@@ -1,0 +1,50 @@
+[
+  {
+    "what": "phase_end treats Phase 0 as missing",
+    "file": "driver/steps.py",
+    "find": "if phase is None or before_phase is None:",
+    "replace": "if not phase or not before_phase:",
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "tests.test_steps.PhaseEndTest.test_missing_phase_parks"
+    ]
+  },
+  {
+    "what": "a track's branch takes no letters or digits after its prefix",
+    "file": "driver/decide.py",
+    "find": "tail = r\"[a-z0-9]*\" if step.track is not None else \"\"",
+    "replace": "tail = \"\"",
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "tests.test_decide.DecideTest.test_a_branch_of_the_step_parks"
+    ]
+  },
+  {
+    "what": "origin/main read from the remote-tracking ref, not ls-remote",
+    "file": "run-steps.py",
+    "find": "origin = git(project, \"ls-remote\", \"origin\", \"refs/heads/main\")",
+    "replace": "origin = git(project, \"for-each-ref\", \"--format=%(objectname)\trefs/heads/main\", \"refs/remotes/origin/main\")",
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "tests.test_dry_run.DryRunTest.test_origin_main_is_read_live"
+    ]
+  },
+  {
+    "what": "the GitHub-read check never fires",
+    "file": "run-steps.py",
+    "find": "if \"github.com\" in git(",
+    "replace": "if \"github.invalid\" in git(",
+    "command": [
+      "python",
+      "-m",
+      "unittest",
+      "tests.test_dry_run.DryRunTest.test_github_unread_exits_2"
+    ]
+  }
+]

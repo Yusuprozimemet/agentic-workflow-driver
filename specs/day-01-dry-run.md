@@ -59,7 +59,7 @@ The line the dry run prints is one of "wait: #12, #13" (the numbers of `now.open
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C01.1 **new** — `classify()` gives every sentence in the table of "In scope" its kind, its
+- [x] C01.1 **new** — `classify()` gives every sentence in the table of "In scope" its kind, its
       day, its track and its branch prefix or reason. A track's name is lowered in the prefix
       (Track B: `day-03/track-b`; Track A1: `day-03/track-a1`; Track 0: `day-03/track-0`). The
       "announced in" sentence is a park, not a track's step; "Day 03 Track B: " (nothing after
@@ -72,14 +72,21 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `scripts/track-red.py` counts a module that does not load as not run, not as red.
       Test: `ClassifyTest.test_each_sentence_of_the_table`,
       `ContractTest.test_every_sentence_next_step_returns_is_known`.
-- [ ] C01.2 **new** — A sentence that is not in the table parks with "the next step is not one
+      Evidence: `ClassifyTest.test_each_sentence_of_the_table` and
+      `ContractTest.test_every_sentence_next_step_returns_is_known` (#3);
+      `python -m unittest discover -s tests` (#3).
+      seen red first on `41d6563`'s code: each test FAILED (errors=1), on the head OK (#3).
+- [x] C01.2 **new** — A sentence that is not in the table parks with "the next step is not one
       this driver knows": "Day 3: the closing PR" (one digit), "day 03: the closing PR", "Day 03:
       the closing PR today", "Re: Day 03: the closing PR", "Day 03 Track : x" and the empty
       string. The whole sentence must match; only a track's sentence takes free text, after its
       colon.
       Red today: each test raises ModuleNotFoundError for `driver` inside the test.
       Test: `ClassifyTest.test_near_misses_are_unknown`.
-- [ ] C01.3 **new** — A phase's end parks, judged against the day before in `order`. With
+      Evidence: `ClassifyTest.test_near_misses_are_unknown` (#3);
+      `python -m unittest discover -s tests` (#3).
+      seen red first on `41d6563`'s code: FAILED (errors=1), on the head OK (#3).
+- [x] C01.3 **new** — A phase's end parks, judged against the day before in `order`. With
       `order` 1, 2, 3, Days 1 and 2 in Phase 0 and finished, Day 3 in Phase 1, the spec step of
       Day 3 gives "the end of Phase 0: Day 03 starts Phase 1". With `order` 1, 3, 2, Day 1 in
       Phase 0 and Days 2 and 3 in Phase 1, the spec step of Day 3 parks and the spec step of
@@ -92,7 +99,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `PhaseEndTest.test_first_step_of_a_new_phase_parks`,
       `PhaseEndTest.test_same_phase_first_day_and_later_steps_do_not`,
       `PhaseEndTest.test_missing_phase_parks`.
-- [ ] C01.4 **new** — `decide()` returns the first of these that applies, and its line:
+      Evidence: `PhaseEndTest.test_first_step_of_a_new_phase_parks`,
+      `PhaseEndTest.test_same_phase_first_day_and_later_steps_do_not` and
+      `PhaseEndTest.test_missing_phase_parks` (#3); `python -m unittest discover -s tests` (#3).
+      seen red first on `41d6563`'s code: each test FAILED (errors=1), on the head OK (#3).
+      broken: phase_end treats Phase 0 as missing → AssertionError: 'Day 03 or the day before it names no phase' is not None (#3)
+- [x] C01.4 **new** — `decide()` returns the first of these that applies, and its line:
       open pull requests 12 and 13, "wait: #12, #13", whatever the tree is;
       a wait sentence with no open pull request, "park: the next step waits on no open pull
       request";
@@ -107,7 +119,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       otherwise "start: " and the sentence.
       Red today: each test raises ModuleNotFoundError for `driver` inside the test.
       Test: `DecideTest.test_first_reason_wins`.
-- [ ] C01.5 **new** — A step with a branch of its own already there never starts. A branch of
+      Evidence: `DecideTest.test_first_reason_wins` (#4);
+      `python -m unittest discover -s tests` (#4).
+      seen red first on `437886d`'s code: FAILED (errors=1), on the head OK (#4).
+- [x] C01.5 **new** — A step with a branch of its own already there never starts. A branch of
       the step is one whose name is the step's prefix, or the prefix followed by `-` or by a
       track name's letters and digits (the kit reads `track-b1-x` and `track-bb-x` as parts of
       Track B). For the step "Day 03 Track B: C03.2–C03.3", a local branch `day-03/track-b-old`,
@@ -119,7 +134,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: each test raises ModuleNotFoundError for `driver` inside the test.
       Test: `DecideTest.test_a_branch_of_the_step_parks`,
       `DecideTest.test_near_miss_branches_start`.
-- [ ] C01.6 **new** — `python run-steps.py --dry-run --project <path>` prints exactly one line
+      Evidence: `DecideTest.test_a_branch_of_the_step_parks` and
+      `DecideTest.test_near_miss_branches_start` (#4); `python -m unittest discover -s tests` (#4).
+      seen red first on `437886d`'s code: each test FAILED (errors=1), on the head OK (#4).
+      broken: a track's branch takes no letters or digits after its prefix → AssertionError: 'start' != 'park' (#4)
+- [x] C01.6 **new** — `python run-steps.py --dry-run --project <path>` prints exactly one line
       on stdout, the action, and exits 0 for "start" and "wait" and 1 for "park". When the
       project cannot be read it prints nothing on stdout, one line on stderr that names what is
       missing, and exits 2: no `scripts/spec-drift.py` (the line names that path), the script
@@ -132,7 +151,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       line, so the test asserts the line names the missing path or field, which it does not.
       Test: `DryRunTest.test_prints_one_action_and_its_exit_code`,
       `DryRunTest.test_unreadable_project_exits_2`, `DryRunTest.test_github_unread_exits_2`.
-- [ ] C01.7 **new** — The dry run reads the remote live, starts nothing and writes nothing in the
+      Evidence: `DryRunTest.test_prints_one_action_and_its_exit_code`,
+      `DryRunTest.test_unreadable_project_exits_2` and `DryRunTest.test_github_unread_exits_2`
+      (#5); `python -m unittest discover -s tests` (#5).
+      seen red first on `e1f09cf`'s code: FAILED (failures=3), (failures=6) and (failures=1),
+      on the head OK (#5).
+      broken: the GitHub-read check never fires → AssertionError: Tuples differ: (1, 'park: the project has no origin/main\n') != (2, '') (#5)
+- [x] C01.7 **new** — The dry run reads the remote live, starts nothing and writes nothing in the
       project. It reads the remote's `main` with `git ls-remote origin refs/heads/main` and the
       remote's branches with `git ls-remote --heads origin`, never the remote-tracking refs a
       `fetch` would update: on a fixture whose bare remote moved ahead from a second clone with
@@ -148,6 +173,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: there is no `run-steps.py`, so no action is printed and no command recorded.
       Test: `DryRunTest.test_origin_main_is_read_live`, `DryRunTest.test_runs_only_reads`,
       `DryRunTest.test_project_is_unchanged`.
+      Evidence: `DryRunTest.test_origin_main_is_read_live`, `DryRunTest.test_runs_only_reads`
+      and `DryRunTest.test_project_is_unchanged` (#5);
+      `python -m unittest discover -s tests` (#5).
+      seen red first on `e1f09cf`'s code: FAILED (failures=3), (errors=1) and (failures=1), on
+      the head OK (#5).
+      broken: origin/main read from the remote-tracking ref, not ls-remote → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') != (1, 'park: main is not origin/main\n') (#5)
+      #5 also wrote spec-drift.py's output inside the project. That failed
+      `DryRunTest.test_runs_only_reads` with "not a read" and the recorded `spec-drift.py` command,
+      and `DryRunTest.test_project_is_unchanged` with "?? spec-drift.json" in the status. Neither
+      replays. The first report holds the interpreter's path and Windows separators, which
+      differ on CI's Linux (D01.18). The second holds the fixture's commit hash, which changes on
+      every run (D01.17).
 
 ## Verify
 ```bash
@@ -205,7 +242,8 @@ python -m unittest discover -s tests
   name, so `git symbolic-ref HEAD <ref>`, which writes, got through. Fixed in this spec change
   (C01.7).
 - **Defect** D01.14 — found: auditor · cause: spec · made: Day 01 · "needs numpy, as the kit's
-  CI already does" was not true of the check that runs `new` tests. Recorded here and in H01.7.
+  CI already does" was not true of the check that runs `new` tests; the plan-auditor found it
+  before any code. Recorded here and in H01.7.
 - **Hand-off** H01.1 → Day 5: whether a phase's end was already answered by the maintainer.
   Until then the dry run parks at every phase's end, each time it is asked.
 - **Hand-off** H01.2 → Day 6: a clean tree on another branch is brought to `main` (the plan's
@@ -226,3 +264,40 @@ python -m unittest discover -s tests
 - **Hand-off** H01.7 → a `tooling/` PR before Track A: the "Track tests seen red" job in
   `.github/workflows/pr-checks.yml` installs nothing, so `ContractTest` cannot load there. It
   installs `requirements.txt` as `tests.yml` does.
+- Closed 2026-11-06. H01.7 landed in #2 (`tooling/seen-red-installs-requirements`), before
+  Track A; Tracks A, B and C landed in #3, #4 and #5, in the table's order. Every `new` test was
+  seen red on the code before its track, by `scripts/track-red.py` in CI's "Track tests seen
+  red" job, one line per test and criterion.
+- The Notes above expected `broken: none` in every track: with nothing to hold there was nothing
+  to break. Each track broke its code once or more anyway, on a rule its tests should guard: six
+  breaks, under C01.3, C01.5, C01.6 and C01.7, four of them in `specs/breaks/day-01.json`
+  (D01.17 and D01.18 say why not the other two). C01.1, C01.2 and
+  C01.4 rest on their seen-red lines alone.
+- #2 also ran a break, on `docs/kit.md`, under no Day 01 criterion: it stays in that PR and out
+  of the day's manifest.
+- Track C's implementer draft came to 406 changed lines; the review cut repeated keyword
+  arguments to 384 (#5).
+- **Defect** D01.15 — found: Day 01 review · cause: implementation · made: none ·
+  `scripts/test_setup_check.py` read the protection rule from `README.md` after the rule moved to
+  `docs/kit.md` when the repository was started from the kit, and errored on `main`; the job
+  that runs it skips a PR that changes no workflow or script, so #1 never ran it. Fixed in #2.
+- **Defect** D01.16 — found: Track A · cause: spec · made: Day 01 · C01.3 did not say what a
+  spec step gives when its day is not in `order` or the day before it is not among `days`. #3
+  parks it with "Day NN or the day before it names no phase", as the plan's rule to park rather
+  than guess asks, and says so in its description.
+- **Defect** D01.17 — found: evidence replay · cause: process · made: Day 01 · #5's break of
+  `DryRunTest.test_project_is_unchanged` recorded a report that holds the fixture's commit hash.
+  The fixture commits at the current time, so the hash changed and the close's rehearsal failed
+  the line. It is written as a sentence under C01.7 instead.
+- **Defect** D01.18 — found: evidence replay · cause: process · made: Day 01 · #5's break of
+  `DryRunTest.test_runs_only_reads` recorded a report that holds the Windows interpreter's path
+  and `\\` separators. The local rehearsal, on the machine that recorded it, passed it; CI's
+  rehearsal on Linux failed it. It is written as a sentence under C01.7 instead, and C01.7 keeps
+  its break of the remote's `main`, which replays on both.
+- **Hand-off** H01.8 → Day 4: on Windows the dry run's stdout uses the locale's codepage, so a
+  sentence with an en dash ("Day 03 Track B: C03.2–C03.3") may reach a parent reading UTF-8
+  mangled. The tests use ASCII sentences. #5 named Day 3; `plan.md` has sessions start from
+  this line on Day 4.
+- **Hand-off** H01.9 → Day 2: when `git ls-remote` fails for any reason, a network error
+  included, the dry run says "park: the project has no origin/main". Parking is the safe side;
+  the reason may be wrong. The preflight can tell an unreachable remote from a missing `main`.
