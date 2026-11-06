@@ -49,7 +49,7 @@ def drift_of(next_step=START, open_prs=()):
     return {
         "now": {"next_step": next_step, "open_prs": [{"number": n} for n in open_prs]},
         "order": [1],
-        "days": [{"day": 1, "phase": 0}],
+        "days": [{"day": 1, "phase": 0, "status": "active"}],
         "meta": {"caveats": []},
     }
 
@@ -70,6 +70,9 @@ def make_project(tmp, drift=None, script=None):
         drift = drift_of() if drift is None else drift
         script = SCRIPT_TEMPLATE.format(drift=json.dumps(drift))
     (project / "scripts" / "spec-drift.py").write_bytes(script.encode("utf-8"))
+    (project / "scripts" / "pr-names.py").write_bytes(b"")
+    (project / ".github" / "workflows").mkdir(parents=True)
+    (project / ".github" / "workflows" / "evidence.yml").write_bytes(b"")
     git(project, "add", "-A")
     git(project, "commit", "-m", "fixture")
     git(project, "remote", "add", "origin", str(Path(tmp) / "remote.git"))
