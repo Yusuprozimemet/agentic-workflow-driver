@@ -178,8 +178,8 @@ class CopiedListsTest(unittest.TestCase):
                 names |= {m.strip().strip('"') for m in re.findall(r"^    name: (.+)$", f.read(), re.M)}
         self.assertEqual(set(setup_check.REQUIRED + setup_check.OPTIONAL) - names, set())
 
-    def test_the_readme_rule_requires_the_same_checks(self):
-        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as f:
+    def test_the_kit_rule_requires_the_same_checks(self):
+        with open(os.path.join(ROOT, "docs", "kit.md"), encoding="utf-8") as f:
             rule = re.search(r"```json\s*\n\s*(\{\"required_status_checks\".*?)```", f.read(), re.S).group(1)
         contexts = json.loads(rule)["required_status_checks"]["contexts"]
         self.assertEqual(contexts, list(setup_check.REQUIRED) + ["<the project's tests>"])
