@@ -14,3 +14,7 @@ docs/dashboard/evidence-checks.json
 
 # --- local secrets ---
 .env
+
+# --- the driver's own: its config and its state folder (halt, lock, settings), never committed ---
+/driver.json
+/state/
