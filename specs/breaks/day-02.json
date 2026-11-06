@@ -1,0 +1,4 @@
+[
+  {"what": "the preflight reads the remote with `git fetch origin` instead of `git ls-remote`", "file": "driver/preflight.py", "find": "git(project, \"ls-remote\", \"origin\")", "replace": "git(project, \"fetch\", \"origin\")", "command": ["python", "-m", "unittest", "tests.test_dry_run.DryRunTest.test_runs_only_reads"]},
+  {"what": "the preflight counts a `null` value as missing", "file": "driver/preflight.py", "find": "key not in entry", "replace": "entry.get(key) is None", "command": ["python", "-m", "unittest", "tests.test_preflight.PreflightTest.test_null_phase_still_parks"]}
+]

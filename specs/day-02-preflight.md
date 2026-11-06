@@ -81,7 +81,7 @@ merged.
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C02.1 **new** — `python run-steps.py --dry-run --project <path>` prints exactly one line
+- [x] C02.1 **new** — `python run-steps.py --dry-run --project <path>` prints exactly one line
       on stdout, the action, and exits 0 for "start" and "wait" and 1 for "park". When the
       project lacks a piece of the table of "In scope" above its CLI rows, it prints nothing on
       stdout, one line on stderr for each piece missing, in the table's order, and exits 2. A
@@ -103,7 +103,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       line on stderr that names what is missing, and exits 2", for a missing
       `scripts/spec-drift.py`, a failing script, a missing `now.next_step`, `now.open_prs`,
       `order` or `days`, or GitHub not read.
-- [ ] C02.2 **new** — When `git ls-remote origin` exits non-zero, the dry run prints nothing on
+      Evidence: `PreflightTest.test_every_missing_piece_is_a_line` and
+      `PreflightTest.test_one_missing_file_refuses` (#8); Day 1's three `DryRunTest` tests pass
+      unedited in `python -m unittest discover -s tests` (#8).
+      seen red first on `3eea7a0`'s code: the four-piece project gave one line, "spec-drift.py's
+      JSON has no order", and the project lacking `scripts/pr-names.py` gave "start: " and exit 0;
+      on the head OK (#8).
+- [x] C02.2 **new** — When `git ls-remote origin` exits non-zero, the dry run prints nothing on
       stdout, "cannot read the project: origin could not be read (git ls-remote exited <its
       code>)" on stderr, and exits 2. With `origin` set to a path that does not exist, the code
       is the one git exits with there (128 with git 2.x), and the test reads it from git, not a
@@ -112,7 +118,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: the remote that does not exist gives "park: the project has no origin/main"
       and exit 1.
       Test: `PreflightTest.test_unreachable_origin_is_not_a_missing_main`.
-- [ ] C02.3 **hold** — The dry run, preflight included, runs only reads and writes nothing in the
+      Evidence: `PreflightTest.test_unreachable_origin_is_not_a_missing_main` (#8); Day 1's
+      `DryRunTest.test_origin_main_is_read_live` still passes in
+      `python -m unittest discover -s tests` (#8).
+      seen red first on `3eea7a0`'s code: (1, "park: the project has no origin/main") where
+      (2, "cannot read the project: origin could not be read ...") was expected; on the head OK
+      (#8).
+- [x] C02.3 **hold** — The dry run, preflight included, runs only reads and writes nothing in the
       project: Day 1's `DryRunTest.test_runs_only_reads` and
       `DryRunTest.test_project_is_unchanged` pass with their assertions unedited, and the dry
       run runs no `claude`.
@@ -120,9 +132,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       same break also fails `DryRunTest.test_project_is_unchanged`, whose report holds a commit
       hash and does not replay (D01.17). Expected report: "not a read: ['git', 'fetch',
       'origin']".
-      broken: the preflight reads the remote with `git fetch origin` instead of
-      `git ls-remote` → <what `DryRunTest.test_runs_only_reads` reported>
-- [ ] C02.4 **new** — `python run-steps.py preflight --project <path> --claude <program>` prints
+      Evidence: `DryRunTest.test_runs_only_reads` and `DryRunTest.test_project_is_unchanged`
+      pass unedited in `python -m unittest discover -s tests` (#8, #9); the first counts any
+      command other than `git`'s reads and `scripts/spec-drift.py`, a `claude` among them, as
+      "not a read".
+      broken: the preflight reads the remote with `git fetch origin` instead of `git ls-remote` → AssertionError: False is not true : not a read: ['git', 'fetch', 'origin'] (#8)
+- [x] C02.4 **new** — `python run-steps.py preflight --project <path> --claude <program>` prints
       "preflight: ok" on stdout and exits 0 when nothing in the table of "In scope" is missing.
       Otherwise it prints nothing on stdout, one line on stderr for each piece missing, the
       kit's lines first and then the CLI's, in the table's order, and exits 2. The CLI's version
@@ -137,7 +152,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `run-steps.py` has no `preflight`; argparse exits 2 with its usage on stderr.
       Test: `CliPreflightTest.test_ok`, `CliPreflightTest.test_versions`,
       `CliPreflightTest.test_not_found`, `CliPreflightTest.test_kit_lines_come_first`.
-- [ ] C02.5 **new** — `<program> --help` lists each of `--print`, `--model`, `--output-format`,
+      Evidence: `CliPreflightTest.test_ok`, `CliPreflightTest.test_versions`,
+      `CliPreflightTest.test_not_found` and `CliPreflightTest.test_kit_lines_come_first` (#9).
+      seen red first on `5587cce`'s code: each test got argparse's usage on stderr and exit 2;
+      on the head OK (#9).
+- [x] C02.5 **new** — `<program> --help` lists each of `--print`, `--model`, `--output-format`,
       `--max-budget-usd`, `--strict-mcp-config`, `--settings`, `--append-system-prompt-file`,
       `--session-id` and `--resume`, or the preflight prints "cannot run a session: <program>
       --help lists no <flag>" for each one it does not. A flag is listed when the help text has
@@ -149,19 +168,28 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `[-file]` after it, and one with `--printer` and no `--print`.
       Red today: `run-steps.py` has no `preflight`.
       Test: `CliPreflightTest.test_every_flag_is_listed`, `CliPreflightTest.test_near_miss_flags`.
-- [ ] C02.6 **new** — The preflight runs only reads and starts no session: the commands it runs
+      Evidence: `CliPreflightTest.test_every_flag_is_listed` and
+      `CliPreflightTest.test_near_miss_flags` (#9); the `[-file]` rule checked against the
+      installed CLI's help, 2.1.170, by the commands in #9's description ("preflight: ok").
+      seen red first on `5587cce`'s code: each test got argparse's usage on stderr and exit 2;
+      on the head OK (#9).
+- [x] C02.6 **new** — The preflight runs only reads and starts no session: the commands it runs
       are the dry run's reads (C01.7), the project's `scripts/spec-drift.py`, and
       `<program> --version` and `<program> --help`, each with no other argument. It writes
       nothing in the project. The test records every command as `DryRunTest.test_runs_only_reads`
       does and fails on any other, a `<program> -p` among them.
       Red today: `run-steps.py` has no `preflight`.
       Test: `CliPreflightTest.test_runs_only_reads`.
-- [ ] C02.7 **hold** — A day whose `phase` is `null` gives no preflight line: the key is there.
+      Evidence: `CliPreflightTest.test_runs_only_reads` (#9).
+      seen red first on `5587cce`'s code: FAILED (errors=1), argparse's `SystemExit` for the
+      unknown `preflight`; on the head OK (#9).
+- [x] C02.7 **hold** — A day whose `phase` is `null` gives no preflight line: the key is there.
       With `order` 1, 2, Day 1 in Phase 0 and Day 2's `phase` `null`, the spec step of Day 2
       gives exit 1 and "park: Day 02 or the day before it names no phase", as C01.3 says. Day 2
       and not Day 1: the first day of `order` gives no phase's end, so a null phase there starts.
       Test: `PreflightTest.test_null_phase_still_parks`.
-      broken: the preflight counts a `null` value as missing → <what the test reported>
+      Evidence: `PreflightTest.test_null_phase_still_parks` (#8).
+      broken: the preflight counts a `null` value as missing → AssertionError: Tuples differ: (2, '') != (1, 'park: Day 02 or the day before it names no phase\n') (#8)
 
 ## Verify
 ```bash
@@ -233,3 +261,31 @@ python -m unittest discover -s tests
   contract test passed on.
 - The `preflight` command stays separate from `--dry-run`, and the live `--settings` check goes
   to Day 3 (H02.1), as this spec proposed (the maintainer, 2026-11-06).
+- Closed 2026-11-06. The spec change landed in #7 with D02.2 and D02.3 fixed; Tracks A and B
+  landed in #8 and #9, in the table's order, Track B branched from `main` after #8 merged. Every
+  `new` test was seen red on the code before its track: 3 in #8, 7 in #9. The two `hold`
+  criteria each have one break, both in `specs/breaks/day-02.json`; C02.3's report names the
+  command, not a path or hash, so it replays on Linux (D01.17, D01.18).
+- Track B's live run (#9) on the installed CLI, 2.1.170, printed "preflight: ok": the `[-file]`
+  rule matches the real help text. That run is the only check of it against a real CLI.
+- **Defect** D02.10 — found: review · cause: implementation · made: Day 02 · the implementer's
+  first `PreflightTest.test_one_missing_file_refuses` committed the removal of
+  `scripts/pr-names.py` without pushing it, so on `main`'s code it was red for the wrong reason,
+  "park: main is not origin/main", not the "start:" and exit 0 that C02.1 names. Both removal
+  tests now push (#8).
+- **Defect** D02.11 — found: Track B · cause: implementation · made: Day 01 · `run_drift` runs
+  the project's `scripts/spec-drift.py` with `READ`, which decodes its output as strict UTF-8.
+  On Windows, with no `PYTHONIOENCODING`, the script writes in the locale's codepage, and a
+  "next:" line with an en dash ("Day 02 Track B: C02.4–C02.6") arrives as byte 0x96: the
+  reader thread dies with "UnicodeDecodeError: 'utf-8' codec can't decode byte 0x96" and a
+  traceback on stderr. The JSON is read from its file, so the action is right, but stderr holds
+  more than the one line per missing piece C02.1 says. Found in #9's live run; the tests miss
+  it, since the fixture's script prints nothing. Shown again at the close with a child that
+  prints that line under `READ`. Not fixed this day (H02.4). The strict decoding came with
+  Day 01's Track C (`4c24172`, #5) and moved into `driver/preflight.py` in #8: an escape from
+  Day 01. The blind rater tagged it "made: unclear", since the text did not say which day wrote
+  it; the tag is kept and the text now says.
+- **Hand-off** H02.4 → the maintainer: the fix for D02.11, `errors="replace"` in `READ` or
+  not capturing `scripts/spec-drift.py`'s output as text, with a test whose fixture script
+  prints an en dash in the locale's codepage. A short spec, or Day 4 beside H01.8, which is the
+  same codepage on the dry run's own stdout.
