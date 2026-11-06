@@ -175,8 +175,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `ConfigTest.test_project_from_config`, `ConfigTest.test_preflight_from_config`, `ConfigTest.test_relative_project`, `ConfigTest.test_every_problem_is_a_line`, `ConfigTest.test_missing_config`, `ConfigTest.test_state_and_config_are_ignored` (#13).
       seen red first on `main`'s code: `python -m unittest tests.test_config` → FAILED (errors=6), each at its `setUp` import of `driver.config` (#13)
       broken: a relative project read from the cwd, not the config's folder → AssertionError: Tuples differ: (1, '') != (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') (#13)
-      broken: a budget_usd of 0 accepted → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against [36 chars], '') != (2, '', "cannot start: C:\\Users\\HACKYO~1[85 chars]0\n") (#13)
-      broken: only the first missing key reported → AssertionError: Tuples differ: (2, '[100 chars]nly\n') != (2, '[100 chars]nly\ncannot start: C:\\Users\\HACKYO~1\\AppDat[163 chars]t\n') (#13)
+      Not replayed, its report holds a Windows temp path: a budget_usd of 0 accepted → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against [36 chars], '') != (2, '', "cannot start: C:\\Users\\HACKYO~1[85 chars]0\n") (#13)
+      Not replayed, its report holds a Windows temp path: only the first missing key reported → AssertionError: Tuples differ: (2, '[100 chars]nly\n') != (2, '[100 chars]nly\ncannot start: C:\\Users\\HACKYO~1\\AppDat[163 chars]t\n') (#13)
       broken: driver.json not ignored → AssertionError: 1 != 0 : driver.json (#13)
 - [x] C03.2 **new** — `driver.lock.take(state)` writes `{"pid": <os.getpid()>, "started": <ISO
       8601>}` to `<state>/lock` and returns no line; a second `take` while that process lives
@@ -267,7 +267,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `HaltTest.test_halt_kills_the_tree`, `HaltTest.test_halt_with_no_driver`, `HaltTest.test_halt_twice`, `HaltTest.test_halt_creates_state`, `HaltTest.test_halt_unreadable_lock` (#16).
       seen red first on `main`'s code: in the same run of `python -m unittest tests.test_halt`, FAILED (errors=10) (#16)
       Not replayed, its report holds a pid or a time: halt never kills the live driver the lock names → AssertionError: 'halt: set; no driver is running' != 'halt: set; killed pid 6120 and the processes it started' (#16)
-      broken: halt reads an unreadable lock as a driver → AssertionError: '' != 'halt: set; C:\\Users\\HACKYO~1\\AppData\\[71 chars]lled' (#16)
+      Not replayed, its report holds a Windows temp path: halt reads an unreadable lock as a driver → AssertionError: '' != 'halt: set; C:\\Users\\HACKYO~1\\AppData\\[71 chars]lled' (#16)
 - [x] C03.7 **new** — `python run-steps.py clear --state <state>` after a halt with no live
       process removes `<state>/halt` and a lock whose process is gone, prints "clear: the halt is
       removed; the driver is off" and exits 0; with no halt file it prints "clear: no halt is set"
@@ -441,19 +441,20 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
   exits 1. Track A (#13) ran the first. No track ran the second: the Tracks table says every
   track holds C03.9, so no track owned its breaks. The close ran it with `scripts/break.py`
   on `tests/test_contract.py`, and the diff exited 1.
-- **Defect** D03.17 — found: evidence replay · cause: process · made: Day 03 · eight of the
+- **Defect** D03.17 — found: evidence replay · cause: process · made: Day 03 · eleven of the
   tracks' 24 `broken:` lines hold a report no replay can print again: seven name a pid or a lock's
   start time (#14, #16), and one names this repository's absolute path, where the replay runs in a
-  scratch worktree (#13). The close's rehearsal failed all eight, and C03.8 too: a `hold` with no
-  `broken:` line. The eight are now sentences, "Not replayed, its report holds ...", and are not in
-  the manifest. C03.8 has `broken: none →` with its reason. Day 01's lesson (D01.17: a report
+  scratch worktree (#13). The close's local rehearsal failed those eight, and C03.8 too: a `hold`
+  with no `broken:` line. CI's rehearsal, on Linux, failed three more, whose reports hold a
+  Windows temp path, cut by unittest to a length Linux's path does not give (#13, #16). The eleven
+  are now sentences, "Not replayed, its report holds ...", and are not in the manifest. C03.8 has `broken: none →` with its reason. Day 01's lesson (D01.17: a report
   that holds a hash does not replay) was not carried into the briefs: a test that asserts on a
   pid needs a break that hits an assertion without one.
 - The close (2026-11-07): the tracks merged in the table's order, A to E (#13, #14, #15, #16,
-  #18), with spec changes #17 and #19 before E merged. 16 of the 24 `broken:` lines of #13 to #16
+  #18), with spec changes #17 and #19 before E merged. 13 of the 24 `broken:` lines of #13 to #16
   are copied with their `manifest:` entries, parsed from the raw bodies, into
-  `specs/breaks/day-03.json`, together with the close's one break (D03.16): 17 entries. The other
-  eight cannot replay (D03.17). C03.8's break was run by hand, so it is a "seen red by hand"
+  `specs/breaks/day-03.json`, together with the close's one break (D03.16): 14 entries. The other
+  eleven cannot replay (D03.17). C03.8's break was run by hand, so it is a "seen red by hand"
   sentence and `broken: none`.
 - **Hand-off** H03.1 → Day 4: `--once` takes the lock and releases it, leads its own process
   group on POSIX, refuses while the halt file is set, writes the settings file before each
