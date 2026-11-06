@@ -1,9 +1,12 @@
 """The checks run before a dry run or a session: the project's kit (spec-drift.py, pr-names.py,
-evidence.yml and the fields of spec-drift.py's JSON) and the remote origin. Each check returns the
-lines of what is missing, none when nothing is."""
+evidence.yml and the fields of spec-drift.py's JSON), the remote origin, and the Claude Code CLI
+(`--version` and `--help` only). Each check returns the lines of what is missing, none when nothing
+is."""
 
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -11,6 +14,22 @@ from pathlib import Path
 
 # How every command runs: its output read as UTF-8 text; each caller checks its exit code.
 READ = {"capture_output": True, "text": True, "encoding": "utf-8"}
+# The CLI's output is not ours to trust as UTF-8, so a bad byte is replaced rather than fatal.
+CLI = {**READ, "errors": "replace"}
+# The oldest Claude Code the driver was checked on, and the flags plan.md's "What to build",
+# item 2, passes to `claude -p`, with --resume from the same item.
+OLDEST = (2, 1, 170)
+FLAGS = (
+    "--print",
+    "--model",
+    "--output-format",
+    "--max-budget-usd",
+    "--strict-mcp-config",
+    "--settings",
+    "--append-system-prompt-file",
+    "--session-id",
+    "--resume",
+)
 
 
 def git(project, *args):
@@ -114,3 +133,37 @@ def kit_lines(project):
         if remote is not None:
             lines.append(remote)
     return lines, drift
+
+
+def listed(flag, text):
+    # A flag is listed when no letter, digit or dash follows it (--settings-file is not
+    # --settings). 2.1.170 lists --append-system-prompt-file only as --append-system-prompt[-file].
+    if re.search(re.escape(flag) + r"(?![A-Za-z0-9-])", text):
+        return True
+    return flag.endswith("-file") and (flag[: -len("-file")] + "[-file]") in text
+
+
+def cli_lines(program):
+    # Runs only `<program> --version` and `<program> --help`: neither starts a session.
+    path = shutil.which(program)
+    if path is None:
+        return [f"cannot run a session: {program} is not found"]
+    lines = []
+    done = subprocess.run([path, "--version"], check=False, **CLI)
+    found = re.match(r"(\d+)\.(\d+)\.(\d+)", done.stdout.lstrip()) if done.returncode == 0 else None
+    if found is None:
+        lines.append(f"cannot run a session: {program} --version printed no version")
+    elif tuple(map(int, found.groups())) < OLDEST:
+        version = ".".join(found.groups())
+        oldest = ".".join(map(str, OLDEST))
+        lines.append(
+            f"cannot run a session: Claude Code {version} is older than {oldest}, "
+            "the oldest the driver was checked on"
+        )
+    done = subprocess.run([path, "--help"], check=False, **CLI)
+    lines += [
+        f"cannot run a session: {program} --help lists no {flag}"
+        for flag in FLAGS
+        if not listed(flag, done.stdout)
+    ]
+    return lines
