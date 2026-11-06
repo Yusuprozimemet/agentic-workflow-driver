@@ -292,8 +292,8 @@ specs/
 
 | Days | Phase | Outcome | Status |
 |---|---|---|---|
-| 1-2 | 0 — The dry run | the driver names the next action on a project and starts nothing | Day 1 specified |
-| 3-8 | 1 — Level 1 | one day of a project runs with the maintainer only merging and answering parks | titles |
+| 1-2 | 0 — The dry run | the driver names the next action on a project and starts nothing | Days 1-2 closed |
+| 3-8 | 1 — Level 1 | one day of a project runs with the maintainer only merging and answering parks | Day 3 specified; Days 4-8 titles |
 | 9- | 2-3 — Level 2, Level 3 | merges without the maintainer; phases chain | after the stop at Day 8 |
 
 ## Provisional specs
