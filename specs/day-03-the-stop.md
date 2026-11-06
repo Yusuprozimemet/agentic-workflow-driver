@@ -243,7 +243,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: argparse exits 2 with "invalid choice: 'clear'".
       Test: `ClearTest.test_clear_removes_halt_and_stale_lock`, `ClearTest.test_clear_no_halt`,
       `ClearTest.test_clear_refuses_while_driver_lives`.
-- [ ] C03.8 **new** — With `DRIVER_LIVE_CLI` naming the installed Claude Code (2.1.170 or newer),
+- [ ] C03.8 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code (2.1.170 or newer),
       on the maintainer's PC:
       (a) with no halt file, the prompt "Run this exact command with the Bash tool: echo driver >
       out.txt" leaves `out.txt` in the scratch project and a line in the project hook's marker
@@ -259,9 +259,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       out2.txt" --resume <that uuid>` exits 0, its JSON's `session_id` is the same uuid,
       `out2.txt` exists and the marker file got another line: hooks hold on a resumed session.
       Without `DRIVER_LIVE_CLI`, all three are skipped with "DRIVER_LIVE_CLI is not set".
-      Red today: the test file does not exist; on `main`'s code the `setUp` import of
-      `driver.settings` fails before the skip, so all three error, with or without
-      `DRIVER_LIVE_CLI`. Its teeth are shown by a break run by
+      True today: Tracks C and D (#15, #16) put the hooks and the settings file on `main`, so
+      on `main`'s code the three tests load and skip without `DRIVER_LIVE_CLI`, and pass with
+      it; Track E adds only the test file. Its teeth are shown by a break run by
       hand, on the maintainer's PC: the halt command in the written settings made to exit 0 →
       (b) fails, `out.txt` exists. CI cannot replay it (no login, no budget): the Track E PR and
       the close record it as a sentence, not a `broken:` line (`specs/README.md`, "Evidence at
@@ -373,6 +373,17 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
   appeared halt or not. Seen in Track E's first live run; by hand, `"Bash(echo driver >
   out.txt)"` and `"Bash(echo *)"` were denied too, and only `Bash` wrote the file. Now `Bash`:
   the project is a scratch one, and the driver's guard hook still sees every call.
+- **Defect** D03.14 — found: Track E · cause: spec · made: Day 03 · C03.8 was tagged `new` with
+  "Red today: the `setUp` import of `driver.settings` fails", but Tracks C and D land that
+  module before Track E, so on `main`'s code the tests skip, and CI's "Track tests seen red"
+  failed #18 three times, "reports OK (skipped=1) on 5887c0b". The behaviour is true before
+  Track E, which adds only its test: now `hold`, broken once by hand as before.
+- **Defect** D03.15 — found: Track E · cause: environment · made: Day 03 · with `Bash` allowed,
+  the live check was still denied the write: `tempfile.mkdtemp()` gave the 8.3 short path
+  `C:\Users\HACKYO~1\...` as the session's cwd, and Claude Code 2.1.170 asked before writing
+  there, which `-p` turns into a denial. With the long path, all three passed. The test now
+  takes `os.path.realpath` of its scratch root. D03.13 was half the cause: in a long-path
+  project, `"Bash(echo:*)"` was still denied.
 - **Hand-off** H03.1 → Day 4: `--once` takes the lock and releases it, leads its own process
   group on POSIX, refuses while the halt file is set, writes the settings file before each
   session, and passes it; a test starts a real step, halts, and checks the session's tree is
@@ -395,3 +406,5 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
 - **Hand-off** H03.9 → Day 4: a skip of the live check passes unseen (H02.1's question). The
   live check records the Claude Code version it passed on, and the preflight refuses a version
   it has not, or Day 4's spec names why not.
+- **Hand-off** H03.10 → Day 4: `--once` starts `claude -p` with the project as cwd; it passes
+  `os.path.realpath` of the project, or a short Windows path denies every write (D03.15).
