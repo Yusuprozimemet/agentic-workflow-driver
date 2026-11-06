@@ -180,7 +180,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       the head OK (#5).
       broken: origin/main read from the remote-tracking ref, not ls-remote → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') != (1, 'park: main is not origin/main\n') (#5)
       broken: spec-drift.py's output written inside the project (test_runs_only_reads) → AssertionError: False is not true : not a read: ['C:\\Users\\HackYourFuture\\AppData\\Local\\Programs\\Python\\Python312\\python.exe', '<tmp>\\project\\scripts\\spec-drift.py', '--out', '<tmp>\\project\\spec-drift.json', '--cache', '<tmp>\\cache.json'] (#5)
-      broken: spec-drift.py's output written inside the project (test_project_is_unchanged) → AssertionError: Tuples differ: ('?? spec-drift.json\n', 'c90cacbbf899a19ae[121 chars]n\n') != ('', 'c90cacbbf899a19ae653766164d956ed8a643[101 chars]n\n') (#5)
+      The same break also failed `DryRunTest.test_project_is_unchanged` in #5, with "?? spec-drift.json" in
+      the status. It cannot be replayed: the report holds the fixture's commit hash, which changes
+      on every run (D01.17).
 
 ## Verify
 ```bash
@@ -266,7 +268,8 @@ python -m unittest discover -s tests
   red" job, one line per test and criterion.
 - The Notes above expected `broken: none` in every track: with nothing to hold there was nothing
   to break. Each track broke its code once or more anyway, on a rule its tests should guard: six
-  breaks, under C01.3, C01.5, C01.6 and C01.7 (`specs/breaks/day-01.json`). C01.1, C01.2 and
+  breaks, under C01.3, C01.5, C01.6 and C01.7, five of them in `specs/breaks/day-01.json`
+  (D01.17 says why not the sixth). C01.1, C01.2 and
   C01.4 rest on their seen-red lines alone.
 - #2 also ran a break, on `docs/kit.md`, under no Day 01 criterion: it stays in that PR and out
   of the day's manifest.
@@ -280,6 +283,11 @@ python -m unittest discover -s tests
   spec step gives when its day is not in `order` or the day before it is not among `days`. #3
   parks it with "Day NN or the day before it names no phase", as the plan's rule to park rather
   than guess asks, and says so in its description.
+- **Defect** D01.17 — found: evidence replay · cause: process · made: Day 01 · #5's break of
+  `DryRunTest.test_project_is_unchanged` recorded a report that holds the fixture's commit hash.
+  The fixture commits at the current time, so the hash changed and the close's rehearsal failed
+  the line. It is written as a sentence under C01.7 instead, and the other break of the same code
+  still replays.
 - **Hand-off** H01.8 → Day 4: on Windows the dry run's stdout uses the locale's codepage, so a
   sentence with an en dash ("Day 03 Track B: C03.2–C03.3") may reach a parent reading UTF-8
   mangled. The tests use ASCII sentences. #5 named Day 3; `plan.md` has sessions start from
