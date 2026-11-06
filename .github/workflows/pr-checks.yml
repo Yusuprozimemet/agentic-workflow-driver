@@ -213,6 +213,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install requirements
+        # The tests import what tests.yml installs (ContractTest loads scripts/spec-drift.py,
+        # which needs numpy); without them a new test errors on both sides instead of failing.
+        run: if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
       - name: Run each new criterion's test on the base and the head
         # The base is where the branch started, as the size check's three-dot diff counts from.
         env:
