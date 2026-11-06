@@ -1,0 +1,5 @@
+[flake8]
+# scripts/ is the kit's, in the kit's style (lines to 120 and more): a copy that lints its whole tree
+# leaves it out. flake8 reads only the first of setup.cfg, tox.ini and .flake8 with a [flake8]
+# section: a project that configures it elsewhere moves this line there (README, style check setup).
+extend-exclude = scripts

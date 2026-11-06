@@ -1,0 +1,58 @@
+name: Evidence replay
+
+on:
+  push:
+    branches: [main]
+  # Every pull request, with no path filter, so the check always reports and can be required: a
+  # closing branch (day-NN/close-the-day, change/<slug>) is replayed as its merge would be, before
+  # it merges; any other branch has nothing to rehearse and passes.
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      day:
+        description: Day number to replay (empty checks the selected main commit)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: A closed day's evidence replays
+    runs-on: ubuntu-latest
+    steps:
+      # A pull request's checkout is its merge commit: first parent the base, second the branch.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PROJECT: install what the replayed checks and breaks need, as the project's own test
+      # workflow does (a docs build needs its docs requirements); by default, requirements.txt.
+      # Change scripts/test_evidence_workflow.py's install tests with it.
+      - name: Install what the replayed checks need
+        run: if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+      - name: Replay the closing merge
+        if: github.event_name != 'pull_request'
+        env:
+          CLOSE_COMMIT: ${{ github.sha }}
+          DAY: ${{ inputs.day }}
+          JIRA_KEY: ${{ vars.JIRA_KEY }}
+        run: python scripts/close-evidence.py --commit "$CLOSE_COMMIT" --day "$DAY"
+      # The branch name comes through the environment, never into the script's text.
+      - name: Rehearse the closing merge
+        if: github.event_name == 'pull_request'
+        env:
+          BRANCH: ${{ github.head_ref }}
+          JIRA_KEY: ${{ vars.JIRA_KEY }}
+        run: python scripts/close-evidence.py --rehearse "$BRANCH" --base HEAD^1 --head HEAD^2
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('evidence.json', 'evidence-rehearsal.json') != ''
+        with:
+          name: evidence
+          path: |
+            evidence.json
+            evidence-rehearsal.json

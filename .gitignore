@@ -1,0 +1,16 @@
+# --- dashboard: what scripts/spec-drift.py read from git, kept between runs, and its output ---
+.spec-drift-cache.json
+.evidence-cache.json
+spec-drift.json
+__pycache__/
+# the replay report the dashboard workflow writes before each build (scripts/close-evidence.py --all)
+docs/dashboard/evidence-checks.json
+
+# --- Bash output the hook saved in full (scripts/cap-output.py) ---
+.claude/tool-output/
+
+# --- the step guard's marker: set on "merged", cleared by a new session (scripts/step-guard.py) ---
+.claude/state/
+
+# --- local secrets ---
+.env

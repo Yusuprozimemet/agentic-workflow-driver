@@ -1,0 +1,4 @@
+[tool.ruff]
+# The kit's scripts are in the kit's style, not this project's.
+extend-exclude = ["scripts"]
+line-length = 100
