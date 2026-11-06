@@ -277,7 +277,7 @@ python -m unittest discover -s tests
   of the day's manifest.
 - Track C's implementer draft came to 406 changed lines; the review cut repeated keyword
   arguments to 384 (#5).
-- **Defect** D01.15 — found: Day 01 review · cause: environment · made: none ·
+- **Defect** D01.15 — found: Day 01 review · cause: implementation · made: none ·
   `scripts/test_setup_check.py` read the protection rule from `README.md` after the rule moved to
   `docs/kit.md` when the repository was started from the kit, and errored on `main`; the job
   that runs it skips a PR that changes no workflow or script, so #1 never ran it. Fixed in #2.
