@@ -179,10 +179,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       seen red first on `e1f09cf`'s code: FAILED (failures=3), (errors=1) and (failures=1), on
       the head OK (#5).
       broken: origin/main read from the remote-tracking ref, not ls-remote → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') != (1, 'park: main is not origin/main\n') (#5)
-      broken: spec-drift.py's output written inside the project (test_runs_only_reads) → AssertionError: False is not true : not a read: ['C:\\Users\\HackYourFuture\\AppData\\Local\\Programs\\Python\\Python312\\python.exe', '<tmp>\\project\\scripts\\spec-drift.py', '--out', '<tmp>\\project\\spec-drift.json', '--cache', '<tmp>\\cache.json'] (#5)
-      The same break also failed `DryRunTest.test_project_is_unchanged` in #5, with "?? spec-drift.json" in
-      the status. It cannot be replayed: the report holds the fixture's commit hash, which changes
-      on every run (D01.17).
+      #5 also wrote spec-drift.py's output inside the project. That failed
+      `DryRunTest.test_runs_only_reads` with "not a read" and the recorded `spec-drift.py` command,
+      and `DryRunTest.test_project_is_unchanged` with "?? spec-drift.json" in the status. Neither
+      replays. The first report holds the interpreter's path and Windows separators, which
+      differ on CI's Linux (D01.18). The second holds the fixture's commit hash, which changes on
+      every run (D01.17).
 
 ## Verify
 ```bash
@@ -268,8 +270,8 @@ python -m unittest discover -s tests
   red" job, one line per test and criterion.
 - The Notes above expected `broken: none` in every track: with nothing to hold there was nothing
   to break. Each track broke its code once or more anyway, on a rule its tests should guard: six
-  breaks, under C01.3, C01.5, C01.6 and C01.7, five of them in `specs/breaks/day-01.json`
-  (D01.17 says why not the sixth). C01.1, C01.2 and
+  breaks, under C01.3, C01.5, C01.6 and C01.7, four of them in `specs/breaks/day-01.json`
+  (D01.17 and D01.18 say why not the other two). C01.1, C01.2 and
   C01.4 rest on their seen-red lines alone.
 - #2 also ran a break, on `docs/kit.md`, under no Day 01 criterion: it stays in that PR and out
   of the day's manifest.
@@ -286,8 +288,12 @@ python -m unittest discover -s tests
 - **Defect** D01.17 — found: evidence replay · cause: process · made: Day 01 · #5's break of
   `DryRunTest.test_project_is_unchanged` recorded a report that holds the fixture's commit hash.
   The fixture commits at the current time, so the hash changed and the close's rehearsal failed
-  the line. It is written as a sentence under C01.7 instead, and the other break of the same code
-  still replays.
+  the line. It is written as a sentence under C01.7 instead.
+- **Defect** D01.18 — found: evidence replay · cause: process · made: Day 01 · #5's break of
+  `DryRunTest.test_runs_only_reads` recorded a report that holds the Windows interpreter's path
+  and `\\` separators. The local rehearsal, on the machine that recorded it, passed it; CI's
+  rehearsal on Linux failed it. It is written as a sentence under C01.7 instead, and C01.7 keeps
+  its break of the remote's `main`, which replays on both.
 - **Hand-off** H01.8 → Day 4: on Windows the dry run's stdout uses the locale's codepage, so a
   sentence with an en dash ("Day 03 Track B: C03.2–C03.3") may reach a parent reading UTF-8
   mangled. The tests use ASCII sentences. #5 named Day 3; `plan.md` has sessions start from

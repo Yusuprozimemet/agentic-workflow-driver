@@ -15,13 +15,14 @@ one tooling PR for hand-off H01.7 (#2), and Tracks A, B and C (#3, #4, #5).
 - **Every `new` check was seen red.** All 7 criteria were `new`, and CI's "Track tests seen red"
   showed each of their 15 tests failing on the code before its track.
 - **Breaks:** 6, across C01.3, C01.5, C01.6 and C01.7, although the spec expected none for an
-  all-`new` day. Five of them replay. The sixth's report held a commit hash that changes on
-  every run, and the close's rehearsal caught it (D01.17). C01.1, C01.2 and C01.4 rest on
-  seen-red alone.
-- **Defects:** 17. The spec-auditor and plan-auditor found 14 in the spec before any code
-  (D01.1–D01.14, all `cause: spec`). Of the other 3, Track A found a spec gap (D01.16), and the
-  close's evidence rehearsal found a break whose report could not be replayed (D01.17). The
-  third was a test of the kit's own tooling that read the wrong file (D01.15). It was made
+  all-`new` day. Four of them replay. The close's rehearsals caught the other two (D01.17,
+  D01.18). One report held a commit hash that changes on every run. The other held a Windows
+  interpreter path that CI's Linux run cannot match, and the local rehearsal passed it. C01.1,
+  C01.2 and C01.4 rest on seen-red alone.
+- **Defects:** 18. The spec-auditor and plan-auditor found 14 in the spec before any code
+  (D01.1–D01.14, all `cause: spec`). Of the other 4, Track A found a spec gap (D01.16), and the
+  close's evidence rehearsals found two breaks whose reports could not be replayed (D01.17,
+  D01.18). The fourth was a test of the kit's own tooling that read the wrong file (D01.15). It was made
   before any day (`made: none`), so it is an escape from the repository's start, not from a
   day. No escapes from Day 01.
 - **Hand-offs:** 9 in all. H01.7 landed in #2. Of the 8 open, Day 2 takes H01.3 and H01.9,

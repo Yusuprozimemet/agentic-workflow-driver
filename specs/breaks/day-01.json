@@ -46,17 +46,5 @@
       "unittest",
       "tests.test_dry_run.DryRunTest.test_github_unread_exits_2"
     ]
-  },
-  {
-    "what": "spec-drift.py's output written inside the project (test_runs_only_reads)",
-    "file": "run-steps.py",
-    "find": "out = Path(tmp) / \"spec-drift.json\"",
-    "replace": "out = project / \"spec-drift.json\"",
-    "command": [
-      "python",
-      "-m",
-      "unittest",
-      "tests.test_dry_run.DryRunTest.test_runs_only_reads"
-    ]
   }
 ]
