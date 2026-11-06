@@ -155,7 +155,7 @@ CI's "Track tests seen red" knows only the rows of this table.
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C03.1 **new** — With no `--project`, `python run-steps.py --dry-run --config <file>` takes
+- [x] C03.1 **new** — With no `--project`, `python run-steps.py --dry-run --config <file>` takes
       the project from the config and prints the same action as with `--project` (exit 0, 1 as
       Day 1). With a config that is not JSON it prints "cannot start: `<file>` is not a JSON
       object" on stderr, nothing on stdout, and exits 2; with `{"project": "<path>"}` alone it
@@ -172,7 +172,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ConfigTest.test_project_from_config`, `ConfigTest.test_preflight_from_config`,
       `ConfigTest.test_relative_project`, `ConfigTest.test_every_problem_is_a_line`,
       `ConfigTest.test_missing_config`, `ConfigTest.test_state_and_config_are_ignored`.
-- [ ] C03.2 **new** — `driver.lock.take(state)` writes `{"pid": <os.getpid()>, "started": <ISO
+      Evidence: `ConfigTest.test_project_from_config`, `ConfigTest.test_preflight_from_config`, `ConfigTest.test_relative_project`, `ConfigTest.test_every_problem_is_a_line`, `ConfigTest.test_missing_config`, `ConfigTest.test_state_and_config_are_ignored` (#13).
+      seen red first on `main`'s code: `python -m unittest tests.test_config` → FAILED (errors=6), each at its `setUp` import of `driver.config` (#13)
+      broken: a relative project read from the cwd, not the config's folder → AssertionError: Tuples differ: (1, '') != (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') (#13)
+      broken: a budget_usd of 0 accepted → AssertionError: Tuples differ: (0, 'start: Day 01: read the spec against [36 chars], '') != (2, '', "cannot start: C:\\Users\\HACKYO~1[85 chars]0\n") (#13)
+      broken: only the first missing key reported → AssertionError: Tuples differ: (2, '[100 chars]nly\n') != (2, '[100 chars]nly\ncannot start: C:\\Users\\HACKYO~1\\AppDat[163 chars]t\n') (#13)
+      broken: driver.json not ignored → AssertionError: 1 != 0 : driver.json (#13)
+- [x] C03.2 **new** — `driver.lock.take(state)` writes `{"pid": <os.getpid()>, "started": <ISO
       8601>}` to `<state>/lock` and returns no line; a second `take` while that process lives
       returns "cannot start: the driver is already running (pid <n>, since <started>)" and
       leaves the file's bytes as they were; with a lock naming a process that has exited (the
@@ -189,7 +195,15 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `LockTest.test_stale_lock_refuses`, `LockTest.test_reused_pid_is_gone`,
       `LockTest.test_unreadable_lock_refuses`, `LockTest.test_release_keeps_anothers_lock`,
       `LockTest.test_asking_does_not_kill`.
-- [ ] C03.3 **new** — `python hooks/halt.py <file>` exits 2 with "halted: <file> exists;
+      Evidence: `LockTest.test_take_writes_pid_and_start`, `LockTest.test_live_lock_refuses`, `LockTest.test_stale_lock_refuses`, `LockTest.test_reused_pid_is_gone`, `LockTest.test_unreadable_lock_refuses`, `LockTest.test_release_keeps_anothers_lock`, `LockTest.test_asking_does_not_kill` (#14).
+      seen red first on `main`'s code: `python -m unittest tests.test_lock` → FAILED (errors=7), each at its `setUp` import of `driver.lock` (#14)
+      broken: the lock names the parent's pid → AssertionError: 19032 != 5008 (#14)
+      broken: take truncates a held lock → AssertionError: None != 'cannot start: the driver is already runn[39 chars]26Z)' (#14)
+      broken: a pid that began after the lock still counts → AssertionError: 'cannot start: the driver is already running (pid 3420, [23 chars]26Z)' != 'cannot start: a lock names pid 3420, which is gone; run[22 chars]s it' (#14)
+      broken: asking ends the process → AssertionError: 'cannot start: a lock names pid 27672, which is gone; ru[23 chars]s it' != 'cannot start: the driver is already running (pid 27672,[24 chars]28Z)' (#14)
+      broken: a lock with no pid names this process → AssertionError: 'cannot start: the driver is already running (pid 5072, [23 chars]00Z)' != 'cannot start: <tmp>[61 chars]s it' (#14)
+      broken: release removes any lock → AssertionError: False is not true : release removed another pid's lock (#14)
+- [x] C03.3 **new** — `python hooks/halt.py <file>` exits 2 with "halted: <file> exists;
       run-steps.py clear removes it" on stderr while the file exists, and 0 with nothing on
       stdout or stderr when it does not, whatever `CLAUDE_PROJECT_DIR` is (unset, or another
       folder) and whatever the working directory; with no argument it exits 2 with "halted: the
@@ -197,7 +211,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `hooks/halt.py` does not exist; Python exits 2 with "can't open file".
       Test: `HaltHookTest.test_refuses_while_halt_file_exists`,
       `HaltHookTest.test_passes_without_halt_file`, `HaltHookTest.test_no_argument_refuses`.
-- [ ] C03.4 **new** — `hooks/guard.py <driver folder>` refuses, exit 2 and the line of In
+      Evidence: `HaltHookTest.test_refuses_while_halt_file_exists`, `HaltHookTest.test_passes_without_halt_file`, `HaltHookTest.test_no_argument_refuses` (#15).
+      seen red first on `main`'s code: `python -m unittest tests.test_hooks`: Python exited 2 with "can't open file" where the halt hook's line was expected (#15)
+      broken: the halt hook passes while the file exists → AssertionError: 0 != 2 (#15)
+      broken: the halt hook skips the missing-argument check → AssertionError: 1 != 2 (#15)
+- [x] C03.4 **new** — `hooks/guard.py <driver folder>` refuses, exit 2 and the line of In
       scope's table, each of: `gh pr merge 12 --squash`; `git push origin main`; `git push
       origin HEAD:main`; `git push origin HEAD:refs/heads/main`; `git switch x && git push
       origin main`; a `Bash` command naming the driver's folder in either slash form, in the
@@ -210,7 +228,16 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `hooks/guard.py` does not exist; every case exits 2 with "can't open file", so
       the passing cases fail.
       Test: `GuardHookTest.test_refuses`, `GuardHookTest.test_passes`.
-- [ ] C03.5 **new** — `driver.settings.write(state, home)` writes `<state>/settings.json`, a JSON
+      Evidence: `GuardHookTest.test_refuses`, `GuardHookTest.test_passes` (#15).
+      seen red first on `main`'s code: in the same run of `python -m unittest tests.test_hooks`, every case exited 2 with "can't open file", so the passing cases failed (#15)
+      broken: the guard lets a merge through → AssertionError: 0 != 2 (#15)
+      broken: the push rule reads the whole command → AssertionError: 2 != 0 (#15)
+      broken: the push rule forgets refs/heads/main → AssertionError: 0 != 2 (#15)
+      broken: the folder rule matches a longer name → AssertionError: 2 != 0 (#15)
+      broken: an edit under the folder passes → AssertionError: 0 != 2 (#15)
+      broken: stdin that is not JSON passes → AssertionError: 0 != 2 (#15)
+      broken: JSON that is not an object is read as a call → AssertionError: 1 != 2 (#15)
+- [x] C03.5 **new** — `driver.settings.write(state, home)` writes `<state>/settings.json`, a JSON
       object whose only key is `hooks`, with the two `PreToolUse` entries of In scope. Each
       entry's command, run through the shell (`shell=True`, as Claude Code runs a hook) from a
       folder that is not the driver's, with `CLAUDE_PROJECT_DIR` set to that folder, and with a
@@ -219,7 +246,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/settings.py` does not exist; `ImportError`.
       Test: `SettingsTest.test_settings_name_both_hooks`,
       `SettingsTest.test_commands_run_from_anywhere`.
-- [ ] C03.6 **new** — A stand-in driver (a Python process the test starts in its own process
+      Evidence: `SettingsTest.test_settings_name_both_hooks`, `SettingsTest.test_commands_run_from_anywhere` (#16).
+      seen red first on `main`'s code: `python -m unittest tests.test_halt` → FAILED (errors=10), each at its `setUp` import of `driver.settings` (#16)
+      broken: settings commands written without quotes → AssertionError: 0 != 2 (#16)
+- [x] C03.6 **new** — A stand-in driver (a Python process the test starts in its own process
       group, which starts a child, both sleeping and both writing their pid to a file) whose pid
       is in `<state>/lock`: `python run-steps.py halt --state <state>` prints "halt: set; killed
       pid <n> and the processes it started" and exits 0; within 5 s both processes are gone;
@@ -234,7 +264,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `HaltTest.test_halt_kills_the_tree`, `HaltTest.test_halt_with_no_driver`,
       `HaltTest.test_halt_twice`, `HaltTest.test_halt_creates_state`,
       `HaltTest.test_halt_unreadable_lock`.
-- [ ] C03.7 **new** — `python run-steps.py clear --state <state>` after a halt with no live
+      Evidence: `HaltTest.test_halt_kills_the_tree`, `HaltTest.test_halt_with_no_driver`, `HaltTest.test_halt_twice`, `HaltTest.test_halt_creates_state`, `HaltTest.test_halt_unreadable_lock` (#16).
+      seen red first on `main`'s code: in the same run of `python -m unittest tests.test_halt`, FAILED (errors=10) (#16)
+      broken: halt never kills the live driver the lock names → AssertionError: 'halt: set; no driver is running' != 'halt: set; killed pid 6120 and the processes it started' (#16)
+      broken: halt reads an unreadable lock as a driver → AssertionError: '' != 'halt: set; C:\\Users\\HACKYO~1\\AppData\\[71 chars]lled' (#16)
+- [x] C03.7 **new** — `python run-steps.py clear --state <state>` after a halt with no live
       process removes `<state>/halt` and a lock whose process is gone, prints "clear: the halt is
       removed; the driver is off" and exits 0; with no halt file it prints "clear: no halt is set"
       and exits 0; while the lock names a live process (the test's own child) it prints "clear:
@@ -243,7 +277,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: argparse exits 2 with "invalid choice: 'clear'".
       Test: `ClearTest.test_clear_removes_halt_and_stale_lock`, `ClearTest.test_clear_no_halt`,
       `ClearTest.test_clear_refuses_while_driver_lives`.
-- [ ] C03.8 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code (2.1.170 or newer),
+      Evidence: `ClearTest.test_clear_removes_halt_and_stale_lock`, `ClearTest.test_clear_no_halt`, `ClearTest.test_clear_refuses_while_driver_lives` (#16).
+      seen red first on `main`'s code: in the same run of `python -m unittest tests.test_halt`, FAILED (errors=10) (#16)
+      broken: clear removes the lock of a live driver → AssertionError: 'clear: the halt is removed; the driver is off' != 'clear: pid 20956 still runs; halt again, or stop it by hand' (#16)
+- [x] C03.8 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code (2.1.170 or newer),
       on the maintainer's PC:
       (a) with no halt file, the prompt "Run this exact command with the Bash tool: echo driver >
       out.txt" leaves `out.txt` in the scratch project and a line in the project hook's marker
@@ -268,13 +305,27 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       the close").
       Test: `LiveCliTest.test_settings_hooks_are_added`, `LiveCliTest.test_halt_refuses_a_tool_call`,
       `LiveCliTest.test_rules_file_and_resume`.
-- [ ] C03.9 **hold** — Day 1's and Day 2's tests pass with their files unedited: `git diff
+      Evidence: `LiveCliTest.test_settings_hooks_are_added`, `LiveCliTest.test_halt_refuses_a_tool_call`, `LiveCliTest.test_rules_file_and_resume` passed live with `DRIVER_LIVE_CLI=claude` on the
+      maintainer's PC (Windows 11, Claude Code 2.1.170, Haiku): 3 tests, OK, 21.2 s (#18); without
+      it, `python -m unittest discover -s tests` skips the three (#18).
+      seen red by hand on the maintainer's PC, not replayable (no login or budget in CI): `scripts/break.py`
+      made the written settings' halt command look for `<state>/no-halt`, and
+      `LiveCliTest.test_halt_refuses_a_tool_call` failed with "AssertionError: True is not false":
+      the session wrote `out.txt` while the halt was set (#18).
+- [x] C03.9 **hold** — Day 1's and Day 2's tests pass with their files unedited: `git diff
       --exit-code 0efd4d2 -- tests/test_contract.py tests/test_decide.py tests/test_dry_run.py
       tests/test_preflight.py tests/test_steps.py tests/test_kit_copy.py` prints nothing, and
       `python -m unittest discover -s tests` passes with them in it.
       To break once: the config read even when `--project` is given (no `driver.json` exists
       where the tests run, so the run refuses with "cannot start: no --project, and no config")
       → a `DryRunTest` fails; and one test file edited → the diff exits 1.
+      Evidence: the commands above: `git -c core.safecrlf=false diff --exit-code 0efd4d2 -- ...`
+      prints nothing and `python -m unittest discover -s tests` gives "Ran 58 tests", "OK
+      (skipped=3)" on this branch, after #18; #13 and #16 report the same diff empty.
+      The diff's break was first run at the close (D03.16); its report is the diff's last
+      context line.
+      broken: the config read even when --project is given → AssertionError: 'days' not found in 'cannot start: no --project, and no config at C:\\Users\\HackYourFuture\\yusup\\agentic-workflow-driver\\driver.json\n' (#13)
+      broken: a Day 1 test file edited → driver/steps.py takes it."""
 
 ## Verify
 ```bash
@@ -384,6 +435,16 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
   there, which `-p` turns into a denial. With the long path, all three passed. The test now
   takes `os.path.realpath` of its scratch root. D03.13 was half the cause: in a long-path
   project, `"Bash(echo:*)"` was still denied.
+- **Defect** D03.16 — found: close · cause: process · made: Day 03 · C03.9 names two breaks:
+  the config read even when `--project` is given, and one test file edited so that the diff
+  exits 1. Track A (#13) ran the first. No track ran the second: the Tracks table says every
+  track holds C03.9, so no track owned its breaks. The close ran it with `scripts/break.py`
+  on `tests/test_contract.py`, and the diff exited 1.
+- The close (2026-11-07): the tracks merged in the table's order, A to E (#13, #14, #15, #16,
+  #18), with spec changes #17 and #19 before E merged. The 24 `broken:` lines of #13 to #16 are
+  copied with their `manifest:` entries, parsed from the raw bodies, into
+  `specs/breaks/day-03.json`, together with the close's one break (D03.16). C03.8's break was run
+  by hand and cannot replay, so it is a "seen red by hand" sentence, not a manifest entry.
 - **Hand-off** H03.1 → Day 4: `--once` takes the lock and releases it, leads its own process
   group on POSIX, refuses while the halt file is set, writes the settings file before each
   session, and passes it; a test starts a real step, halts, and checks the session's tree is
