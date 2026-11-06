@@ -1,7 +1,9 @@
 """run-steps.py runs the kit's day loop on a project. --dry-run reads the project and its remote,
 prints the one action the driver would take on the next step, and writes nothing in the project.
 It exits 0 for start or wait, 1 for park, and 2 when the project lacks a piece of the kit (one
-line on stderr for each piece missing)."""
+line on stderr for each piece missing). preflight --project <path> [--claude <program>] checks the
+kit, then the Claude Code CLI, and prints "preflight: ok" and exits 0, or one line per missing
+piece on stderr and exits 2."""
 
 import argparse
 import sys
@@ -10,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from driver.decide import Facts, decide
-from driver.preflight import git, kit_lines
+from driver.preflight import cli_lines, git, kit_lines
 
 
 def sha_of(done, ref):
@@ -46,12 +48,29 @@ def read_facts(project):
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Run the kit's day loop on a project.")
     parser.add_argument(
+        "command", nargs="?", choices=["preflight"], help="check the kit and the Claude Code CLI"
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
     )
     parser.add_argument("--project", required=True, type=Path, help="the project's folder")
+    parser.add_argument(
+        "--claude",
+        default="claude",
+        help="the Claude Code program the preflight checks, found on PATH",
+    )
     args = parser.parse_args(argv)
+    if args.command == "preflight":
+        lines, _ = kit_lines(args.project)
+        lines += cli_lines(args.claude)
+        if lines:
+            for line in lines:
+                print(line, file=sys.stderr)
+            return 2
+        print("preflight: ok")
+        return 0
     if not args.dry_run:
-        print("run-steps.py: only --dry-run exists yet", file=sys.stderr)
+        print("run-steps.py: only --dry-run and preflight exist yet", file=sys.stderr)
         return 2
     lines, drift = kit_lines(args.project)
     if lines:
