@@ -6,6 +6,6 @@
   "services": {},
   "infra_workflow": "",
   "areas": [],
-  "frozen": [],
+  "frozen": ["tests/test_contract.py"],
   "code_under_tests": []
 }
