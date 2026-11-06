@@ -70,7 +70,7 @@ Closed 2026-11-07 ([spec](../specs/day-03-the-stop.md)). Nine PRs merged: the pl
   `main`'s code before their track (6 in #13, 7 in #14, 5 in #15, 10 in #16). C03.8 began as
   `new`, but Tracks C and D had already landed its behaviour, so CI's "Track tests seen red"
   failed #18 until #19 made it `hold` (D03.14).
-- **Breaks:** 32 recorded, 17 of them in the manifest: 16 from the tracks, and one the close ran
+- **Breaks:** 26 recorded, 17 of them in the manifest: 16 from the tracks, and one the close ran
   itself, because no track owned C03.9's diff break (D03.16). Eight track breaks reported a pid, a
   lock time or this repository's path, which no replay can print again: the close's rehearsal
   failed them, and they stay as sentences (D03.17), so Day 01's lesson did not hold. C03.8's break
