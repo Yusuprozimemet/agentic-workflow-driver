@@ -75,6 +75,12 @@ what an unattended run needs: the switches, the parks, the merge.
   `claude --settings <its file>` and its rules with `--append-system-prompt-file`, both from its
   own folder. Nothing of the driver is in a project's `.claude/`, so a manual session never loads
   any of it.
+- **Its hooks are named by absolute path.** In a session the driver starts,
+  `CLAUDE_PROJECT_DIR` is the project's folder, not the driver's, so a hook command cannot find
+  the driver's scripts through it. Before each session the driver writes its settings file into
+  its own state folder, uncommitted and ignored by git, with each hook's script and the halt file
+  named in full; the check of its own repository ("What the separate folder protects") does not
+  see it, and the next session's file is written afresh.
 - **Checked on Claude Code 2.1.170** (2026-11-06, `claude -p` in a scratch project with a hook
   of its own): hooks from `--settings` are added to the project's, not put in their place. Both
   fired on the same call, with the same event and matcher, and inside a subagent. A `--settings`
@@ -175,7 +181,8 @@ stateDiagram-v2
 
 1. Writes the halt file, in the driver's folder. From then on a hook refuses every tool call in
    every session the driver started, subagents included. This holds even if a process survives.
-2. Kills the running session and everything it started (the whole process tree).
+2. Kills the running session and everything it started: the whole process tree of the driver
+   process the lock names.
 3. Merges nothing, starts nothing, and exits. Open pull requests stay open and unmerged.
 4. Writes what was in progress to the run's issue: the step, the branch, the last commit, whether
    the working tree was left with uncommitted changes.
@@ -377,7 +384,7 @@ A lost or torn log makes it park, not guess.
    for the same step and reason, and comments there.
 7. **No command that can lose work.** The driver's git commands are `status`, `rev-parse`,
    `for-each-ref`, `ls-remote`, `fetch`, and on a clean tree `switch main` and
-   `merge --ff-only`. Never `reset`, a checkout of a path, `clean`, `stash`, `branch -D`, a
+   `merge --ff-only`; `symbolic-ref` and `ls-remote --get-url` read only. Never `reset`, a checkout of a path, `clean`, `stash`, `branch -D`, a
    forced push or the deletion of a branch. A halt kills processes and deletes nothing. What a
    crash left in the tree stays until the maintainer decides.
 8. **A merge is asked of GitHub, not of the log** (level 2). Whether a PR merged is read from
@@ -448,7 +455,8 @@ is built until the trial at level 1 has been read.
      step, and each day's `phase`, since the sentence never names a phase's end or the audit
      that follows it;
    - runs, in the project's folder, `claude -p "<step>" --model <the main session's>
-     --output-format json --max-budget-usd <n> --strict-mcp-config --settings <the driver's>
+     --output-format json --max-budget-usd <n> --permission-mode auto --strict-mcp-config
+     --settings <the driver's>
      --append-system-prompt-file <the driver's rules>`. `--strict-mcp-config` is there so that no
      connector of the maintainer's claude.ai account loads in a session nobody watches;
    - writes the step, its branch prefix and the session's id (`--session-id`) to the run log
@@ -465,7 +473,8 @@ is built until the trial at level 1 has been read.
    while the halt file exists), the refusal of `gh pr merge` and of a push to `main`, the refusal
    of edits to the driver's folder. The rules: the `PARK:` line, and a lesson for `CLAUDE.md`
    written as a `Hand-off` line. No driver without its stop: a test starts a step, halts, and
-   checks the process is gone and a tool call is refused.
+   checks the process is gone and a tool call is refused (Day 3 on a stand-in process, Day 4 on
+   a real step).
 4. **Parks**: the `parked` issue, every reason in "When the driver parks", and the phone's `STOP`
    issue.
 5. **The run log**: one line per step, printed by `status`: steps, parks by reason, cost per PR
@@ -499,9 +508,8 @@ runs without them:
 
 ## Phases
 
-Each phase is a series of <400-line PRs, so CI stays green. Day 1 has a spec,
-[specs/day-01-dry-run.md](specs/day-01-dry-run.md). The days after it are titles: each gets its
-spec when its turn comes.
+Each phase is a series of <400-line PRs, so CI stays green. Days 1 and 2 have specs in
+[`specs/`](specs/). The days after them are titles: each gets its spec when its turn comes.
 
 ### Phase 0 — The dry run
 **Goal:** the driver reads a project and names the next action, and starts nothing.
@@ -514,9 +522,16 @@ spec when its turn comes.
 
 ### Phase 1 — Level 1: the driver starts steps, the maintainer merges
 **Goal:** one day of a project runs with the maintainer only merging and answering parks.
-- Day 3: the stop before the start: the halt file, the driver's settings, `halt` and `clear`.
-- Day 4: one step: the run log written first, the session, its PR found, `PARK:`, `--once`.
-- Day 5: parks: the issue and its reasons, the phone's `STOP`, `off`.
+- Day 3: the stop before the start: the config and the lock; the driver's settings (the halt
+  hook, and the refusals of a merge, a push to `main` and an edit to the driver's folder);
+  `halt` and `clear`, shown on a stand-in process; the live check that `--settings` hooks are
+  added to the project's ("What to build", item 1).
+- Day 4: one step: the preflight and the check of the driver's own repository first, the run
+  log written first, the session (`--session-id`, `--permission-mode auto`), its PR found by
+  branch and author, `PARK:`, the wait after a close until its evidence run is checked,
+  `--once`; a halt during a real step.
+- Day 5: parks: the run's issue, the `parked` issue and its reasons, when a park counts as
+  answered, the phone's `STOP`, `off`; a halt's report on the run's issue.
 - Day 6: the loop: the checks, a fix resumed twice at most, the merge waited for, the evidence
   run, `main` pulled, `on`.
 - Day 7: recovery: every start reads the table of "Recovery"; `status` and the run log's report.
@@ -591,7 +606,9 @@ Decided 2026-11-06:
 - **Permission mode.** The level 1 trial runs its sessions in `auto` mode. A refusal that stops
   a step is a park, and the run log counts them. If they become frequent, the driver's report
   says so and the maintainer decides. The driver never changes the mode, and nothing falls back
-  to `bypassPermissions`.
+  to `bypassPermissions`. It passes `--permission-mode auto` on every call: without the flag a
+  headless session takes its mode from the maintainer's own `~/.claude/settings.json`, which the
+  driver does not control (found 2026-11-06, Phase 1's audit).
 - **The token.** Fine-grained, for the trial's repository only: contents, pull requests and
   issues; no Administration, no Workflows. GitHub then refuses a change to the protection and a
   push that edits `.github/workflows/`, and the PRs still come from the maintainer's account.
