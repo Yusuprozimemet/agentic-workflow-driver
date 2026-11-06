@@ -18,5 +18,8 @@ Run the tests with `python -m unittest discover -s tests` (they need `numpy`:
 
 ## Findings
 
-None yet. Each closing PR adds what its day found; the details are in
+Each closing PR adds what its day found; the details are in
 [docs/lab-notebook.md](docs/lab-notebook.md).
+
+- **Day 01:** the auditors found 14 of the day's 16 defects in the spec, before any code. Every
+  `new` test was seen red, and none escaped.
