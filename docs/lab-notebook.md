@@ -70,14 +70,16 @@ Closed 2026-11-07 ([spec](../specs/day-03-the-stop.md)). Nine PRs merged: the pl
   `main`'s code before their track (6 in #13, 7 in #14, 5 in #15, 10 in #16). C03.8 began as
   `new`, but Tracks C and D had already landed its behaviour, so CI's "Track tests seen red"
   failed #18 until #19 made it `hold` (D03.14).
-- **Breaks:** 25 in the manifest: 24 from the tracks, and one the close ran itself, because no
-  track owned C03.9's diff break (D03.16). C03.8's break was run by hand on the maintainer's PC
-  and cannot replay in CI.
-- **Defects:** 16. The auditors found 11 before any code: four `plan.md` gaps found by the
+- **Breaks:** 32 recorded, 17 of them in the manifest: 16 from the tracks, and one the close ran
+  itself, because no track owned C03.9's diff break (D03.16). Eight track breaks reported a pid, a
+  lock time or this repository's path, which no replay can print again: the close's rehearsal
+  failed them, and they stay as sentences (D03.17), so Day 01's lesson did not hold. C03.8's break
+  was run by hand on the maintainer's PC and cannot replay in CI.
+- **Defects:** 17. The auditors found 11 before any code: four `plan.md` gaps found by the
   plan-auditor and fixed by #11 (D03.1–D03.4), and seven spec errors found by the spec-auditor
   (D03.6–D03.12). The session found 2 itself (D03.5, D03.13), Track E found 2 (D03.14, and
-  D03.15: an 8.3 short temp path made Claude Code deny the write), and the close found 1
-  (D03.16). None is an escape from an earlier day.
+  D03.15: an 8.3 short temp path made Claude Code deny the write), the close found 1
+  (D03.16), and its rehearsal 1 (D03.17). None is an escape from an earlier day.
 - **Hand-offs:** 10. H03.1, H03.5, H03.6, H03.7, H03.9 and H03.10 → Day 4, H03.2 → Day 5,
   H03.4 → Day 6, H03.3 → Day 7, and H03.8 to the maintainer.
 

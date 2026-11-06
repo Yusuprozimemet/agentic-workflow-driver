@@ -197,11 +197,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `LockTest.test_asking_does_not_kill`.
       Evidence: `LockTest.test_take_writes_pid_and_start`, `LockTest.test_live_lock_refuses`, `LockTest.test_stale_lock_refuses`, `LockTest.test_reused_pid_is_gone`, `LockTest.test_unreadable_lock_refuses`, `LockTest.test_release_keeps_anothers_lock`, `LockTest.test_asking_does_not_kill` (#14).
       seen red first on `main`'s code: `python -m unittest tests.test_lock` → FAILED (errors=7), each at its `setUp` import of `driver.lock` (#14)
-      broken: the lock names the parent's pid → AssertionError: 19032 != 5008 (#14)
-      broken: take truncates a held lock → AssertionError: None != 'cannot start: the driver is already runn[39 chars]26Z)' (#14)
-      broken: a pid that began after the lock still counts → AssertionError: 'cannot start: the driver is already running (pid 3420, [23 chars]26Z)' != 'cannot start: a lock names pid 3420, which is gone; run[22 chars]s it' (#14)
-      broken: asking ends the process → AssertionError: 'cannot start: a lock names pid 27672, which is gone; ru[23 chars]s it' != 'cannot start: the driver is already running (pid 27672,[24 chars]28Z)' (#14)
-      broken: a lock with no pid names this process → AssertionError: 'cannot start: the driver is already running (pid 5072, [23 chars]00Z)' != 'cannot start: <tmp>[61 chars]s it' (#14)
+      Not replayed, its report holds a pid or a time: the lock names the parent's pid → AssertionError: 19032 != 5008 (#14)
+      Not replayed, its report holds a pid or a time: take truncates a held lock → AssertionError: None != 'cannot start: the driver is already runn[39 chars]26Z)' (#14)
+      Not replayed, its report holds a pid or a time: a pid that began after the lock still counts → AssertionError: 'cannot start: the driver is already running (pid 3420, [23 chars]26Z)' != 'cannot start: a lock names pid 3420, which is gone; run[22 chars]s it' (#14)
+      Not replayed, its report holds a pid or a time: asking ends the process → AssertionError: 'cannot start: a lock names pid 27672, which is gone; ru[23 chars]s it' != 'cannot start: the driver is already running (pid 27672,[24 chars]28Z)' (#14)
+      Not replayed, its report holds a pid or a time: a lock with no pid names this process → AssertionError: 'cannot start: the driver is already running (pid 5072, [23 chars]00Z)' != 'cannot start: <tmp>[61 chars]s it' (#14)
       broken: release removes any lock → AssertionError: False is not true : release removed another pid's lock (#14)
 - [x] C03.3 **new** — `python hooks/halt.py <file>` exits 2 with "halted: <file> exists;
       run-steps.py clear removes it" on stderr while the file exists, and 0 with nothing on
@@ -266,7 +266,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `HaltTest.test_halt_unreadable_lock`.
       Evidence: `HaltTest.test_halt_kills_the_tree`, `HaltTest.test_halt_with_no_driver`, `HaltTest.test_halt_twice`, `HaltTest.test_halt_creates_state`, `HaltTest.test_halt_unreadable_lock` (#16).
       seen red first on `main`'s code: in the same run of `python -m unittest tests.test_halt`, FAILED (errors=10) (#16)
-      broken: halt never kills the live driver the lock names → AssertionError: 'halt: set; no driver is running' != 'halt: set; killed pid 6120 and the processes it started' (#16)
+      Not replayed, its report holds a pid or a time: halt never kills the live driver the lock names → AssertionError: 'halt: set; no driver is running' != 'halt: set; killed pid 6120 and the processes it started' (#16)
       broken: halt reads an unreadable lock as a driver → AssertionError: '' != 'halt: set; C:\\Users\\HACKYO~1\\AppData\\[71 chars]lled' (#16)
 - [x] C03.7 **new** — `python run-steps.py clear --state <state>` after a halt with no live
       process removes `<state>/halt` and a lock whose process is gone, prints "clear: the halt is
@@ -279,7 +279,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `ClearTest.test_clear_refuses_while_driver_lives`.
       Evidence: `ClearTest.test_clear_removes_halt_and_stale_lock`, `ClearTest.test_clear_no_halt`, `ClearTest.test_clear_refuses_while_driver_lives` (#16).
       seen red first on `main`'s code: in the same run of `python -m unittest tests.test_halt`, FAILED (errors=10) (#16)
-      broken: clear removes the lock of a live driver → AssertionError: 'clear: the halt is removed; the driver is off' != 'clear: pid 20956 still runs; halt again, or stop it by hand' (#16)
+      Not replayed, its report holds a pid or a time: clear removes the lock of a live driver → AssertionError: 'clear: the halt is removed; the driver is off' != 'clear: pid 20956 still runs; halt again, or stop it by hand' (#16)
 - [x] C03.8 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code (2.1.170 or newer),
       on the maintainer's PC:
       (a) with no halt file, the prompt "Run this exact command with the Bash tool: echo driver >
@@ -312,6 +312,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       made the written settings' halt command look for `<state>/no-halt`, and
       `LiveCliTest.test_halt_refuses_a_tool_call` failed with "AssertionError: True is not false":
       the session wrote `out.txt` while the halt was set (#18).
+      broken: none → run by hand on the maintainer's PC: CI has no Claude Code login or budget (#18)
 - [x] C03.9 **hold** — Day 1's and Day 2's tests pass with their files unedited: `git diff
       --exit-code 0efd4d2 -- tests/test_contract.py tests/test_decide.py tests/test_dry_run.py
       tests/test_preflight.py tests/test_steps.py tests/test_kit_copy.py` prints nothing, and
@@ -324,7 +325,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       (skipped=3)" on this branch, after #18; #13 and #16 report the same diff empty.
       The diff's break was first run at the close (D03.16); its report is the diff's last
       context line.
-      broken: the config read even when --project is given → AssertionError: 'days' not found in 'cannot start: no --project, and no config at C:\\Users\\HackYourFuture\\yusup\\agentic-workflow-driver\\driver.json\n' (#13)
+      Not replayed, its report holds the repository's path: the config read even when --project is given → AssertionError: 'days' not found in 'cannot start: no --project, and no config at C:\\Users\\HackYourFuture\\yusup\\agentic-workflow-driver\\driver.json\n' (#13)
       broken: a Day 1 test file edited → driver/steps.py takes it."""
 
 ## Verify
@@ -440,11 +441,20 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
   exits 1. Track A (#13) ran the first. No track ran the second: the Tracks table says every
   track holds C03.9, so no track owned its breaks. The close ran it with `scripts/break.py`
   on `tests/test_contract.py`, and the diff exited 1.
+- **Defect** D03.17 — found: evidence replay · cause: process · made: Day 03 · eight of the
+  tracks' 24 `broken:` lines hold a report no replay can print again: seven name a pid or a lock's
+  start time (#14, #16), and one names this repository's absolute path, where the replay runs in a
+  scratch worktree (#13). The close's rehearsal failed all eight, and C03.8 too: a `hold` with no
+  `broken:` line. The eight are now sentences, "Not replayed, its report holds ...", and are not in
+  the manifest. C03.8 has `broken: none →` with its reason. Day 01's lesson (D01.17: a report
+  that holds a hash does not replay) was not carried into the briefs: a test that asserts on a
+  pid needs a break that hits an assertion without one.
 - The close (2026-11-07): the tracks merged in the table's order, A to E (#13, #14, #15, #16,
-  #18), with spec changes #17 and #19 before E merged. The 24 `broken:` lines of #13 to #16 are
-  copied with their `manifest:` entries, parsed from the raw bodies, into
-  `specs/breaks/day-03.json`, together with the close's one break (D03.16). C03.8's break was run
-  by hand and cannot replay, so it is a "seen red by hand" sentence, not a manifest entry.
+  #18), with spec changes #17 and #19 before E merged. 16 of the 24 `broken:` lines of #13 to #16
+  are copied with their `manifest:` entries, parsed from the raw bodies, into
+  `specs/breaks/day-03.json`, together with the close's one break (D03.16): 17 entries. The other
+  eight cannot replay (D03.17). C03.8's break was run by hand, so it is a "seen red by hand"
+  sentence and `broken: none`.
 - **Hand-off** H03.1 → Day 4: `--once` takes the lock and releases it, leads its own process
   group on POSIX, refuses while the halt file is set, writes the settings file before each
   session, and passes it; a test starts a real step, halts, and checks the session's tree is
