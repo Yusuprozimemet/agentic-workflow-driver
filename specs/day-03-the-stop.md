@@ -106,7 +106,7 @@ a test on the installed CLI that `--settings` hooks are still added to the proje
   and a scratch state folder with the driver's settings written by `driver/settings.py`. It runs
   `<program> -p <prompt> --model <DRIVER_LIVE_MODEL, default haiku> --output-format json
   --max-budget-usd 0.50 --strict-mcp-config --permission-mode auto --settings
-  <state>/settings.json --allowedTools "Bash(echo:*)"` in the project, with a timeout of 300 s.
+  <state>/settings.json --allowedTools Bash` in the project, with a timeout of 300 s.
   `--permission-mode auto` is passed so the run does not depend on the maintainer's
   `~/.claude/settings.json`, as Day 4's sessions will not. CI has no login and no budget, so it
   skips there; the evidence is the maintainer's run by hand (Notes).
@@ -366,6 +366,13 @@ git -c core.safecrlf=false diff --exit-code 0efd4d2 -- tests/test_contract.py te
   B2" if B grew past 400 lines, but CI's "Track tests seen red" fails a track that is not a row
   of the Tracks table; and three deferrals (the en dash and codepage, `--permission-mode` in
   the preflight, the evidence files) had no Hand-off ID. Now five tracks, and H03.6 to H03.8.
+- **Defect** D03.13 — found: self · cause: spec · made: Day 03 · the live check allowed
+  `"Bash(echo:*)"`, which under `--permission-mode auto` on Claude Code 2.1.170 does not cover
+  `echo driver > out.txt`: the call was denied ("permission_denials" in the JSON, `is_error`
+  false), so (a) and (c)'s resume failed, and (b) passed for the wrong reason, since no `out.txt`
+  appeared halt or not. Seen in Track E's first live run; by hand, `"Bash(echo driver >
+  out.txt)"` and `"Bash(echo *)"` were denied too, and only `Bash` wrote the file. Now `Bash`:
+  the project is a scratch one, and the driver's guard hook still sees every call.
 - **Hand-off** H03.1 → Day 4: `--once` takes the lock and releases it, leads its own process
   group on POSIX, refuses while the halt file is set, writes the settings file before each
   session, and passes it; a test starts a real step, halts, and checks the session's tree is
