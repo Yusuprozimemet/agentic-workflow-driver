@@ -383,7 +383,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       no `new` claim, and CI's "Track tests seen red" passes a track that owns none.
       To break once: `--once` takes no lock (halt prints "no driver is running", the tree lives);
       on POSIX only, no `os.setpgid` (halt prints "killed pid N only: …", which still starts
-      "halt: set; killed pid ", so a process alive after 5 s is what fails, the fake first (D04.15); a local Windows run
+      "halt: set; killed pid ", so the child alive after 5 s is what fails; a local Windows run
       does not see this break, CI's Linux run does). The tests assert so that no pid or path is
       in the report (D03.17).
       Test: `OnceHaltTest.test_halt_during_once`, `OnceHaltTest.test_once_refuses_after_halt`.
@@ -407,9 +407,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       marker file got a line, and `is_error` is false: the session's next tool call was
       refused. Without `DRIVER_LIVE_CLI`, skipped with "DRIVER_LIVE_CLI is not set".
       Tagged hold as C04.12: true once Track F merges; Track G adds the test. Broken by hand,
-      on the maintainer's PC, as C03.8 was: `halt` kills the driver only, with no "/T" in its
-      `taskkill` → `late.txt` exists. (Was: `--once` passes no `--settings` → `out2.txt`
-      exists; the test cannot see that break, D04.13.) CI cannot replay it (no login, no budget): a sentence and `broken: none →`.
+      on the maintainer's PC, as C03.8 was: `--once` passes no `--settings` → `out2.txt`
+      exists. CI cannot replay it (no login, no budget): a sentence and `broken: none →`.
       Test: `LiveOnceTest.test_halt_during_a_real_step`.
       Evidence: `LiveOnceTest.test_halt_during_a_real_step` passed live with
       `DRIVER_LIVE_CLI=claude` on the maintainer's PC (Windows, Claude Code 2.1.170, haiku):
@@ -550,7 +549,9 @@ git -c core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py te
   `--once` passing no `--settings`, cannot fail `LiveOnceTest.test_halt_during_a_real_step`: the
   resume the criterion names passes `--settings <state>/settings.json` itself, and `halt` kills
   the tree before the flag matters (#29). Track G ran the "/T" break instead, which the test
-  catches; C04.13 now names it.
+  catches, and the close ticks C04.13 on it. A departure: C04.13's text still names the other
+  break, since a close keeps the criteria's wording ("Criteria keep their wording"); a
+  spec-change PR rewords it if the maintainer wants.
 - **Defect** D04.14 — found: Track G · cause: environment · made: none · C04.12's POSIX break
   could not run on the maintainer's PC, whose WSL has no `python3` (#29). The close ran it on
   Linux in a Docker container.
