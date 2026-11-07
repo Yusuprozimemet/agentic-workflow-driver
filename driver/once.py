@@ -7,11 +7,14 @@ session's outcome from its stdout, writes the run log's end line, and checks the
 repository again: a change or a moved HEAD sets the halt file, because the session ran with the
 driver's own files in reach. Then the run's issue is closed with the outcome as its comment, and
 `run.json` removed. Every park it prints is also an open issue (Day 5), so that the maintainer can
-close it to let the driver go on."""
+close it to let the driver go on. While the session runs, --once reads the project's issues every
+--poll seconds: an open STOP issue halts the driver, reports on the run's issue and kills the session
+(Day 5, "The phone's STOP during a session")."""
 
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import uuid
@@ -84,6 +87,63 @@ def park_issue(project, gh, line, sentence, session, open_list):
     return number
 
 
+def write_halt(state, why):
+    # Written as bytes, as the rest of the state is; the next --once refuses with this file.
+    with open(os.path.join(state, "halt"), "wb") as halt:
+        halt.write(f"halted at {lock.now().strftime(lock.STAMP)}: {why}".encode())
+
+
+def stop_session(proc, args, project, number, record, stop_number):
+    # The halt file is written first, so that every tool call the session makes is refused from here
+    # on. The report is written before the kill and cannot keep it: a report that fails or hangs
+    # still ends in the kill. On POSIX the kill is --once's own group, so this does not return.
+    write_halt(args.state, f"STOP issue #{stop_number}")
+    print(f"halt: the STOP issue #{stop_number} is open; the session is stopped", flush=True)
+    try:
+        reason = issues.close(project, args.gh, number, issues.report(project, record), timeout=10)
+        if reason is None:
+            print(f"halt: reported on #{number}", flush=True)
+        else:
+            print(f"halt: no report on #{number}: {reason}", flush=True)
+    except Exception as exc:  # noqa: BLE001 - the kill comes next whatever the report raised
+        print(f"halt: no report on #{number}: {type(exc).__name__}", flush=True)
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
+            )
+            proc.wait()
+            os.remove(os.path.join(args.state, "run.json"))
+        else:
+            os.killpg(os.getpgid(0), signal.SIGKILL)
+
+
+def run_session(command, prompt, args, project, number, record):
+    # Returns (stdout, return code), or None when a STOP issue stopped the session. The prompt goes on
+    # stdin once; each --poll seconds the project's issues are read while the session runs.
+    proc = subprocess.Popen(
+        command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=os.path.realpath(project)
+    )
+    data = prompt.encode("utf-8")
+    while True:
+        try:
+            out, _ = proc.communicate(data, timeout=args.poll)
+            return out, proc.returncode
+        except subprocess.TimeoutExpired:
+            # Passing the input again raises ValueError, so later calls send none.
+            data = None
+        open_list, reason = issues.open_issues(project, args.gh)
+        if reason:
+            # A read that fails is skipped; the next poll reads again.
+            continue
+        stops = sorted(issue["number"] for issue in open_list if issue["title"].startswith("STOP"))
+        if stops:
+            stop_session(proc, args, project, number, record, stops[0])
+            return None
+
+
 def run(args, home, read_facts):
     # read_facts is passed in from run-steps.py, so the dry run's own function is used unchanged.
     if hasattr(os, "setpgid"):
@@ -130,11 +190,7 @@ def checked(args, home, project, read_facts, config):
     stops = [issue for issue in open_list if issue["title"].startswith("STOP")]
     if stops:
         number = stops[0]["number"]
-        # Written as bytes, as the halt file is at the end of this module.
-        with open(os.path.join(args.state, "halt"), "wb") as halt:
-            halt.write(
-                f"halted at {lock.now().strftime(lock.STAMP)}: STOP issue #{number}".encode()
-            )
+        write_halt(args.state, f"STOP issue #{number}")
         text = f"cannot start: halted: the STOP issue #{number} is open;"
         return refuse([f"{text} close it, then run-steps.py clear"])
     parked = [f"#{issue['number']}" for issue in open_list if "parked" in issue["labels"]]
@@ -240,15 +296,13 @@ def checked(args, home, project, read_facts, config):
         f"Next step: {sentence}\n"
         "Do this one step as CLAUDE.md says, open its one pull request, and stop.\n"
     )
-    done = subprocess.run(
-        command,
-        input=prompt.encode("utf-8"),
-        stdout=subprocess.PIPE,
-        cwd=os.path.realpath(project),
-        check=False,
-    )
-    out = done.stdout.decode("utf-8", errors="replace")
-    line, code = outcome(out, done.returncode, session, project, args.gh, sentence)
+    done = run_session(command, prompt, args, project, number, record)
+    if done is None:
+        # The STOP issue stopped the session: no outcome, no park and no close; the halt file says why.
+        return 1
+    stdout, returncode = done
+    out = stdout.decode("utf-8", errors="replace")
+    line, code = outcome(out, returncode, session, project, args.gh, sentence)
     if code == 2:
         print(line, file=sys.stderr)
     else:
