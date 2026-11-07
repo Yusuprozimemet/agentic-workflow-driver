@@ -125,7 +125,15 @@ class OnceParksTest(unittest.TestCase):
         calls = read_calls(claude_dir) if (claude_dir / "calls.jsonl").exists() else []
         # The probes are --version and --help; any other call is a session.
         sessions = [call for call in calls if call["args"] not in (["--version"], ["--help"])]
-        return {"code": code, "out": out, "err": err, "sessions": sessions, "state": state}
+        gh_calls = read_calls(gh_dir) if (gh_dir / "calls.jsonl").exists() else []
+        return {
+            "code": code,
+            "out": out,
+            "err": err,
+            "sessions": sessions,
+            "state": state,
+            "gh": gh_calls,
+        }
 
     def test_stop_at_start(self):
         result = self.run_case("stop", issues=[issue(4, "STOP now")])
@@ -147,9 +155,13 @@ class OnceParksTest(unittest.TestCase):
             drift=drift_of(DASHED),
             issues=[issue(5, "STOP now", author="someone")],
         )
+        # The issues were read, by the maintainer's account only, and the other author's STOP
+        # was not among them: a run that reads no issue would also start, and proves nothing.
+        first = result["gh"][0] if result["gh"] else []
+        read_mine = first[:2] == ["issue", "list"] and "@me" in first
         self.assertEqual(
-            (result["code"], result["out"].rstrip("\r\n"), len(result["sessions"])),
-            (0, OPENED, 1),
+            (read_mine, result["code"], result["out"].rstrip("\r\n"), len(result["sessions"])),
+            (True, 0, OPENED, 1),
         )
 
     def test_wait_on_parked(self):
