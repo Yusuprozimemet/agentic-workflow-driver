@@ -17,8 +17,9 @@ if str(ROOT) not in sys.path:
 
 SHA = "1dc0f03" + "a" * 33
 
-# The fake program: it records its arguments in calls.jsonl beside it, then answers `run list` and
-# `pr list` from fake.json, and exits 99 on anything else.
+# The fake program: it records its arguments in calls.jsonl beside it, then answers `run list`,
+# `pr list` and `issue list` from fake.json (`issue_code` fails every issue and label call), and
+# exits 99 on anything else.
 FAKE = """import json
 import sys
 from pathlib import Path
@@ -30,6 +31,8 @@ with (folder / "calls.jsonl").open("ab") as calls:
 spec = json.loads((folder / "fake.json").read_text(encoding="utf-8"))
 if spec["code"] != 0:
     sys.exit(spec["code"])
+if args[0] in ("issue", "label") and spec.get("issue_code", 0) != 0:
+    sys.exit(spec["issue_code"])
 if args[:2] == ["run", "list"]:
     print(json.dumps(spec["runs"]))
     sys.exit(0)
@@ -39,12 +42,39 @@ if args[:2] == ["pr", "list"]:
         prs = [pr for pr in prs if pr.get("author") == "me"]
     print(json.dumps([{k: v for k, v in pr.items() if k != "author"} for pr in prs]))
     sys.exit(0)
+if args[:2] == ["issue", "list"]:
+    issues = spec["issues"]
+    state = args[args.index("--state") + 1]
+    issues = [issue for issue in issues if issue.get("state") == state]
+    if "--label" in args:
+        label = args[args.index("--label") + 1]
+        issues = [issue for issue in issues if label in issue.get("labels", [])]
+    if "--author" in args and args[args.index("--author") + 1] == "@me":
+        issues = [issue for issue in issues if issue.get("author") == "me"]
+    fields = args[args.index("--json") + 1].split(",")
+    listed = []
+    for issue in issues:
+        row = {}
+        for field in fields:
+            if field == "labels":
+                row[field] = [{"name": n} for n in issue.get("labels", [])]
+            else:
+                row[field] = issue.get(field)
+        listed.append(row)
+    print(json.dumps(listed))
+    sys.exit(0)
 sys.exit(99)
 """
 
 
-def fake_gh(folder, runs=None, prs=None, code=0):
-    spec = {"runs": runs or [], "prs": prs or [], "code": code}
+def fake_gh(folder, runs=None, prs=None, code=0, issues=None, issue_code=0):
+    spec = {
+        "runs": runs or [],
+        "prs": prs or [],
+        "code": code,
+        "issues": issues or [],
+        "issue_code": issue_code,
+    }
     # Files are written as bytes: on Windows, text mode would add a carriage return to each line.
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
     (folder / "fake.py").write_bytes(FAKE.encode("utf-8"))
