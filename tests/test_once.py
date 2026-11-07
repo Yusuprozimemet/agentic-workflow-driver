@@ -386,7 +386,11 @@ class OnceTest(unittest.TestCase):
             "and stop.\n"
         ).encode()
         stdin = bytes.fromhex(sessions[0]["stdin"]) if one else b""
-        gh_ok = [call[:2] for call in result["gh"]] == [["run", "list"], ["pr", "list"]]
+        gh_ok = [call[:2] for call in result["gh"]] == [
+            ["issue", "list"],
+            ["run", "list"],
+            ["pr", "list"],
+        ]
         cmd_ok = os.name != "nt" or claude_program(result["claude_dir"]).name.endswith(".cmd")
         self.assertEqual(
             (
@@ -397,7 +401,7 @@ class OnceTest(unittest.TestCase):
                 cmd_ok,
                 result["out"].rstrip("\r\n") == OPENED,
                 gh_ok,
-                one and sessions[0]["gh_calls"] == 1,
+                one and sessions[0]["gh_calls"] == 2,
             ),
             (True,) * 8,
         )

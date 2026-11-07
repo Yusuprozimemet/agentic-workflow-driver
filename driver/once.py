@@ -1,9 +1,10 @@
 """--once does one step's checks in order, and the first that applies ends the run: the halt file,
-the config, the lock, the driver's own repository, the kit and the CLI (preflight), the decision,
-the evidence run, then the run log. Steps 10 and 11 write the settings and the run log's start
-line, then start one `claude -p` session, its prompt on stdin. Step 12 reads the session's outcome
-from its stdout, writes the run log's end line, and checks the driver's repository again: a change
-or a moved HEAD sets the halt file, because the session ran with the driver's own files in reach."""
+the config, the lock, the driver's own repository, the kit and the CLI (preflight), the project's
+issues (the STOP switch, the parks), the decision, the evidence run, then the run log and the
+step's failures. Steps 10 and 11 write the settings and the run log's start line, then start one
+`claude -p` session, its prompt on stdin. Step 12 reads the session's outcome from its stdout,
+writes the run log's end line, and checks the driver's repository again: a change or a moved HEAD
+sets the halt file, because the session ran with the driver's own files in reach."""
 
 import json
 import os
@@ -12,7 +13,7 @@ import subprocess
 import sys
 import uuid
 
-from driver import github, lock, runlog
+from driver import github, issues, lock, runlog
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -89,6 +90,11 @@ def run(args, home, read_facts):
     if refusal:
         return refuse([refusal])
     try:
+        # An earlier run's record goes, so that a halt before this run's session reads none.
+        try:
+            os.remove(os.path.join(args.state, "run.json"))
+        except FileNotFoundError:
+            pass
         return checked(args, home, project, read_facts, config)
     finally:
         lock.release(args.state)
@@ -102,8 +108,33 @@ def checked(args, home, project, read_facts, config):
     lines += cli_lines(args.claude)
     if lines:
         return refuse(lines)
+    open_list, reason = issues.open_issues(project, args.gh)
+    if reason:
+        return refuse([f"cannot read the project: {reason}"])
+    # The lowest-numbered STOP issue; only the maintainer's own, as open_issues reads them.
+    stops = [issue for issue in open_list if issue["title"].startswith("STOP")]
+    if stops:
+        number = stops[0]["number"]
+        # Written as bytes, as the halt file is at the end of this module.
+        with open(os.path.join(args.state, "halt"), "wb") as halt:
+            halt.write(
+                f"halted at {lock.now().strftime(lock.STAMP)}: STOP issue #{number}".encode()
+            )
+        text = f"cannot start: halted: the STOP issue #{number} is open;"
+        return refuse([f"{text} close it, then run-steps.py clear"])
+    parked = [f"#{issue['number']}" for issue in open_list if "parked" in issue["labels"]]
+    if parked:
+        print(f"wait: parked {', '.join(parked)}")
+        return 0
     facts = read_facts(project)
     action = decide(drift, facts)
+    # A phase's end is answered by a closed parked issue of its exact title (decide's `answered`).
+    answered = None
+    if action.kind == "park" and action.line.startswith("park: the end of Phase "):
+        answered, reason = issues.closed_parks(project, args.gh)
+        if reason:
+            return refuse([f"cannot read the project: {reason}"])
+        action = decide(drift, facts, answered)
     if action.kind != "start":
         print(action.line)
         return 1 if action.kind == "park" else 0
@@ -121,6 +152,20 @@ def checked(args, home, project, read_facts, config):
     if reason:
         print(f"park: {reason}")
         return 1
+    failed, reason = runlog.failures(args.state, classify(sentence).prefix)
+    if reason:
+        print(f"park: {reason}")
+        return 1
+    if len(failed) >= 2:
+        line = f"park: the step failed twice: sessions `{failed[-2]}` and `{failed[-1]}`"
+        # A step that failed twice parks until the maintainer closes its park issue, as a phase does.
+        if answered is None:
+            answered, reason = issues.closed_parks(project, args.gh)
+            if reason:
+                return refuse([f"cannot read the project: {reason}"])
+        if line not in answered:
+            print(line)
+            return 1
     # The settings are written afresh, and the start line is in the log before the session runs.
     settings_path = driver_settings.write(args.state, home)
     session = str(uuid.uuid4())
