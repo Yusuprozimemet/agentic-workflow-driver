@@ -209,86 +209,81 @@ def checked(args, home, project, read_facts, config):
     run_path = os.path.join(args.state, "run.json")
     with open(run_path, "wb") as run_file:
         run_file.write(json.dumps(record).encode("utf-8"))
-    try:
-        # The settings are written afresh, and the start line is in the log before the session runs.
-        settings_path = driver_settings.write(args.state, home)
-        path = shutil.which(args.claude)
-        probe = subprocess.run([path, "--version"], check=False, **CLI)
-        lines = probe.stdout.splitlines()
-        version = lines[0].strip() if lines else ""
-        runlog.start(args.state, sentence, classify(sentence).prefix, session, version)
-        command = [
-            path,
-            "-p",
-            "--model",
-            args.model,
-            "--output-format",
-            "json",
-            "--max-budget-usd",
-            str(config["budget_usd"]),
-            "--permission-mode",
-            "auto",
-            "--strict-mcp-config",
-            "--settings",
-            settings_path,
-            "--append-system-prompt-file",
-            os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
-            "--session-id",
-            session,
-        ]
-        # The prompt is on stdin, not in an argument: cmd.exe drops a newline and what follows it.
-        prompt = (
-            f"Next step: {sentence}\n"
-            "Do this one step as CLAUDE.md says, open its one pull request, and stop.\n"
-        )
-        done = subprocess.run(
-            command,
-            input=prompt.encode("utf-8"),
-            stdout=subprocess.PIPE,
-            cwd=os.path.realpath(project),
-            check=False,
-        )
-        out = done.stdout.decode("utf-8", errors="replace")
-        line, code = outcome(out, done.returncode, session, project, args.gh, sentence)
-        if code == 2:
-            print(line, file=sys.stderr)
-        else:
-            print(line)
-        # The cost and the refusals are the session's own counts; a reply that is not JSON has
-        # neither.
-        data = parsed(out) or {}
-        denials = data.get("permission_denials")
-        runlog.end(
-            args.state,
-            session,
-            line,
-            data.get("total_cost_usd"),
-            len(denials) if isinstance(denials, list) else 0,
-        )
-        # A gh that failed (exit 2) is what the step cannot use, so no further gh call is made.
-        parked = None
-        if code == 1:
-            parked = park_issue(project, args.gh, line, sentence, session, open_list)
-        _, reason = driver_home.check(home, started)
+    # The settings are written afresh, and the start line is in the log before the session runs.
+    settings_path = driver_settings.write(args.state, home)
+    path = shutil.which(args.claude)
+    probe = subprocess.run([path, "--version"], check=False, **CLI)
+    lines = probe.stdout.splitlines()
+    version = lines[0].strip() if lines else ""
+    runlog.start(args.state, sentence, classify(sentence).prefix, session, version)
+    command = [
+        path,
+        "-p",
+        "--model",
+        args.model,
+        "--output-format",
+        "json",
+        "--max-budget-usd",
+        str(config["budget_usd"]),
+        "--permission-mode",
+        "auto",
+        "--strict-mcp-config",
+        "--settings",
+        settings_path,
+        "--append-system-prompt-file",
+        os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
+        "--session-id",
+        session,
+    ]
+    # The prompt is on stdin, not in an argument: cmd.exe drops a newline and what follows it.
+    prompt = (
+        f"Next step: {sentence}\n"
+        "Do this one step as CLAUDE.md says, open its one pull request, and stop.\n"
+    )
+    done = subprocess.run(
+        command,
+        input=prompt.encode("utf-8"),
+        stdout=subprocess.PIPE,
+        cwd=os.path.realpath(project),
+        check=False,
+    )
+    out = done.stdout.decode("utf-8", errors="replace")
+    line, code = outcome(out, done.returncode, session, project, args.gh, sentence)
+    if code == 2:
+        print(line, file=sys.stderr)
+    else:
+        print(line)
+    # The cost and the refusals are the session's own counts; a reply that is not JSON has neither.
+    data = parsed(out) or {}
+    denials = data.get("permission_denials")
+    runlog.end(
+        args.state,
+        session,
+        line,
+        data.get("total_cost_usd"),
+        len(denials) if isinstance(denials, list) else 0,
+    )
+    # A gh that failed (exit 2) is what the step cannot use, so no further gh call is made.
+    parked = None
+    if code == 1:
+        parked = park_issue(project, args.gh, line, sentence, session, open_list)
+    _, reason = driver_home.check(home, started)
+    if reason:
+        # Written as bytes, as the rest of the state is; the next --once refuses with this file.
+        with open(os.path.join(args.state, "halt"), "wb") as halt:
+            halt.write(f"halted at {lock.now().strftime(lock.STAMP)}: {reason}".encode())
+        print(f"halt: set during the step; {reason}")
+    if code != 2:
+        # The run's issue is closed with the outcome as its comment, and a halt's report.
+        comment = [line]
+        if parked is not None:
+            comment.append(f"parked: #{parked}")
         if reason:
-            # Written as bytes, as the rest of the state is; the next --once refuses with this file.
-            with open(os.path.join(args.state, "halt"), "wb") as halt:
-                halt.write(f"halted at {lock.now().strftime(lock.STAMP)}: {reason}".encode())
-            print(f"halt: set during the step; {reason}")
-        if code != 2:
-            # The run's issue is closed with the outcome as its comment, and a halt's report.
-            comment = [line]
-            if parked is not None:
-                comment.append(f"parked: #{parked}")
-            if reason:
-                comment.append(f"halt: set during the step; {reason}")
-                comment.append(issues.report(project, record))
-            error = issues.close(project, args.gh, number, "\n".join(comment))
-            if error:
-                print(f"cannot close the run's issue #{number}: {error}", file=sys.stderr)
-        return 1 if reason else code
-    finally:
-        try:
-            os.remove(run_path)
-        except FileNotFoundError:
-            pass
+            comment.append(f"halt: set during the step; {reason}")
+            comment.append(issues.report(project, record))
+        error = issues.close(project, args.gh, number, "\n".join(comment))
+        if error:
+            print(f"cannot close the run's issue #{number}: {error}", file=sys.stderr)
+    # The step is over: a halt from the PC after it has no run to report on.
+    os.remove(run_path)
+    return 1 if reason else code

@@ -62,14 +62,14 @@ class OnceRunTest(unittest.TestCase):
         seen = json.loads((folder / "claude" / "seen-run.json").read_bytes())
         self.assertEqual(
             (
-                set(seen),
+                sorted(seen),
                 seen["issue"],
                 seen["session"] == start_session(state),
-                seen["step"],
+                seen["step"] == DASHED,
                 (state / "run.json").exists(),
                 code,
             ),
-            (RUN_KEYS, 1, True, DASHED, False, 0),
+            (sorted(RUN_KEYS), 1, True, True, False, 0),
         )
 
     def test_run_issue_closed(self):
