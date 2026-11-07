@@ -2,9 +2,13 @@
 scripts/spec-drift.py that the name-gap chart and its caption read."""
 
 import importlib.util
+import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -97,6 +101,97 @@ class SpecStepsPanelTest(unittest.TestCase):
         self.assertTrue(
             "removal = p.x === 0 && p.out > 0" in script, "a pure removal is not marked"
         )
+
+
+def load_evidence():
+    spec = importlib.util.spec_from_file_location("evidence", ROOT / "scripts" / "evidence.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class ProvedByTest(unittest.TestCase):
+    """evidence.py's proved_by: every kind that proved a ticked criterion, in a fixed order."""
+
+    def test_every_kind_found_in_order(self):
+        evidence = load_evidence()
+        test = {("CliTest", "test_x"): None}
+        self.assertEqual(
+            evidence.proved_by(test, "git x", True, None), ["test", "command", "break"]
+        )
+        self.assertEqual(evidence.proved_by({}, None, True, None), ["break"])
+
+    def test_reader_only_with_nothing_else(self):
+        evidence = load_evidence()
+        self.assertEqual(evidence.proved_by({}, None, False, "a person reads it"), ["reader"])
+        self.assertEqual(evidence.proved_by({}, "git x", False, "a person reads it"), ["command"])
+        self.assertEqual(evidence.proved_by({}, None, False, None), [])
+
+
+class ProofKindsTest(unittest.TestCase):
+    """spec-drift.py's proof_kinds: each criterion once, under its strongest kind."""
+
+    def test_strongest_kind_counts_once(self):
+        checks = [
+            {"kind": "proof", "proved_by": ["test", "command", "break"]},
+            {"kind": "proof", "proved_by": ["command", "break"]},
+            {"kind": "proof", "proved_by": ["break"]},
+            {"kind": "proof", "proved_by": ["reader"]},
+            {"kind": "proof", "proved_by": []},
+            {"kind": "proof", "proved_by": None},
+            {"kind": "proof"},
+            {"kind": "break", "proved_by": ["break"]},
+        ]
+        self.assertEqual(
+            spec_drift.proof_kinds(checks),
+            {"test": 1, "command": 1, "break": 1, "reader": 1, "unproved": 2, "not_recorded": 1},
+        )
+
+    def test_report_day_gets_its_proof_counts(self):
+        report = {
+            "schema": spec_drift.EVIDENCE_SCHEMA,
+            "generated": "2026-11-07T00:00:00",
+            "ref": "main",
+            "ref_sha": "abc",
+            "runner": {},
+            "days": [
+                {
+                    "spec": {"path": "specs/day-03-x.md"},
+                    "checks": [
+                        {
+                            "id": "a",
+                            "kind": "proof",
+                            "status": "passed",
+                            "proved_by": ["test", "break"],
+                        },
+                        {"id": "b", "kind": "proof", "status": "passed", "proved_by": ["reader"]},
+                    ],
+                }
+            ],
+        }
+        days = [{"day": 3, "status": "done", "prs": [], "file": "specs/day-03-x.md"}]
+        with tempfile.TemporaryDirectory() as page:
+            with open(os.path.join(page, "evidence-checks.json"), "w", encoding="utf-8") as f:
+                json.dump(report, f)
+            with mock.patch.object(spec_drift, "PAGE", page):
+                out = spec_drift.evidence_checks(days, [{"sha": "abc", "pr": None}])
+        self.assertEqual(out["state"], "loaded", out.get("diagnostic"))
+        proof = out["days"][0]["proof"]
+        self.assertEqual((proof["test"], proof["reader"], proof["break"]), (1, 1, 0))
+        self.assertEqual(
+            [c["proved_by"] for c in out["days"][0]["checks"]], [["test", "break"], ["reader"]]
+        )
+
+
+class ProofKindsPanelTest(unittest.TestCase):
+    """The page has the proof-kinds chart, drawn on every redraw, not recorded apart from unproved."""
+
+    def test_panel_on_the_page_and_drawn(self):
+        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
+        self.assertIn('<div id="proof-kinds"></div>', page)
+        self.assertIn('panel("proof-kinds", drawProofKinds)', script)
+        self.assertIn('seg(d.proof.not_recorded, { fill: "none"', script)
 
 
 if __name__ == "__main__":
