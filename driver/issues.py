@@ -7,7 +7,7 @@ import shutil
 import signal
 import subprocess
 
-from driver import lock
+from driver import home, lock
 from driver.github import _gh
 
 
@@ -190,3 +190,21 @@ def close(project, gh, number, comment, timeout=None):
     if code != 0:
         return f"gh issue close exited {code}"
     return None
+
+
+def report(project, record):
+    # What a halt writes, read from the run's issue: when, which step and session, and what the
+    # project's repository held then (plan.md, "Recovery", rule 7). A git that fails reads as none.
+    branch = (home.git(project, "symbolic-ref", "-q", "--short", "HEAD") or "").strip()
+    head = (home.git(project, "rev-parse", "--verify", "-q", "HEAD") or "").strip()
+    status = home.git(project, "status", "--porcelain") or ""
+    changed = len([line for line in status.splitlines() if line.strip()])
+    lines = [
+        f"halted at {lock.now().strftime(lock.STAMP)}",
+        f"step: {record['step']}",
+        f"session: {record['session']}",
+        f"branch: {branch or 'detached HEAD'}",
+        f"last commit: {head[:7] if head else 'none'}",
+        f"uncommitted changes: {changed} paths" if changed else "uncommitted changes: none",
+    ]
+    return "\n".join(lines) + "\n"

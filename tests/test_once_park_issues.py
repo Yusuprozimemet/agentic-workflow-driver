@@ -27,6 +27,8 @@ ERROR = {"type": "result", "is_error": True, "result": "x"}
 PARKED = {"type": "result", "is_error": False, "result": "Worked.\n\nPARK: needs a decision\n\n"}
 PARK_STEM = "park: the session parked: needs a decision"
 LABEL_LINE = "cannot open the park's issue: gh label create exited 1"
+# The run's issue cannot be commented on either: the session's gh issue calls fail too.
+CLOSE_LINE = "cannot close the run's issue #1: gh issue comment exited 1"
 # The session makes the fake gh's issue and label calls fail, from its own folder's gh/fake.json.
 GH_FAILS = (
     'gh_file = folder.parent / "gh" / "fake.json"; '
@@ -59,6 +61,11 @@ def gh_issues(folder):
     # The issues the fake gh holds after the run: the ones it created, and the ones it was given.
     spec = json.loads((folder / "gh" / "fake.json").read_bytes())
     return spec["issues"]
+
+
+def parked_issues(folder):
+    # The park issues only: the run's issue (Day 5, C05.8) is labelled by nothing.
+    return [issue for issue in gh_issues(folder) if "parked" in issue["labels"]]
 
 
 def gh_calls(folder, verb):
@@ -111,11 +118,12 @@ class OnceParkIssuesTest(unittest.TestCase):
                 flags = build(folder, **kwargs)
                 code, out, err = once(self.copy, *flags)
                 line = out.strip()
-                bodies = created_bodies(folder)
+                # The run's issue is created too, and its body is not a park's: only parks are read.
+                bodies = [body for body in created_bodies(folder) if CLOSE in body]
                 self.assertEqual(
                     (
                         line.startswith("park: "),
-                        [(i["title"], i["state"], i["labels"]) for i in gh_issues(folder)],
+                        [(i["title"], i["state"], i["labels"]) for i in parked_issues(folder)],
                         out.splitlines(),
                         len(bodies),
                         all(line in body and CLOSE in body for body in bodies),
@@ -171,6 +179,13 @@ class OnceParkIssuesTest(unittest.TestCase):
         code, out, err = once(self.copy, *flags)
         stem = out.strip().split(" (session ")[0]
         self.assertEqual(
-            (stem, len(out.splitlines()), err.splitlines()[:1], code, gh_issues(folder)),
-            (PARK_STEM, 1, [LABEL_LINE], 1, []),
+            (
+                stem,
+                len(out.splitlines()),
+                err.splitlines()[:1],
+                err.splitlines()[1:2],
+                code,
+                parked_issues(folder),
+            ),
+            (PARK_STEM, 1, [LABEL_LINE], [CLOSE_LINE], 1, []),
         )
