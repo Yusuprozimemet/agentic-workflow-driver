@@ -271,6 +271,13 @@
     <div class="legend" id="proof-kinds-legend"></div>
     <div id="proof-kinds"></div>
     <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Promises kept, merge by merge</h2>
+      <p>Each in-force criterion's checks replayed on <code>main</code> at a merge, by <code>scripts/replay-history.py</code>, run by hand and committed as <code>replay-history.json</code>: its tests run clean and each recorded break put back in. A row is a criterion, a column a merge. A cell shows the worst of its checks, in this order: code broken, test weakened, break no longer applies, not runnable, not applicable on this platform, live only, holds. A cell is "not yet in force" only when every check is. A notch in the corner means its checks disagree. The strip above marks what each merge sampled: every criterion at a close, one day's criteria otherwise, and nothing where a day's merge waits for its close. A blank cell was not sampled.</p>
+    </div>
+    <div class="legend" id="replay-legend"></div>
+    <div id="replay"></div>
+    <details id="replay-table"></details>
+    <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Merge by merge</h2>
       <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree with no spec saying so; grey is retired. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
     </div>

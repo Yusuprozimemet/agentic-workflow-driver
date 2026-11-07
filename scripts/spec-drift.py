@@ -1406,6 +1406,51 @@ def token_usage():
         return json.load(f)
 
 
+# A criterion's state at a merge is the first of these any of its checks is in (scripts/replay-history.py).
+REPLAY_WORST = ["code broken", "test weakened", "break no longer applies", "not runnable",
+                "not applicable on this platform", "live only", "holds"]
+REPLAY_STATES = REPLAY_WORST + ["not yet in force"]
+
+
+def replay_state(states):
+    """The worst of a criterion's check states; "not yet in force" only when every check is."""
+    live = [s for s in states if s != "not yet in force"]
+    return min(live, key=REPLAY_WORST.index) if live else "not yet in force"
+
+
+def replay_history(path=None):
+    """docs/dashboard/replay-history.json, as scripts/replay-history.py wrote it, read, never run here:
+    one cell per criterion and merge, its checks' worst state, mixed when they differ. No file is
+    "absent", one this cannot read "invalid": neither a pass."""
+    path = path or os.path.join(PAGE, "replay-history.json")
+    if not os.path.exists(path):
+        return dict(state="absent")
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("schema") != 1:
+            raise ValueError(f"schema {data.get('schema')!r}, this page reads 1")
+        merges, cells = {}, {}
+        for r in data["rows"]:
+            if r["state"] not in REPLAY_STATES:
+                raise ValueError(f"{r['criterion']} at {r['merge']}: state {r['state']!r}")
+            m = merges.setdefault(r["n"], dict(n=r["n"], merge=r["merge"], pr=r.get("pr"), sample=r["sample"],
+                                               run=0, copied=0))
+            if "key" in r:
+                m["copied" if "reused_from" in r else "run"] += 1
+            cells.setdefault((r["criterion"], r["n"]), dict(day=r["day"], checks=[]))["checks"].append(
+                {k: r[k] for k in ("check", "state", "detail", "reused_from", "platform") if k in r})
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        return dict(state="invalid", why=str(e))
+    num = lambda cid: tuple(int(x) for x in re.findall(r"\d+", cid))  # noqa: E731
+    out = []
+    for (cid, n), c in sorted(cells.items(), key=lambda kv: (num(kv[0][0]), kv[0][1])):
+        states = {ch["state"] for ch in c["checks"]}
+        out.append(dict(criterion=cid, day=c["day"], n=n, state=replay_state(states), mixed=len(states) > 1,
+                        checks=c["checks"]))
+    return dict(state="loaded", states=REPLAY_STATES, merges=[merges[n] for n in sorted(merges)], cells=out)
+
+
 def refusals(name="refusals.json"):
     """The guards' refusals per date and guard, or with gates.json each gate's runs and tokens, as
     scripts/token-usage.py last wrote them."""
@@ -1851,7 +1896,7 @@ def main():
                     verification=verification(prs, runs),
                     infra=infra(INFRA_WORKFLOW),
                     deployment=deployment(),
-                    evidence_checks=checks,
+                    evidence_checks=checks, replay=replay_history(),
                     conclusion=conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md")),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),

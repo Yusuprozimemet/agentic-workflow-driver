@@ -90,12 +90,28 @@ class Classify(unittest.TestCase):
 
     def test_a_key_already_measured_is_copied_and_a_change_under_driver_measures_again(self):
         sha = rh.git("rev-parse", "HEAD").strip()
-        item = ("01", "C01.1", "keep broken", BREAK, [], None)
+        item = ("01", "C01.1", "keep broken", BREAK, [], None, False)
         known = {rh.key(sha, BREAK, [], False): {"state": "code broken", "merge": "abc"}}
         row = rh.sample(5, sha, "Merge pull request #9 from me/x", "day", [item], known, {"01": 1})[0]
         self.assertEqual((row["state"], row["reused_from"], row["pr"]), ("code broken", "abc", 9))
         other = self.commit({"driver/x.py": "x = 1\n"})
         self.assertNotIn(rh.key(other, BREAK, [], False), known)
+
+
+class LiveOnly(unittest.TestCase):
+    def test_broken_none_under_a_criterion_naming_driver_live_cli_is_live_only_and_any_other_is_not_runnable(self):
+        specs = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, specs, ignore_errors=True)
+        with open(os.path.join(specs, "day-01-a.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("## Acceptance criteria\n"
+                    "- [x] C01.1 **hold** — With `DRIVER_LIVE_CLI` naming Claude Code, the session parks.\n"
+                    "      broken: none → a live check, its break run by hand (#1)\n"
+                    "- [x] C01.2 **hold** — A person reads the page.\n"
+                    "      broken: none → nothing to break (#1)\n")
+        rows = rh.sample(5, "a" * 40, "Merge pull request #9 from me/x", "all", rh.checks(specs, ["01"]), {}, {"01": 1})
+        self.assertEqual([(r["criterion"], r["state"], r["detail"]) for r in rows],
+                         [("C01.1", "live only", "broken: none; the criterion names DRIVER_LIVE_CLI"),
+                          ("C01.2", "not runnable", "broken: none")])
 
 
 class Sampling(unittest.TestCase):

@@ -21,6 +21,8 @@ Each check gets one state:
 - break no longer applies: the file is gone, or the find text no longer occurs exactly once;
 - not applicable on this platform: a "posix_only" break, on Windows;
 - not runnable: no recorded arguments, `broken: none`, nothing to run, or break.py refused to run;
+- live only: `broken: none` under a criterion that names DRIVER_LIVE_CLI, a check on the installed
+  Claude Code that has no replay;
 - not yet in force: a merge before the day's close, where the named test or the edited code is not there yet.
 
 A check is keyed by a hash of what it reads at the merge: the trees of tests/, driver/, hooks/ and
@@ -56,7 +58,7 @@ git = ev.git
 
 OUT = "docs/dashboard/replay-history.json"
 STATES = ["holds", "code broken", "test weakened", "break no longer applies",
-          "not applicable on this platform", "not runnable", "not yet in force"]
+          "not applicable on this platform", "not runnable", "live only", "not yet in force"]
 READS = ["tests", "driver", "hooks", "rules", "run-steps.py", ".gitignore", "pyproject.toml", "requirements.txt"]
 DAY_BRANCH = re.compile(r"^Merge pull request #\d+ from \S+?/day-(\d{2})/|^Day (\d{2}) ")
 PR = re.compile(r"#(\d+)")
@@ -96,7 +98,8 @@ def sampled_days(n, subject, closed):
 
 
 def checks(specs, days):
-    """(day, criterion, check name, entry or None, tests) for each sampled in-force criterion, in order."""
+    """(day, criterion, check name, entry or None, tests, report, live) for each sampled in-force
+    criterion, in order; live when the criterion names DRIVER_LIVE_CLI."""
     in_force = {r["id"] for r in bi.collect(specs)[0] if r["state"] == "in force"}
     out = []
     for day in days:
@@ -113,10 +116,11 @@ def checks(specs, days):
                 continue
             tests = sorted(set(ev.TEST.findall("\n".join(lines))))
             found = [m.groups() for line in ev.joined(lines) if (m := ev.BROKEN.match(line))]
+            live = "DRIVER_LIVE_CLI" in "\n".join(lines)
             for what, report in found:
-                out.append((day, cid, what, recorded.get(what), tests, report))
+                out.append((day, cid, what, recorded.get(what), tests, report, live))
             if not found:
-                out.append((day, cid, "tests", None, tests, None))
+                out.append((day, cid, "tests", None, tests, None, live))
     return out
 
 
@@ -200,10 +204,14 @@ def sample(n, sha, subject, mode, items, known, pre_of):
     rows, env = [], dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     worktree = None
     try:
-        for day, cid, what, entry, tests, report in items:
+        for day, cid, what, entry, tests, report, live in items:
             pre = n < pre_of[day]
             row = {"n": n, "merge": sha[:12], "pr": int(m.group(1)) if (m := PR.search(subject)) else None,
                    "sample": mode, "day": day, "criterion": cid, "check": what, "platform": PLATFORM}
+            if entry is None and what == "none" and live:
+                row.update(state="live only", detail="broken: none; the criterion names DRIVER_LIVE_CLI")
+                rows.append(row)
+                continue
             if entry is None and what != "tests":
                 row.update(state="not runnable", detail="broken: none" if what == "none" else "no recorded arguments")
                 rows.append(row)

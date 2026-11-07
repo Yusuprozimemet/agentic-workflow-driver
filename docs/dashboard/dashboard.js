@@ -1097,6 +1097,88 @@ function drawProofKinds() {
   oooNote(box);
 }
 
+/* ---------- replay history ---------- */
+// Colour for the four states a reader must act on, each with a glyph too; shape alone for the rest.
+const REPLAY_LOOK = {
+  "code broken": { fill: "var(--r-broken)", glyph: "✕", ink: "#fff" },
+  "test weakened": { fill: "var(--r-weak)", glyph: "↓", ink: "#0b0b0b" },
+  "break no longer applies": { fill: "var(--r-gone)", glyph: "?", ink: "#fff" },
+  "not runnable": { fill: "var(--muted)" },
+  "not applicable on this platform": { fill: "url(#replay-hatch)", stroke: "var(--muted)" },
+  "live only": { fill: "none", stroke: "var(--muted)" },
+  "holds": { fill: "var(--r-holds)" },
+  "not yet in force": { dot: true },
+};
+const replaySwatch = s => {
+  const k = REPLAY_LOOK[s] || {};
+  if (k.dot) return `<i class="dot rdot"></i>`;
+  const bg = s === "not applicable on this platform" ? "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px)" : k.fill === "none" ? "none" : k.fill;
+  return `<i class="dot" style="background:${bg};${k.stroke ? "box-shadow:inset 0 0 0 1.5px " + k.stroke : ""};color:${k.ink || "inherit"}">${k.glyph || ""}</i>`;
+};
+function drawReplay() {
+  const rp = DATA.replay || { state: "absent" }, box = document.getElementById("replay");
+  const legend = document.getElementById("replay-legend"), table = document.getElementById("replay-table");
+  box.innerHTML = legend.innerHTML = table.innerHTML = "";
+  table.hidden = true;
+  if (rp.state === "absent") { box.innerHTML = `<p class="off">No history: <code>python scripts/replay-history.py</code> writes <code>docs/dashboard/replay-history.json</code>.</p>`; return; }
+  if (rp.state === "invalid") { box.innerHTML = `<p class="load-error">replay-history.json could not be read: ${esc(rp.why)}. Nothing is counted as holding.</p>`; return; }
+  if (!rp.cells.length) { box.innerHTML = `<p class="off">No merge sampled yet.</p>`; return; }
+  const count = s => rp.cells.filter(c => c.state === s).length;
+  legend.innerHTML = rp.states.map(s => `<span>${replaySwatch(s)}${esc(s)} · ${count(s)}</span>`).join("")
+    + `<span><i class="dot" style="background:var(--surface);box-shadow:inset 0 0 0 1px var(--grid)"><b class="notch"></b></i>checks disagree</span>`;
+  const byN = new Map(rp.merges.map(m => [m.n, m]));
+  const first = rp.merges[0].n, cols = rp.merges[rp.merges.length - 1].n - first + 1;
+  const rows = [...new Map(rp.cells.map(c => [c.criterion, c.day])).entries()];
+  const cell = new Map(rp.cells.map(c => [c.criterion + "@" + c.n, c]));
+  const P = { l: 84, r: 16, t: 36, b: 34 }, ch = 15, dayGap = 7;
+  const cw = Math.min(30, (LW - P.l - P.r) / cols);
+  const ys = [];
+  let y = P.t;
+  rows.forEach(([, day], i) => { if (i && day !== rows[i - 1][1]) y += dayGap; ys.push(y); y += ch; });
+  const H = y + P.b, cx = n => P.l + (n - first) * cw;
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Each in-force criterion's replay state at each merge" }, box);
+  const pat = el("pattern", { id: "replay-hatch", width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, el("defs", {}, svg));
+  el("line", { x1: 0, y1: 0, x2: 0, y2: 4, stroke: "var(--muted)", "stroke-width": 1.5 }, pat);
+  // The strip: what each merge sampled.
+  el("text", { x: P.l - 8, y: 22, "text-anchor": "end", class: "lbl", style: "font-size:11px" }, svg).textContent = "sampled";
+  const every = Math.ceil(28 / cw);
+  for (let n = first; n < first + cols; n++) {
+    const m = byN.get(n), x = cx(n);
+    el("rect", m ? { x: x + 1, y: 14, width: cw - 2, height: 10, rx: 2, fill: m.sample === "all" ? "var(--ink-2)" : "var(--axis)" }
+      : { x: x + 1.5, y: 14.5, width: cw - 3, height: 9, rx: 2, fill: "none", stroke: "var(--axis)", "stroke-dasharray": "2 2" }, svg);
+    if ((n - first) % every === 0) el("text", { x: x + cw / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" }, svg).textContent = m && m.pr ? "#" + m.pr : "·";
+    const hit = el("rect", { x, y: 10, width: cw, height: 18, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, m
+      ? `<b>${m.pr ? "#" + m.pr : esc(m.merge)}</b><div style="margin:3px 0 6px">merge ${esc(m.merge)} · ${m.sample === "all" ? "every criterion (a close)" : "one day's criteria"}</div><div class="row"><span>checks run</span><span>${m.run}</span></div><div class="row"><span>copied, same inputs</span><span>${m.copied}</span></div>`
+      : `<b>Not sampled</b><div>a day's merge, waiting for that day's close</div>`));
+    hit.addEventListener("mouseleave", hideTip);
+  }
+  rows.forEach(([cid, day], i) => {
+    if (!i || day !== rows[i - 1][1]) el("text", { x: 4, y: ys[i] + 11, class: "lbl", style: "font-size:11px;font-weight:600" }, svg).textContent = "D" + day;
+    el("text", { x: P.l - 8, y: ys[i] + 11, "text-anchor": "end", class: "num", style: "font-size:11px" }, svg).textContent = cid;
+    for (let n = first; n < first + cols; n++) {
+      const c = cell.get(cid + "@" + n);
+      if (!c) continue;
+      const k = REPLAY_LOOK[c.state], x = cx(n) + 1, w = cw - 2, h = ch - 2, yy = ys[i] + 1;
+      if (k.dot) el("circle", { cx: x + w / 2, cy: yy + h / 2, r: 2, fill: "var(--muted)" }, svg);
+      else el("rect", { x: x + 0.75, y: yy + 0.75, width: w - 1.5, height: h - 1.5, rx: 2, fill: k.fill, stroke: k.stroke || "none", "stroke-width": k.stroke ? 1.5 : 0 }, svg);
+      if (k.glyph) el("text", { x: x + w / 2, y: yy + h / 2 + 3.5, "text-anchor": "middle", style: `font-size:10px;font-weight:700;fill:${k.ink}` }, svg).textContent = k.glyph;
+      if (c.mixed) el("path", { d: `M${x + w - 6} ${yy} H${x + w} V${yy + 6} Z`, fill: "var(--ink)" }, svg);
+      const m = byN.get(n), hit = el("rect", { x: cx(n), y: ys[i], width: cw, height: ch, class: "hit" }, svg);
+      hit.addEventListener("mousemove", ev => showTip(ev, `<b>${esc(cid)} · ${m.pr ? "#" + m.pr : esc(m.merge)}</b><div style="margin:3px 0 6px">${esc(c.state)}${c.mixed ? " (its checks disagree)" : ""}</div>`
+        + c.checks.map(k => `<div class="row"><span>${esc(k.check)}</span><span>${esc(k.state)}</span></div>`
+          + (k.detail || k.reused_from ? `<div style="color:var(--muted);font-size:11.5px;margin-bottom:3px">${esc([k.detail, k.reused_from && "copied from " + k.reused_from].filter(Boolean).join(" · "))}</div>` : "")).join("")));
+      hit.addEventListener("mouseleave", hideTip);
+    }
+  });
+  // The table view: every check that does not hold, newest merge first.
+  const off = rp.cells.flatMap(c => c.checks.filter(k => k.state !== "holds").map(k => ({ c, k }))).sort((a, b) => b.c.n - a.c.n);
+  table.hidden = false;
+  table.innerHTML = `<summary>Every check that does not hold · ${off.length}</summary>` + (off.length ? `<table class="replay-off"><thead><tr><th>Merge</th><th>Criterion</th><th>Check</th><th>State</th><th>Detail</th></tr></thead><tbody>`
+    + off.map(({ c, k }) => { const m = byN.get(c.n); return `<tr><td>${m.pr ? "#" + m.pr : esc(m.merge)}</td><td>${esc(c.criterion)}</td><td>${esc(k.check)}</td><td>${esc(k.state)}</td><td>${esc(k.detail || "")}</td></tr>`; }).join("")
+    + `</tbody></table>` : `<p class="off">None: every check replayed holds.</p>`);
+}
+
 /* ---------- hand-offs ---------- */
 // The script sorts them by the receiving day's place in the run order, open ones first; those no
 // later day picks up (`to` null) come last, then tracks a PR announced that no branch names.
@@ -1416,7 +1498,7 @@ panel("attention-list", drawCriteria);
 panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
-panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds);panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
+panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel);
 }
 

@@ -128,6 +128,125 @@ class ProvedByTest(unittest.TestCase):
         self.assertEqual(evidence.proved_by({}, None, False, None), [])
 
 
+class ReplayHistoryTest(unittest.TestCase):
+    """spec-drift.py's replay_history: one cell per criterion and merge, its checks' worst state."""
+
+    WORST_FIRST = (
+        "code broken",
+        "test weakened",
+        "break no longer applies",
+        "not runnable",
+        "not applicable on this platform",
+        "live only",
+        "holds",
+    )
+
+    def write(self, data):
+        folder = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(folder, ignore_errors=True))
+        path = os.path.join(folder, "replay-history.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return path
+
+    def test_a_criterion_takes_its_worst_check_and_not_yet_in_force_only_when_every_check_is(self):
+        for i, worse in enumerate(self.WORST_FIRST):
+            for better in (*self.WORST_FIRST[i + 1 :], "not yet in force"):
+                self.assertEqual(spec_drift.replay_state({worse, better}), worse, (worse, better))
+        self.assertEqual(spec_drift.replay_state({"not yet in force"}), "not yet in force")
+
+    def test_the_page_reads_every_state_replay_history_writes(self):
+        spec = importlib.util.spec_from_file_location(
+            "replay_history", ROOT / "scripts" / "replay-history.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(sorted(spec_drift.REPLAY_STATES), sorted(module.STATES))
+
+    def test_cells_in_criterion_order_with_their_checks_and_each_merge_counts_runs_and_copies(self):
+        row = {"day": "04", "platform": "windows", "pr": 9, "sample": "all", "merge": "aaa", "n": 5}
+        rows = [
+            dict(row, criterion="C04.10", check="tests", state="not yet in force", key="k1"),
+            dict(row, criterion="C04.2", check="b", state="holds", key="k2"),
+            dict(
+                row,
+                criterion="C04.2",
+                check="a",
+                state="test weakened",
+                detail="passes with it in",
+                key="k3",
+            ),
+            dict(
+                row,
+                n=6,
+                merge="bbb",
+                pr=10,
+                sample="day",
+                criterion="C04.2",
+                check="a",
+                state="holds",
+                key="k4",
+                reused_from="aaa",
+            ),
+            dict(
+                row,
+                n=6,
+                merge="bbb",
+                pr=10,
+                sample="day",
+                criterion="C04.13",
+                check="none",
+                state="live only",
+            ),
+        ]
+        got = spec_drift.replay_history(self.write({"schema": 1, "rows": rows}))
+        self.assertEqual(got["state"], "loaded")
+        self.assertEqual(
+            [(c["criterion"], c["n"], c["state"], c["mixed"]) for c in got["cells"]],
+            [
+                ("C04.2", 5, "test weakened", True),
+                ("C04.2", 6, "holds", False),
+                ("C04.10", 5, "not yet in force", False),
+                ("C04.13", 6, "live only", False),
+            ],
+        )
+        self.assertEqual(
+            got["cells"][0]["checks"][1],
+            {
+                "check": "a",
+                "state": "test weakened",
+                "detail": "passes with it in",
+                "platform": "windows",
+            },
+        )
+        self.assertEqual(
+            [(m["n"], m["pr"], m["sample"], m["run"], m["copied"]) for m in got["merges"]],
+            [(5, 9, "all", 3, 0), (6, 10, "day", 0, 1)],
+        )
+
+    def test_no_file_is_absent_and_one_it_cannot_read_is_invalid(self):
+        self.assertEqual(
+            spec_drift.replay_history(os.path.join(tempfile.gettempdir(), "no-such-replay.json")),
+            {"state": "absent"},
+        )
+        bad = {
+            "day": "04",
+            "platform": "windows",
+            "sample": "all",
+            "merge": "aaa",
+            "n": 5,
+            "criterion": "C04.1",
+            "check": "x",
+            "state": "flaky",
+        }
+        self.assertEqual(
+            spec_drift.replay_history(self.write({"schema": 1, "rows": [bad]}))["state"], "invalid"
+        )
+        self.assertEqual(
+            spec_drift.replay_history(self.write({"schema": 2, "rows": []}))["state"], "invalid"
+        )
+
+
 class ProofKindsTest(unittest.TestCase):
     """spec-drift.py's proof_kinds: each criterion once, under its strongest kind."""
 
