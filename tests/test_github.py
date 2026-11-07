@@ -18,10 +18,14 @@ if str(ROOT) not in sys.path:
 SHA = "1dc0f03" + "a" * 33
 
 # The fake program: it records its arguments in calls.jsonl beside it, then answers `run list`,
-# `pr list` and `issue list` from fake.json (`issue_code` fails every issue and label call), and
-# exits 99 on anything else.
+# `pr list`, `issue list`, and the issue writes (`issue create`, `issue comment`, `issue close`,
+# `label create`) from fake.json (`issue_code` fails every issue and label call), and exits 99 on
+# anything else. A call with `--body-file -` also appends its stdin to bodies.jsonl beside it. A
+# fake.json with `sleep_on` (an `issue` subcommand) and `sleep` makes that call sleep first, for
+# the timeout test.
 FAKE = """import json
 import sys
+import time
 from pathlib import Path
 
 folder = Path(__file__).resolve().parent
@@ -29,6 +33,13 @@ args = sys.argv[1:]
 with (folder / "calls.jsonl").open("ab") as calls:
     calls.write(json.dumps(args).encode("utf-8") + b"\\n")
 spec = json.loads((folder / "fake.json").read_text(encoding="utf-8"))
+if "--body-file" in args and args[args.index("--body-file") + 1] == "-":
+    # Read before any exit below, so that a failed call does not leave its stdin unread.
+    body = sys.stdin.buffer.read().decode("utf-8")
+    with (folder / "bodies.jsonl").open("ab") as bodies:
+        bodies.write(json.dumps({"args": args, "body": body}).encode("utf-8") + b"\\n")
+if args[0] == "issue" and spec.get("sleep_on") == args[1]:
+    time.sleep(spec.get("sleep", 0))
 if spec["code"] != 0:
     sys.exit(spec["code"])
 if args[0] in ("issue", "label") and spec.get("issue_code", 0) != 0:
@@ -63,6 +74,29 @@ if args[:2] == ["issue", "list"]:
         listed.append(row)
     print(json.dumps(listed))
     sys.exit(0)
+if args[:2] == ["label", "create"]:
+    sys.exit(0)
+if args[:2] == ["issue", "create"]:
+    number = max([issue["number"] for issue in spec["issues"]], default=0) + 1
+    labels = [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == "--label"]
+    title = args[args.index("--title") + 1]
+    spec["issues"].append(
+        {"number": number, "title": title, "labels": labels, "state": "open", "author": "me"}
+    )
+    (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
+    print(f"https://github.com/me/project/issues/{number}")
+    sys.exit(0)
+if args[:2] in (["issue", "comment"], ["issue", "close"]):
+    if args[2] not in [str(issue["number"]) for issue in spec["issues"]]:
+        sys.exit(1)
+    if args[1] == "close":
+        for issue in spec["issues"]:
+            if str(issue["number"]) == args[2]:
+                issue["state"] = "closed"
+        (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
+        sys.exit(0)
+    print(f"https://github.com/me/project/issues/{args[2]}#issuecomment-1")
+    sys.exit(0)
 sys.exit(99)
 """
 
@@ -92,6 +126,15 @@ def read_calls(folder):
     return [
         json.loads(line)
         for line in (folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+
+
+def read_bodies(folder):
+    # Read as bytes, as the fake wrote them: a carriage return the caller sent is escaped in the
+    # JSON, so the raw file holds none, and the decoded body shows whether one was sent.
+    return [
+        json.loads(line)
+        for line in (folder / "bodies.jsonl").read_bytes().decode("utf-8").splitlines()
     ]
 
 
