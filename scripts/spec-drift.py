@@ -29,6 +29,9 @@ Per merge, the gap read against chance (what the dashboard draws):
   class_coverage: of the reached names, the share in the code, by class (prod, test, flags);
   class_names: the named names per class, and the flags the specs name, counted apart as they
   do not enter the gap. A test helper found only in test files counts as a test name.
+  names_added, names_dropped: per class, the names the specs use at this merge and not the one
+  before, and the other way round (None at the origin). The dashboard plots each spec-change
+  PR's names added against its step on gap_excess.
 
 Boundaries: for the services the project file names, how much of their main source has left the
 monolith for services/, and how many imports still cross from one service's packages into
@@ -599,6 +602,17 @@ def spec_flags(texts):
     return {f for t in texts.values() for span in TICK.findall(t) for f in FLAG.findall(span)}
 
 
+def name_steps(before, after):
+    """The names a merge added to the specs and dropped from them, per class, against the merge
+    before. Each side is (named, klass, flags): the mask of names the specs use, each name's class,
+    and the set of flags. A dropped name takes its class from the merge before, where it was named."""
+    (n0, k0, f0), (n1, k1, f1) = before, after
+    added = {k: int((n1 & ~n0 & (k1 == k)).sum()) for k in ("prod", "test")}
+    dropped = {k: int((n0 & ~n1 & (k0 == k)).sum()) for k in ("prod", "test")}
+    added["flags"], dropped["flags"] = len(f1 - f0), len(f0 - f1)
+    return added, dropped
+
+
 def code_flags(sha, flags):
     """The flags, of those asked for, that the code at sha has. git grep reads it as code_counts
     does, comment lines left out; cached under the SHA with the flags asked, as sorted lists."""
@@ -716,7 +730,7 @@ def trajectory(snaps, blobs, order=()):
                 counts[place_of(path)][index[tok]] += n
         return counts, cached
 
-    day, rows, ever = 0, [], np.zeros(len(vocab), dtype=bool)
+    day, rows, ever, before = 0, [], np.zeros(len(vocab), dtype=bool), None
     for i, s in enumerate(snaps):
         touched = at_commits("diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []
         s["kind"] = "origin" if s["pr"] is None else kind(s["title"], s["branch"], touched)
@@ -780,13 +794,18 @@ def trajectory(snaps, blobs, order=()):
         flags = spec_flags(reached_texts)
         class_coverage["flags"] = round(len(code_flags(s["sha"], flags)) / len(flags), 3) if s["pr"] and flags else None
         class_names = {k: int((named & (klass == k)).sum()) for k in ("prod", "test")}
-        class_names["flags"] = len(spec_flags(s["texts"]))
+        all_flags = spec_flags(s["texts"])
+        class_names["flags"] = len(all_flags)
+        # Against the merge before; the origin has none, so its two are None.
+        names_added, names_dropped = name_steps(before, (named, klass, all_flags)) if before else (None, None)
+        before = (named, klass, all_flags)
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], branch=s["branch"], kind=s["kind"],
                          day=day if s["pr"] else 0, added=added, deleted=deleted,
                          gap_full=gap_full,
                          gap_chance=chance and chance[0], gap_chance_band=chance and chance[1:],
                          gap_excess=gap_excess, gap_excess_band=gap_excess_band, gap_percentile=gap_percentile,
                          class_coverage=class_coverage, class_names=class_names,
+                         names_added=names_added, names_dropped=names_dropped,
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
                          name_coverage=name_coverage, jaccard=jaccard, names_kept=names_kept, names_retired=names_retired,
                          prod_name_coverage=prod_name_coverage, spec_names=int(named.sum()),

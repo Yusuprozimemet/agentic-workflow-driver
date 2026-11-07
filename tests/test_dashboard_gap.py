@@ -62,5 +62,38 @@ class ChanceTest(unittest.TestCase):
         self.assertEqual(spec_drift.chance_angle(x, y, one), [round(spec_drift.angle(x, y), 2)] * 3)
 
 
+class NameStepsTest(unittest.TestCase):
+    """name_steps: what a merge added to the specs and dropped, per class, against the merge before."""
+
+    def test_added_and_dropped_by_class(self):
+        klass = np.array(["prod", "test", "test", "prod"])
+        before = (np.array([True, True, False, False]), klass, {"--a", "--b"})
+        after = (np.array([False, True, True, True]), klass, {"--b", "--c", "--d"})
+        added, dropped = spec_drift.name_steps(before, after)
+        self.assertEqual(added, {"prod": 1, "test": 1, "flags": 2})
+        self.assertEqual(dropped, {"prod": 1, "test": 0, "flags": 1})
+
+    def test_a_dropped_name_keeps_its_class_from_before(self):
+        # The name was a test name where the specs named it; at the merge that drops it, it is found
+        # nowhere and reads as prod. It is counted where it was.
+        before = (np.array([True]), np.array(["test"]), set())
+        after = (np.array([False]), np.array(["prod"]), set())
+        added, dropped = spec_drift.name_steps(before, after)
+        self.assertEqual(dropped, {"prod": 0, "test": 1, "flags": 0})
+        self.assertEqual(added, {"prod": 0, "test": 0, "flags": 0})
+
+
+class SpecStepsPanelTest(unittest.TestCase):
+    """The page has the spec-change panel, and the script draws it on every redraw."""
+
+    def test_panel_on_the_page_and_drawn(self):
+        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
+        self.assertTrue('<div id="spec-steps"></div>' in page, "no spec-steps panel on the page")
+        self.assertTrue('panel("spec-steps", drawSpecSteps)' in script, "setSel does not draw spec-steps")
+        # A pure removal is drawn apart from a PR that added names.
+        self.assertTrue("removal = p.x === 0 && p.out > 0" in script, "a pure removal is not marked")
+
+
 if __name__ == "__main__":
     unittest.main()
