@@ -426,6 +426,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       tests/test_live_cli.py` prints nothing, and `python -m unittest discover -s tests` passes
       with them in it ("OK (skipped=4)" at the close: Day 3's three live tests and
       `LiveOnceTest`).
+      Replaces: C03.9 — was: Day 1's and Day 2's tests pass with their files unedited,
+      `tests/test_preflight.py` among them: the diff against 0efd4d2 prints nothing.
       To break once, in Track A: one listed test file edited → the diff exits 1; and `run_drift`
       writes its `--out` file inside the project → `DryRunTest.test_project_is_unchanged` fails.
       The second's report holds commit shas that differ on every run, so it is recorded as a
