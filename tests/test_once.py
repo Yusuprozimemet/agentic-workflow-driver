@@ -1,6 +1,8 @@
 """--once from a copy of the driver, with a fake claude and the fake gh; later tracks import these
-helpers. A refusal is one line on its stream; the lock is released unless a live driver holds it."""
+helpers. A refusal is one line on its stream and starts no session; a run that starts one records
+the session's call in calls.jsonl beside the fake. The lock is released unless a live driver holds it."""
 
+import ctypes
 import importlib
 import json
 import os
@@ -21,6 +23,8 @@ from tests.test_preflight import HELP
 
 SESSION = "00000000-0000-4000-8000-000000000000"
 LIVE_LOCK = "cannot start: the driver is already running (pid "
+# An en dash, as in the sentences the kit writes; the prompt must carry it as UTF-8.
+DASHED = "Day 01 Track A: C01.1–C01.3"
 # The fake claude answers --version and --help from fake.json beside it, and records every call in
 # calls.jsonl. A session call runs the spec's `do`, then prints its `result` with the session id.
 FAKE = """import json
@@ -34,12 +38,15 @@ args = sys.argv[1:]
 probe = args in (["--version"], ["--help"])
 data = b"" if probe else sys.stdin.buffer.read()
 state = Path(args[args.index("--settings") + 1]).parent if "--settings" in args else None
+gh_log = folder.parent / "gh" / "calls.jsonl"
+gh_calls = len(gh_log.read_bytes().splitlines()) if gh_log.exists() else 0
 record = {
     "args": args,
     "stdin": data.hex(),
     "cwd": os.getcwd(),
     "lock": state is not None and (state / "lock").exists(),
     "settings": state is not None and (state / "settings.json").exists(),
+    "gh_calls": gh_calls,
 }
 with (folder / "calls.jsonl").open("ab") as calls:
     calls.write(json.dumps(record).encode("utf-8") + b"\\n")
@@ -160,6 +167,30 @@ def open_run(project, state):
     (state / "run.jsonl").write_bytes((json.dumps(record) + "\n").encode("utf-8"))
 
 
+def bad_settings(project, state):
+    # A settings file that is not JSON: the driver must rewrite it before the session reads it.
+    state.mkdir(parents=True)
+    (state / "settings.json").write_bytes(b"not json")
+
+
+# Run by the fake claude inside a session: keeps the settings file the session was given.
+COPY_SETTINGS = (
+    '(folder / "seen-settings.json").write_bytes('
+    'Path(args[args.index("--settings") + 1]).read_bytes())'
+)
+
+
+def alias_of(folder, project):
+    # Another path to the project: a symlink on POSIX, the 8.3 short name on Windows.
+    if os.name != "nt":
+        link = folder / "link"
+        os.symlink(project, link, target_is_directory=True)
+        return str(link)
+    buffer = ctypes.create_unicode_buffer(32768)
+    ctypes.windll.kernel32.GetShortPathNameW(str(project), buffer, 32768)
+    return buffer.value
+
+
 class OnceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -202,13 +233,30 @@ class OnceTest(unittest.TestCase):
             ("waits", {"drift": waiting}, 0, "stdout", equals("wait: #7")),
             ("evidence_failed", {"runs": failed}, 1, "stdout", evidence_failed),
             ("open_run_log", {"setup": open_run}, 1, "stdout", equals(ended)),
-            ("passes", {}, 0, "stdout", equals(f"would start: {START}")),
+            ("passes", {"drift": drift_of(DASHED)}, 0, "stdout", starts("ended: session `")),
+            # The config names the project by another path; the session runs in the real one.
+            (
+                "real_path",
+                {"drift": drift_of(DASHED), "alias": True},
+                0,
+                "stdout",
+                starts("ended: session `"),
+            ),
+            (
+                "bad_settings",
+                {"drift": drift_of(DASHED), "setup": bad_settings, "do": COPY_SETTINGS},
+                0,
+                "stdout",
+                starts("ended: session `"),
+            ),
         ]
+        # The cases after the refusals, passes among them, each start one session.
+        sessions = ("passes", "real_path", "bad_settings")
         cls.wants = {}
         cls.results = {}
         for name, kwargs, code, stream, match in table:
             cls.results[name] = cls.run_case(name, **kwargs)
-            cls.wants[name] = (code, stream, match)
+            cls.wants[name] = (code, stream, match, int(name in sessions))
 
     @classmethod
     def tearDownClass(cls):
@@ -217,7 +265,9 @@ class OnceTest(unittest.TestCase):
         shutil.rmtree(cls.root, ignore_errors=True)
 
     @classmethod
-    def run_case(cls, name, drift=None, setup=None, help=HELP, runs=None, drop=()):
+    def run_case(
+        cls, name, drift=None, setup=None, help=HELP, runs=None, drop=(), do="", alias=False
+    ):
         folder = Path(cls.root) / name
         folder.mkdir()
         project = make_project(folder, drift)
@@ -225,15 +275,26 @@ class OnceTest(unittest.TestCase):
         claude_dir, gh_dir = folder / "claude", folder / "gh"
         claude_dir.mkdir()
         gh_dir.mkdir()
-        claude = fake_claude(claude_dir, help=help)
+        claude = fake_claude(claude_dir, help=help, do=do)
         gh = fake_gh(gh_dir, runs=runs or [{"status": "completed", "conclusion": "success"}])
         config = write_config(folder, project, drop)
         if setup is not None:
             setup(project, state)
         flags = ["--config", str(config), "--state", str(state), "--claude", claude, "--gh", gh]
+        # The other path goes in --project: the config's project is resolved when it is read.
+        given = alias_of(folder, project) if alias else project
+        if alias:
+            flags += ["--project", str(given)]
         code, out, err = once(cls.copy, *flags)
         (cls.copy / "notes.txt").unlink(missing_ok=True)
         calls = read_calls(claude_dir) if (claude_dir / "calls.jsonl").exists() else []
+        # The probes are --version and --help; any other call is a session.
+        sessions = [call for call in calls if call["args"] not in (["--version"], ["--help"])]
+        gh_calls = read_calls(gh_dir) if (gh_dir / "calls.jsonl").exists() else []
+        starts = []
+        if (state / "run.jsonl").exists():
+            lines = (state / "run.jsonl").read_text(encoding="utf-8").splitlines()
+            starts = [record for record in map(json.loads, lines) if record["event"] == "start"]
         return {
             "code": code,
             "out": out,
@@ -241,19 +302,25 @@ class OnceTest(unittest.TestCase):
             "lock": os.path.exists(cls.lock.path(str(state))),
             "settings": (state / "settings.json").exists(),
             "runlog": (state / "run.jsonl").exists(),
-            # Only --version and --help may have run: no case here starts a session.
-            "calls_ok": all(call["args"] in (["--version"], ["--help"]) for call in calls),
+            "calls": calls,
+            "sessions": sessions,
+            "gh": gh_calls,
+            "starts": starts,
+            "state": state,
+            "project": project,
+            "given": str(given),
+            "claude_dir": claude_dir,
         }
 
     def assert_case(self, name):
         result = self.results[name]
-        code, stream, match = self.wants[name]
+        code, stream, match, sessions = self.wants[name]
         printed = [n for n, text in (("stdout", result["out"]), ("stderr", result["err"])) if text]
         text = (result["err"] or result["out"]).strip()
         with self.subTest(case=name):
             self.assertEqual(
-                (result["code"], printed, match(text), result["calls_ok"]),
-                (code, [stream], True, True),
+                (result["code"], printed, match(text), len(result["sessions"])),
+                (code, [stream], True, sessions),
             )
 
     def test_refusals(self):
@@ -272,11 +339,88 @@ class OnceTest(unittest.TestCase):
 
     def test_lock_released_on_refusal(self):
         # Cases 4 to 11 of the table, from driver_changed to passes, leave the lock released.
-        locks = [self.results[name]["lock"] for name in list(self.results)[3:]]
+        locks = [self.results[name]["lock"] for name in list(self.results)[3:11]]
         self.assertEqual((locks, self.results["live_lock"]["lock"]), ([False] * 8, True))
         self.assert_case("passes")
-        passes = self.results["passes"]
-        self.assertEqual((passes["settings"], passes["runlog"]), (False, False))
+
+    def test_session_command(self):
+        result = self.results["passes"]
+        sessions, starts = result["sessions"], result["starts"]
+        one = len(sessions) == 1
+        session = starts[0]["session"] if len(starts) == 1 else None
+        settings = os.path.join(os.path.abspath(str(result["state"])), "settings.json")
+        rules = str(Path(self.copy).resolve() / "rules" / "session.md")
+        expected = [
+            "-p",
+            "--model",
+            "opus",
+            "--output-format",
+            "json",
+            "--max-budget-usd",
+            "5",
+            "--permission-mode",
+            "auto",
+            "--strict-mcp-config",
+            "--settings",
+            settings,
+            "--append-system-prompt-file",
+            rules,
+            "--session-id",
+            session,
+        ]
+        prompt = (
+            f"Next step: {DASHED}\nDo this one step as CLAUDE.md says, open its one pull request, "
+            "and stop.\n"
+        ).encode()
+        stdin = bytes.fromhex(sessions[0]["stdin"]) if one else b""
+        gh_ok = [call[:2] for call in result["gh"]] == [["run", "list"]]
+        cmd_ok = os.name != "nt" or claude_program(result["claude_dir"]).name.endswith(".cmd")
+        self.assertEqual(
+            (
+                one and sessions[0]["args"] == expected,
+                len(starts) == 1,
+                stdin == prompt,
+                b"\xe2\x80\x93" in stdin,
+                cmd_ok,
+                result["out"].rstrip("\r\n") == f"ended: session `{session}`",
+                gh_ok,
+                one and sessions[0]["gh_calls"] == 1,
+            ),
+            (True,) * 8,
+        )
+
+    def test_session_cwd_is_real_path(self):
+        result = self.results["real_path"]
+        sessions = result["sessions"]
+        real = os.path.realpath(str(result["project"]))
+        self.assertEqual(
+            (result["given"] != real, len(sessions) == 1 and sessions[0]["cwd"] == real),
+            (True, True),
+        )
+
+    def test_lock_and_settings_during_session(self):
+        result = self.results["bad_settings"]
+        sessions = result["sessions"]
+        during = sessions[0] if len(sessions) == 1 else {"lock": False, "settings": False}
+        seen_path = result["claude_dir"] / "seen-settings.json"
+        try:
+            seen = json.loads(seen_path.read_bytes())
+        except (OSError, ValueError):
+            seen = {}
+        pre = seen.get("hooks", {}).get("PreToolUse", []) if isinstance(seen, dict) else []
+        halt_hook = any("halt.py" in hook["command"] for entry in pre for hook in entry["hooks"])
+        self.assertEqual(
+            (during["lock"], during["settings"], bool(seen), halt_hook, not result["lock"]),
+            (True, True, True, True, True),
+        )
+
+    def test_rules_file(self):
+        lines = (ROOT / "rules" / "session.md").read_text(encoding="utf-8").splitlines()
+        phrases = ("nobody watches", "PARK: <", "never merge", "Hand-off")
+        found = [[line for line in lines if phrase in line] for phrase in phrases]
+        one_each = all(len(hits) == 1 for hits in found)
+        distinct = len({hits[0] for hits in found if hits}) == len(phrases)
+        self.assertEqual((one_each, distinct), (True, True))
 
     def test_once_goes_alone(self):
         for args in (("--dry-run",), ("halt",)):
