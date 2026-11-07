@@ -6,12 +6,13 @@ kit, then the Claude Code CLI, and prints "preflight: ok" and exits 0, or one li
 piece on stderr and exits 2. The project is --project; when it is not given, it is the project in
 the config (--config, default driver.json beside this file), and a config with a problem exits 2
 with one stderr line per problem. halt [--state <dir>] writes <dir>/halt and kills the driver's
-process tree when its lock names a live process; clear [--state <dir>] removes the halt file and a
-stale lock, and refuses while a driver lives. Neither needs a project or a config; --state defaults
-to the state folder beside this file. --once [--config] [--project] [--state] [--claude] [--gh]
-[--model] does one step's checks in order: halt, config, lock, the driver's own repository,
-preflight, decide, the evidence run, then the run log; for now it prints "would start: <sentence>"
-and starts nothing."""
+process tree when its lock names a live process, then reports on the run's issue from
+<dir>/run.json; clear [--state <dir>] removes the halt file and a stale lock, and refuses while a
+driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
+file. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
+[--config] [--project] [--state] [--claude] [--gh] [--model] does one step's checks in order: halt,
+config, lock, the driver's own repository, preflight, decide, the evidence run, then the run log;
+for now it prints "would start: <sentence>" and starts nothing."""
 
 import argparse
 import sys
@@ -60,8 +61,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["preflight", "halt", "clear"],
-        help="check the kit and the Claude Code CLI, or halt or clear the driver",
+        choices=["preflight", "halt", "clear", "off"],
+        help="check the kit and the Claude Code CLI, or halt, clear or turn off the driver",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
@@ -109,6 +110,8 @@ def main(argv=None) -> int:
                 print(line, file=sys.stderr)
             return 2
         args.project = config["project"]
+    if args.command == "off":
+        return switches.off(args.project, args.gh)
     if args.command == "preflight":
         lines, _ = kit_lines(args.project)
         lines += cli_lines(args.claude)
