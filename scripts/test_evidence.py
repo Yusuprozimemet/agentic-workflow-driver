@@ -33,7 +33,9 @@ def spec(test="CliTest.test_a", verify="echo 0    # 0", report="AssertionError: 
             f"## Verify\n```bash\n{verify}\n```\n")
 
 
-class EvidenceTest(unittest.TestCase):
+class Repo(unittest.TestCase):
+    """The fixture: a repository with one day's close merged, and helpers to write and run a spec in it."""
+
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo, ignore_errors=True)
@@ -92,6 +94,10 @@ class EvidenceTest(unittest.TestCase):
         self.git("switch", "-q", "main")
         self.git("merge", "-q", "--no-ff", "-m", "Merge pull request #4 from me/day-01/close-the-day-2",
                  "day-01/close-the-day-2")
+
+
+class EvidenceTest(Repo):
+    """Each check a spec's close makes, and what it reports."""
 
     def test_evidence_that_holds_passes(self):
         run = self.run_evidence(spec())
@@ -485,6 +491,66 @@ class ShortSpecTest(unittest.TestCase):
         self.assertIn("no merged change/other on main", self.run_evidence("specs/changes/other.md").stdout)
         self.write("specs/keep-ok.md", SHORT)
         self.assertIn("neither a day spec nor a short spec", self.run_evidence("specs/keep-ok.md").stdout)
+
+
+# A second criterion whose recorded break no longer fails: its find and replace are the same, so the check passes.
+FINE = dict(BREAK, what="the fine removed", replace="ok")
+TWO_CRITERIA = spec(verify="echo 1    # 0", more=(
+    "- [x] C1.2 **new** — Test: `CliTest.test_a`.\n"
+    "      broken: the fine removed → AssertionError: broken (#2)\n"))
+
+
+class CriterionTest(Repo):
+    """--criterion replays only the named criteria's checks, from one spec, and runs no Verify line."""
+
+    def limited(self, *criteria, text=TWO_CRITERIA):
+        """The run with --criterion for each of criteria, and the report it wrote."""
+        flags = [f for c in criteria for f in ("--criterion", c)]
+        run = self.run_evidence(text, (BREAK, FINE), *flags, "--json", "report.json")
+        with open(os.path.join(self.repo, "report.json"), encoding="utf-8") as f:
+            return run, json.load(f)
+
+    def by_key(self, report):
+        return {c["id"].split("/", 1)[1]: c for c in report["days"][0]["checks"]}
+
+    def test_one_criterion_replays_its_checks_alone(self):
+        run, report = self.limited("C1.1")
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        ids = [c["id"].split("/", 1)[1] for c in report["days"][0]["checks"]]
+        self.assertEqual(ids, ["close", "C1.1/test/CliTest.test_a", "C1.1/proof", "C1.1/break/the ok removed"])
+
+    def test_the_other_criterion_fails_on_its_own_break(self):
+        run, report = self.limited("C1.2")
+        self.assertEqual(run.returncode, 1, run.stdout)
+        self.assertEqual(self.by_key(report)["C1.2/break/the fine removed"]["status"], "failed")
+        self.assertFalse([k for k in self.by_key(report) if k.startswith("C1.1")], run.stdout)
+
+    def test_an_unknown_criterion_fails(self):
+        run, report = self.limited("C1.9")
+        self.assertEqual(run.returncode, 1, run.stdout)
+        check = self.by_key(report)["C1.9/criterion"]
+        self.assertEqual(check["status"], "failed")
+        self.assertIn("no criterion C1.9", check["diagnostic"])
+
+    def test_criterion_and_cache_cannot_go_together(self):
+        run = self.run_evidence(TWO_CRITERIA, (BREAK,), "--criterion", "C1.1", "--cache", "cache.json")
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("--criterion cannot go with --cache", run.stderr)
+
+    def test_criterion_takes_one_spec_and_a_criterion_id(self):
+        run = subprocess.run([sys.executable, SCRIPT, "specs/day-01-x.md", "specs/day-02-y.md", "--criterion", "C1.1"],
+                             cwd=self.repo, env=GIT_ENV, capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("--criterion takes exactly one spec", run.stderr)
+        run = self.run_evidence(TWO_CRITERIA, (BREAK,), "--criterion", "bogus")
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("not a criterion id: 'bogus'", run.stderr)
+
+    def test_the_report_names_the_criteria_it_was_limited_to(self):
+        _, report = self.limited("C1.1")
+        self.assertEqual(report["days"][0]["criteria"], ["C1.1"])
+        _, report = self.report(TWO_CRITERIA)
+        self.assertIsNone(report["days"][0]["criteria"])
 
 
 if __name__ == "__main__":

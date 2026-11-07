@@ -39,6 +39,10 @@ unticked one with no `Not proven:` line, a hold criterion with no `broken:` line
 ticked criterion. A criterion checked by a command instead of a named test, and a `broken: none →
 <why>`, are recorded as not applicable, with the reason.
 
+With --criterion ID (repeatable) only the named criteria's checks replay, from one spec, and the Verify
+block does not run: a partial replay is not the close's, so it cannot go with --cache, which keeps only
+whole replays. An ID the spec does not have fails.
+
 Item 6 of the lab notebook's open items: no step checked the evidence a close ticks a box on. It
 prints one line per check and exits 1 if any failed or could not run. With --json PATH it also
 writes the same checks as a report (docs/spec-drift-improvement.md, Step 2): each with an id, a
@@ -63,7 +67,8 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 BREAK = os.path.join(HERE, "break.py")
 
-CRITERION = re.compile(r"^- \[([ x])\] (C\d+\.\d+|S-[a-z0-9]+(?:-[a-z0-9]+)*\.\d+)\b")
+CRITERION_ID = r"C\d+\.\d+|S-[a-z0-9]+(?:-[a-z0-9]+)*\.\d+"
+CRITERION = re.compile(rf"^- \[([ x])\] ({CRITERION_ID})\b")
 CHANGE_MERGE = re.compile(r"^Merge pull request #\d+ from \S+/change/([a-z0-9]+(?:-[a-z0-9]+)*)$")
 SQUASHED = re.compile(r" \(#\d+\)$")
 TEST = re.compile(r"`(\w+)\.(test_\w+)`")
@@ -340,11 +345,11 @@ def input_file(path):
     return record
 
 
-def check_spec(path, ref):
-    """One spec's record: what it was checked from and at, and its checks."""
+def check_spec(path, ref, only=None):
+    """One spec's record: what it was checked from and at, and its checks; only, a partial replay's criteria."""
     name = os.path.basename(path)
     record = {"spec": input_file(path), "day": None, "change": None, "close_sha": None, "verify_base_sha": None,
-              "breaks": None, "checks": []}
+              "breaks": None, "criteria": list(only) if only else None, "checks": []}
 
     def add(key, kind, status, label, diagnostic=None, criterion=None, sha=None, proof=None):
         record["checks"].append({"id": f"{name}/{key}", "kind": kind, "criterion": criterion, "sha": sha,
@@ -378,8 +383,14 @@ def check_spec(path, ref):
     add("close", "close", "passed", f"{name}: {landed} in {commit[:7]}", sha=commit)
     found = criteria(text)
     ticked = {cid: lines for cid, lines in found.items() if lines[0].startswith("- [x]")}
-    if not ticked:
+    if not ticked and not only:
         add("criteria", "close", "failed", name, "no ticked criterion: nothing was checked")
+    for cid in only or []:
+        if cid not in found:
+            add(f"{cid}/criterion", "criterion", "failed", cid, f"no criterion {cid} in {name}", cid)
+    if only:
+        found = {cid: lines for cid, lines in found.items() if cid in only}
+        ticked = {cid: lines for cid, lines in ticked.items() if cid in only}
     # A Not proven: line counts as the close merged it, not as added to the spec since.
     reasons = {cid: not_proven(lines) for cid, lines in criteria(spec_at(commit, path)).items()}
 
@@ -417,6 +428,10 @@ def check_spec(path, ref):
                 recorded[e["what"]] = e
                 times[e["what"]] = times.get(e["what"], 0) + 1
 
+    # A partial replay with no break to run reads the spec alone: no worktree, and no Verify block.
+    runs = [m for lines in ticked.values() for m in map(BROKEN.match, joined(lines)) if m and m.group(1) != "none"]
+    if only and not runs:
+        return record
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     worktree = tempfile.mkdtemp(prefix="evidence-")
     try:
@@ -427,8 +442,8 @@ def check_spec(path, ref):
         return record
     try:
         base = record["verify_base_sha"] = git("rev-parse", f"{commit}^1").strip()
-        commands = verify_lines(text)
-        if not commands:
+        commands = [] if only else verify_lines(text)  # a partial replay runs no Verify line
+        if not commands and not only:
             add("verify", "verify", "failed", "Verify", "no Verify block, or an empty one")
         for i, line in enumerate(commands, 1):
             why = run_verify(line, worktree, base, env)
@@ -516,6 +531,12 @@ def report_text(report):
     return "{\n" + ",\n".join(fields) + "\n}\n"
 
 
+def criterion_id(text):
+    if not re.fullmatch(CRITERION_ID, text):
+        raise argparse.ArgumentTypeError(f"not a criterion id: {text!r}")
+    return text
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("specs", nargs="+")
@@ -523,7 +544,13 @@ def main(argv=None):
     p.add_argument("--json", metavar="PATH", help="also write the checks as a report")
     p.add_argument("--cache", metavar="PATH", help="reuse a spec's replay kept here when its replay_key is "
                    "unchanged and every check held; keep this run's held replays here")
+    p.add_argument("--criterion", action="append", metavar="ID", type=criterion_id,
+                   help="replay only this criterion's checks (repeatable; one spec only; skips the Verify block)")
     a = p.parse_args(argv)
+    if a.criterion and a.cache:
+        p.error("--criterion cannot go with --cache: a partial replay is never kept")
+    if a.criterion and len(a.specs) != 1:
+        p.error("--criterion takes exactly one spec")
     sys.stdout.reconfigure(encoding="utf-8")
     report = {"schema": SCHEMA, "runner": runner(),
               "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -541,7 +568,7 @@ def main(argv=None):
                 print(f"reused  {path}: replayed {hit['replayed']}, nothing it reads has changed since")
             else:
                 hit = None
-                day = check_spec(spec, a.ref)
+                day = check_spec(spec, a.ref, a.criterion)
         except Exception as e:  # what the checker did not foresee still leaves a report
             key = None
             day = {"spec": {"path": path}, "checks": [
