@@ -1,3 +1,14 @@
+## User story
+
+<!-- In plain words someone non-technical can follow: who needs this, what they
+     want, and why it matters. No code names, file paths or jargon. Say the goal,
+     not how it was built. -->
+
+
+As a [type of user],
+I want [goal or capability],
+so that [benefit or outcome].
+
 ## What I built
 
 <!-- One or two sentences. What does this change do? -->
