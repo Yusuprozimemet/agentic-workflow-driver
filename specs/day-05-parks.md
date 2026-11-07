@@ -373,7 +373,7 @@ git -c core.safecrlf=false diff --exit-code 93c94de -- tests/test_contract.py te
      nothing could write the report after it; the halt file is written first, so the session's
      tool calls are refused while the report is written. A departure from `plan.md`'s order (a
      halt's steps 2 and 4), recorded here.
-- Recommended, awaiting the maintainer in the spec-change PR:
+- Also decided by the maintainer, 2026-11-07, in the spec-change PR, as recommended:
   2. The run's issue is found by its title, "Driver run …", by the maintainer's account, with no
      label; a `parked` issue by its label. Removing the driver leaves both as history (`plan.md`,
      "Removing it").
