@@ -28,7 +28,9 @@ the spec), its breaks in specs/breaks/<slug>.json:
 The breaks file is a list of {"what", "file", "find", "replace", "command"}, "what" being the text
 of the `broken:` line before its last arrow and unique in the file (a name recorded twice fails),
 "file" a path from the repository root, and "command" an argument list run from that root, `bash`
-meaning Git's bash on Windows. Three keys are optional:
+meaning Git's bash on Windows. Four keys are optional:
+"posix_only": true for a break no Windows run can see (`os.setpgid` there changes nothing), which
+a replay on Windows reports not applicable and a replay elsewhere runs as any other;
 "passes": true for a near miss that passes by design, which break.py does not record (it exits 1);
 "at": a commit to run the break at instead of the close, when the close no longer has what the
 break edits; and "expect_stdout": the regex break.py's --expect-stdout took, for a check judged by
@@ -459,6 +461,9 @@ def check_spec(path, ref, only=None):
                     continue
                 if what not in recorded:
                     add(key, "break", "failed", label, f"no arguments in {breaks_file}", cid)
+                    continue
+                if recorded[what].get("posix_only") and os.name == "nt":
+                    add(key, "break", "not_applicable", label, "a POSIX-only break: not replayed on Windows", cid)
                     continue
                 if times[what] > 1:
                     add(key, "break", "failed", label, f"recorded {times[what]} times in {breaks_file}: "

@@ -16,5 +16,5 @@
   {"what": "no check after the step", "file": "driver/once.py", "find": "_, reason = driver_home.check(home, started)", "replace": "_, reason = None, None", "command": ["python", "-m", "unittest", "tests.test_once_outcome.OutcomeTest.test_driver_changed_during_step"]},
   {"what": "the check after the step without the starting HEAD", "file": "driver/once.py", "find": "_, reason = driver_home.check(home, started)", "replace": "_, reason = driver_home.check(home)", "command": ["python", "-m", "unittest", "tests.test_once_outcome.OutcomeTest.test_driver_moved_during_step"]},
   {"what": "--once takes no lock", "file": "driver/once.py", "find": "refusal = lock.take(args.state)", "replace": "refusal = None", "command": ["python", "-m", "unittest", "tests.test_once_halt.OnceHaltTest.test_halt_during_once"]},
-  {"what": "--once leaves the driver in the caller's process group", "file": "driver/once.py", "find": "os.setpgid(0, 0)", "replace": "pass", "command": ["python", "-m", "unittest", "tests.test_once_halt.OnceHaltTest.test_halt_during_once"]}
+  {"what": "--once leaves the driver in the caller's process group", "file": "driver/once.py", "find": "os.setpgid(0, 0)", "replace": "pass", "command": ["python", "-m", "unittest", "tests.test_once_halt.OnceHaltTest.test_halt_during_once"], "posix_only": true}
 ]
