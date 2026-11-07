@@ -10,6 +10,8 @@ const band = b => b == null ? "–" : `${fmt(b[0])}–${fmt(b[1])}°`;
 // gap compares, not that the code is right or that the difference is significant.
 const bandPlace = r => r.gap_full == null || r.gap_chance_band == null ? "comparison unavailable" :
   `${r.gap_full < r.gap_chance_band[0] ? "below" : r.gap_full > r.gap_chance_band[1] ? "above" : "inside"} the shuffled-count reference band`;
+// The ordinal of a percentile rounded to a whole number: 61st, 62nd, 63rd, and 11th to 13th take "th".
+const ordinal = p => { const n = Math.round(p), t = n % 100; return n + (t >= 11 && t <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] || "th"); };
 // PR titles come from anyone who opens a pull request, so everything from the data is escaped.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const md = s => esc(s)
@@ -182,6 +184,8 @@ function drawReadout() {
   const dGap = s.gap_full - prev.gap_full, specLines = Object.values(s.spec_files || {}).reduce((a, b) => a + b, 0);
   const sign = x => (x > 0 ? "+" : x < 0 ? "−" : "±") + Math.abs(x).toFixed(2);
   const edits = Object.entries(s.spec_files || {}).sort((a, b) => b[1] - a[1]);
+  const against = s.gap_excess == null ? "comparison unavailable" :
+    `${sign(s.gap_excess)}° ${s.gap_excess < 0 ? "below" : "above"} chance, ${ordinal(s.gap_percentile)} percentile of the shuffles`;
   const moved = sel === 0 ? "Starting point: the code and the plan written for it." :
     !specLines && Math.abs(dGap) < 0.05 ? "Neither the spec nor the gap moved noticeably." :
     !specLines ? `Only the code moved. The gap ${dGap < 0 ? "narrowed" : "widened"} by ${Math.abs(dGap).toFixed(2)}°.` :
@@ -199,7 +203,7 @@ function drawReadout() {
       <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd><dd class="spark">${sparkHtml("kept")}</dd>
       <dt>Spec names retired from the code</dt><dd>${s.names_retired ?? "–"}</dd><dd class="spark">${sparkHtml("retired")}</dd>
       <dt>Spec–code name-gap angle (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd><dd class="spark">${sparkHtml("gap")}</dd>
-      <dt>Against shuffled counts (95%: ${band(s.gap_chance_band)})</dt><dd>${bandPlace(s)}</dd><dd></dd>
+      <dt>Against shuffled counts (95%: ${band(s.gap_chance_band)})</dt><dd>${against}; ${bandPlace(s)}</dd><dd></dd>
       <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd><dd class="spark">${sparkHtml("coverage")}</dd>
       <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd><dd class="spark">${sparkHtml("code")}</dd>
       <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd><dd class="spark">${sparkHtml("spec")}</dd>
@@ -275,6 +279,7 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, stri
     const edge = k => pts.map(([i, v]) => `${lx(i)},${ly(v[k])}`);
     el("polygon", { points: [...edge(0), ...edge(1).reverse()].join(" "), fill: b.color, "fill-opacity": 0.12, stroke: "none" }, svg);
   });
+  const labels = [];
   series.forEach(s => {
     const pts = R.map((r, i) => [i, s.get(r)]).filter(p => p[1] != null);
     if (!pts.length) return;
@@ -282,8 +287,14 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, stri
     const v = s.get(R[sel]);
     if (v != null && !s.dash) el("circle", { cx: lx(sel), cy: ly(v), r: 5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }, svg);
     const end = pts[pts.length - 1];
-    el("text", { x: lx(end[0]) + 10, y: ly(end[1]) + 4 + (s.dy || 0), class: "lbl" }, svg).textContent = s.end || `${s.name} ${fmt(end[1], digits)}${unit}`;
+    labels.push({ x: lx(end[0]) + 10, y: ly(end[1]) + 4 + (s.dy || 0), text: s.end || `${s.name} ${fmt(end[1], digits)}${unit}` });
   });
+  // End labels top to bottom, each at least a line below the one above, so close lines keep readable labels.
+  labels.sort((a, b) => a.y - b.y).reduce((above, l) => {
+    l.y = Math.max(l.y, above + 11);
+    el("text", { x: l.x, y: l.y, class: "lbl" }, svg).textContent = l.text;
+    return l.y;
+  }, -Infinity);
   const hit = el("rect", { x: LP.l - 6, y: 0, width: LW - LP.l - LP.r + 12, height: H, class: "hit" }, svg);
   const idxAt = ev => {
     const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
@@ -297,26 +308,39 @@ function lineChart(box, { H, yMin, yMax, ticks, unit, series, bands, label, stri
 }
 // The axes follow the data, so a later phase that pushes the gap or coverage past today's range stays on the chart.
 // At least one 15° step: with no gap yet the axis was 0 to 0, its ticks 0/0, and drew "NaN°".
-const degMax = Math.max(15, Math.ceil(Math.max(...R.map(r => Math.max(r.gap_full || 0, (r.gap_chance_band || [])[1] || 0))) / 15) * 15);
-const covMin = Math.min(92, Math.floor(Math.min(...R.filter(r => r.coverage != null).map(r => r.coverage * 100)) / 2) * 2);
+// The gap less its chance runs both ways about zero, out to its largest value or band end, in 5° steps and at least 5° each way.
+const exValues = R.flatMap(r => [r.gap_excess, ...(r.gap_excess_band || [])]).filter(v => v != null).map(Math.abs);
+const exMax = Math.max(5, Math.ceil(Math.max(0, ...exValues) / 5) * 5);
+const coverPct = v => v == null ? null : +(v * 100).toFixed(2);
+// The cover chart's shares of a merge: in code, then production, tests and flags.
+const coverShares = [r => r.coverage, r => r.class_coverage?.prod, r => r.class_coverage?.test, r => r.class_coverage?.flags];
+const covMin = Math.max(0, Math.min(92, Math.floor(Math.min(...R.flatMap(r => coverShares.map(f => f(r))).filter(v => v != null).map(v => v * 100)) / 10) * 10));
 function drawLines() {
   // The legend's sample is this repository's first out-of-order day, and there is no key when none ran out of order.
   const key = document.getElementById("ooo-key"), first = oooRun()[0];
   if (key) { if (first == null) key.style.display = "none"; else key.querySelector("b").textContent = "D" + dd(first) + "*"; }
   lineChart(document.getElementById("lines"), {
-    H: 330, yMin: 0, yMax: degMax, ticks: steps(0, degMax, degMax / 15), unit: "°", strip: true,
-    label: "Spec–code name gap in degrees across merges",
+    H: 330, yMin: -exMax, yMax: exMax, ticks: steps(-exMax, exMax, 2 * exMax / 5), unit: "°", strip: true,
+    label: "Spec–code name gap minus its chance value, in degrees, across merges",
     series: [
-      { name: "gap", color: "var(--gap)", get: r => r.gap_full },
-      { name: "chance", color: "var(--gap)", dash: true, get: r => r.gap_chance ?? null },
+      { name: "gap", color: "var(--gap)", get: r => r.gap_excess ?? null },
+      { name: "chance", color: "var(--gap)", dash: true, get: () => 0 },
     ],
-    bands: [{ color: "var(--gap)", get: r => r.gap_chance_band ?? null }],
+    bands: [{ color: "var(--gap)", get: r => r.gap_excess_band ?? null }],
   });
   lineChart(document.getElementById("cover"), {
     H: 190, yMin: covMin, yMax: 100, ticks: steps(covMin, 100, 4), unit: "%", strip: false,
-    label: "Share of reached-day spec names present in code",
-    series: [{ name: "in code", color: "var(--code)", get: r => r.coverage == null ? null : +(r.coverage * 100).toFixed(2) }],
+    label: "Share of reached-day spec names present in code, all and by class",
+    series: [
+      { name: "in code", color: "var(--code)", get: r => coverPct(r.coverage) },
+      { name: "prod", color: "var(--close)", end: "production", get: r => coverPct(r.class_coverage?.prod) },
+      { name: "test", color: "var(--muted)", end: "tests", get: r => coverPct(r.class_coverage?.test) },
+      { name: "flags", color: "var(--spec)", end: "flags", get: r => coverPct(r.class_coverage?.flags) },
+    ],
   });
+  // The names behind the cover chart: the latest merge's, split by class, with the flags apart.
+  const names = last.class_names, named = names ? names.prod + names.test : 0;
+  document.getElementById("class-share").textContent = named ? `Of the ${named} code names the specs use at the latest merge, ${names.test} (${Math.round(100 * names.test / named)}%) are test names, ${names.prod} production identifiers; the specs also name ${names.flags} flags, counted apart because they do not enter the gap.` : "";
   lineChart(document.getElementById("evidence-history"), {
     H: 190, yMin: 0, yMax: evMax, ticks: steps(0, evMax, 4), unit: "", strip: false, digits: 0,
     label: "Tests named by finished days: present on each merge, not running (orange), retired (grey)",

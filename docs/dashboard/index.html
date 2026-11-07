@@ -55,12 +55,12 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Spec–code name gap, merge by merge</h2>
-      <p>The spec–code name gap is the angle between the whole spec and the code, over the code names the specs put in backticks, in degrees, not a percentage. The dashed line is what it would read with nothing to find, and the shading around it is the 95% band of 1,000 seeded draws: the gap to the same code counts shuffled across the names. A merge with no spec name in the code has no gap angle and is left off the line. The strip under the axis shows what kind of PR each merge was; below that, a tick where each calendar date begins, so a busy date takes more width. A day marked * ran out of numeric order.</p>
+      <p>The line is the spec–code name gap minus what it would read by chance, in degrees, not a percentage. The gap is the angle between the whole spec and the code, over the code names the specs put in backticks; chance is the same angle with the code counts shuffled across the names (1,000 seeded draws). Zero is chance. The shading is the 95% band of those shuffles around zero, and a line below it means the spec and the code share more names than chance would give. A merge with no spec name in the code has no gap angle and is left off the line. The strip under the axis shows what kind of PR each merge was; below that, a tick where each calendar date begins, so a busy date takes more width. A day marked * ran out of numeric order.</p>
       <p class="limit">Compared with seeded shuffles of name counts; this is not a correctness test.</p>
     </div>
     <div class="legend">
-      <span><i style="background:var(--gap)"></i>Name gap: spec vs code</span>
-      <span><i class="dash"></i>Name gap by chance, with its 95% band</span>
+      <span><i style="background:var(--gap)"></i>Name gap minus chance</span>
+      <span><i class="dash"></i>Chance (zero), with its 95% band</span>
       <span><i class="dot" style="background:var(--spec)"></i>Spec change</span>
       <span><i class="dot" style="background:var(--code)"></i>Code track</span>
       <span><i class="dot" style="background:var(--close)"></i>Close the day</span>
@@ -75,9 +75,16 @@
     <div id="deltas"></div>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">The sawtooth, up close</h2>
-      <p>The share of code names in the specs for days already reached that exist in the code. It dips when a day starts, because the spec names things not built yet, and climbs back as that day's tracks land.</p>
+      <p>The share of code names in the specs for days already reached that exist in the code. It dips when a day starts, because the spec names things not built yet, and climbs back as that day's tracks land. The other three split it by class: production identifiers, test names (a <code>test_</code> or <code>Test</code> name, or one found only in test files), and the flags the specs put in backticks, which the gap does not read.</p>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--code)"></i>All names</span>
+      <span><i style="background:var(--close)"></i>Production identifiers</span>
+      <span><i style="background:var(--muted)"></i>Test names</span>
+      <span><i style="background:var(--spec)"></i>Flags</span>
     </div>
     <div id="cover"></div>
+    <p class="axis-note" id="class-share"></p>
   </section>
 
   <section class="panel" id="pulls">
@@ -279,7 +286,7 @@
       <summary>How the vectors are built</summary>
       <div class="method" style="margin-top:10px">
         <p><b>Snapshots.</b> The initial commit plus every first-parent merge on <code>main</code> (<span id="pr-range"></span>). Code PRs, spec-change PRs and close-the-day PRs are told apart by branch name and title.</p>
-        <p><b>The spec–code name gap</b> needs a space both sides share. It is built from the <span class="num vocab-n"></span> code-like names the specs put in backticks. The spec vector counts how often each name appears in the specs. The code vector counts how often it appears in the code, with Markdown, <code>data/</code>, screenshots and comment lines left out: a comment naming a thing is not the thing. Both are log-scaled and compared by angle. Each merge’s gap uses only the names the specs had used by that merge, so a name a later spec adds does not move an earlier point. Counts are never negative, so even unrelated vectors sit well under 90°: the same code counts shuffled across the names would read <span class="num" id="gap-chance"></span> today (the dashed line and its band). With no spec name in the code there is no direction to compare, so no angle, rather than 90°. The other direction is counted apart: names the specs once used and have dropped, that the code still has. The gap is worth reading only as its distance below that line; the share of reached names found in the code (“The sawtooth, up close”) is the plainer measure.</p>
+        <p><b>The spec–code name gap</b> needs a space both sides share. It is built from the <span class="num vocab-n"></span> code-like names the specs put in backticks. The spec vector counts how often each name appears in the specs. The code vector counts how often it appears in the code, with Markdown, <code>data/</code>, screenshots and comment lines left out: a comment naming a thing is not the thing. Both are log-scaled and compared by angle. Each merge’s gap uses only the names the specs had used by that merge, so a name a later spec adds does not move an earlier point. Counts are never negative, so even unrelated vectors sit well under 90°: the same code counts shuffled across the names would read <span class="num" id="gap-chance"></span> today. With no spec name in the code there is no direction to compare, so no angle, rather than 90°. The other direction is counted apart: names the specs once used and have dropped, that the code still has. The gap is worth reading only as its distance from that value, so the chart draws the gap minus it: chance is the dashed zero line, and the band moves with it. The class lines under the cover chart show what the names are made of; the share of reached names found in the code (“The sawtooth, up close”) is the plainer measure.</p>
         <p><b>Where the work went</b> counts <code>git diff --numstat</code> between one merge and the one before it, every file, so nothing merged is counted twice and nothing is left out. A moved file counts only the lines that changed in the move, under the path it moved to. Binary files, <code>package-lock.json</code>, <code>screenshots/</code> and <code>docs/dashboard/token-usage.json</code>, <code>refusals.json</code> and <code>gates.json</code> are written by tools, not people, and are not counted. The first rule that matches a file’s path decides its box:</p>
         <ol>
           <li><b>Specs:</b> <code>plan.md</code> and <code>specs/</code>, the template and README there included.</li>
