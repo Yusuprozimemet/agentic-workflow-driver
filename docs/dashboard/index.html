@@ -80,6 +80,40 @@
     <div id="cover"></div>
   </section>
 
+  <section class="panel" id="pulls">
+    <div class="panel-head">
+      <h2>How the pulls on the gap add up</h2>
+      <p>Every merge steps the gap above wider or closer. These four views sum those steps: the steps away from the code against the steps toward it. The sum is the change since the plan was written, not the gap: a sum of zero means the pulls cancelled, not that spec and code agree. Setup is the merges before Day 01's first pull request.</p>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--away)"></i>Pulled the spec away from the code</span>
+      <span><i class="dot" style="background:var(--closer)"></i>Pulled it closer</span>
+      <span><i class="dot" style="background:var(--muted)"></i>Did not move it</span>
+    </div>
+    <div class="panel-head">
+      <h2 style="font-size:17px">The sum, merge by merge</h2>
+      <p>The running sum of every step, on the same merge axis as the gap above, so the line falls as the gap closes. Hover for the merge; select it to follow it through the page.</p>
+    </div>
+    <div id="pull-sum"></div>
+    <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">Each merge's contribution</h2>
+      <p>A waterfall: each bar starts where the one before it ended, and the dark bar is the net. All the merges at once are dense; pick a day to read one at a time.</p>
+    </div>
+    <div class="pick" id="pull-steps-pick" role="group" aria-label="Merges in the waterfall"></div>
+    <div id="pull-steps"></div>
+    <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">Total pull in each direction</h2>
+      <p>All the steps closer summed on the left, all the steps away on the right. This tells a quiet day from a day of large pulls that cancelled; the order inside a day is lost.</p>
+    </div>
+    <div class="pull-totals" id="pull-totals"></div>
+    <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">The balance</h2>
+      <p>The same two totals on a scale: the heavier pan sinks, and the tilt is the net as a share of all the pull.</p>
+    </div>
+    <div class="pick" id="pull-scale-pick" role="group" aria-label="Merges on the balance"></div>
+    <div id="pull-scale"></div>
+  </section>
+
   <section class="panel">
     <div class="panel-head">
       <h2>Service boundaries</h2>

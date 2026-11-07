@@ -467,6 +467,163 @@ function drawDeltas() {
   oooNote(box);
 }
 
+/* ---------- how the pulls on the gap add up ---------- */
+// The steps above, summed: steps away from the code against steps toward it. The sum is a change
+// since the plan, not the gap. Day 0 is "Setup", the merges before Day 01's first pull request.
+const PULLS = R.slice(1).map((r, j) => ({ r, i: j + 1, d: step(R[j].gap_full, r.gap_full) }));
+PULLS.reduce((run, p) => (p.cum = +(run + p.d).toFixed(2)), 0);
+const PULL_DAYS = [...new Set(PULLS.map(p => p.r.day || 0))];
+const pullDay = d => d === "all" ? "All merges" : d ? "D" + dd(d) : "Setup";
+const pullsOf = d => d === "all" ? PULLS : PULLS.filter(p => (p.r.day || 0) === d);
+function pullSum(ps) {
+  const add = a => +a.reduce((x, p) => x + p.d, 0).toFixed(2), up = ps.filter(p => p.d > 0), dn = ps.filter(p => p.d < 0);
+  return { up: add(up), dn: add(dn), net: add(ps), nu: up.length, nd: dn.length, nz: ps.length - up.length - dn.length };
+}
+const pullTip = p => rowTip(p.r) + `<div class="row"><span>step on the gap</span><span>${signed(p.d)}°</span></div>` +
+  `<div class="row"><span>sum since the plan</span><span>${signed(p.cum)}°</span></div>`;
+function noPulls(box) {
+  if (PULLS.length) return false;
+  box.innerHTML = '<p class="load-error">No merge yet: the pulls start at the first merge after the plan.</p>';
+  return true;
+}
+// Day buttons above a view: it opens on `start` and redraws on a click.
+function pullPicker(id, draw, start) {
+  const box = document.getElementById(id + "-pick");
+  box.innerHTML = PULLS.length ? ["all", ...PULL_DAYS].map(d =>
+    `<button type="button" data-d="${d}" aria-pressed="${d === start}">${pullDay(d)}</button>`).join("") : "";
+  box.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    panel(id, () => draw(b.dataset.d === "all" ? "all" : +b.dataset.d));
+  }));
+  panel(id, () => draw(start));
+}
+function gridY(svg, ly, yMin, yMax, unit, x1, x2) {
+  for (let v = yMin; v <= yMax + 1e-9; v += unit) {
+    el("line", { x1, x2, y1: ly(v), y2: ly(v), stroke: Math.abs(v) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg);
+    el("text", { x: x1 - 8, y: ly(v) + 4, "text-anchor": "end", class: "num" }, svg).textContent = signed(v, unit < 1 ? 1 : 0) + "°";
+  }
+}
+
+function drawPullSum() {
+  const box = document.getElementById("pull-sum");
+  box.innerHTML = "";
+  if (noPulls(box)) return;
+  const H = 250, top = LP.t, bot = H - 40, pts = [{ i: 0, cum: 0 }, ...PULLS];
+  const lo = Math.min(0, ...pts.map(p => p.cum)), hi = Math.max(0, ...pts.map(p => p.cum));
+  const unit = hi - lo > 20 ? 5 : hi - lo > 8 ? 2 : 1;
+  const yMin = Math.floor(lo / unit) * unit, yMax = Math.max(Math.ceil(hi / unit) * unit, yMin + unit);
+  const ly = v => top + (yMax - v) / (yMax - yMin) * (bot - top);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Sum of the gap's steps since the plan, in merge order" }, box);
+  gridY(svg, ly, yMin, yMax, unit, LP.l, LW - LP.r);
+  let lastX = -99;
+  dayStarts().forEach(([i, d]) => {
+    if (!d || lx(i) - lastX < 34) return;
+    lastX = lx(i);
+    el("line", { x1: lx(i), x2: lx(i), y1: top, y2: bot, stroke: "var(--grid)", "stroke-dasharray": "2 3" }, svg);
+    el("text", { x: lx(i) + 3, y: bot + 16, class: "num" }, svg).textContent = "D" + dd(d);
+  });
+  const line = pts.map((p, k) => (k ? "L" : "M") + lx(p.i).toFixed(1) + " " + ly(p.cum).toFixed(1)).join("");
+  const area = line + `L${lx(N - 1)} ${ly(0)}L${lx(0)} ${ly(0)}Z`, defs = el("defs", {}, svg);
+  el("rect", { x: 0, y: 0, width: LW, height: ly(0) }, el("clipPath", { id: "pull-up" }, defs));
+  el("rect", { x: 0, y: ly(0), width: LW, height: H }, el("clipPath", { id: "pull-dn" }, defs));
+  el("path", { d: area, fill: "var(--away)", "fill-opacity": 0.22, "clip-path": "url(#pull-up)" }, svg);
+  el("path", { d: area, fill: "var(--closer)", "fill-opacity": 0.18, "clip-path": "url(#pull-dn)" }, svg);
+  el("path", { d: line, fill: "none", stroke: "var(--ink)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  el("line", { x1: lx(sel), x2: lx(sel), y1: top, y2: bot, stroke: "var(--ink-2)" }, svg);
+  el("circle", { cx: lx(sel), cy: ly(sel ? PULLS[sel - 1].cum : 0), r: 4.5, fill: "var(--ink)", stroke: "var(--surface)", "stroke-width": 2 }, svg);
+  const end = PULLS[PULLS.length - 1], now = [...R].reverse().find(r => r.gap_full != null);
+  el("text", { x: LW - LP.r + 10, y: ly(end.cum) + 4, class: "lbl-strong num" }, svg).textContent = signed(end.cum, 1) + "°";
+  el("text", { x: LW - LP.r + 10, y: ly(end.cum) + 20, class: "num" }, svg).textContent = `gap ${fmt(now && now.gap_full)}°`;
+  if (Math.abs(ly(end.cum) - ly(0)) > 34)
+    el("text", { x: LW - LP.r + 10, y: ly(0) + 4, class: "num" }, svg).textContent = `0 = gap ${fmt(R[0].gap_full)}°`;
+  const w = (LW - LP.l - LP.r) / Math.max(1, N - 1);
+  PULLS.forEach(p => {
+    const hit = el("rect", { x: lx(p.i) - w / 2, y: top, width: w, height: bot - top, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, pullTip(p)));
+    hit.addEventListener("mouseleave", hideTip);
+    hit.addEventListener("click", () => setSel(p.i));
+  });
+}
+
+function drawPullSteps(d) {
+  const box = document.getElementById("pull-steps");
+  if (noPulls(box)) return;
+  const ps = pullsOf(d), t = pullSum(ps), few = ps.length <= 16, H = 280, P = { l: LP.l, r: 20, t: 22, b: 44 };
+  box.innerHTML = `<p class="pull-cap num">${pullDay(d)}: ${ps.length} merges · away ${signed(t.up)}° · closer ${signed(t.dn)}° · net ${signed(t.net)}°</p>`;
+  let run = 0;
+  const bars = ps.map(p => { const a = run; run = +(run + p.d).toFixed(2); return { p, a, b: run }; });
+  const vals = [0, ...bars.map(b => b.b)], lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const unit = span > 40 ? 10 : span > 16 ? 5 : span > 6 ? 2 : span > 2.5 ? 1 : 0.5;
+  const yMin = Math.floor((lo - span * 0.08) / unit) * unit, yMax = Math.ceil((hi + span * 0.08) / unit) * unit;
+  const ly = v => P.t + (yMax - v) / (yMax - yMin) * (H - P.t - P.b);
+  const slot = (LW - P.l - P.r) / (ps.length + 1.4), bw = Math.min(30, Math.max(3, slot * 0.68)), x = k => P.l + slot * (k + 0.7);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": `Each merge's step on the gap: ${pullDay(d)}` }, box);
+  gridY(svg, ly, yMin, yMax, unit, P.l, LW - P.r);
+  let lastX = -99;
+  bars.forEach(({ p, a, b }, k) => {
+    el("line", { x1: x(k) + bw / 2, x2: x(k + 1) - bw / 2, y1: ly(b), y2: ly(b), stroke: "var(--axis)" }, svg);
+    const y0 = Math.min(ly(a), ly(b)), h = Math.max(2, Math.abs(ly(a) - ly(b)));
+    el("rect", { x: x(k) - bw / 2, y: y0, width: bw, height: h, rx: Math.min(2, bw / 4),
+      fill: p.d > 0 ? "var(--away)" : p.d < 0 ? "var(--closer)" : "var(--muted)" }, svg);
+    if (few) {
+      if (p.d) el("text", { x: x(k), y: p.d > 0 ? y0 - 5 : y0 + h + 13, "text-anchor": "middle", class: "num" }, svg).textContent = signed(p.d);
+      el("text", { x: x(k), y: H - P.b + 16, "text-anchor": "middle", class: "num" }, svg).textContent = prLabel(p.r);
+    } else if ((!k || (p.r.day || 0) !== (ps[k - 1].r.day || 0)) && x(k) - lastX >= 34) {
+      lastX = x(k);
+      el("line", { x1: x(k) - slot / 2, x2: x(k) - slot / 2, y1: P.t, y2: H - P.b, stroke: "var(--grid)", "stroke-dasharray": "2 3" }, svg);
+      el("text", { x: x(k) - slot / 2 + 3, y: H - P.b + 16, class: "num" }, svg).textContent = p.r.day ? "D" + dd(p.r.day) : "S";
+    }
+    const hit = el("rect", { x: x(k) - slot / 2, y: P.t, width: slot, height: H - P.t - P.b, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, pullTip(p)));
+    hit.addEventListener("mouseleave", hideTip);
+    hit.addEventListener("click", () => setSel(p.i));
+  });
+  const nx = x(bars.length), y0 = Math.min(ly(0), ly(run)), h = Math.max(2, Math.abs(ly(0) - ly(run)));
+  el("rect", { x: nx - bw / 2, y: y0, width: bw, height: h, rx: Math.min(2, bw / 4), fill: "var(--ink)" }, svg);
+  el("text", { x: nx, y: run > 0 ? y0 - 5 : y0 + h + 13, "text-anchor": "middle", class: "lbl-strong num" }, svg).textContent = signed(run, few ? 2 : 1);
+  el("text", { x: nx, y: H - P.b + 16, "text-anchor": "middle", class: "lbl" }, svg).textContent = "net";
+}
+
+function drawPullTotals() {
+  const box = document.getElementById("pull-totals");
+  if (noPulls(box)) return;
+  const all = pullSum(PULLS), days = PULL_DAYS.map(d => [pullDay(d), pullSum(pullsOf(d))]);
+  const dayMax = Math.max(1e-9, ...days.map(([, t]) => Math.max(t.up, -t.dn)));
+  const row = (name, t, max, cls = "") => `<div class="name">${name}</div>` +
+    `<div class="side l ${cls}"><span class="v num">${t.nd ? signed(t.dn, 1) + "°" : ""}</span><i style="width:${(-t.dn / max * 80).toFixed(1)}%" title="${t.nd} merges"></i></div>` +
+    `<div class="side r ${cls}"><i style="width:${(t.up / max * 80).toFixed(1)}%" title="${t.nu} merges"></i><span class="v num">${t.nu ? signed(t.up, 1) + "°" : ""}</span></div>` +
+    `<div class="net num">net ${signed(t.net, 1)}°</div>`;
+  box.innerHTML = `<div></div><div class="hd l">← pulled closer</div><div class="hd r">pulled away →</div><div></div>` +
+    row("All", all, Math.max(1e-9, all.up, -all.dn), "big") + `<div class="sep"></div>` +
+    days.map(([n, t]) => row(n, t, dayMax)).join("") +
+    `<p class="note">All has its own scale; the days share one, so they compare with each other.</p>`;
+}
+
+function drawPullScale(d) {
+  const box = document.getElementById("pull-scale");
+  box.innerHTML = "";
+  if (noPulls(box)) return;
+  const t = pullSum(pullsOf(d)), all = pullSum(PULLS), W = 640, H = 330, cx = W / 2, py = 112, half = 210;
+  const up = t.up, dn = -t.dn, ang = (up - dn) / (up + dn || 1) * 30, rad = ang * Math.PI / 180;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Balance of the pulls closer and away: ${pullDay(d)}` }, box);
+  const L = { x: cx - half * Math.cos(rad), y: py - half * Math.sin(rad) }, Rt = { x: cx + half * Math.cos(rad), y: py + half * Math.sin(rad) };
+  el("path", { d: `M${cx} ${py}L${cx - 34} ${H - 60}L${cx + 34} ${H - 60}Z`, fill: "var(--surface-2)", stroke: "var(--axis)" }, svg);
+  el("line", { x1: L.x, y1: L.y, x2: Rt.x, y2: Rt.y, stroke: "var(--ink)", "stroke-width": 4, "stroke-linecap": "round" }, svg);
+  el("circle", { cx, cy: py, r: 6, fill: "var(--surface)", stroke: "var(--ink)", "stroke-width": 2 }, svg);
+  const heaviest = Math.max(1e-9, all.up, -all.dn);
+  [[L, dn, -dn, t.nd, "var(--closer)", "pulled closer"], [Rt, up, up, t.nu, "var(--away)", "pulled away"]].forEach(([e, w, v, n, fill, name]) => {
+    const y = e.y + 78, bh = w > 0 ? Math.max(3, Math.sqrt(w / heaviest) * 52) : 0;
+    el("path", { d: `M${e.x} ${e.y}L${e.x - 46} ${y}M${e.x} ${e.y}L${e.x + 46} ${y}`, fill: "none", stroke: "var(--axis)" }, svg);
+    el("path", { d: `M${e.x - 58} ${y}L${e.x + 58} ${y}Q${e.x} ${y + 26} ${e.x - 58} ${y}Z`, fill: "var(--surface-2)", stroke: "var(--axis)" }, svg);
+    if (bh) el("rect", { x: e.x - 32, y: y - bh, width: 64, height: bh, rx: 3, fill }, svg);
+    el("text", { x: e.x, y: y + 42, "text-anchor": "middle", class: "lbl" }, svg).textContent = name;
+    el("text", { x: e.x, y: y + 60, "text-anchor": "middle", class: "num" }, svg).textContent = `${signed(v, 1)}° in ${n} merges`;
+  });
+  el("text", { x: cx, y: H - 28, "text-anchor": "middle", class: "lbl-strong num" }, svg).textContent = `net ${signed(t.net)}°`;
+  el("text", { x: cx, y: H - 8, "text-anchor": "middle", class: "num" }, svg).textContent =
+    `${pullDay(d)} · tilt ${fmt(Math.abs(ang), 1)}° toward ${up > dn ? "away" : up < dn ? "closer" : "neither"} · ${t.nz} merges did not move it`;
+}
+
 /* ---------- pull requests per day ---------- */
 function drawPerDay() {
   const [S, C] = CUM.get(last);
@@ -657,6 +814,7 @@ function panel(id, draw) {
 function setSel(i) {
   sel = i; scrub.value = i;
   panel("scrub-now", drawScrubNow); panel("readout", drawReadout); panel("lines", drawLines); panel("deltas", drawDeltas); panel("heat", drawHeat);
+  panel("pull-sum", drawPullSum);
   document.querySelectorAll("#tbl tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === sel));
 }
 
@@ -1133,6 +1291,7 @@ function drawCriteria() {
 panel("attention-list", drawCriteria);
 
 panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
+pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel);

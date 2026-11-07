@@ -1433,6 +1433,25 @@ class PageTest(unittest.TestCase):
                          ("perday", "No day has a merged pull request yet")):
             self.assertIn(f'<p class="load-error">{why}', panels[box], box)
 
+    def test_the_pulls_on_the_gap_add_up_both_ways(self):
+        # From a gap of 50: +3 and -5 on day 1, a merge that moves nothing, then -1 on day 2.
+        # Away +3 in one merge, closer -6 in two, net -3; the gap ends at 47.
+        rows = [dict(page_row(i, pr, kind, gap), day=day, work=dict(test=27 * i), code_churn=27)
+                for i, (pr, kind, gap, day) in enumerate(
+            [(None, "origin", 50.0, 0), (1, "spec", 53.0, 1), (2, "code", 48.0, 1), (3, "other", 48.0, 1), (4, "code", 47.0, 2)])]
+        error, panels, logged = drawn(rows)
+        self.assertIsNone(error)
+        self.assertEqual(logged, [])
+        for box in ("pull-sum", "pull-steps", "pull-scale"):
+            self.assertIn("<svg", panels.get(box, ""), box)
+        self.assertIn(">−3.0°<", panels.get("pull-sum", ""))  # the sum since the plan, at its end
+        self.assertIn(">gap 47.0°<", panels.get("pull-sum", ""))
+        totals = panels.get("pull-totals", "")
+        for text in (">+3.0°<", ">−6.0°<", ">net −3.0°<", ">−5.0°<", ">net −1.0°<"):  # all, then day 1, then day 2
+            self.assertIn(text, totals)
+        self.assertIn("net −1.00°", panels.get("pull-steps", ""))  # opens on the latest day: one step of -1
+        self.assertIn(">net −3.00°<", panels.get("pull-scale", ""))  # opens on all merges
+
     def test_the_tests_ratio_leaves_the_fixtures_out(self):
         # 4,000 test lines, 3,000 of them fixtures, over 1,000 production lines: 1×, so the axis stops at 2×, not 4×.
         rows = [dict(page_row(i, pr, "other" if pr else "origin", 70.8), code_churn=27,
