@@ -249,6 +249,18 @@ class EvidenceTest(Repo):
         self.assertEqual(run.returncode, 1)
         self.assertIn("failed with the break in: this near miss should pass", run.stdout)
 
+    def test_a_posix_only_break_is_not_applicable_on_windows_and_replays_elsewhere(self):
+        # A break the check cannot see: replayed, it fails; on Windows it is not replayed at all.
+        blind = dict(BREAK, command=[sys.executable, "-c", "pass"], posix_only=True)
+        run, report = self.report(spec(), breaks=(blind,))
+        check = [c for d in report["days"] for c in d["checks"] if c["kind"] == "break"][0]
+        if os.name == "nt":
+            self.assertEqual((check["status"], check["diagnostic"]),
+                             ("not_applicable", "a POSIX-only break: not replayed on Windows"))
+        else:
+            self.assertEqual(check["status"], "failed", check)
+            self.assertIn("The check passed with the break in", check["diagnostic"])
+
     def test_a_break_recorded_at_a_commit_runs_there_not_at_the_close(self):
         check = [sys.executable, "-c", "import os, sys; sys.exit('AssertionError: broken') if 'broken' in "
                  "open('app.txt').read() and not os.path.exists('close.txt') else None"]
