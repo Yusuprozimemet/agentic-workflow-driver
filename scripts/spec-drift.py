@@ -23,6 +23,13 @@ but the code keeps counts against it). Names kept: that other direction alone, h
 specs once used and have dropped that the code still has. Names retired: of the names the specs
 use that the code lacks, those it had at an earlier merge.
 
+Per merge, the gap read against chance (what the dashboard draws):
+  gap_excess: the gap less its chance value, so zero is chance; gap_excess_band: the 95% band of
+  the shuffles around that value; gap_percentile: the share of the shuffles the gap sits above.
+  class_coverage: of the reached names, the share in the code, by class (prod, test, flags);
+  class_names: the named names per class, and the flags the specs name, counted apart as they
+  do not enter the gap. A test helper found only in test files counts as a test name.
+
 Boundaries: for the services the project file names, how much of their main source has left the
 monolith for services/, and how many imports still cross from one service's packages into
 another's. Both are read from the tree, like the gap; neither depends on what a day ticked.
@@ -55,6 +62,10 @@ import numpy as np
 TICK = re.compile(r"`([^`\n]+)`")
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
 WORDS = re.compile(r"[A-Za-z0-9_]+")
+# A flag has a hyphen, which IDENT never takes: flags are counted apart, and stay out of the gap angle.
+FLAG = re.compile(r"(?<![\w-])--[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\w-])")
+# A test's own name: test_ functions, Test classes and helpers named Test or Tests at the end.
+TEST_NAME = re.compile(r"^test_|^Test|Tests?$")
 COMMENT_LINE = re.compile(r"^\s*(//|/\*|\*|--|<!--|#(\s|!|$))")
 COMMENT_TAIL = re.compile(r"/\*.*?\*/|\s(//|--|#)\s.*$")
 CRITERION = re.compile(r"^- \[( |x)\]", re.M)
@@ -516,18 +527,31 @@ def angles(X, y):
     return np.degrees(np.arccos(np.clip(X[ok] @ y / (nx[ok] * ny), -1, 1)))
 
 
-def chance_angle(x, y, keep):
-    """The angle between x and y with y's entries in keep shuffled among themselves, over
-    CHANCE_DRAWS shuffles: [mean, 2.5th, 97.5th percentile], or None with no angle. Seeded per
-    call, so the same counts give the same chance at every merge."""
+def chance_draws(x, y, keep):
+    """The angles between x and y with y's entries in keep shuffled among themselves, one per
+    CHANCE_DRAWS shuffles; with fewer than two entries to shuffle, the one angle, or none. Seeded per
+    call, so the same counts give the same draws at every merge."""
     idx, rng = np.flatnonzero(keep), np.random.default_rng(0)
     if len(idx) < 2:
         a = angle(x, y)
-        return None if a is None else [round(a, 2)] * 3
+        return np.array([] if a is None else [a])
     Z = np.tile(y, (CHANCE_DRAWS, 1))
     # sorted first: only the counts matter, not their order
     Z[:, idx] = rng.permuted(np.tile(np.sort(y[idx]), (CHANCE_DRAWS, 1)), axis=1)
-    return band(angles(Z, x))
+    return angles(Z, x)
+
+
+def chance_angle(x, y, keep):
+    """The chance draws of chance_draws as [mean, 2.5th, 97.5th percentile], or None with no angle."""
+    return band(chance_draws(x, y, keep))
+
+
+def percentile_in(draws, gap):
+    """The share of draws below gap, half of those equal to it, as a percentage to one decimal;
+    None with no gap or no draws."""
+    if gap is None or not len(draws):
+        return None
+    return round(float((np.sum(draws < gap) + np.sum(draws == gap) / 2) / len(draws) * 100), 1)
 
 
 def name_overlap(spec, code, known):
@@ -562,6 +586,37 @@ def code_names(line, index):
     if COMMENT_LINE.match(line):
         return []
     return [w for w in WORDS.findall(COMMENT_TAIL.sub("", line)) if w in index]
+
+
+def name_class(tok, places):
+    """The class of a vocabulary name: "test" or "prod". A test helper found only in test files
+    counts as a test name; places is the set of places the name is found in at the merge."""
+    return "test" if TEST_NAME.search(tok) or (places and places <= {"test"}) else "prod"
+
+
+def spec_flags(texts):
+    """The flags the specs put in backticks, read as code_flags reads the code."""
+    return {f for t in texts.values() for span in TICK.findall(t) for f in FLAG.findall(span)}
+
+
+def code_flags(sha, flags):
+    """The flags, of those asked for, that the code at sha has. git grep reads it as code_counts
+    does, comment lines left out; cached under the SHA with the flags asked, as sorted lists."""
+    asked = sorted(flags)
+    if not asked:
+        return set()
+    cached = CACHE.setdefault("flags", {}).get(sha)
+    if cached is None or cached["asked"] != asked:
+        out = subprocess.run(["git", "grep", "-h", "-I", "-F", "-f", "-", sha, "--", ".",
+                              ":(exclude)*.md", ":(exclude)**/package-lock.json",
+                              *(f":(exclude){d}" for d in NOT_CODE_DIRS)], input="\n".join(asked) + "\n",
+                             capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+        found = set()
+        for line in out.splitlines():
+            if not COMMENT_LINE.match(line):
+                found.update(FLAG.findall(COMMENT_TAIL.sub("", line)))
+        cached = CACHE["flags"][sha] = {"asked": asked, "found": sorted(found & set(asked))}
+    return set(cached["found"])
 
 
 def snapshots(prs):
@@ -670,7 +725,8 @@ def trajectory(snaps, blobs, order=()):
             day = max(day, int(m.group(1)), key=rank)
         spec, (places, where) = spec_counts(s["texts"]), code_counts(s["sha"])
         code = sum(places.values())
-        reached = spec_counts({f: t for f, t in s["texts"].items() if day_of(f) and rank(day_of(f)) <= rank(max(day, 1))})
+        reached_texts = {f: t for f, t in s["texts"].items() if day_of(f) and rank(day_of(f)) <= rank(max(day, 1))}
+        reached = spec_counts(reached_texts)
         added = deleted = 0
         for line in at_commits("diff", "--numstat", snaps[0]["sha"], s["sha"], "--", "plan.md", "specs").splitlines():
             a, d, _ = line.split("\t")
@@ -708,11 +764,29 @@ def trajectory(snaps, blobs, order=()):
                                   for p in PLACES if any(place_of(f) == p for f in where[v])} for v in outside}
         names_absent = [vocab[k] for k in np.flatnonzero(named & ~in_code)]
         ever |= in_code
-        chance = chance_angle(spec_v, code_v, known)
+        # The shuffles run once: the chance band and the gap's place among them both come from them.
+        draws = chance_draws(spec_v, code_v, known)
+        chance, gap = band(draws), angle(spec_v, code_v)
+        gap_full = deg(gap)
+        gap_excess = round(gap_full - chance[0], 2) if gap_full is not None and chance else None
+        gap_excess_band = [round(chance[1] - chance[0], 2), round(chance[2] - chance[0], 2)] if chance else None
+        gap_percentile = percentile_in(draws, gap)
+        # Each vocabulary name's class, from its own name and the places it is found in at this merge.
+        klass = np.array([name_class(v, {place_of(p) for p in where.get(v, {})}) for v in vocab])
+        reached_class = {k: mask & (klass == k) for k in ("prod", "test")}
+        # On a merge with a PR only, as coverage: the origin has no day reached.
+        class_coverage = {k: round(float((code[m] > 0).mean()), 3) if s["pr"] and m.any() else None
+                          for k, m in reached_class.items()}
+        flags = spec_flags(reached_texts)
+        class_coverage["flags"] = round(len(code_flags(s["sha"], flags)) / len(flags), 3) if s["pr"] and flags else None
+        class_names = {k: int((named & (klass == k)).sum()) for k in ("prod", "test")}
+        class_names["flags"] = len(spec_flags(s["texts"]))
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], branch=s["branch"], kind=s["kind"],
                          day=day if s["pr"] else 0, added=added, deleted=deleted,
-                         gap_full=deg(angle(spec_v, code_v)),
+                         gap_full=gap_full,
                          gap_chance=chance and chance[0], gap_chance_band=chance and chance[1:],
+                         gap_excess=gap_excess, gap_excess_band=gap_excess_band, gap_percentile=gap_percentile,
+                         class_coverage=class_coverage, class_names=class_names,
                          coverage=round(float((code[mask] > 0).mean()), 3) if s["pr"] and mask.any() else None,
                          name_coverage=name_coverage, jaccard=jaccard, names_kept=names_kept, names_retired=names_retired,
                          prod_name_coverage=prod_name_coverage, spec_names=int(named.sum()),
