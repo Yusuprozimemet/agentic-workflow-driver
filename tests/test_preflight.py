@@ -121,6 +121,7 @@ HELP = (
     "  --model <model>  Model for the current session\n"
     "  --output-format <format>  Output format: text, json or stream-json\n"
     "  --max-budget-usd <amount>  Maximum dollar amount to spend on API calls\n"
+    "  --permission-mode <mode>  Permission mode to use for the session\n"
     "  --strict-mcp-config  Only use MCP servers from --mcp-config\n"
     "  --settings <file-or-json>  Path to a settings JSON file or a JSON string\n"
     "  --bare  Minimal mode; a system prompt file is set by --append-system-prompt[-file]\n"
@@ -276,6 +277,7 @@ class CliPreflightTest(unittest.TestCase):
                 "--model",
                 "--output-format",
                 "--max-budget-usd",
+                "--permission-mode",
                 "--strict-mcp-config",
                 "--settings",
                 "--append-system-prompt-file",
