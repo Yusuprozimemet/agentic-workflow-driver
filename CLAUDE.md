@@ -283,7 +283,8 @@ The dashboard script and the PR checks:
 ## Commits and pull requests
 
 - Commit messages: a subject that says what changed, then why, and what was seen failing.
-- PR descriptions follow `.github/pull_request_template.md`: what was built, why this approach
+- PR descriptions follow `.github/pull_request_template.md`: a user story in plain words a
+  non-technical reader follows (as a…, I want…, so that…), what was built, why this approach
   (including what was broken on purpose and what it reported), contract impact, how to run, and
   the self-check. Spec-change PRs tick the `new`/`hold` line.
 - Record mistakes, including your own, in the PR and the day's Notes. The corrections are part of

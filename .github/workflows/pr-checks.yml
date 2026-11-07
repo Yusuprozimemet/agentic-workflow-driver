@@ -64,6 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           required=(
+            "## User story"
             "## What I built"
             "## Why this approach"
             "## Contract impact"
