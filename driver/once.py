@@ -1,16 +1,21 @@
 """--once does one step's checks in order, and the first that applies ends the run: the halt file,
 the config, the lock, the driver's own repository, the kit and the CLI (preflight), the decision,
-the evidence run, then the run log. Until Track E a step that passes them prints
-"would start: <sentence>" and starts nothing."""
+the evidence run, then the run log. Steps 10 and 11 write the settings and the run log's start
+line, then start one `claude -p` session, its prompt on stdin. Until Track F it prints
+"ended: session `<uuid>`" and no outcome."""
 
 import os
+import shutil
+import subprocess
 import sys
+import uuid
 
 from driver import github, lock, runlog
 from driver import home as driver_home
+from driver import settings as driver_settings
 from driver.config import load as load_config
 from driver.decide import decide
-from driver.preflight import cli_lines, kit_lines
+from driver.preflight import CLI, cli_lines, kit_lines
 from driver.steps import classify
 
 
@@ -41,12 +46,12 @@ def run(args, home, read_facts):
     if refusal:
         return refuse([refusal])
     try:
-        return checked(args, home, project, read_facts)
+        return checked(args, home, project, read_facts, config)
     finally:
         lock.release(args.state)
 
 
-def checked(args, home, project, read_facts):
+def checked(args, home, project, read_facts, config):
     _started, reason = driver_home.check(home)
     if reason:
         return refuse([f"cannot start: {reason}"])
@@ -73,6 +78,46 @@ def checked(args, home, project, read_facts):
     if reason:
         print(f"park: {reason}")
         return 1
-    # Until Track E: no settings are written and no run-log line is, so nothing is started.
-    print(f"would start: {sentence}")
+    # The settings are written afresh, and the start line is in the log before the session runs.
+    settings_path = driver_settings.write(args.state, home)
+    session = str(uuid.uuid4())
+    path = shutil.which(args.claude)
+    probe = subprocess.run([path, "--version"], check=False, **CLI)
+    lines = probe.stdout.splitlines()
+    version = lines[0].strip() if lines else ""
+    runlog.start(args.state, sentence, classify(sentence).prefix, session, version)
+    command = [
+        path,
+        "-p",
+        "--model",
+        args.model,
+        "--output-format",
+        "json",
+        "--max-budget-usd",
+        str(config["budget_usd"]),
+        "--permission-mode",
+        "auto",
+        "--strict-mcp-config",
+        "--settings",
+        settings_path,
+        "--append-system-prompt-file",
+        os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
+        "--session-id",
+        session,
+    ]
+    # The prompt is on stdin, not in an argument: cmd.exe drops a newline and what follows it.
+    prompt = (
+        f"Next step: {sentence}\n"
+        "Do this one step as CLAUDE.md says, open its one pull request, and stop.\n"
+    )
+    done = subprocess.run(
+        command,
+        input=prompt.encode("utf-8"),
+        stdout=subprocess.PIPE,
+        cwd=os.path.realpath(project),
+        check=False,
+    )
+    _out = done.stdout.decode("utf-8", errors="replace")
+    # Until Track F: the session's outcome is read from _out and no end line is written.
+    print(f"ended: session `{session}`")
     return 0
