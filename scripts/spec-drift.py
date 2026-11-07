@@ -1594,7 +1594,7 @@ def evidence_checks(days, snaps):
         return dict(state="invalid", diagnostic=f"{type(e).__name__}: {e}")
 
 
-def criterion_index(days, reports, handoffs, snaps, blobs):
+def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
     """Join recorded evidence without treating an unavailable source as a negative result."""
     names = {t for d in days for c in d["evidence"] for t in evidence_test_names(c["block"])}
     states = test_state(names, snaps[-1]["sha"], blobs, {old: new for _, old, new in moves(snaps)})
@@ -1662,6 +1662,10 @@ def criterion_index(days, reports, handoffs, snaps, blobs):
                 flag(row, "not_seen_red", "No seen-red or broken line")
             if found is False:
                 flag(row, "test_not_found", ", ".join(t for t in tests if states[t] == "missing"))
+            # The "Tests on main" column's orange: a test CI can skip is noted here, not a fault.
+            skips = [t for t in tests if states[t] == "skippable"]
+            if skips:
+                flag(row, "test_skippable", ", ".join(skips))
             for h in handoffs:
                 if not h["picked"] and re.search(rf"\b{re.escape(c['id'])}\b", h["text"]):
                     flag(row, "handoff_unclaimed", h["text"])
@@ -1671,10 +1675,21 @@ def criterion_index(days, reports, handoffs, snaps, blobs):
             if target in by_id:
                 by_id[target]["replaced_by"].append(row["id"])
     severity = ("replay_failed", "replay_error", "replay_stale", "evidence_missing",
-                "not_seen_red", "test_not_found", "handoff_unclaimed", "not_breakable")
+                "not_seen_red", "test_not_found", "handoff_unclaimed", "not_breakable", "test_skippable")
     attention.sort(key=lambda a: (severity.index(a["reason"]), a["day"], a["id"]))
     for item in attention:
         del item["day"]
+    # handoff_unclaimed above needs a hand-off to name a criterion; hand-offs name their own ID and
+    # a day, and the day they go to has no criteria yet. So each open one is listed, after the rest:
+    # those for the next day to run, then those no later day picks up.
+    finished = {d["day"] for d in days if d["status"] in FINISHED}
+    upcoming = next((d for d in order if d not in finished and d not in PLACEHOLDERS), None)
+    for reason, to in ((("handoff_next", upcoming),) if upcoming else ()) + (("handoff_unpicked", None),):
+        for h in handoffs:
+            if not h["picked"] and h.get("to") == to:
+                text = " ".join(re.sub(r"^\s*-\s*", "", h["text"]).split())
+                attention.append(dict(id=h.get("id") or h["source"], reason=reason,
+                                      detail=(f"Day {to:02d}: " if to is not None else "") + text))
     return rows, attention
 
 
@@ -1887,7 +1902,7 @@ def main():
         boundaries(rows, snaps, blobs)
         handoffs = hand_offs(days, order, head, blobs)
         checks = evidence_checks(days, snaps)
-        index, attention = criterion_index(days, checks, handoffs, snaps, blobs)
+        index, attention = criterion_index(days, checks, handoffs, snaps, blobs, order)
         now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                    head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
                    current_day=next((d["day"] for d in days if d["status"] == "active"), None),

@@ -77,6 +77,10 @@ const gapClosed = -Object.values(byKind).reduce((a, b) => a + b, 0);
 const ofGap = x => gapClosed ? `${Math.round(-x / gapClosed * 100)}%` : "–";
 const firstGap = R.find(r => r.gap_full != null) || first;
 const specShare = -byKind.spec / gapClosed;
+// Degrees with their sign, − closer and + away, and what a kind's sum did to the gap.
+const gapDeg = x => (x > 0 ? "+" : x < 0 ? "−" : "±") + fmt(Math.abs(x), 1) + "°";
+const gapMove = x => x > 0 ? `widened it by ${fmt(x, 1)}°` : x < 0 ? `closed it by ${fmt(-x, 1)}°` : "did not move it";
+const thousands = n => n == null ? "–" : Number(n).toLocaleString("en-US");
 const nKind = k => R.filter(r => r.kind === k).length;
 // A count and its noun, singular for one: "1 day", "2 days".
 const many = (n, one, more = one + "s") => `${n} ${n === 1 ? one : more}`;
@@ -96,12 +100,12 @@ document.getElementById("stats").innerHTML = `
     <span class="v num">${last.name_coverage == null ? "–" : fmt(last.name_coverage * 100, 1) + "%"} <small>· ${last.jaccard == null ? "–" : fmt(last.jaccard, 2)}</small></span>
     <span class="n">Of the backticked names the specs use today, the share the code has${last.spec_names == null ? "" : ` (${last.names_in_code} of ${last.spec_names}; in production, ${last.names_in_prod})`}; Jaccard is the names in both over the names in either.</span>
     <span class="n" style="color:var(--muted)">Name-gap angle (secondary): ${fmt(firstGap.gap_full)}° → ${fmt(last.gap_full)}°, ${fmt(gapClosed)}° closed across ${N - 1} merges; ${fmt(last.gap_chance)}° by chance (95%: ${band(last.gap_chance_band)}). ${last.names_kept == null ? "" : `${last.names_kept} names the specs dropped are still in the code. `}${last.names_retired == null ? "" : `${last.names_retired} of the names not in the code were there at an earlier merge: retired, still counted as missing. `}${last.coverage == null ? "" : `${fmt(last.coverage * 100, 1)}% of the names the reached days use are in the code.`}</span></div>
-  <div class="stat"><span class="k">Share of the gap closed by the spec</span>
-    <span class="v num">${ofGap(byKind.spec)}</span>
-    <span class="n"><span class="sw" style="background:var(--spec)"></span>${many(nKind("spec"), "spec-change PR")} ${specShare >= 0 ? "moved the spec toward the code" : "widened the gap, naming what was not built yet"}; <span class="sw" style="background:var(--code)"></span>${many(nKind("code"), "code PR")} closed ${ofGap(byKind.code)}</span></div>
+  <div class="stat" title="Share of the gap closed: spec ${ofGap(byKind.spec)}, code ${ofGap(byKind.code)}"><span class="k">Name gap moved, by kind of PR</span>
+    <span class="v num">net ${gapDeg(-gapClosed)}</span>
+    <span class="n"><span class="sw" style="background:var(--spec)"></span>${many(nKind("spec"), "spec-change PR")} ${gapMove(byKind.spec)}${byKind.spec > 0 ? ", naming what was not built yet" : ""}; <span class="sw" style="background:var(--code)"></span>${many(nKind("code"), "code PR")} ${gapMove(byKind.code)}. Signed as in “Total pull in each direction”: − is closer.</span></div>
   <div class="stat"><span class="k">Spec text since ${shortDate(R[0].date)}</span>
-    <span class="v num">−${last.deleted} <small>/ +${last.added} lines</small></span>
-    <span class="n">of ${DATA.origin_lines} lines as written: ${Math.round(last.deleted / DATA.origin_lines * 100)}% rewritten, the rest kept</span></div>`;
+    <span class="v num">${thousands(last.deleted)} <small>of ${thousands(DATA.origin_lines)} original spec lines rewritten · ${thousands(last.added)} added</small></span>
+    <span class="n">${Math.round(last.deleted / DATA.origin_lines * 100)}% of the spec as written rewritten, the rest kept</span></div>`;
 document.getElementById("headline").textContent = specShare >= -byKind.code / gapClosed
   ? "The plan moved to meet the code" : "The spec leads, the code follows";
 document.querySelectorAll(".vocab-n").forEach(e => { e.textContent = DATA.vocab_size; });
@@ -707,16 +711,14 @@ function drawPerDay() {
     <span><i style="background:var(--code)"></i>Code lines changed · ${kilo(C)}</span>`;
   const merges = R.filter(r => r.pr);
   const totals = ["spec", "code", "close"].map(k => ({ name: KIND[k], value: merges.filter(r => r.kind === k).length, color: KVAR[k] }));
-  const groups = DATA.other_groups;
-  if (groups) {
-    const opacity = [1, 0.75, 0.55, 0.4];
-    groups.forEach((g, i) => totals.push({ name: g.name, value: g.count, color: "var(--other)", opacity: opacity[i] }));
-  } else {
-    totals.push({ name: KIND.other, value: merges.filter(r => r.kind === "other").length, color: KVAR.other });
-  }
+  // Shades of one grey could not be told apart: the bar draws every other PR as one segment, and
+  // the legend and its tooltip give the split by branch area.
+  const groups = DATA.other_groups, split = groups ? groups.map(g => `${esc(g.name)} · ${g.count}`).join(", ") : "";
+  totals.push({ name: KIND.other, value: merges.filter(r => r.kind === "other").length, color: KVAR.other,
+    tip: split && `<div class="row"><span>by area</span><span>${split}</span></div>` });
   shareBar(document.getElementById("pr-total"), totals, "Every merged pull request by kind");
   document.getElementById("pr-total-legend").innerHTML = totals.map(t =>
-    `<span><i class="dot" style="background:${t.color}${t.opacity == null ? "" : `;opacity:${t.opacity}`}"></i>${esc(t.name)} · ${t.value}</span>`).join("") + `<span>${merges.length} in all</span>`;
+    `<span><i class="dot" style="background:${t.color}"></i>${esc(t.name)} · ${t.value}${t.tip ? ` (${split})` : ""}</span>`).join("") + `<span>${merges.length} in all</span>`;
   const box = document.getElementById("perday");
   box.innerHTML = "";
   const kinds = ["spec", "code", "close", "other"], H = 240, P = { l: 44, r: 16, t: 22, b: 30 };
@@ -1458,14 +1460,26 @@ function drawDeployment() {
 // Display the evidence as supplied by the data build.
 const reasonLabels = { replay_failed: "Replay failed", replay_error: "Replay error", replay_stale: "Replay stale",
   evidence_missing: "Evidence missing", not_seen_red: "Not seen red", test_not_found: "Test not found", handoff_unclaimed: "Hand-off unclaimed",
-  not_breakable: "No break possible" };
-// Listed apart, after the rest: a check whose `broken: none → <why>` says no break can run from the repository.
-const NOTED = new Set(["not_breakable"]);
+  not_breakable: "No break possible", test_skippable: "Can be skipped",
+  handoff_next: "Hand-off for the next day", handoff_unpicked: "Hand-off no later day picks up" };
+// Listed apart, after the rest, each under its heading: a check whose `broken: none → <why>` says no
+// break can run from the repository, and a named test CI can skip (orange in "Tests on main").
+const NOTED = {
+  not_breakable: ["Can’t be broken here", "Checked by hand: the reason no break can run from the repository."],
+  test_skippable: ["Can be skipped in CI (expected)", "A live test runs only when its variable is set, so CI skips it: run it by hand. “Tests on main” draws these orange."] };
 const seenRed = s => s.state === false && s.none && s.none.length ? `<span title="${esc(s.none.join("; "))}">can’t</span>` : measured(s.state);
 const attention = DATA.attention || [], criteria = DATA.criteria_index || [];
 const unknown = '<span title="not measured">–</span>';
 const measured = value => value == null ? unknown : value ? "yes" : "no";
 const values = items => items && items.length ? items.map(esc).join(", ") : unknown;
+// A criterion's replay checks counted by status, failed and errored first and marked: "11/11 passed".
+const replayCount = status => {
+  if (!status || !status.length) return unknown;
+  const n = status.reduce((t, s) => (t[s] = (t[s] || 0) + 1, t), {}), bad = ["failed", "error"];
+  if (Object.keys(n).length === 1 && n.passed) return `${n.passed}/${n.passed} passed`;
+  return [...bad.filter(s => n[s]), ...Object.keys(n).filter(s => !bad.includes(s))].map(s => bad.includes(s)
+    ? `<b class="replay-bad">✗ ${n[s]} ${esc(s)}</b>` : `${n[s]} ${esc(s)}`).join(" · ");
+};
 const itemText = item => `<b>${esc(item.id)}</b> · ${esc(reasonLabels[item.reason] || item.reason)}: ${esc(item.detail)}`;
 function inspect(id) {
   const row = criteria.find(c => c.id === id), items = attention.filter(a => a.id === id);
@@ -1486,13 +1500,15 @@ function inspect(id) {
 function drawCriteria() {
   const list = document.getElementById("attention-list"), matrix = document.getElementById("criteria-matrix");
   const button = (a, i) => `<button type="button" data-attention="${i}">${itemText(a)}</button>`;
-  const flagged = attention.map(button).filter((_, i) => !NOTED.has(attention[i].reason));
-  const noted = attention.map(button).filter((_, i) => NOTED.has(attention[i].reason));
-  list.innerHTML = DATA.attention == null ? "Not in this data" : (flagged.length ? flagged.join("") : "Nothing needs attention") +
-    (noted.length ? `<h3>Can’t be broken here</h3><p>Checked by hand: the reason no break can run from the repository.</p>${noted.join("")}` : "");
+  const flagged = attention.map(button).filter((_, i) => !(attention[i].reason in NOTED));
+  const noted = Object.entries(NOTED).map(([reason, [head, why]]) => {
+    const items = attention.map(button).filter((_, i) => attention[i].reason === reason);
+    return items.length ? `<h3>${head}</h3><p>${why}</p>${items.join("")}` : "";
+  }).join("");
+  list.innerHTML = DATA.attention == null ? "Not in this data" : (flagged.length ? flagged.join("") : "Nothing needs attention") + noted;
   matrix.innerHTML = DATA.criteria_index == null ? "<caption>Not in this data</caption>" : !criteria.length ? "<caption>No criteria yet</caption>" :
     `<thead><tr><th>Criterion</th><th>Day</th><th>Tag</th><th>Cites a PR</th><th>Test found</th><th>Seen red</th><th>Replay</th></tr></thead><tbody>${criteria.map((c, i) =>
-      `<tr tabindex="0" role="button" data-criterion="${i}"><td>${esc(c.id)}</td><td>${esc(c.day)}</td><td>${esc(c.tag)}</td><td>${measured(c.cited)}</td><td>${measured(c.test_found)}</td><td>${seenRed(c.seen_red)}</td><td>${c.replay.status == null ? unknown : values(c.replay.status)}</td></tr>`).join("")}</tbody>`;
+      `<tr tabindex="0" role="button" data-criterion="${i}"><td>${esc(c.id)}</td><td>${esc(c.day)}</td><td>${esc(c.tag)}</td><td>${measured(c.cited)}</td><td>${measured(c.test_found)}</td><td>${seenRed(c.seen_red)}</td><td>${replayCount(c.replay.status)}</td></tr>`).join("")}</tbody>`;
   list.addEventListener("click", e => { const b = e.target.closest("button[data-attention]"); if (b) inspect(attention[+b.dataset.attention].id); });
   const selectRow = e => { const r = e.target.closest("tr[data-criterion]"); if (r) inspect(criteria[+r.dataset.criterion].id); };
   matrix.addEventListener("click", selectRow);
