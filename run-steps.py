@@ -120,4 +120,9 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    # A parent reading through a pipe reads UTF-8, whatever the locale and PYTHONIOENCODING say;
+    # a console keeps its own encoding. Here, not in main(): tests call main() under StringIO.
+    for stream in (sys.stdout, sys.stderr):
+        if not stream.isatty():
+            stream.reconfigure(encoding="utf-8")
     sys.exit(main())

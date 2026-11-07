@@ -24,6 +24,7 @@ FLAGS = (
     "--model",
     "--output-format",
     "--max-budget-usd",
+    "--permission-mode",
     "--strict-mcp-config",
     "--settings",
     "--append-system-prompt-file",
@@ -47,7 +48,8 @@ def run_drift(project):
         out = Path(tmp) / "spec-drift.json"
         cache = Path(tmp) / "cache.json"
         cmd = [sys.executable, str(script), "--out", str(out), "--cache", str(cache)]
-        done = subprocess.run(cmd, check=False, cwd=project, **READ)
+        # Its output is not read for anything, so a bad byte in it is replaced, not fatal.
+        done = subprocess.run(cmd, check=False, cwd=project, **CLI)
         if done.returncode != 0:
             code = done.returncode
             return None, f"cannot read the project: scripts/spec-drift.py exited {code}"
