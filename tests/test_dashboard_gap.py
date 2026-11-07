@@ -90,9 +90,13 @@ class SpecStepsPanelTest(unittest.TestCase):
         page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
         self.assertTrue('<div id="spec-steps"></div>' in page, "no spec-steps panel on the page")
-        self.assertTrue('panel("spec-steps", drawSpecSteps)' in script, "setSel does not draw spec-steps")
+        self.assertTrue(
+            'panel("spec-steps", drawSpecSteps)' in script, "setSel does not draw spec-steps"
+        )
         # A pure removal is drawn apart from a PR that added names.
-        self.assertTrue("removal = p.x === 0 && p.out > 0" in script, "a pure removal is not marked")
+        self.assertTrue(
+            "removal = p.x === 0 && p.out > 0" in script, "a pure removal is not marked"
+        )
 
 
 if __name__ == "__main__":
