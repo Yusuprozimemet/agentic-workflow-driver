@@ -10,8 +10,8 @@ process tree when its lock names a live process, then reports on the run's issue
 <dir>/run.json; clear [--state <dir>] removes the halt file and a stale lock, and refuses while a
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
 file. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
-[--config] [--project] [--state] [--claude] [--gh] [--model] does one step's checks in order: halt,
-config, lock, the driver's own repository, preflight, decide, the evidence run, then the run log;
+[--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] does one step's checks in order:
+halt, config, lock, the driver's own repository, preflight, decide, the evidence run, then the run log;
 for now it prints "would start: <sentence>" and starts nothing."""
 
 import argparse
@@ -90,6 +90,12 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--gh", default="gh", help="the GitHub CLI program, found on PATH")
     parser.add_argument("--model", default="opus", help="the session's model")
+    parser.add_argument(
+        "--poll",
+        type=float,
+        default=30,
+        help="seconds between --once's reads of the project's issues during a session",
+    )
     args = parser.parse_args(argv)
     if args.once:
         if args.dry_run or args.command:
