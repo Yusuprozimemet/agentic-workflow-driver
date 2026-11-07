@@ -8,7 +8,10 @@ the config (--config, default driver.json beside this file), and a config with a
 with one stderr line per problem. halt [--state <dir>] writes <dir>/halt and kills the driver's
 process tree when its lock names a live process; clear [--state <dir>] removes the halt file and a
 stale lock, and refuses while a driver lives. Neither needs a project or a config; --state defaults
-to the state folder beside this file."""
+to the state folder beside this file. --once [--config] [--project] [--state] [--claude] [--gh]
+[--model] does one step's checks in order: halt, config, lock, the driver's own repository,
+preflight, decide, the evidence run, then the run log; for now it prints "would start: <sentence>"
+and starts nothing."""
 
 import argparse
 import sys
@@ -16,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from driver import switches
+from driver import once, switches
 from driver.config import load as load_config
 from driver.decide import Facts, decide
 from driver.preflight import cli_lines, git, kit_lines
@@ -81,7 +84,17 @@ def main(argv=None) -> int:
         default=Path(__file__).resolve().parent / "state",
         help="the driver's state folder: halt, lock, settings",
     )
+    parser.add_argument(
+        "--once", action="store_true", help="do one step: check, then start its session"
+    )
+    parser.add_argument("--gh", default="gh", help="the GitHub CLI program, found on PATH")
+    parser.add_argument("--model", default="opus", help="the session's model")
     args = parser.parse_args(argv)
+    if args.once:
+        if args.dry_run or args.command:
+            print("run-steps.py: --once goes alone", file=sys.stderr)
+            return 2
+        return once.run(args, Path(__file__).resolve().parent, read_facts)
     # halt and clear touch only the state folder, so they run with no project and no config.
     if args.command == "halt":
         return switches.halt(args.state)
@@ -106,7 +119,7 @@ def main(argv=None) -> int:
         print("preflight: ok")
         return 0
     if not args.dry_run:
-        print("run-steps.py: only --dry-run and preflight exist yet", file=sys.stderr)
+        print("run-steps.py: give --dry-run, --once or a command", file=sys.stderr)
         return 2
     lines, drift = kit_lines(args.project)
     if lines:
