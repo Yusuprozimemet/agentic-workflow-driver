@@ -74,6 +74,11 @@
     </div>
     <div id="deltas"></div>
     <div class="panel-head" style="margin-top:6px">
+      <h2 style="font-size:17px">What each spec change did to the gap</h2>
+      <p>One point per spec-change pull request: across, the names it added to the specs (production and test names; flags do not enter the gap); up, the step it took on the gap less its chance value. It tells a batch of new names from rewording that adds none. A hollow diamond is a pull request that added no names but dropped some. Hover a point for the names dropped and the flags.</p>
+    </div>
+    <div id="spec-steps"></div>
+    <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">The sawtooth, up close</h2>
       <p>The share of code names in the specs for days already reached that exist in the code. It dips when a day starts, because the spec names things not built yet, and climbs back as that day's tracks land. The other three split it by class: production identifiers, test names (a <code>test_</code> or <code>Test</code> name, or one found only in test files), and the flags the specs put in backticks, which the gap does not read.</p>
     </div>

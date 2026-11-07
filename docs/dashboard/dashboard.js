@@ -492,6 +492,57 @@ function drawDeltas() {
   oooNote(box);
 }
 
+/* ---------- what each spec change did to the gap ---------- */
+// One point per spec-change PR: the names it added to the specs (production and test; flags do not
+// enter the gap) against its step on the gap less chance. A PR that added none but dropped some is a
+// hollow diamond, so a pure removal does not read as a dot at "nothing happened".
+const sumPT = c => c ? c.prod + c.test : 0;
+const SPEC_STEPS = R.map((r, i) => ({ r, i })).filter(p => p.i && p.r.kind === "spec" && p.r.names_added
+  && p.r.gap_excess != null && R[p.i - 1].gap_excess != null)
+  .map(p => ({ ...p, x: sumPT(p.r.names_added), out: sumPT(p.r.names_dropped), d: step(R[p.i - 1].gap_excess, p.r.gap_excess) }));
+function drawSpecSteps() {
+  const box = document.getElementById("spec-steps");
+  box.innerHTML = "";
+  if (!SPEC_STEPS.length) { box.innerHTML = '<p class="load-error">No spec-change PR has merged yet.</p>'; return; }
+  const H = 300, top = LP.t, bot = H - 44, left = LP.l, right = LW - LP.r;
+  const xMax = Math.max(10, Math.ceil(Math.max(...SPEC_STEPS.map(p => p.x)) / 10) * 10);
+  const lo = Math.min(0, ...SPEC_STEPS.map(p => p.d)), hi = Math.max(0, ...SPEC_STEPS.map(p => p.d));
+  const unit = hi - lo > 8 ? 2 : 1, yMin = Math.floor(lo / unit) * unit, yMax = Math.max(Math.ceil(hi / unit) * unit, yMin + unit);
+  const sx = v => left + v / xMax * (right - left), sy = v => top + (1 - (v - yMin) / (yMax - yMin)) * (bot - top);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Names each spec-change PR added, against its step on the gap less chance" }, box);
+  for (let t = yMin; t <= yMax + 1e-9; t += unit) {
+    el("line", { x1: left, x2: right, y1: sy(t), y2: sy(t), stroke: Math.abs(t) < 1e-9 ? "var(--axis)" : "var(--grid)" }, svg);
+    el("text", { x: left - 8, y: sy(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = signed(t, 0) + "°";
+  }
+  for (let t = 0; t <= xMax; t += xMax / 5) {
+    el("text", { x: sx(t), y: bot + 18, "text-anchor": "middle", class: "num" }, svg).textContent = fmt(t, 0);
+  }
+  el("rect", { x: left, y: top, width: right - left, height: bot - top, fill: "none", stroke: "var(--axis)" }, svg);
+  el("text", { x: (left + right) / 2, y: bot + 38, "text-anchor": "middle", class: "lbl" }, svg).textContent = "names added to the specs (production and test)";
+  el("text", { x: right + 10, y: top + 16, class: "lbl" }, svg).textContent = "Δ gap less chance";
+  const placed = [];
+  SPEC_STEPS.forEach(p => {
+    const cx = sx(p.x), cy = sy(p.d), removal = p.x === 0 && p.out > 0;
+    if (removal) el("path", { d: `M${cx},${cy - 5}L${cx + 5},${cy}L${cx},${cy + 5}L${cx - 5},${cy}Z`, fill: "var(--surface)", stroke: "var(--spec)", "stroke-width": 1.5, class: "removal" }, svg);
+    else el("circle", { cx, cy, r: 4, fill: "var(--spec)", stroke: "var(--surface)", "stroke-width": 1 }, svg);
+    if (p.i === sel) el("circle", { cx, cy, r: 8, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5 }, svg);
+    // Labels that would land on one already drawn are left to the tooltip: several PRs sit at zero.
+    if (!placed.some(([x, y]) => Math.abs(x - cx) < 40 && Math.abs(y - cy) < 14)) {
+      placed.push([cx, cy]);
+      el("text", { x: cx + 8, y: cy - 6, class: "num" }, svg).textContent = prLabel(p.r);
+    }
+    const a = p.r.names_added, o = p.r.names_dropped;
+    const hit = el("circle", { cx, cy, r: 8, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, rowTip(p.r)
+      + `<div class="row"><span>names added (prod / test)</span><span>${a.prod} / ${a.test}</span></div>`
+      + `<div class="row"><span>names dropped (prod / test)</span><span>${o.prod} / ${o.test}</span></div>`
+      + `<div class="row"><span>flags added / dropped</span><span>${a.flags} / ${o.flags}</span></div>`
+      + `<div class="row"><span>change in gap less chance</span><span>${signed(p.d)}°</span></div>`));
+    hit.addEventListener("mouseleave", hideTip);
+    hit.addEventListener("click", () => setSel(p.i));
+  });
+}
+
 /* ---------- how the pulls on the gap add up ---------- */
 // The steps above, summed: steps away from the code against steps toward it. The sum is a change
 // since the plan, not the gap. Day 0 is "Setup", the merges before Day 01's first pull request.
@@ -838,7 +889,7 @@ function panel(id, draw) {
 }
 function setSel(i) {
   sel = i; scrub.value = i;
-  panel("scrub-now", drawScrubNow); panel("readout", drawReadout); panel("lines", drawLines); panel("deltas", drawDeltas); panel("heat", drawHeat);
+  panel("scrub-now", drawScrubNow); panel("readout", drawReadout); panel("lines", drawLines); panel("deltas", drawDeltas); panel("spec-steps", drawSpecSteps); panel("heat", drawHeat);
   panel("pull-sum", drawPullSum);
   document.querySelectorAll("#tbl tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === sel));
 }
