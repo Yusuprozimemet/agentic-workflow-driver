@@ -1238,14 +1238,15 @@ function drawConclusion() {
       ${nKind("code")} code tracks, ${nKind("spec")} spec changes, ${nKind("close")} closing PRs and ${nKind("other")} others.</p></div>
     <div class="finding"><h3>What is next</h3>${next}</div>`;
 
+  const head = DATA.conclusion.measured_head || ["Question", "Evidence so far"];
   document.getElementById("measured").innerHTML = measured.length
-    ? `<thead><tr><th>Question</th><th>Evidence so far</th></tr></thead><tbody>` +
-      measured.map(([q, e]) => `<tr><td class="t">${md(q)}</td><td class="t">${md(e)}</td></tr>`).join("") + "</tbody>"
+    ? `<thead><tr>${head.map(h => `<th>${md(h)}</th>`).join("")}</tr></thead><tbody>` +
+      measured.map(r => `<tr>${r.map(c => `<td class="t">${md(c)}</td>`).join("")}</tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="t">The lab notebook has no measurement table.</td></tr></tbody>`;
 }
 
 /* ---------- tokens ---------- */
-const MODEL_VAR = { "claude-opus-5-5": "var(--m-opus)", "claude-opus-5": "var(--m-opus-prev)", "claude-sonnet-5": "var(--m-sonnet)", "claude-haiku-4-5": "var(--m-haiku)", "claude-haiku-5-5": "var(--m-haiku)" };
+const MODEL_VAR = { "claude-opus-5-5": "var(--m-opus)", "claude-opus-5": "var(--m-opus-prev)", "claude-sonnet-5": "var(--m-sonnet)", "claude-haiku-4-5": "var(--m-haiku-prev)", "claude-haiku-5-5": "var(--m-haiku)" };
 const modelName = m => m.replace(/^claude-/, "").replace(/^(\w)(\w*)-/, (_, a, b) => a.toUpperCase() + b + " ").replace(/-/g, ".");
 const kilo = n => n >= 1e6 ? fmt(n / 1e6, 2) + "M" : n >= 1e3 ? fmt(n / 1e3, 0) + "k" : String(n);
 const pct = (a, b) => fmt(b ? a / b * 100 : 0, 1) + "%";
@@ -1470,12 +1471,15 @@ function inspect(id) {
   const row = criteria.find(c => c.id === id), items = attention.filter(a => a.id === id);
   const box = document.getElementById("criterion-inspector");
   if (!id) { box.innerHTML = DATA.criteria_index == null || DATA.attention == null ? "Not in this data" : "Select a criterion or day."; return; }
-  const details = row ? `<h3>${esc(row.id)}</h3><p>${esc(row.claim)}</p>
+  // A check with no diagnostic says only its status: those are counted, not listed one by one.
+  const tally = row ? Object.entries(row.replay.checks.reduce((n, c) => (n[c.status] = (n[c.status] || 0) + 1, n), {}))
+    .map(([s, n]) => `${n} ${esc(s)}`).join(", ") : "";
+  const details = row ? `<h3>${esc(row.id)}</h3><p>${md(row.claim)}</p>
     <p>Spec: ${row.spec ? esc(row.spec) : unknown} · Track: ${row.track == null ? unknown : esc(row.track)}</p>
     <p>PRs: ${values(row.prs)} · Tests: ${values(row.tests)}</p>
     <p>Seen red: ${values(row.seen_red.lines)}</p>
-    <p>Replay: ${esc(row.replay.state)} · ${values(row.replay.why)}</p>
-    <ul>${row.replay.checks.map(c => `<li>${esc(c.status)}: ${c.diagnostic == null ? unknown : esc(c.diagnostic)}</li>`).join("")}</ul>
+    <p>Replay: ${esc(row.replay.state)}${tally ? ` · checks: ${tally}` : ""} · ${values(row.replay.why)}</p>
+    <ul>${row.replay.checks.filter(c => c.diagnostic != null).map(c => `<li>${esc(c.status)}: ${esc(c.diagnostic)}</li>`).join("")}</ul>
     <p>Replaces: ${values(row.replaces)} · Replaced by: ${values(row.replaced_by)}</p>` : `<h3>${esc(id)}</h3>`;
   box.innerHTML = details + `<p>Attention:</p><ul>${items.map(a => `<li>${itemText(a)}</li>`).join("")}</ul>`;
 }

@@ -1319,6 +1319,62 @@ class CriterionPanelsTest(unittest.TestCase):
         self.assertIn("Nothing needs attention", panels["attention-list"])
         self.assertIn("No criteria yet", panels["criteria-matrix"])
 
+    def test_inspector_renders_backticks_and_counts_checks_without_diagnostics(self):
+        row = dict(id="C1", day=1, tag="new", claim="`classify()` gives a kind", spec="s.md", track="A", prs=[3],
+                   tests=["test_x"], cited=True, test_found=True, seen_red=dict(state=True, lines=["l"]),
+                   replay=dict(state="current", status=["passed"], why=[],
+                               checks=[dict(status="passed", diagnostic=None)] * 3 + [dict(status="failed", diagnostic="boom")]),
+                   replaces=[], replaced_by=[])
+        error, panels, _ = drawn([self.ROW], criteria_index=[row], attention=[])
+        self.assertIsNone(error)
+        inspector = panels["criterion-inspector"]
+        self.assertIn("<code>classify()</code> gives a kind", inspector)
+        self.assertNotIn("passed: ", inspector)
+        self.assertIn("3 passed, 1 failed", inspector)
+        self.assertIn("<li>failed: boom</li>", inspector)
+
+
+class ConclusionTest(unittest.TestCase):
+    NOTEBOOK = ("# Notebook\n\n## What is being measured\n\n"
+                "| Question | Evidence | Day 01 | Day 02 |\n| --- | --- | --- | --- |\n"
+                "| Cost per PR | `token-usage.json` | $5.51 | $4.10 |\n| Escapes | Notes | 0 | 3 |\n\n## Retrospective\n")
+
+    def test_a_table_with_a_column_per_day_is_kept_whole(self):
+        got = sd.conclusion(self.NOTEBOOK)
+        self.assertEqual(got["measured_head"], ["Question", "Evidence", "Day 01", "Day 02"])
+        self.assertEqual(got["measured"], [["Cost per PR", "`token-usage.json`", "$5.51", "$4.10"],
+                                           ["Escapes", "Notes", "0", "3"]])
+
+    def test_the_page_draws_every_column(self):
+        got = sd.conclusion(self.NOTEBOOK)
+        error, panels, _ = drawn([CriterionPanelsTest.ROW], conclusion=got)
+        self.assertIsNone(error)
+        table = panels["measured"]
+        self.assertIn("<th>Day 02</th>", table)
+        self.assertIn("<code>token-usage.json</code>", table)
+        self.assertIn("$4.10", table)
+        self.assertNotIn("has no measurement table", table)
+        _, panels, _ = drawn([CriterionPanelsTest.ROW], conclusion=dict(reads=[], measured=[["Q", "E"]]))
+        self.assertIn("<th>Question</th>", panels["measured"])
+
+
+class PageAssetsTest(unittest.TestCase):
+    DASH = os.path.join(HERE, "..", "docs", "dashboard")
+
+    def test_each_model_has_its_own_colour_in_every_theme(self):
+        with open(os.path.join(self.DASH, "dashboard.js"), encoding="utf-8") as f:
+            mapping = re.search(r"const MODEL_VAR = \{([^}]*)\}", f.read()).group(1)
+        colours = re.findall(r'"var\((--[\w-]+)\)"', mapping)
+        self.assertEqual(len(colours), len(set(colours)), mapping)
+        with open(os.path.join(self.DASH, "dashboard.css"), encoding="utf-8") as f:
+            css = f.read()
+        for name in colours:
+            self.assertEqual(len(re.findall(re.escape(name) + r":", css)), 3, name)
+
+    def test_the_page_names_its_icon(self):
+        with open(os.path.join(self.DASH, "index.html"), encoding="utf-8") as f:
+            self.assertRegex(f.read(), r'<link rel="icon" href="data:image/svg\+xml,')
+
 
 class PageProseTest(unittest.TestCase):
     """The words around the panels: the page explains any project's data, not the one it was built on."""
