@@ -1058,7 +1058,8 @@ function drawProofKinds() {
   const legend = document.getElementById("proof-kinds-legend");
   box.innerHTML = legend.innerHTML = "";
   const days = ec.state === "loaded" ? ec.days.filter(d => d.proof).sort((a, b) => rank(a.day) - rank(b.day)) : [];
-  if (!days.length) { box.innerHTML = `<p class="off">No replayed day to count: the report above is ${esc(ec.state === "loaded" ? "empty" : ec.state)}.</p>`; return; }
+  // One message whatever the report's state: the panel above names it.
+  if (!days.length) { box.innerHTML = `<p class="off">No replayed day to count: see the report above.</p>`; return; }
   const sum = k => days.reduce((s, d) => s + d.proof[k], 0);
   legend.innerHTML = PROOF.map(([k, name, c]) => `<span><i class="dot" style="background:${c}"></i>${name} · ${sum(k)}</span>`).join("")
     + `<span><i class="dot" style="border:1.5px dashed var(--muted)"></i>Not recorded · ${sum("not_recorded")}</span>`;
