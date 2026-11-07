@@ -84,15 +84,47 @@ Closed 2026-11-07 ([spec](../specs/day-03-the-stop.md)). Nine PRs merged: the pl
 - **Hand-offs:** 10. H03.1, H03.5, H03.6, H03.7, H03.9 and H03.10 → Day 4, H03.2 → Day 5,
   H03.4 → Day 6, H03.3 → Day 7, and H03.8 to the maintainer.
 
+### Day 04 — one step: `--once` checks, writes the run log, starts one session and finds its pull request
+
+Closed 2026-11-07 ([spec](../specs/day-04-one-step.md)). Eight PRs merged for the day: the spec
+change (#21) and Tracks A to G (#22, #23, #24, #25, #26, #28, #29); #27, a `tooling/` branch,
+merged between E and F.
+
+- **Delivered:** `python run-steps.py --once` runs one step. It refuses, in order, on the halt
+  file, a live lock, a change or move in the driver's own repository, a failed preflight (which
+  now lists `--permission-mode`), a next step that parks or waits, an evidence run on `main` that
+  has not passed, and a run-log `start` with no `end`. Then it writes the settings, a `start`
+  line in `<state>/run.jsonl`, and starts one `claude -p` session in the project's real path, the
+  prompt on stdin and the rules file beside it. From the session's JSON and the step's open PRs
+  it prints one line (opened, parked, failed), writes the `end` line with the cost and the
+  denials, and sets the halt if the session changed the driver's repository. The kit's output is
+  read with bad bytes replaced, and the driver writes UTF-8 to a pipe. A halt during `--once`
+  kills the session's tree, on a stand-in and, live on Claude Code 2.1.170, a real session.
+- **Every `new` check was seen red.** 11 of the 14 criteria were `new`; their 32 tests failed on
+  `main`'s code before their track (4 in #22, 9 in #23, 4 in #24, 5 in #25, 4 in #26, 6 in #28).
+  C04.12 to C04.14 are `hold`.
+- **Breaks:** 26 recorded: 25 by the tracks and C04.12's setpgid break, which no machine of the
+  maintainer's could run (D04.14) and the close ran on Linux in Docker. Every entry was replayed
+  twice there before the close, the way CI's replay compares them: 18 are in the manifest, two
+  of them re-recorded because a later track changed the test (D04.11). Six cannot replay: four
+  report a uuid or a sha again, as on Day 3 (D04.6, same as D03.17), and two bite on Windows
+  only (D04.7, D04.9). C04.13's named break could never fail its test (D04.13); Track G's
+  "/T" break, run by hand, replaced it.
+- **Defects:** 15. The spec-auditor found 5 before any code (D04.1–D04.5). The tracks found 5:
+  Track B 1 (D04.6), the breaks on purpose 2 (D04.8, D04.10), Track G 2 (D04.13, D04.14). The
+  close found 5 (D04.7, D04.9, D04.11, D04.12, D04.15), four of them only by replaying the
+  breaks on Linux. None is an escape from an earlier day.
+- **Hand-offs:** 4. H04.1 → Day 5, H04.2 → Day 6, H04.3 and H04.4 → Day 7.
+
 ## What is being measured
 
-| Question | Evidence it will be judged on | Day 01 | Day 02 | Day 03 |
-| --- | --- | --- | --- | --- |
-| Cost per merged PR, main sessions, beside the kit's baseline of $1.86 (`plan.md`, "What it is judged against") | `docs/dashboard/token-usage.json` | $5.51 over 5 merged PRs on 2026-11-06, $1.10 each ($2.45 attributed to Day 1 by branch, $3.06 on `main`). The implementer added $0.07. The close's own session is counted only up to its `token-usage.py` run | $7.97 over 3 merged PRs since Day 01's count, $2.66 each. It includes the tail of Day 01's close after its count, and this close only up to its `token-usage.py` run. The implementer added $0.05; the spec-auditor $1.51 | $15.07 over 9 merged PRs since Day 02's count (#11 to #19), $1.67 each. It includes the tail of Day 02's close after its count, and this close only up to its `token-usage.py` run. The implementer added $0.11; the spec-auditor $2.04; the plan-auditor $1.45 |
-| Replies per merged PR, main sessions, beside 34.4 | `docs/dashboard/token-usage.json` | 118 replies over 5 PRs, 23.6 each | 140 replies over 3 PRs, 46.7 each | 281 replies over 9 PRs, 31.2 each |
-| Escapes per day | the Notes' Defect lines with `made:` an earlier day | 0 from a day; 1 from the repository's start (D01.15) | 3 from Day 01 (D02.2, D02.3, D02.11) | 0 from a day; 5 `made: none` (D03.1–D03.4 in `plan.md`, D03.5 in #11's description) |
-| Parks by reason | the driver's run log | none yet: the driver does not run steps until Phase 1 | none yet | none yet |
-| Hook refusals | `docs/dashboard/refusals.json` | 1, read-guard, 2026-11-06 | 2 more, read-guard, 2026-11-06 (3 in all) | 1 more, read-guard, 2026-11-06 (4 in all) |
-| What each gate cost | `docs/dashboard/gates.json` | Day 1: seen red, 5 runs for $0.36; break on purpose, 8 runs for $0.39 | Day 2: seen red, 5 runs for $0.36; break on purpose, 1 run for $0.12 | Day 3: seen red, 8 runs for $0.60; break on purpose, 16 runs for $0.93; evidence replay, 4 runs for $0.17 |
+| Question | Evidence it will be judged on | Day 01 | Day 02 | Day 03 | Day 04 |
+| --- | --- | --- | --- | --- | --- |
+| Cost per merged PR, main sessions, beside the kit's baseline of $1.86 (`plan.md`, "What it is judged against") | `docs/dashboard/token-usage.json` | $5.51 over 5 merged PRs on 2026-11-06, $1.10 each ($2.45 attributed to Day 1 by branch, $3.06 on `main`). The implementer added $0.07. The close's own session is counted only up to its `token-usage.py` run | $7.97 over 3 merged PRs since Day 01's count, $2.66 each. It includes the tail of Day 01's close after its count, and this close only up to its `token-usage.py` run. The implementer added $0.05; the spec-auditor $1.51 | $15.07 over 9 merged PRs since Day 02's count (#11 to #19), $1.67 each. It includes the tail of Day 02's close after its count, and this close only up to its `token-usage.py` run. The implementer added $0.11; the spec-auditor $2.04; the plan-auditor $1.45 | $21.59 over 10 merged PRs since Day 03's count (#20 to #29), $2.16 each. It includes the tail of Day 03's close after its count, and this close only up to its `token-usage.py` run. The implementer added $0.61; the spec-auditor $2.20 |
+| Replies per merged PR, main sessions, beside 34.4 | `docs/dashboard/token-usage.json` | 118 replies over 5 PRs, 23.6 each | 140 replies over 3 PRs, 46.7 each | 281 replies over 9 PRs, 31.2 each | 363 replies over 10 PRs, 36.3 each |
+| Escapes per day | the Notes' Defect lines with `made:` an earlier day | 0 from a day; 1 from the repository's start (D01.15) | 3 from Day 01 (D02.2, D02.3, D02.11) | 0 from a day; 5 `made: none` (D03.1–D03.4 in `plan.md`, D03.5 in #11's description) | 0 from a day; none `made: none` |
+| Parks by reason | the driver's run log | none yet: the driver does not run steps until Phase 1 | none yet | none yet | none yet: `--once` has run only on fake projects and one live scratch project |
+| Hook refusals | `docs/dashboard/refusals.json` | 1, read-guard, 2026-11-06 | 2 more, read-guard, 2026-11-06 (3 in all) | 1 more, read-guard, 2026-11-06 (4 in all) | 8 more, 2026-11-07: 7 read-guard, 1 auditor-guard (12 in all) |
+| What each gate cost | `docs/dashboard/gates.json` | Day 1: seen red, 5 runs for $0.36; break on purpose, 8 runs for $0.39 | Day 2: seen red, 5 runs for $0.36; break on purpose, 1 run for $0.12 | Day 3: seen red, 8 runs for $0.60; break on purpose, 16 runs for $0.93; evidence replay, 4 runs for $0.17 | Day 4: seen red, 18 runs for $1.50; break on purpose, 18 runs for $1.21; hooks, 7 runs for $0.02; the spec-auditor, 1 run for $2.20 |
 
 ## Retrospective

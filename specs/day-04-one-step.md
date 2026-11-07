@@ -97,7 +97,7 @@ stand-in and, by hand, on a real session.
      "cannot read the project".
   9. `open_session(state, prefix)`: a session gives "park: the run log names session `<uuid>`
      for this step, with no end", a reason gives "park: `<reason>`"; exit 1.
-  Until Track E, a step that passes step 9 prints "would start: `<the sentence>`" and exits 0,
+  Before Track E (#26), a step that passed step 9 printed "would start: `<the sentence>`" and exited 0,
   with the lock released, no settings written and no run-log line.
   10. `driver.settings.write(state, home)` (afresh), a new `uuid4`, then `runlog.start(...)`.
   11. The session, with the project's real path as cwd (`os.path.realpath`; H03.10, D03.15):
@@ -112,7 +112,7 @@ stand-in and, by hand, on a real session.
       says, open its one pull request, and stop." The session's stdout is read as UTF-8 with
       `errors="replace"`.
   12. The outcome (Track F), its run log `end` line, and the driver's repository checked again.
-  Until Track F, step 12 is "ended: session `<uuid>`" and exit 0, with no end line.
+  Before Track F (#28), step 12 was "ended: session `<uuid>`" and exit 0, with no end line.
 - **The outcome** (Track F). From the session's stdout, the first rule that applies:
 
   | The session | The line | Exit |
@@ -187,7 +187,7 @@ that would pass 400 changed lines is split by a spec change first, not on its br
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C04.1 **new** — With a project whose `scripts/spec-drift.py` writes its JSON and then the
+- [x] C04.1 **new** — With a project whose `scripts/spec-drift.py` writes its JSON and then the
       bytes "next: Day 02 Track B: C02.4", 0x96, "C02.6" and a newline to its stdout (the en
       dash in Windows-1252), `python run-steps.py --dry-run --project <path>` exits 0, prints
       the start line on stdout, and prints nothing on stderr; `preflight` with a fake CLI prints
@@ -195,13 +195,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: the strict UTF-8 decode raises `UnicodeDecodeError`, and a traceback reaches
       stderr (D02.11), on any system: the fixture writes the byte itself.
       Test: `EncodingTest.test_drift_output_not_utf8`, `EncodingTest.test_preflight_output_not_utf8`.
-- [ ] C04.2 **new** — `python run-steps.py --dry-run --project <path>` on a project whose next
+      Evidence: `EncodingTest.test_drift_output_not_utf8`, `EncodingTest.test_preflight_output_not_utf8` (#22).
+      seen red: python -m unittest tests.test_encoding.EncodingTest.test_drift_output_not_utf8 on main → AssertionError: b'Exception in thread Thread-1 (_readerthre[706 chars]\r\n' != b'' (#22)
+      seen red: python -m unittest tests.test_encoding.EncodingTest.test_preflight_output_not_utf8 on main → AssertionError: b'Exception in thread Thread-1 (_readerthre[706 chars]\r\n' != b'' (#22)
+- [x] C04.2 **new** — `python run-steps.py --dry-run --project <path>` on a project whose next
       step is "Day 01 Track A: C01.1–C01.3", run with `PYTHONIOENCODING=cp1252` and no
       `PYTHONUTF8`, writes to its stdout pipe the bytes of "start: Day 01 Track A: C01.1–C01.3"
       in UTF-8 (`\xe2\x80\x93` for the dash) and `os.linesep` (`\r\n` on Windows).
       Red today: stdout follows `PYTHONIOENCODING` and writes byte 0x96.
       Test: `EncodingTest.test_stdout_is_utf8_in_a_pipe`.
-- [ ] C04.3 **new** — The preflight's flag check lists `--permission-mode`: a help text without
+      Evidence: `EncodingTest.test_stdout_is_utf8_in_a_pipe` (#22).
+      seen red: python -m unittest tests.test_encoding.EncodingTest.test_stdout_is_utf8_in_a_pipe on main → AssertionError: b'start: Day 01 Track A: C01.1\x96C01.3\r\n' != b'start: Day 01 Track A: C01.1\xe2\x80\x93C01.3\r\n' (#22)
+- [x] C04.3 **new** — The preflight's flag check lists `--permission-mode`: a help text without
       it gives "cannot run a session: `<program>` --help lists no --permission-mode", in the
       order of `FLAGS` (after `--max-budget-usd`), and the fake help with it gives "preflight:
       ok".
@@ -210,7 +215,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `--session-id` and `--resume`, and no `--permission-mode`.
       Red today: the "no flag" subtest expects ten lines and gets nine.
       Test: `CliPreflightTest.test_every_flag_is_listed`.
-- [ ] C04.4 **new** — `driver.runlog`: after `start(...)` returns, a second process reads
+      Evidence: `CliPreflightTest.test_every_flag_is_listed` (#22).
+      seen red: python -m unittest tests.test_encoding tests.test_preflight.CliPreflightTest.test_every_flag_is_listed on main → AssertionError: Tuples differ: (2, '[579 chars]no --strict-mcp-config\ncannot run a session: [460 chars]e\n') != (2, '[579 chars]no --permission-mode\ncannot run a session: C:[584 chars]e\n') (#22)
+- [x] C04.4 **new** — `driver.runlog`: after `start(...)` returns, a second process reads
       `<state>/run.jsonl` and finds the line, parsed, with the six keys of In scope; `end(...)`
       appends its line after it; the file's bytes hold no `\r`. `open_session` returns the
       session of a `start` with no `end`, `(None, None)` once its `end` is written, `(None,
@@ -219,7 +226,20 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/runlog.py` does not exist; each test errors at its `setUp` import.
       Test: `RunLogTest.test_start_line_is_on_disk`, `RunLogTest.test_end_line`,
       `RunLogTest.test_open_session`, `RunLogTest.test_torn_log`.
-- [ ] C04.5 **new** — `driver.home.check` on a scratch repository: clean gives `(<HEAD>, None)`;
+      Evidence: `RunLogTest.test_start_line_is_on_disk`, `RunLogTest.test_end_line`, `RunLogTest.test_open_session`, `RunLogTest.test_torn_log` (#23).
+      seen red: python -m unittest tests.test_runlog.RunLogTest.test_start_line_is_on_disk on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_runlog.RunLogTest.test_end_line on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_runlog.RunLogTest.test_open_session on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_runlog.RunLogTest.test_torn_log on main → FAILED (errors=1) (#23)
+      Not replayed, its report holds a session uuid that differs on every run (D04.6): "open_session
+      drops the last line whether or not it ends in a newline" failed
+      `RunLogTest.test_torn_log`, and "open_session ignores end lines" failed
+      `RunLogTest.test_open_session` (#23).
+      Not replayed in CI, it bites on Windows only (D04.7): "the run log writes the platform line
+      ending" failed `RunLogTest.test_end_line` with a carriage return found in the line; on
+      Linux `os.linesep` is a bare newline and the break passes, so a local Windows run guards
+      it, not CI (#23).
+- [x] C04.5 **new** — `driver.home.check` on a scratch repository: clean gives `(<HEAD>, None)`;
       an edited tracked file and an untracked `notes.txt` give "the driver's repository has
       changes: " and both paths; untracked `evidence-rehearsal.json` and `evidence.json` at the
       root give no reason, and `sub/evidence.json`, in a `sub/` that holds a committed file,
@@ -231,21 +251,41 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `HomeTest.test_clean`, `HomeTest.test_changes_named`,
       `HomeTest.test_ignored_close_files`, `HomeTest.test_moved`,
       `HomeTest.test_not_a_repository`.
-- [ ] C04.6 **new** — `driver.github.evidence_line` with the fake `gh`: a run `completed` and
+      Evidence: `HomeTest.test_clean`, `HomeTest.test_changes_named`, `HomeTest.test_ignored_close_files`, `HomeTest.test_moved`, `HomeTest.test_not_a_repository` (#23).
+      seen red: python -m unittest tests.test_home.HomeTest.test_clean on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_home.HomeTest.test_changes_named on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_home.HomeTest.test_ignored_close_files on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_home.HomeTest.test_moved on main → FAILED (errors=1) (#23)
+      seen red: python -m unittest tests.test_home.HomeTest.test_not_a_repository on main → FAILED (errors=1) (#23)
+      Not replayed, its report holds commit shas that differ on every run (D04.6):
+      "home.check leaves out the close files in any folder, not only the root" failed
+      `HomeTest.test_ignored_close_files`, and "home.check names a move before changes" failed
+      `HomeTest.test_moved` (#23).
+- [x] C04.6 **new** — `driver.github.evidence_line` with the fake `gh`: a run `completed` and
       `success` gives `None`; no run, a run `in_progress`, and a run `completed` and `failure`
       give the three park lines of In scope; a fake that exits 1 gives "cannot read the project:
       gh run list exited 1". The fake's recorded call is exactly the `run list` of In scope,
       with the 40-character sha given.
       Red today: `driver/github.py` does not exist; `ImportError` in `setUp`.
       Test: `GitHubTest.test_evidence_states`, `GitHubTest.test_evidence_gh_fails`.
-- [ ] C04.7 **new** — `driver.github.step_prs` for the step "Day 04 Track A: …" with the fake
+      Evidence: `GitHubTest.test_evidence_states`, `GitHubTest.test_evidence_gh_fails` (#24).
+      seen red: python -m unittest tests.test_github.GitHubTest.test_evidence_states on main → FAILED (errors=1) (#24)
+      seen red: python -m unittest tests.test_github.GitHubTest.test_evidence_gh_fails on main → FAILED (errors=1) (#24)
+      broken: evidence_line passes gh the 7-character sha → AssertionError: Lists differ: [['ru[57 chars]c0f03', '--limit', '1', '--json', 'status,conclusion']] != [['ru[57 chars]c0f03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '--li[37 chars]on']] (#24)
+      broken: evidence_line takes any completed run as passed → AssertionError: None != 'park: the evidence run on `1dc0f03` ended `failure`' (#24)
+- [x] C04.7 **new** — `driver.github.step_prs` for the step "Day 04 Track A: …" with the fake
       `gh` holding PRs on `day-04/track-a-x` by `me`, `day-04/track-a-y` by `someone`,
       `day-04/track-b-z` by `me` and `day-14/track-a-x` by `me`, returns only the first; the
       recorded call has `--author @me` and `--state open`; a fake that exits 1 gives `([],
       "cannot read the project: gh pr list exited 1")`.
       Red today: `ImportError` in `setUp`, as C04.6.
       Test: `GitHubTest.test_step_prs_by_branch_and_author`, `GitHubTest.test_step_prs_gh_fails`.
-- [ ] C04.8 **new** — `python run-steps.py --once` from a copy of the driver starts no session
+      Evidence: `GitHubTest.test_step_prs_by_branch_and_author`, `GitHubTest.test_step_prs_gh_fails` (#24).
+      seen red: python -m unittest tests.test_github.GitHubTest.test_step_prs_by_branch_and_author on main → FAILED (errors=1) (#24)
+      seen red: python -m unittest tests.test_github.GitHubTest.test_step_prs_gh_fails on main → FAILED (errors=1) (#24)
+      broken: step_prs asks for another author than @me → AssertionError: Tuples differ: ([{'n[71 chars]r/1'}, {'number': 2, 'headRefName': 'day-04/tr[43 chars]None) != ([{'n[71 chars]r/1'}], None) (#24)
+      broken: step_prs keeps every open PR of the author → AssertionError: Tuples differ: ([{'n[71 chars]r/1'}, {'number': 3, 'headRefName': 'day-04/tr[124 chars]None) != ([{'n[71 chars]r/1'}], None) (#24)
+- [x] C04.8 **new** — `python run-steps.py --once` from a copy of the driver starts no session
       (the fake `claude` records no call but `--version` and `--help`) and prints, on the
       stream and with the exit of In scope, each of: the halt file set; a config missing
       `budget_usd`; a lock naming a live process (the test's child); an untracked file in the
@@ -264,7 +304,21 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `OnceTest.test_refusals`, `OnceTest.test_halt_comes_first`,
       `OnceTest.test_lock_released_on_refusal`, `OnceTest.test_once_goes_alone`,
       `OnceTest.test_usage_line`.
-- [ ] C04.9 **new** — With every check passing, `--once` starts one session: the fake records
+      Evidence: `OnceTest.test_refusals`, `OnceTest.test_halt_comes_first`, `OnceTest.test_lock_released_on_refusal`, `OnceTest.test_once_goes_alone`, `OnceTest.test_usage_line` (#25).
+      seen red: python -m unittest tests.test_once.OnceTest.test_refusals on main → AssertionError: Tuples differ: (2, ['stderr'], False, True) != (1, ['stdout'], True, True) (#25)
+      seen red: python -m unittest tests.test_once.OnceTest.test_halt_comes_first on main → AssertionError: Tuples differ: (2, False, True) != (2, True, True) (#25)
+      seen red: python -m unittest tests.test_once.OnceTest.test_lock_released_on_refusal on main → AssertionError: Tuples differ: (2, ['stderr'], False, True) != (0, ['stdout'], True, True) (#25)
+      seen red: python -m unittest tests.test_once.OnceTest.test_once_goes_alone on main → AssertionError: Tuples differ: (2, 'usage: run-steps.py [-h] [--dry-run] [--p[194 chars], '') != (2, 'run-steps.py: --once goes alone', '') (#25)
+      seen red: python -m unittest tests.test_once.OnceTest.test_usage_line on main → AssertionError: Tuples differ: (2, 'run-steps.py: only --dry-run and preflight exist yet', '') != (2, 'run-steps.py: give --dry-run, --once or a command', '') (#25)
+      broken: --once never releases its lock → AssertionError: Tuples differ: ([True, True, True, True, True, True, True, True], True) != ([False, False, False, False, False, False, False, False], True) (#25)
+      broken: --once skips the halt file → AssertionError: Tuples differ: (2, False, True) != (2, True, True) (#25)
+      Re-recorded at the close (D04.11): Track E (#26) changed the tuple `OnceTest.test_refusals`
+      compares, so the next two breaks, recorded in #25 as "(0, ['stdout'], False, True) != (1,
+      ['stdout'], True, True)", report what they give on today's code, the same on Linux and
+      Windows:
+      broken: --once reads the run log for another prefix → AssertionError: Tuples differ: (1, ['stdout'], False, 1) != (1, ['stdout'], True, 0)
+      broken: --once skips the evidence run → AssertionError: Tuples differ: (1, ['stdout'], False, 1) != (1, ['stdout'], True, 0)
+- [x] C04.9 **new** — With every check passing, `--once` starts one session: the fake records
       exactly the arguments of In scope's step 11 after the program, with the uuid that the run
       log's `start` line holds, and on its stdin the two lines of the prompt, in UTF-8, the
       sentence's en dash as `\xe2\x80\x93`; on Windows the fake is a `.cmd`, as npm's `claude`
@@ -278,7 +332,19 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       no session; the fake records only `--version` and `--help`.
       Test: `OnceTest.test_session_command`, `OnceTest.test_session_cwd_is_real_path`,
       `OnceTest.test_lock_and_settings_during_session`, `OnceTest.test_rules_file`.
-- [ ] C04.10 **new** — Each row of In scope's outcome table, from the fake's JSON and the fake
+      Evidence: `OnceTest.test_session_command`, `OnceTest.test_session_cwd_is_real_path`, `OnceTest.test_lock_and_settings_during_session`, `OnceTest.test_rules_file` (#26).
+      seen red: python -m unittest tests.test_once.OnceTest.test_session_command on main → AssertionError: Tuples differ: (False, False, False, False, True, False, True, False) != (True, True, True, True, True, True, True, True) (#26)
+      seen red: python -m unittest tests.test_once.OnceTest.test_session_cwd_is_real_path on main → AssertionError: Tuples differ: (True, False) != (True, True) (#26)
+      seen red: python -m unittest tests.test_once.OnceTest.test_lock_and_settings_during_session on main → AssertionError: Tuples differ: (False, False, False, False, True) != (True, True, True, True, True) (#26)
+      seen red: python -m unittest tests.test_once.OnceTest.test_rules_file on main → FAILED (errors=1) (#26)
+      broken: the prompt not written to the session's stdin → AssertionError: Tuples differ: (True, True, False, False, True, True, True, True) != (True, True, True, True, True, True, True, True) (#26)
+      broken: the settings not written before the session → AssertionError: Tuples differ: (True, True, False, False, True) != (True, True, True, True, True) (#26)
+      broken: the rules file without "nobody watches" → AssertionError: Tuples differ: (False, False) != (True, True) (#26)
+      Not replayed in CI, it bites on Windows only (D04.9): "the session's cwd the path as given,
+      not its real path" failed `OnceTest.test_session_cwd_is_real_path` with "(True, False) !=
+      (True, True)" on Windows, where the 8.3 short path stays the child's cwd; on Linux the
+      child's cwd reads as the resolved path whatever it is given, and the break passes (#26).
+- [x] C04.10 **new** — Each row of In scope's outcome table, from the fake's JSON and the fake
       `gh`'s PRs, prints its line and exits with its code; a `result` that ends "PARK: needs a
       decision" with an open PR of the step still parks; and the run log's `end` line holds the
       printed line, the fake's `total_cost_usd`, and `denials` 2 for two `permission_denials`.
@@ -286,7 +352,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       writes no `end` line.
       Test: `OutcomeTest.test_outcomes`, `OutcomeTest.test_park_wins_over_a_pr`,
       `OutcomeTest.test_end_line`.
-- [ ] C04.11 **new** — A fake session that writes `notes.txt` into the driver's copy, and one
+      Evidence: `OutcomeTest.test_outcomes`, `OutcomeTest.test_park_wins_over_a_pr`, `OutcomeTest.test_end_line` (#28).
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_outcomes on main → AssertionError: Tuples differ: (0, ['stdout'], 'ended: session `<uuid>`') != (2, ['stderr'], 'cannot read the project: gh pr list exited 4') (#28)
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_park_wins_over_a_pr on main → AssertionError: Tuples differ: (0, 'ended: session `<uuid>`') != (1, 'park: the session parked: needs a decision (session `<uuid>`)') (#28)
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_end_line on main → FAILED (errors=1) (#28)
+      broken: the PARK line not read → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`') != (1, 'park: the session parked: needs a decision (session `<uuid>`)') (#28)
+      broken: denials always 0 → AssertionError: Tuples differ: ('end', True, 'opened: #5 from `day-01/track-a-x`', 0.42, 0) != ('end', True, 'opened: #5 from `day-01/track-a-x`', 0.42, 2) (#28)
+- [x] C04.11 **new** — A fake session that writes `notes.txt` into the driver's copy, and one
       that commits there, each end with the outcome line, then "halt: set during the step; "
       and the reason of C04.5, exit 1, and `<state>/halt` exists; a following `--once` refuses
       with the halt's line. A session that writes `evidence.json` at the copy's root does not
@@ -294,7 +366,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: on Track E's code no check runs after the session; no halt file appears.
       Test: `OutcomeTest.test_driver_changed_during_step`,
       `OutcomeTest.test_driver_moved_during_step`, `OutcomeTest.test_close_files_do_not_halt`.
-- [ ] C04.12 **hold** — A stand-in step: `--once` on a fake session that starts a child and
+      Evidence: `OutcomeTest.test_driver_changed_during_step`, `OutcomeTest.test_driver_moved_during_step`, `OutcomeTest.test_close_files_do_not_halt` (#28).
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_driver_changed_during_step on main → AssertionError: Tuples differ: (0, ['ended: session `<uuid>`'], '', False) != (1, ['opened: #5 from `day-01/track-a-x`',[85 chars]True) (#28)
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_driver_moved_during_step on main → AssertionError: Tuples differ: (0, ['ended: session `<uuid>`'], False) != (1, ['opened: #5 from `day-01/track-a-x`',[82 chars]True) (#28)
+      seen red: python -m unittest tests.test_once_outcome.OutcomeTest.test_close_files_do_not_halt on main → AssertionError: Tuples differ: (0, ['ended: session `<uuid>`'], '') != (0, ['opened: #5 from `day-01/track-a-x`'], '') (#28)
+      broken: no check after the step → AssertionError: Tuples differ: (0, ['opened: #5 from `day-01/track-a-x`'], '', False) != (1, ['opened: #5 from `day-01/track-a-x`',[85 chars]True) (#28)
+      broken: the check after the step without the starting HEAD → AssertionError: Tuples differ: (0, ['opened: #5 from `day-01/track-a-x`'], False) != (1, ['opened: #5 from `day-01/track-a-x`',[82 chars]True) (#28)
+- [x] C04.12 **hold** — A stand-in step: `--once` on a fake session that starts a child and
       both sleep, both writing their pid to a file. Once the pids are written,
       `python run-steps.py halt --state <state>` prints a line starting "halt: set; killed pid "
       and exits 0; within 5 s the driver, the fake and its child are gone; the run log has the
@@ -305,11 +383,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       no `new` claim, and CI's "Track tests seen red" passes a track that owns none.
       To break once: `--once` takes no lock (halt prints "no driver is running", the tree lives);
       on POSIX only, no `os.setpgid` (halt prints "killed pid N only: …", which still starts
-      "halt: set; killed pid ", so the child alive after 5 s is what fails; a local Windows run
+      "halt: set; killed pid ", so a process alive after 5 s is what fails, the fake first (D04.15); a local Windows run
       does not see this break, CI's Linux run does). The tests assert so that no pid or path is
       in the report (D03.17).
       Test: `OnceHaltTest.test_halt_during_once`, `OnceHaltTest.test_once_refuses_after_halt`.
-- [ ] C04.13 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code, on the
+      Evidence: `OnceHaltTest.test_halt_during_once`, `OnceHaltTest.test_once_refuses_after_halt` (#29).
+      broken: --once takes no lock → AssertionError: 'halt: set; no driver i' != 'halt: set; killed pid ' (#29)
+      The POSIX break was run by the close, not by Track G (D04.14): on Linux, in a
+      `python:3.12-slim` container, `scripts/break.py` replaced "os.setpgid(0, 0)" with "pass"
+      in `driver/once.py`; on Windows it changes nothing and passes, so CI's Linux replay
+      guards it. The first process seen alive is the fake, not its child (D04.15):
+      broken: --once leaves the driver in the caller's process group → AssertionError: True is not false : the fake still runs
+- [x] C04.13 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code, on the
       maintainer's PC (`plan.md`, "What to build", item 3, "a real step"): a scratch project
       whose `CLAUDE.md` says to run, first, "echo started > started.txt && sleep 20 && echo late
       > late.txt" with the Bash tool, whose `.claude/settings.json` allows `Bash` and has a
@@ -322,10 +407,19 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       marker file got a line, and `is_error` is false: the session's next tool call was
       refused. Without `DRIVER_LIVE_CLI`, skipped with "DRIVER_LIVE_CLI is not set".
       Tagged hold as C04.12: true once Track F merges; Track G adds the test. Broken by hand,
-      on the maintainer's PC, as C03.8 was: `--once` passes no `--settings` → `out2.txt`
-      exists. CI cannot replay it (no login, no budget): a sentence and `broken: none →`.
+      on the maintainer's PC, as C03.8 was: `halt` kills the driver only, with no "/T" in its
+      `taskkill` → `late.txt` exists. (Was: `--once` passes no `--settings` → `out2.txt`
+      exists; the test cannot see that break, D04.13.) CI cannot replay it (no login, no budget): a sentence and `broken: none →`.
       Test: `LiveOnceTest.test_halt_during_a_real_step`.
-- [ ] C04.14 **hold** — Earlier days' tests pass with their files unedited, but for
+      Evidence: `LiveOnceTest.test_halt_during_a_real_step` passed live with
+      `DRIVER_LIVE_CLI=claude` on the maintainer's PC (Windows, Claude Code 2.1.170, haiku):
+      1 test in 44.9 s, OK (#29).
+      seen red by hand on the maintainer's PC, not replayable (no login or budget in CI):
+      `scripts/break.py` dropped "/T" from `halt`'s `taskkill` call in `driver/switches.py`, so
+      `halt` killed the driver only, and the run reported "AssertionError: True is not false :
+      the session's tree lived on": `late.txt` was written (#29).
+      broken: none → C04.13 is a live check; CI skips it without DRIVER_LIVE_CLI, and its break was run by hand (#29)
+- [x] C04.14 **hold** — Earlier days' tests pass with their files unedited, but for
       `tests/test_preflight.py`'s fake help text and flag list (C04.3): `git -c
       core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py
       tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_kit_copy.py
@@ -337,6 +431,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       writes its `--out` file inside the project → `DryRunTest.test_project_is_unchanged` fails.
       The second's report holds commit shas that differ on every run, so it is recorded as a
       sentence and `broken: none →` with that reason, not replayed (D03.17, D04.4).
+      Evidence: the commands above: `git -c core.safecrlf=false diff --exit-code 1dc0f03 -- ...`
+      prints nothing and `python -m unittest discover -s tests` gives "Ran 92 tests", "OK
+      (skipped=4)" on this branch, after #29; #22 to #29 each report the same diff empty.
+      broken: tests/test_decide.py edited → ROOT = Path(__file__).resolve().parent.parent (#22)
+      Not replayed, its report holds commit shas that differ on every run (D04.4): `run_drift`
+      writing its `--out` inside the project failed `DryRunTest.test_project_is_unchanged` with
+      "?? spec-drift.json" in git status (#22).
 
 ## Verify
 ```bash
@@ -396,3 +497,61 @@ git -c core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py te
   on (H03.9), and decides where that record lives.
 - **Hand-off** H04.3 → Day 7: a run-log `start` with no `end` is read by the table of
   "Recovery": a live process of that session waits, a gone one parks; Day 4 parks on both.
+- The close (2026-11-07): the tracks merged in the table's order, A to G (#22, #23, #24, #25,
+  #26, #28, #29), after the spec change #21; #27 was a `tooling/` branch between E and F. The
+  tracks recorded 25 `broken:` lines: 23 with a `manifest:` entry and two `broken: none` (#22,
+  #29). Each entry, parsed from the raw bodies, and the close's one break (C04.12's setpgid,
+  D04.14) were run through `scripts/break.py` twice on Linux, in a `python:3.12-slim` container
+  on a clone of `main` at `cfdb450`, and each report compared by the replay's own `normal()`
+  with the recorded one: 16 matched both times, as CI's Linux replay will compare them. Of the
+  other eight, six cannot replay and are sentences, not in the manifest (D04.6, D04.7, D04.9),
+  and two are re-recorded from today's code (D04.11). `specs/breaks/day-04.json` holds 18
+  entries: 15 as recorded, the two re-recorded, and the close's.
+- Left for the close by the tracks. The backticks of In scope: #25 and #28 read them as literal
+  around identifiers, branch names, paths, uuids and shas, and none around numbers, a whole
+  substituted reason or the PARK text; the close keeps that reading, which the tests pin. #25's
+  fifth break, the "--once goes alone" check dropped, failed `OnceTest.test_once_goes_alone` with
+  a temp path in its report, so it is neither a `broken:` line nor in the manifest. In scope's
+  "Until Track E" and "Until Track F" sentences are now in the past (#28 asked).
+- Hook refusals since Day 03's count (`docs/dashboard/refusals.json`): 7 read-guard and 1
+  auditor-guard, all on 2026-11-07. Seven whole-file Reads refused in a day say the 8,000-byte
+  rule is still read past: a Read of a spec or a test file starts from `grep -n`.
+- **Defect** D04.6 — found: Track B · cause: process · made: Day 04 · same-as: D03.17 · four of
+  Track B's five breaks (#23) report a session uuid or commit shas, which differ on every run,
+  though this spec's Notes ("Breaks that replay") asked each brief for booleans or fixed strings;
+  #23 said so itself and left it to the close. Now sentences, not in the manifest.
+- **Defect** D04.7 — found: close · cause: spec · made: Day 04 · C04.4's claim that the run log's
+  bytes hold no carriage return bites on Windows only: on Linux the break that writes
+  `os.linesep` passes, and the spec did not say so (`specs/README.md`: a check whose break bites
+  on one system only says so). The close's Linux replay found it.
+- **Defect** D04.8 — found: break on purpose · cause: process · made: Day 04 · Track E's brief
+  (#26) put the 8.3 short path in the config's `project`, which `driver/config.py` already
+  resolves, so the break that drops `realpath` from step 11 passed; the case now passes the path
+  with `--project`.
+- **Defect** D04.9 — found: close · cause: spec · made: Day 04 · C04.9's "a symlink on POSIX" case
+  cannot fail: a POSIX child's cwd reads as the resolved path whatever path it was started in,
+  so on Linux the break that passes the path as given passes; only Windows' 8.3 case sees it.
+  The spec did not say so (as D04.7).
+- **Defect** D04.10 — found: break on purpose · cause: implementation · made: Day 04 · same-as:
+  D03.17 · the implementer's first Track F tests (#28) compared the session's real uuid, so
+  their seen-red and break reports held it; the main session's first round of breaks caught it,
+  and the tests now put "<uuid>", "<a>" and "<b>" in its place.
+- **Defect** D04.11 — found: close · cause: process · made: Day 04 · two of Track D's breaks (#25)
+  no longer report what #25 recorded: Track E (#26) changed the tuple `OnceTest.test_refusals`
+  compares, and nothing re-ran D's breaks. Both are still caught; the close re-records them.
+- **Defect** D04.12 — found: close · cause: process · made: Day 04 · #24's body wrote its four
+  `broken:` lines as "broken: broken: …": copied as they stand, none would have matched its
+  manifest entry by name. The spec holds each once.
+- **Defect** D04.13 — found: Track G · cause: spec · made: Day 04 · C04.13's named break,
+  `--once` passing no `--settings`, cannot fail `LiveOnceTest.test_halt_during_a_real_step`: the
+  resume the criterion names passes `--settings <state>/settings.json` itself, and `halt` kills
+  the tree before the flag matters (#29). Track G ran the "/T" break instead, which the test
+  catches; C04.13 now names it.
+- **Defect** D04.14 — found: Track G · cause: environment · made: Day 04 · C04.12's POSIX break
+  could not run on the maintainer's PC, whose WSL has no `python3` (#29). The close ran it on
+  Linux in a Docker container.
+- **Defect** D04.15 — found: close · cause: spec · made: Day 04 · C04.12 said the setpgid break
+  fails on the child alive after 5 s; it fails first on the fake ("the fake still runs"): `halt`
+  kills only the driver's pid, and the test checks the fake before its child.
+- **Hand-off** H04.4 → Day 7: a run-log `start` line that parses but has no `session` key is not
+  read as unreadable (#23); the table of "Recovery" that H04.3 brings decides it.
