@@ -4,7 +4,8 @@ issues (the STOP switch, the parks), the decision, the evidence run, then the ru
 step's failures. Steps 10 and 11 write the settings and the run log's start line, then start one
 `claude -p` session, its prompt on stdin. Step 12 reads the session's outcome from its stdout,
 writes the run log's end line, and checks the driver's repository again: a change or a moved HEAD
-sets the halt file, because the session ran with the driver's own files in reach."""
+sets the halt file, because the session ran with the driver's own files in reach. Every park it
+prints is also an open issue (Day 5), so that the maintainer can close it to let the driver go on."""
 
 import json
 import os
@@ -69,6 +70,18 @@ def outcome(out, returncode, session, project, gh, sentence):
     return f"park: the step has more than one pull request: {numbers}", 1
 
 
+def park_issue(project, gh, line, sentence, session, open_list):
+    # Every park --once prints is an issue (Day 5): the maintainer closes it to let the driver go on.
+    body = (
+        f"{line}\n\nstep: {sentence}\nsession: {session or 'none'}\n"
+        f"at: {lock.now().strftime(lock.STAMP)}\n\nClose this issue to let the driver go on.\n"
+    )
+    number, reason = issues.park(project, gh, line, body, open_list)
+    if reason:
+        print(f"cannot open the park's issue: {reason}", file=sys.stderr)
+    return number
+
+
 def run(args, home, read_facts):
     # read_facts is passed in from run-steps.py, so the dry run's own function is used unchanged.
     if hasattr(os, "setpgid"):
@@ -127,6 +140,8 @@ def checked(args, home, project, read_facts, config):
         print(f"wait: parked {', '.join(parked)}")
         return 0
     facts = read_facts(project)
+    # Read before decide, so that every park below can name the step it parked on.
+    sentence = drift["now"]["next_step"]
     action = decide(drift, facts)
     # A phase's end is answered by a closed parked issue of its exact title (decide's `answered`).
     answered = None
@@ -137,24 +152,33 @@ def checked(args, home, project, read_facts, config):
         action = decide(drift, facts, answered)
     if action.kind != "start":
         print(action.line)
-        return 1 if action.kind == "park" else 0
+        if action.kind == "park":
+            park_issue(project, args.gh, action.line, sentence, None, open_list)
+            return 1
+        return 0
     line = github.evidence_line(project, args.gh, facts.origin_main)
     if line:
         if line.startswith("park:"):
             print(line)
+            park_issue(project, args.gh, line, sentence, None, open_list)
             return 1
         return refuse([line])
-    sentence = drift["now"]["next_step"]
     session, reason = runlog.open_session(args.state, classify(sentence).prefix)
     if session:
-        print(f"park: the run log names session `{session}` for this step, with no end")
+        line = f"park: the run log names session `{session}` for this step, with no end"
+        print(line)
+        park_issue(project, args.gh, line, sentence, None, open_list)
         return 1
     if reason:
-        print(f"park: {reason}")
+        line = f"park: {reason}"
+        print(line)
+        park_issue(project, args.gh, line, sentence, None, open_list)
         return 1
     failed, reason = runlog.failures(args.state, classify(sentence).prefix)
     if reason:
-        print(f"park: {reason}")
+        line = f"park: {reason}"
+        print(line)
+        park_issue(project, args.gh, line, sentence, None, open_list)
         return 1
     if len(failed) >= 2:
         line = f"park: the step failed twice: sessions `{failed[-2]}` and `{failed[-1]}`"
@@ -165,6 +189,7 @@ def checked(args, home, project, read_facts, config):
                 return refuse([f"cannot read the project: {reason}"])
         if line not in answered:
             print(line)
+            park_issue(project, args.gh, line, sentence, None, open_list)
             return 1
     # The settings are written afresh, and the start line is in the log before the session runs.
     settings_path = driver_settings.write(args.state, home)
@@ -221,6 +246,8 @@ def checked(args, home, project, read_facts, config):
         data.get("total_cost_usd"),
         len(denials) if isinstance(denials, list) else 0,
     )
+    if code == 1:
+        park_issue(project, args.gh, line, sentence, session, open_list)
     _, reason = driver_home.check(home, started)
     if reason:
         # Written as bytes, as the rest of the state is; the next --once refuses with this file.
