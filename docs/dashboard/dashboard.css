@@ -17,6 +17,8 @@
   --away: #b8862b; --closer: #3b5fc7;
   /* Proof kinds, strongest to weakest: one blue ramp, dark to light (steps 700, 550, 400, 250). */
   --p-test: #0d366b; --p-command: #1c5cab; --p-break: #3987e5; --p-reader: #86b6ef;
+  /* Replay states: one set, validated all-pairs on both surfaces (dataviz validate_palette.js). */
+  --r-holds: #3a74d0; --r-broken: #c22f2f; --r-weak: #cf7d12; --r-gone: #b03fa6;
   --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834; --w-context: #b07d12; --fail: #d23f3a;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
@@ -186,6 +188,15 @@ td.none { color: var(--code); font-weight: 600; }
 /* A day whose spec predates the evidence format: its counts were not asked for, so not scored. */
 td.pre { color: var(--muted); font-style: italic; }
 #evidence-checks .off { color: var(--muted); font-style: italic; }
+#replay .off { color: var(--muted); font-style: italic; }
+#replay-legend i.dot { position: relative; width: 12px; height: 12px; font-size: 9px; font-weight: 700; font-style: normal; line-height: 12px; text-align: center; }
+#replay-legend i.rdot { background: radial-gradient(circle, var(--muted) 0 2px, transparent 2.5px); }
+#replay-legend b.notch { position: absolute; top: 0; right: 0; border-top: 5px solid var(--ink); border-left: 5px solid transparent; }
+table.replay-off { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; table-layout: fixed; }
+table.replay-off td { overflow-wrap: anywhere; white-space: normal; }
+table.replay-off th:nth-child(1) { width: 8%; } table.replay-off th:nth-child(2) { width: 10%; }
+table.replay-off th:nth-child(3) { width: 34%; } table.replay-off th:nth-child(4) { width: 18%; }
+table.replay-off th, table.replay-off td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
 .pre-tag { font: 500 10.5px/1 var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 tr:has(+ tr.found) td { border-bottom: 0; }
 .found td { padding-top: 0; white-space: normal; }
