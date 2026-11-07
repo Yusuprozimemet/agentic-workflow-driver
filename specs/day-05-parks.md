@@ -185,8 +185,8 @@ issue.
 | B | | C05.4, C05.5: `decide()`'s `answered`, `runlog.failures` |
 | C1 | | C05.6: `--once`'s start checks (6a, 7, 9a), the first edit to `test_session_command` |
 | C2 | | C05.7: `--once`'s parks as issues; C05.12's print break |
-| D | | C05.8: the run's issue and `run.json` around the session, the second edit to `test_session_command` |
-| E | | C05.9, C05.10: `report`, a halt's report from the PC, `off` |
+| D | | C05.8: the run's issue and `run.json` around the session, `report`, the second edit to `test_session_command` |
+| E | | C05.9, C05.10: a halt's report from the PC, `off` |
 | F | | C05.11: `--poll` and the phone's `STOP` during a session |
 
 C1 needs A1 and B; C2 needs A2 and C1; D needs C2; E needs A2 and D's `run.json`; F needs D and E.
@@ -280,7 +280,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       and `<state>/settings.json` existed while it ran; a `settings.json` holding `not json` before
       the run is valid JSON with the halt hook during it; `rules/session.md` holds "nobody
       watches", "PARK: <", "never merge" and "Hand-off"; after the session the lock is gone (all
-      as C04.9). The fake `gh` records, in order, `issue list`, `run list`, `issue create` (the
+      as C04.9, whose tests hold them unchanged and C05.12 keeps passing). The fake `gh` records, in order, `issue list`, `run list`, `issue create` (the
       run's issue), `pr list`, `issue comment`, `issue close`, and the fake `claude` saw three
       `gh` calls before it ran. During the session `<state>/run.json` held the five keys, its
       `issue` the created number, its `session` the run log's uuid; after it, `run.json` is gone
@@ -295,9 +295,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       settings and rules, and "The fake `gh` recorded one `run list` before the session."
       Red today: no `issue` call and no `run.json`; `test_session_command`, as edited, fails on its
       `gh` calls.
-      Test: `OnceTest.test_session_command`, `OnceTest.test_session_cwd_is_real_path`,
-      `OnceTest.test_lock_and_settings_during_session`, `OnceTest.test_rules_file`,
-      `OnceRunTest.test_run_json_during_session`, `OnceRunTest.test_run_issue_closed`,
+      Test: `OnceTest.test_session_command`, `OnceRunTest.test_run_json_during_session`, `OnceRunTest.test_run_issue_closed`,
       `OnceRunTest.test_run_issue_reused`, `OnceRunTest.test_park_on_run_issue`,
       `OnceRunTest.test_halt_during_step_reported`, `OnceRunTest.test_no_call_after_gh_fails`.
 - [ ] C05.9 **new** — `run-steps.py halt --state <state>` with a lock naming a live stand-in (as
@@ -383,6 +381,14 @@ git -c core.safecrlf=false diff --exit-code 93c94de -- tests/test_contract.py te
 - Known limit (spec-auditor finding 9): within `--once`, `park()`'s comment path never runs: step
   6a waits on any open `parked` issue before a park's line is reached. Only C05.2's unit test
   covers it; Day 6's loop is where it can matter.
+- **Defect** D05.1 — found: seen red · cause: spec · made: Day 05 · C05.8's `Test:` named three
+  of C04.9's tests (`test_session_cwd_is_real_path`, `test_lock_and_settings_during_session`,
+  `test_rules_file`), restated as `new`: they pass on the code before Track D, and the spec
+  forbids editing them, so CI's "Track tests seen red" failed #39 on them. They are dropped from
+  the `Test:` field; C05.12 keeps them passing unedited.
+- **Defect** D05.2 — found: Track D · cause: spec · made: Day 05 · the Tracks table gave `report`
+  to Track E, but C05.8's halt case (Track D) needs its "branch: " line, and E comes after D.
+  `report` moves to Track D's row.
 - Unverified: `gh issue create` printing its URL last, and `gh issue close` exiting 0 on a closed
   issue (gh 2.93.0 holds "is already closed"). Both write: the auditor could not run them, and a
   scratch repository was refused by the session's permission classifier. Checked before A2 merges.
