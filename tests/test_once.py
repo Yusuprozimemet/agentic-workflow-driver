@@ -25,6 +25,9 @@ SESSION = "00000000-0000-4000-8000-000000000000"
 LIVE_LOCK = "cannot start: the driver is already running (pid "
 # An en dash, as in the sentences the kit writes; the prompt must carry it as UTF-8.
 DASHED = "Day 01 Track A: C01.1–C01.3"
+# The step's one open pull request, and the line --once prints for it when the session opens it.
+STEP_PR = {"number": 5, "headRefName": "day-01/track-a-x", "url": "u", "author": "me"}
+OPENED = "opened: #5 from `day-01/track-a-x`"
 # The fake claude answers --version and --help from fake.json beside it, and records every call in
 # calls.jsonl. A session call runs the spec's `do`, then prints its `result` with the session id.
 FAKE = """import json
@@ -233,21 +236,21 @@ class OnceTest(unittest.TestCase):
             ("waits", {"drift": waiting}, 0, "stdout", equals("wait: #7")),
             ("evidence_failed", {"runs": failed}, 1, "stdout", evidence_failed),
             ("open_run_log", {"setup": open_run}, 1, "stdout", equals(ended)),
-            ("passes", {"drift": drift_of(DASHED)}, 0, "stdout", starts("ended: session `")),
+            ("passes", {"drift": drift_of(DASHED)}, 0, "stdout", equals(OPENED)),
             # The config names the project by another path; the session runs in the real one.
             (
                 "real_path",
                 {"drift": drift_of(DASHED), "alias": True},
                 0,
                 "stdout",
-                starts("ended: session `"),
+                equals(OPENED),
             ),
             (
                 "bad_settings",
                 {"drift": drift_of(DASHED), "setup": bad_settings, "do": COPY_SETTINGS},
                 0,
                 "stdout",
-                starts("ended: session `"),
+                equals(OPENED),
             ),
         ]
         # The cases after the refusals, passes among them, each start one session.
@@ -266,7 +269,16 @@ class OnceTest(unittest.TestCase):
 
     @classmethod
     def run_case(
-        cls, name, drift=None, setup=None, help=HELP, runs=None, drop=(), do="", alias=False
+        cls,
+        name,
+        drift=None,
+        setup=None,
+        help=HELP,
+        runs=None,
+        drop=(),
+        do="",
+        alias=False,
+        prs=(STEP_PR,),
     ):
         folder = Path(cls.root) / name
         folder.mkdir()
@@ -276,7 +288,8 @@ class OnceTest(unittest.TestCase):
         claude_dir.mkdir()
         gh_dir.mkdir()
         claude = fake_claude(claude_dir, help=help, do=do)
-        gh = fake_gh(gh_dir, runs=runs or [{"status": "completed", "conclusion": "success"}])
+        gh_runs = runs or [{"status": "completed", "conclusion": "success"}]
+        gh = fake_gh(gh_dir, runs=gh_runs, prs=list(prs))
         config = write_config(folder, project, drop)
         if setup is not None:
             setup(project, state)
@@ -373,7 +386,7 @@ class OnceTest(unittest.TestCase):
             "and stop.\n"
         ).encode()
         stdin = bytes.fromhex(sessions[0]["stdin"]) if one else b""
-        gh_ok = [call[:2] for call in result["gh"]] == [["run", "list"]]
+        gh_ok = [call[:2] for call in result["gh"]] == [["run", "list"], ["pr", "list"]]
         cmd_ok = os.name != "nt" or claude_program(result["claude_dir"]).name.endswith(".cmd")
         self.assertEqual(
             (
@@ -382,7 +395,7 @@ class OnceTest(unittest.TestCase):
                 stdin == prompt,
                 b"\xe2\x80\x93" in stdin,
                 cmd_ok,
-                result["out"].rstrip("\r\n") == f"ended: session `{session}`",
+                result["out"].rstrip("\r\n") == OPENED,
                 gh_ok,
                 one and sessions[0]["gh_calls"] == 1,
             ),
