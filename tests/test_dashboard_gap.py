@@ -4,6 +4,7 @@ scripts/spec-drift.py that the name-gap chart and its caption read."""
 import importlib.util
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -138,6 +139,7 @@ class ReplayHistoryTest(unittest.TestCase):
         "not runnable",
         "not applicable on this platform",
         "live only",
+        "holds, never broken",
         "holds",
     )
 
@@ -162,6 +164,40 @@ class ReplayHistoryTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.assertEqual(sorted(spec_drift.REPLAY_STATES), sorted(module.STATES))
+        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
+        look = re.search(r"const REPLAY_LOOK = \{(.*?)\n\};", script, re.DOTALL).group(1)
+        drawn = set(re.findall(r'^\s*"([^"]+)":', look, re.MULTILINE))
+        self.assertEqual(sorted(drawn), sorted(module.STATES))
+        self.assertEqual(sorted(drawn), sorted((*self.WORST_FIRST, "not yet in force")))
+
+    def test_an_old_holds_row_with_its_teeth_unchecked_reads_as_never_broken(self):
+        row = {"day": "01", "platform": "windows", "pr": 9, "sample": "all", "merge": "aaa", "n": 5}
+        rows = [
+            dict(
+                row,
+                criterion="C01.1",
+                check="tests",
+                state="holds",
+                detail="teeth unchecked: no broken: line",
+            ),
+            dict(row, criterion="C01.2", check="b", state="holds", detail="reported X"),
+            dict(
+                row,
+                criterion="C01.4",
+                check="tests",
+                state="holds, never broken",
+                detail="teeth unchecked",
+            ),
+        ]
+        got = spec_drift.replay_history(self.write({"schema": 1, "rows": rows}))
+        self.assertEqual(
+            [(c["criterion"], c["state"], c["checks"][0]["state"]) for c in got["cells"]],
+            [
+                ("C01.1", "holds, never broken", "holds, never broken"),
+                ("C01.2", "holds", "holds"),
+                ("C01.4", "holds, never broken", "holds, never broken"),
+            ],
+        )
 
     def test_cells_in_criterion_order_with_their_checks_and_each_merge_counts_runs_and_copies(self):
         row = {"day": "04", "platform": "windows", "pr": 9, "sample": "all", "merge": "aaa", "n": 5}

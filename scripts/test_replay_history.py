@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC = importlib.util.spec_from_file_location("replay_history", os.path.join(HERE, "replay-history.py"))
@@ -84,9 +85,31 @@ class Classify(unittest.TestCase):
         self.assertEqual(self.state(None), ("not runnable", "no test or break to replay"))
 
     def test_a_criterion_with_no_break_runs_its_tests_clean(self):
-        self.assertEqual(self.state(None, [("CliTest", "test_a")]), ("holds", "teeth unchecked: no broken: line"))
+        self.assertEqual(self.state(None, [("CliTest", "test_a")]),
+                         ("holds, never broken", "teeth unchecked: no broken: line"))
         self.commit({"tests/test_cli.py": "import unittest\n" + TEST.replace("pass", "self.fail('no')")})
         self.assertEqual(self.state(None, [("CliTest", "test_a")])[0], "code broken")
+
+    def test_an_old_holds_row_with_its_teeth_unchecked_read_from_out_is_rewritten_to_never_broken(self):
+        base = {"n": 5, "platform": "windows", "day": "01", "merge": "aaa", "sample": "all"}
+        old = [dict(base, criterion="C01.1", check="tests", state="holds", key="k1",
+                    detail="teeth unchecked: no broken: line"),
+               dict(base, n=6, merge="bbb", criterion="C01.1", check="tests", state="holds", key="k1",
+                    detail="teeth unchecked: no broken: line", reused_from="aaa"),
+               dict(base, criterion="C01.2", check="b", state="holds", key="k2"),
+               dict(base, criterion="C01.3", check="b", state="holds", key="k3", detail="reported X")]
+        out = os.path.join(self.repo, "replay.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump({"schema": 1, "since": "aaa", "rows": old}, f)
+        with mock.patch.object(rh, "merges", return_value=[]), mock.patch.object(rh, "closes", return_value={}):
+            self.assertEqual(rh.main(["--out", out, "--since", "HEAD"]), 0)
+        with open(out, encoding="utf-8") as f:
+            got = json.load(f)
+        self.assertEqual([(r["criterion"], r["n"], r["state"], r.get("detail")) for r in got["rows"]],
+                         [("C01.1", 5, "holds, never broken", "teeth unchecked: no broken: line"),
+                          ("C01.2", 5, "holds", None), ("C01.3", 5, "holds", "reported X"),
+                          ("C01.1", 6, "holds, never broken", "teeth unchecked: no broken: line")])
+        self.assertIn("holds, never broken", got["states"])
 
     def test_a_key_already_measured_is_copied_and_a_change_under_driver_measures_again(self):
         sha = rh.git("rev-parse", "HEAD").strip()
