@@ -203,7 +203,8 @@ function drawReadout() {
       <dt>Names the specs dropped, still in code</dt><dd>${s.names_kept ?? "–"}</dd><dd class="spark">${sparkHtml("kept")}</dd>
       <dt>Spec names retired from the code</dt><dd>${s.names_retired ?? "–"}</dd><dd class="spark">${sparkHtml("retired")}</dd>
       <dt>Spec–code name-gap angle (secondary)</dt><dd>${fmt(s.gap_full, 2)}° <span style="color:var(--muted)">(${sign(dGap)})</span></dd><dd class="spark">${sparkHtml("gap")}</dd>
-      <dt>Against shuffled counts (95%: ${band(s.gap_chance_band)})</dt><dd>${against}; ${bandPlace(s)}</dd><dd></dd>
+      <dt>Against shuffled counts (95%: ${band(s.gap_chance_band)})</dt><dd>${bandPlace(s)}</dd><dd></dd>
+      <dt>Name gap less its chance value</dt><dd>${against}</dd><dd></dd>
       <dt>Reached-day names in code</dt><dd>${s.coverage == null ? "–" : fmt(s.coverage * 100, 1) + "%"}</dd><dd class="spark">${sparkHtml("coverage")}</dd>
       <dt>Code lines changed</dt><dd>${s.code_churn.toLocaleString()}</dd><dd class="spark">${sparkHtml("code")}</dd>
       <dt>Spec lines changed</dt><dd>${edits.reduce((a, b) => a + b[1], 0)}</dd><dd class="spark">${sparkHtml("spec")}</dd>
