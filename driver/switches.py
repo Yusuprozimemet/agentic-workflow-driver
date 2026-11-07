@@ -1,15 +1,19 @@
-"""halt and clear, the two switches a person pulls with run-steps.py. halt writes <state>/halt and,
-when the lock names a live driver, kills that process's tree. clear removes the halt file and a
-stale lock, and refuses while a driver lives. Each prints one line and returns its exit code; neither
-starts anything."""
+"""halt, clear and off, the switches a person pulls with run-steps.py. halt writes <state>/halt and,
+when the lock names a live driver, kills that process's tree, then reports on the run's issue from
+<state>/run.json. clear removes the halt file and a stale lock, and refuses while a driver lives.
+off closes the project's open "Driver run" issues, so the run ends after its current step. Each
+prints its lines and returns its exit code; none starts anything."""
 
+import json
 import os
 import signal
 import subprocess
+import sys
 
-from driver import lock
+from driver import issues, lock
 
 TREE = "halt: set; killed pid {} and the processes it started"
+REPORT_KEYS = ("project", "gh", "issue", "step", "session")
 
 
 def halt(state):
@@ -22,7 +26,10 @@ def halt(state):
             print(f"halt: set; {lock.path(state)} cannot be read, so nothing was killed")
             return 1
         if lock.lives(*held):
-            return kill(held[0])
+            code = kill(held[0])
+            if code == 0:
+                _report(state)
+            return code
     print("halt: set; no driver is running")
     return 0
 
@@ -53,6 +60,30 @@ def kill(pid):
     return 0
 
 
+def _report(state):
+    # The run's issue gets what the halt found, so the person reads it on the phone. A run.json that
+    # cannot be read is said so; the halt stands either way.
+    path = os.path.join(state, "run.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "rb") as f:
+            record = json.loads(f.read())
+    except (OSError, ValueError):
+        record = None
+    if not isinstance(record, dict) or not all(key in record for key in REPORT_KEYS):
+        print(f"halt: no report: {path} cannot be read")
+        return
+    number = record["issue"]
+    reason = issues.close(
+        record["project"], record["gh"], number, issues.report(record["project"], record)
+    )
+    if reason is None:
+        print(f"halt: reported on #{number}")
+    else:
+        print(f"halt: no report on #{number}: {reason}")
+
+
 def clear(state):
     if os.path.exists(lock.path(state)):
         held = lock.read(state)
@@ -66,4 +97,27 @@ def clear(state):
         return 0
     os.remove(halt_file)
     print("clear: the halt is removed; the driver is off")
+    return 0
+
+
+def off(project, gh):
+    # Closing a run's issue is the switch (plan.md, "The switches"). Only the maintainer's issues
+    # count, as open_issues reads them: a run someone else opened is not a switch.
+    listed, reason = issues.open_issues(project, gh)
+    if reason is not None:
+        print(f"cannot read the project: {reason}", file=sys.stderr)
+        return 2
+    runs = [issue["number"] for issue in listed if issue["title"].startswith("Driver run")]
+    if not runs:
+        print("off: no run is going")
+        return 0
+    for number in runs:
+        comment = f"off from the PC at {lock.now().strftime(lock.STAMP)}\n"
+        reason = issues.close(project, gh, number, comment)
+        if reason is not None:
+            print(f"cannot read the project: {reason}", file=sys.stderr)
+            return 2
+        print(
+            f"off: closed the run's issue #{number}; the current step finishes, nothing new starts"
+        )
     return 0
