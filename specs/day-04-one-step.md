@@ -506,7 +506,10 @@ git -c core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py te
   with the recorded one: 16 matched both times, as CI's Linux replay will compare them. Of the
   other eight, six cannot replay and are sentences, not in the manifest (D04.6, D04.7, D04.9),
   and two are re-recorded from today's code (D04.11). `specs/breaks/day-04.json` holds 18
-  entries: 15 as recorded, the two re-recorded, and the close's.
+  entries: 15 as recorded, the two re-recorded, and the close's. A local
+  `python scripts/close-evidence.py --rehearse day-04/close-the-day` on Windows fails one check,
+  C04.12's setpgid break ("The check passed with the break in"), and passes every other; CI's
+  rehearsal and replay, on Linux, are the ones that see that break.
 - Left for the close by the tracks. The backticks of In scope: #25 and #28 read them as literal
   around identifiers, branch names, paths, uuids and shas, and none around numbers, a whole
   substituted reason or the PARK text; the close keeps that reading, which the tests pin. #25's
@@ -524,14 +527,15 @@ git -c core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py te
   bytes hold no carriage return bites on Windows only: on Linux the break that writes
   `os.linesep` passes, and the spec did not say so (`specs/README.md`: a check whose break bites
   on one system only says so). The close's Linux replay found it.
-- **Defect** D04.8 — found: break on purpose · cause: process · made: Day 04 · Track E's brief
-  (#26) put the 8.3 short path in the config's `project`, which `driver/config.py` already
-  resolves, so the break that drops `realpath` from step 11 passed; the case now passes the path
-  with `--project`.
+- **Defect** D04.8 — found: break on purpose · cause: implementation · made: Day 04 · Track E's
+  test case (#26), as its brief wrote it, put the 8.3 short path in the config's `project`, which
+  `driver/config.py` already resolves, so the break that drops `realpath` from step 11 passed;
+  Track E's break on purpose caught it before #26 merged, and the case now passes the path with
+  `--project`.
 - **Defect** D04.9 — found: close · cause: spec · made: Day 04 · C04.9's "a symlink on POSIX" case
   cannot fail: a POSIX child's cwd reads as the resolved path whatever path it was started in,
   so on Linux the break that passes the path as given passes; only Windows' 8.3 case sees it.
-  The spec did not say so (as D04.7).
+  The spec did not say so (as D04.7). The close's Linux replay found it.
 - **Defect** D04.10 — found: break on purpose · cause: implementation · made: Day 04 · same-as:
   D03.17 · the implementer's first Track F tests (#28) compared the session's real uuid, so
   their seen-red and break reports held it; the main session's first round of breaks caught it,
@@ -547,11 +551,21 @@ git -c core.safecrlf=false diff --exit-code 1dc0f03 -- tests/test_contract.py te
   resume the criterion names passes `--settings <state>/settings.json` itself, and `halt` kills
   the tree before the flag matters (#29). Track G ran the "/T" break instead, which the test
   catches; C04.13 now names it.
-- **Defect** D04.14 — found: Track G · cause: environment · made: Day 04 · C04.12's POSIX break
+- **Defect** D04.14 — found: Track G · cause: environment · made: none · C04.12's POSIX break
   could not run on the maintainer's PC, whose WSL has no `python3` (#29). The close ran it on
   Linux in a Docker container.
 - **Defect** D04.15 — found: close · cause: spec · made: Day 04 · C04.12 said the setpgid break
   fails on the child alive after 5 s; it fails first on the fake ("the fake still runs"): `halt`
-  kills only the driver's pid, and the test checks the fake before its child.
+  kills only the driver's pid, and the test checks the fake before its child. The close's run of
+  the break showed it.
+- The blind relabel (`scripts/relabel.py`, the defect-rater): stage 7 of 15 agree, cause 13 of
+  15, made 14 of 15. Each stage disagreement but D04.5's is the rater's "unclear": the text did
+  not say when it was found. D04.1 to D04.5 keep `found: auditor` (the first Note: the
+  spec-auditor's findings, fixed in #21 before any code), and D04.8, D04.9 and D04.15 now say
+  when. D04.2 keeps `cause: spec` against the rater's `environment` (low): npm's `claude.cmd` is
+  what it met, but the spec's step 11 is what was wrong and changed. D04.8's cause is now
+  `implementation`, the rater's: the spec was right and the test case was not, though its brief
+  wrote it so. D04.14's `made:` is now `none`, the rater's: a machine with no `python3` is no
+  day's work.
 - **Hand-off** H04.4 → Day 7: a run-log `start` line that parses but has no `session` key is not
   read as unreadable (#23); the table of "Recovery" that H04.3 brings decides it.
