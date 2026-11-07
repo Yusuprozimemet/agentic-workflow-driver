@@ -222,6 +222,29 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("manifest: none → ", run.stdout.strip().splitlines()[-2])
 
+    def test_a_file_outside_the_tree_cwd_runs_in_is_refused_before_anything_changes(self):
+        # seen 2026-11-07: run from the root with --cwd <worktree>, the break went into the main
+        # tree's file, the worktree's copy ran, and the check "passed with the break in".
+        other = tempfile.mkdtemp()
+        with open(os.path.join(other, "Guard.java"), "wb") as f:
+            f.write(self.original)
+        command = [sys.executable, "-c", "import sys; t = open('Guard.java').read(); "
+                   "sys.exit('AssertionError: broken') if 'broken' in t else print('1 passed')"]
+        run = self.run_break("// ok", "// broken", command=command, extra=("--cwd", other))
+        self.assertEqual(run.returncode, 2, run.stdout + run.stderr)
+        self.assertIn("is outside the tree --cwd", run.stderr)
+        self.assertEqual(self.contents(), self.original)
+
+    def test_a_file_elsewhere_in_cwd_s_git_work_tree_is_broken(self):
+        # a shared file at the root, its check run from a service directory of the same work tree.
+        subprocess.run(["git", "init", "-q", self.dir], check=True)
+        service = os.path.join(self.dir, "services", "job")
+        os.makedirs(service)
+        run = self.run_break("// ok", "// broken", extra=("--cwd", service))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("broken: the guard removed → ", run.stdout)
+        self.assertEqual(self.contents(), self.original)
+
     def test_a_break_inside_a_break_s_check_takes_its_own_lock(self):
         # item 130: a break of break.py, or of what runs it, needed break.py run from a scratch copy.
         inner = [sys.executable, SCRIPT, "--file", self.file, "--find", "// ok", "--replace", "// broken",

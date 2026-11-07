@@ -11,7 +11,9 @@ kept in memory and written back as they were, line endings included, whatever th
 is never used to revert, so unstaged work elsewhere is untouched. The command runs as an argument
 list, with no shell: on Windows, `mvnw` runs as `mvnw.cmd`. A Maven command must clean, or an
 incremental build can skip the broken source and pass. One break at a time: a second run while one
-is active refuses; a break run by the check of another takes a lock of its own.
+is active refuses; a break run by the check of another takes a lock of its own. --file is taken
+from where break.py runs; with --cwd it must sit in the tree the check runs in (--cwd's git work
+tree, or --cwd outside git): a break in one tree with the check in another is refused, not run.
 
 It runs the check first without the break, and refuses if it does not pass. It exits 0 only when
 the check then failed with the break in and the file is back as it was, and prints
@@ -106,6 +108,23 @@ def argv_for(command, cwd):
     return [head, *command[1:]]
 
 
+def tree(cwd):
+    """The tree the check runs in: the git work tree that holds cwd, or cwd itself outside git."""
+    top = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    return os.path.realpath(top.stdout.strip() if top.returncode == 0 else cwd)
+
+
+def in_tree(file, cwd):
+    """Whether file sits in the tree the check runs in. --file is taken from break.py's own working
+    directory and --cwd's check from --cwd: run from one tree with --cwd in another, the break went
+    into the first while the check ran on the second, and passed."""
+    root, path = tree(cwd), os.path.realpath(file)
+    try:
+        return os.path.commonpath([os.path.normcase(root), os.path.normcase(path)]) == os.path.normcase(root)
+    except ValueError:  # another drive
+        return False
+
+
 def manifest(a):
     """The line before the broken: line: the break's entry for specs/breaks/day-NN.json
     (specs/README.md), to copy into the track PR beside it, or why there is none. The replay runs the
@@ -134,12 +153,13 @@ def main(args=None):
     p.add_argument("--find", required=True)
     p.add_argument("--replace", required=True)
     p.add_argument("--what", required=True, help="what was broken, for the broken: line")
-    p.add_argument("--cwd", default=".")
+    p.add_argument("--cwd", help="where the check runs; --file must then sit in its tree")
     p.add_argument("--expect-stdout", metavar="REGEX",
                    help="the check's stdout without the break; the break is caught when it no longer matches")
     p.add_argument("command", nargs=argparse.REMAINDER, help="the check, with its options; a leading -- is dropped")
     a = p.parse_args(args)
     a.command = a.command[1:] if a.command[:1] == ["--"] else a.command
+    elsewhere, a.cwd = a.cwd is not None, a.cwd or "."
     if not a.command:
         p.error("the command to run is required")
     sys.stdout.reconfigure(encoding="utf-8")  # the arrow; a Windows console's default is cp1252
@@ -152,6 +172,9 @@ def main(args=None):
         re.compile(a.expect_stdout or "")
     except re.error as e:
         return refuse(f"--expect-stdout is not a regex: {e}")
+    if elsewhere and not in_tree(a.file, a.cwd):
+        return refuse(f"--file {a.file} is outside the tree --cwd {a.cwd} runs the check in ({tree(a.cwd)}): "
+                      "the break would not be in the code the check runs; name the file in that tree")
     with open(a.file, "rb") as f:
         original = f.read()
     find, replace = a.find.encode(), a.replace.encode()
