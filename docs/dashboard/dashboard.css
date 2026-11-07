@@ -19,7 +19,7 @@
   --p-test: #0d366b; --p-command: #1c5cab; --p-break: #3987e5; --p-reader: #86b6ef;
   /* Replay states: one set, validated all-pairs on both surfaces (dataviz validate_palette.js). */
   --r-holds: #3a74d0; --r-broken: #c22f2f; --r-weak: #cf7d12; --r-gone: #b03fa6;
-  --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834; --w-context: #b07d12; --fail: #d23f3a;
+  --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834; --m-haiku-prev: #f4b394; --w-context: #b07d12; --fail: #d23f3a;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
@@ -31,7 +31,7 @@
     --ink: #f3f5f8; --ink-2: #b8bec9; --muted: #868d99;
     --grid: #262a31; --axis: #3a3f48; --ring: rgba(255,255,255,0.10);
     --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
-    --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --w-context: #d4a02a; --fail: #e5534b;
+    --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --m-haiku-prev: #8f3a17; --w-context: #d4a02a; --fail: #e5534b;
     --away: #b98a34; --closer: #6a82dc;
     --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
   }
@@ -42,7 +42,7 @@
   --ink: #f3f5f8; --ink-2: #b8bec9; --muted: #868d99;
   --grid: #262a31; --axis: #3a3f48; --ring: rgba(255,255,255,0.10);
   --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
-    --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --w-context: #d4a02a; --fail: #e5534b;
+    --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --m-haiku-prev: #8f3a17; --w-context: #d4a02a; --fail: #e5534b;
   --away: #b98a34; --closer: #6a82dc;
   --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
 }

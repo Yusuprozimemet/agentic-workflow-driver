@@ -1394,7 +1394,9 @@ def conclusion(notebook):
     reads = [dict(phase=int(m.group(1)), text=m.group(0).strip()) for m in PHASE_READ.finditer(notebook)]
     rows = [[c.strip() for c in r.strip().strip("|").split("|")]
             for r in section(notebook, "What is being measured").splitlines() if r.startswith("|")]
-    return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == 2])
+    # Any width: the notebook adds a column per day beside the question and its evidence.
+    head = rows[0] if len(rows) > 2 and len(rows[0]) >= 2 else []
+    return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == len(head)], measured_head=head)
 
 
 def token_usage():
