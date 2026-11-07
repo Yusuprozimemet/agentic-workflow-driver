@@ -16,6 +16,8 @@ specs and breaks files are read as they stand now, so a corrected manifest corre
 Each check gets one state:
 
 - holds: the check passes clean and fails with the break in (a near miss: passes with it in);
+- holds, never broken: the tests pass clean and no `broken:` line was ever recorded, so nothing shows
+  they can fail;
 - code broken: the check fails clean: the code no longer does what was promised;
 - test weakened: the check passes with the break in, or its named test was removed;
 - break no longer applies: the file is gone, or the find text no longer occurs exactly once;
@@ -57,8 +59,16 @@ bi = load("behaviour_index", "behaviour-index.py")
 git = ev.git
 
 OUT = "docs/dashboard/replay-history.json"
-STATES = ["holds", "code broken", "test weakened", "break no longer applies",
+STATES = ["holds", "holds, never broken", "code broken", "test weakened", "break no longer applies",
           "not applicable on this platform", "not runnable", "live only", "not yet in force"]
+NEVER_BROKEN = "holds, never broken"
+
+
+def upgrade(row):
+    """A row an older run wrote as "holds" with no break to check its teeth, as the state it now gets."""
+    if row.get("state") == "holds" and (row.get("detail") or "").startswith("teeth unchecked"):
+        return dict(row, state=NEVER_BROKEN)
+    return row
 READS = ["tests", "driver", "hooks", "rules", "run-steps.py", ".gitignore", "pyproject.toml", "requirements.txt"]
 DAY_BRANCH = re.compile(r"^Merge pull request #\d+ from \S+?/day-(\d{2})/|^Day (\d{2}) ")
 PR = re.compile(r"#(\d+)")
@@ -166,7 +176,7 @@ def classify(entry, tests, report, worktree, sha, pre, env):
         run = subprocess.run([sys.executable, "-m", "unittest", *names], cwd=worktree, env=env,
                              capture_output=True, text=True, encoding="utf-8", errors="replace")
         if run.returncode == 0:
-            return "holds", "teeth unchecked: no broken: line"
+            return NEVER_BROKEN, "teeth unchecked: no broken: line"
         return "code broken", ev.normal(run.stderr.strip().splitlines()[-1] if run.stderr.strip() else "failed")
     for arg in entry["command"]:
         m = DOTTED.match(arg)
@@ -260,7 +270,7 @@ def main(argv=None):
     if not since:
         p.error("--since is needed until --out exists")
     since = git("rev-parse", since).strip()[:12]
-    rows = list(old["rows"])
+    rows = [upgrade(r) for r in old["rows"]]
     known = {r["key"]: r for r in rows if "key" in r and "reused_from" not in r}
     done = {(r["n"], r["platform"]) for r in rows}
     closed = closes(a.ref)

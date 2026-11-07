@@ -254,7 +254,7 @@ def demo():
                          at="2026-10-30T08:00+00:00")]),
         evidence_checks=dict(state="loaded", generated="2026-10-29T10:00+00:00", ref="main", ref_sha=HEAD,
                              runner="evidence.py 1", days=checks),
-        replay=dict(state="loaded", states=["holds", "code broken", "test weakened", "break no longer applies",
+        replay=dict(state="loaded", states=["holds", "holds, never broken", "code broken", "test weakened", "break no longer applies",
                                             "not applicable on this platform", "not runnable", "live only",
                                             "not yet in force"],
                     merges=[dict(n=n, merge=f"demo{n}", pr=n + 10, sample=s, run=r, copied=c)
@@ -263,7 +263,7 @@ def demo():
                                 checks=[dict(check="tests", state=st, platform="linux")])
                            for cid, n, st, mx in (("C1", 20, "holds", False), ("C2", 20, "holds", False),
                                                   ("C3", 20, "live only", False), ("C1", 21, "holds", False),
-                                                  ("C1", 23, "test weakened", True), ("C2", 23, "holds", False),
+                                                  ("C1", 23, "test weakened", True), ("C2", 23, "holds, never broken", False),
                                                   ("C3", 23, "live only", False), ("C4", 23, "not yet in force", False))]),
         conclusion=dict(reads=[dict(phase=1, text="**Read at the end of Phase 1.** Products and the cart work; "
                                                   "the checkout is next.")],

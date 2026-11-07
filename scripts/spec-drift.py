@@ -1408,8 +1408,15 @@ def token_usage():
 
 # A criterion's state at a merge is the first of these any of its checks is in (scripts/replay-history.py).
 REPLAY_WORST = ["code broken", "test weakened", "break no longer applies", "not runnable",
-                "not applicable on this platform", "live only", "holds"]
+                "not applicable on this platform", "live only", "holds, never broken", "holds"]
 REPLAY_STATES = REPLAY_WORST + ["not yet in force"]
+
+
+def replay_row_state(r):
+    """A row's state; an older file's "holds" with no break to check its teeth reads as "holds, never broken"."""
+    if r["state"] == "holds" and (r.get("detail") or "").startswith("teeth unchecked"):
+        return "holds, never broken"
+    return r["state"]
 
 
 def replay_state(states):
@@ -1432,6 +1439,7 @@ def replay_history(path=None):
             raise ValueError(f"schema {data.get('schema')!r}, this page reads 1")
         merges, cells = {}, {}
         for r in data["rows"]:
+            r = dict(r, state=replay_row_state(r))
             if r["state"] not in REPLAY_STATES:
                 raise ValueError(f"{r['criterion']} at {r['merge']}: state {r['state']!r}")
             m = merges.setdefault(r["n"], dict(n=r["n"], merge=r["merge"], pr=r.get("pr"), sample=r["sample"],

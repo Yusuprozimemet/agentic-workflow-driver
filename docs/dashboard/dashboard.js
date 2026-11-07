@@ -1106,6 +1106,8 @@ const REPLAY_LOOK = {
   "not runnable": { fill: "var(--muted)" },
   "not applicable on this platform": { fill: "url(#replay-hatch)", stroke: "var(--muted)" },
   "live only": { fill: "none", stroke: "var(--muted)" },
+  // Holds, unproven: the holds colour as an outline round a hollow centre, not a hue of its own.
+  "holds, never broken": { fill: "none", stroke: "var(--r-holds)", width: 2.5 },
   "holds": { fill: "var(--r-holds)" },
   "not yet in force": { dot: true },
 };
@@ -1113,7 +1115,7 @@ const replaySwatch = s => {
   const k = REPLAY_LOOK[s] || {};
   if (k.dot) return `<i class="dot rdot"></i>`;
   const bg = s === "not applicable on this platform" ? "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px)" : k.fill === "none" ? "none" : k.fill;
-  return `<i class="dot" style="background:${bg};${k.stroke ? "box-shadow:inset 0 0 0 1.5px " + k.stroke : ""};color:${k.ink || "inherit"}">${k.glyph || ""}</i>`;
+  return `<i class="dot" style="background:${bg};${k.stroke ? `box-shadow:inset 0 0 0 ${k.width || 1.5}px ` + k.stroke : ""};color:${k.ink || "inherit"}">${k.glyph || ""}</i>`;
 };
 function drawReplay() {
   const rp = DATA.replay || { state: "absent" }, box = document.getElementById("replay");
@@ -1161,7 +1163,7 @@ function drawReplay() {
       if (!c) continue;
       const k = REPLAY_LOOK[c.state], x = cx(n) + 1, w = cw - 2, h = ch - 2, yy = ys[i] + 1;
       if (k.dot) el("circle", { cx: x + w / 2, cy: yy + h / 2, r: 2, fill: "var(--muted)" }, svg);
-      else el("rect", { x: x + 0.75, y: yy + 0.75, width: w - 1.5, height: h - 1.5, rx: 2, fill: k.fill, stroke: k.stroke || "none", "stroke-width": k.stroke ? 1.5 : 0 }, svg);
+      else { const sw = k.stroke ? k.width || 1.5 : 0, inset = Math.max(0.75, sw / 2); el("rect", { x: x + inset, y: yy + inset, width: w - 2 * inset, height: h - 2 * inset, rx: 2, fill: k.fill, stroke: k.stroke || "none", "stroke-width": sw }, svg); }
       if (k.glyph) el("text", { x: x + w / 2, y: yy + h / 2 + 3.5, "text-anchor": "middle", style: `font-size:10px;font-weight:700;fill:${k.ink}` }, svg).textContent = k.glyph;
       if (c.mixed) el("path", { d: `M${x + w - 6} ${yy} H${x + w} V${yy + 6} Z`, fill: "var(--ink)" }, svg);
       const m = byN.get(n), hit = el("rect", { x: cx(n), y: ys[i], width: cw, height: ch, class: "hit" }, svg);
