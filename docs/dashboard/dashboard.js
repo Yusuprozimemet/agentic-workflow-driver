@@ -1477,7 +1477,7 @@ function inspect(id) {
   const details = row ? `<h3>${esc(row.id)}</h3><p>${md(row.claim)}</p>
     <p>Spec: ${row.spec ? esc(row.spec) : unknown} · Track: ${row.track == null ? unknown : esc(row.track)}</p>
     <p>PRs: ${values(row.prs)} · Tests: ${values(row.tests)}</p>
-    <p>Seen red: ${values(row.seen_red.lines)}</p>
+    <p>Seen red: ${row.seen_red.lines && row.seen_red.lines.length ? row.seen_red.lines.map(md).join(", ") : unknown}</p>
     <p>Replay: ${esc(row.replay.state)}${tally ? ` · checks: ${tally}` : ""} · ${values(row.replay.why)}</p>
     <ul>${row.replay.checks.filter(c => c.diagnostic != null).map(c => `<li>${esc(c.status)}: ${esc(c.diagnostic)}</li>`).join("")}</ul>
     <p>Replaces: ${values(row.replaces)} · Replaced by: ${values(row.replaced_by)}</p>` : `<h3>${esc(id)}</h3>`;

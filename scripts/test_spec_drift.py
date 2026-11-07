@@ -1321,7 +1321,7 @@ class CriterionPanelsTest(unittest.TestCase):
 
     def test_inspector_renders_backticks_and_counts_checks_without_diagnostics(self):
         row = dict(id="C1", day=1, tag="new", claim="`classify()` gives a kind", spec="s.md", track="A", prs=[3],
-                   tests=["test_x"], cited=True, test_found=True, seen_red=dict(state=True, lines=["l"]),
+                   tests=["test_x"], cited=True, test_found=True, seen_red=dict(state=True, lines=["seen red on `41d6563`'s code"]),
                    replay=dict(state="current", status=["passed"], why=[],
                                checks=[dict(status="passed", diagnostic=None)] * 3 + [dict(status="failed", diagnostic="boom")]),
                    replaces=[], replaced_by=[])
@@ -1329,6 +1329,7 @@ class CriterionPanelsTest(unittest.TestCase):
         self.assertIsNone(error)
         inspector = panels["criterion-inspector"]
         self.assertIn("<code>classify()</code> gives a kind", inspector)
+        self.assertIn("seen red on <code>41d6563</code>", inspector)
         self.assertNotIn("passed: ", inspector)
         self.assertIn("3 passed, 1 failed", inspector)
         self.assertIn("<li>failed: boom</li>", inspector)
