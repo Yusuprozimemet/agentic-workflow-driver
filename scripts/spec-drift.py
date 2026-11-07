@@ -1456,6 +1456,22 @@ def deployment():
 
 EVIDENCE_SCHEMA = 1  # scripts/evidence.py's SCHEMA
 EVIDENCE_STATUSES = ("passed", "failed", "error", "not_applicable")
+PROOF_RANK = ("test", "command", "break", "reader")  # strongest first
+
+
+def proof_kinds(checks):
+    """A day's criteria by what proved them, each once, under its strongest kind in PROOF_RANK:
+    unproved for an unticked criterion or one nothing proved, not_recorded for a proof check from a
+    report written before evidence.py recorded proved_by (not counted as either)."""
+    out = dict.fromkeys((*PROOF_RANK, "unproved", "not_recorded"), 0)
+    for c in checks:
+        if c.get("kind") != "proof":
+            continue
+        if "proved_by" not in c:
+            out["not_recorded"] += 1
+            continue
+        out[next((k for k in PROOF_RANK if k in (c["proved_by"] or ())), "unproved")] += 1
+    return out
 
 
 def blob_id(sha, path):
@@ -1511,7 +1527,9 @@ def evidence_checks(days, snaps):
             for c in r["checks"]:
                 counts.setdefault(c["kind"], dict.fromkeys(EVIDENCE_STATUSES, 0))[c["status"]] += 1
             out.append(dict(day=d["day"], state="stale" if why else "current", why=why, counts=counts,
-                            checks=[{k: c.get(k) for k in ("criterion", "kind", "status", "label", "diagnostic")}
+                            proof=proof_kinds(r["checks"]),
+                            checks=[{k: c.get(k) for k in ("criterion", "kind", "status", "label", "diagnostic",
+                                                           "proved_by")}
                                     for c in r["checks"]],
                             problems=[{k: c.get(k) for k in ("kind", "status", "label", "diagnostic")}
                                       for c in r["checks"] if c["status"] in ("failed", "error")]))

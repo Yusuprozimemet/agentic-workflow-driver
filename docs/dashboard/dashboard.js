@@ -1050,6 +1050,52 @@ function drawEvidenceChecks() {
   if (problems.length) box.innerHTML += `<h3>Failed or could not run</h3><ul>${problems.join("")}</ul>`;
 }
 
+// spec-drift.py's proof_kinds, strongest first; not recorded is drawn apart, as an outline.
+const PROOF = [["test", "Named test", "var(--p-test)"], ["command", "Command", "var(--p-command)"],
+  ["break", "Break", "var(--p-break)"], ["reader", "Reader", "var(--p-reader)"], ["unproved", "Unproved", "var(--other)"]];
+function drawProofKinds() {
+  const ec = DATA.evidence_checks || { state: "absent" }, box = document.getElementById("proof-kinds");
+  const legend = document.getElementById("proof-kinds-legend");
+  box.innerHTML = legend.innerHTML = "";
+  const days = ec.state === "loaded" ? ec.days.filter(d => d.proof).sort((a, b) => rank(a.day) - rank(b.day)) : [];
+  if (!days.length) { box.innerHTML = `<p class="off">No replayed day to count: the report above is ${esc(ec.state === "loaded" ? "empty" : ec.state)}.</p>`; return; }
+  const sum = k => days.reduce((s, d) => s + d.proof[k], 0);
+  legend.innerHTML = PROOF.map(([k, name, c]) => `<span><i class="dot" style="background:${c}"></i>${name} · ${sum(k)}</span>`).join("")
+    + `<span><i class="dot" style="border:1.5px dashed var(--muted)"></i>Not recorded · ${sum("not_recorded")}</span>`;
+  const H = 220, P = { l: 44, r: 16, t: 22, b: 30 };
+  const total = d => PROOF.reduce((s, [k]) => s + d.proof[k], 0) + d.proof.not_recorded;
+  const yMax = Math.max(4, Math.ceil(Math.max(...days.map(total)) / 4) * 4);
+  const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
+  const bw = (LW - P.l - P.r) / days.length, w = Math.min(28, bw - 6);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Criteria per finished day by what proved them" }, box);
+  steps(0, yMax, 4).forEach(t => {
+    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
+    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t;
+  });
+  days.forEach((d, j) => {
+    const x = P.l + j * bw + (bw - w) / 2, stale = d.state === "stale";
+    let base = 0;
+    const seg = (n, attrs) => {
+      if (!n) return;
+      // A 2px gap of surface between segments, taken from the top of each.
+      el("rect", { x, y: ly(base + n), width: w, height: Math.max(1, ly(base) - ly(base + n) - 2), rx: 2, ...attrs }, svg);
+      base += n;
+    };
+    PROOF.forEach(([k, , c]) => seg(d.proof[k], { fill: c, opacity: stale ? 0.5 : 1 }));
+    seg(d.proof.not_recorded, { fill: "none", stroke: "var(--muted)", "stroke-dasharray": "3 3" });
+    el("text", { x: x + w / 2, y: ly(base) - 6, "text-anchor": "middle", class: "num" }, svg).textContent = base;
+    el("text", { x: x + w / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" + (OOO.has(d.day) ? " ooo" : "") }, svg)
+      .textContent = "D" + dd(d.day) + (OOO.has(d.day) ? "*" : "");
+    const title = (DATA.days.find(x => x.day === d.day) || {}).title || "";
+    const hit = el("rect", { x: P.l + j * bw, y: P.t, width: bw, height: H - P.t - P.b, class: "hit" }, svg);
+    hit.addEventListener("mousemove", ev => showTip(ev, `<b>Day ${dd(d.day)}</b><div style="margin:3px 0 6px">${esc(title)}${stale ? " · stale report" : ""}</div>`
+      + PROOF.map(([k, name]) => `<div class="row"><span>${name}</span><span>${d.proof[k]}</span></div>`).join("")
+      + `<div class="row"><span>Not recorded</span><span>${d.proof.not_recorded}</span></div>`));
+    hit.addEventListener("mouseleave", hideTip);
+  });
+  oooNote(box);
+}
+
 /* ---------- hand-offs ---------- */
 // The script sorts them by the receiving day's place in the run order, open ones first; those no
 // later day picks up (`to` null) come last, then tracks a PR announced that no branch names.
@@ -1369,7 +1415,7 @@ panel("attention-list", drawCriteria);
 panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
-panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
+panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds);panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel);
 }
 

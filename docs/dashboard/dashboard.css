@@ -15,6 +15,8 @@
   --gap: #0e1116;
   --ooo: #8a4fd6;
   --away: #b8862b; --closer: #3b5fc7;
+  /* Proof kinds, strongest to weakest: one blue ramp, dark to light (steps 700, 550, 400, 250). */
+  --p-test: #0d366b; --p-command: #1c5cab; --p-break: #3987e5; --p-reader: #86b6ef;
   --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834; --w-context: #b07d12; --fail: #d23f3a;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
@@ -29,6 +31,7 @@
     --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --w-context: #d4a02a; --fail: #e5534b;
     --away: #b98a34; --closer: #6a82dc;
+    --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
   }
 }
 :root[data-theme="dark"] {
@@ -39,6 +42,7 @@
   --spec: #3987e5; --code: #d95926; --close: #199e70; --other: #6c7380; --gap: #f3f5f8; --ooo: #a57be6;
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --w-context: #d4a02a; --fail: #e5534b;
   --away: #b98a34; --closer: #6a82dc;
+  --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
 }
 * { box-sizing: border-box; }
 body {

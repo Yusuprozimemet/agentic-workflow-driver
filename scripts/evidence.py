@@ -43,7 +43,8 @@ Item 6 of the lab notebook's open items: no step checked the evidence a close ti
 prints one line per check and exits 1 if any failed or could not run. With --json PATH it also
 writes the same checks as a report (docs/spec-drift-improvement.md, Step 2): each with an id, a
 kind, its criterion and the commit it ran at, and a status, passed, failed, error (the checker
-could not run it) or not_applicable; and what was checked, from which inputs, by which runner. It
+could not run it) or not_applicable, a proof check also its proved_by (`proved_by` below, null for
+an unticked criterion); and what was checked, from which inputs, by which runner. It
 changes no file outside the worktree but that report.
 """
 import argparse
@@ -183,6 +184,13 @@ def criteria(text):
 def not_proven(lines):
     """The reason a `Not proven:` line under a criterion gives, or None."""
     return next((m.group(1).strip() for line in lines[1:] if (m := NOT_PROVEN.match(line))), None)
+
+
+def proved_by(tests, command, broken, reason):
+    """What proved a ticked criterion, every kind found, in this order: "test", "command", "break";
+    ["reader"] when none of them but a `Not proven:` line; [] when nothing. The dashboard ranks them."""
+    found = [k for k, hit in (("test", tests), ("command", command), ("break", broken)) if hit]
+    return found or (["reader"] if reason else [])
 
 
 def spec_at(commit, path):
@@ -338,9 +346,11 @@ def check_spec(path, ref):
     record = {"spec": input_file(path), "day": None, "change": None, "close_sha": None, "verify_base_sha": None,
               "breaks": None, "checks": []}
 
-    def add(key, kind, status, label, diagnostic=None, criterion=None, sha=None):
+    def add(key, kind, status, label, diagnostic=None, criterion=None, sha=None, proof=None):
         record["checks"].append({"id": f"{name}/{key}", "kind": kind, "criterion": criterion, "sha": sha,
                                  "status": status, "label": label, "diagnostic": diagnostic})
+        if kind == "proof":  # null for an unticked criterion: not proven
+            record["checks"][-1]["proved_by"] = proof
 
     day = re.match(r"day-(\d{2})-", name)
     # A short spec, specs/changes/<slug>.md, replays at the merge of change/<slug>.
@@ -388,16 +398,17 @@ def check_spec(path, ref):
         command = COMMAND.search(body)
         broken = any(m and m.group(1) != "none" for m in map(BROKEN.match, joined(lines)))
         proof = [w for w, hit in (("a test", tests), ("a command", command), ("a break", broken)) if hit]
+        kinds = proved_by(tests, command, broken, reason)
         if not tests and (proof or reason):
             add(f"{cid}/test", "named_test", "not_applicable", f"{cid} named test",
                 f"none: checked by `{command.group(1)}`" if command else
                 "none: checked by its break" if broken else "none: judged by a reader", cid)
         if proof:
-            add(f"{cid}/proof", "proof", "passed", f"{cid} proved by {', '.join(proof)}", None, cid, commit)
+            add(f"{cid}/proof", "proof", "passed", f"{cid} proved by {', '.join(proof)}", None, cid, commit, kinds)
         else:
             add(f"{cid}/proof", "proof", "passed" if reason else "failed", f"{cid} proved by a reader" if reason
                 else f"{cid} proved by nothing", reason or "no test, command or break, and no Not proven: line "
-                f"under it at {commit[:7]}", cid, commit)
+                f"under it at {commit[:7]}", cid, commit, kinds)
 
     recorded, times = {}, {}
     if os.path.exists(breaks_file):
