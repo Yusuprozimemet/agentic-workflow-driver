@@ -1,5 +1,5 @@
 [
 {"date":"2026-11-06","guard":"read-guard","refused":4},
-{"date":"2026-11-07","guard":"auditor-guard","refused":1},
-{"date":"2026-11-07","guard":"read-guard","refused":7}
+{"date":"2026-11-07","guard":"auditor-guard","refused":4},
+{"date":"2026-11-07","guard":"read-guard","refused":12}
 ]
