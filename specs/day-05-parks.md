@@ -197,7 +197,7 @@ E 370, F 280. C05.12 is held by every track. A track over 400 is split by a spec
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C05.1 **new** — With the fake `gh`, `open_issues` returns the open issues by `me` only, by
+- [x] C05.1 **new** — With the fake `gh`, `open_issues` returns the open issues by `me` only, by
       number, each with its labels' names, from a file that also holds a closed one and one by
       `someone`; `closed_parks` returns the titles of the closed `parked` issues by `me` only; the
       recorded calls are exactly the two `issue list` calls of In scope; with `issue_code` 1 each
@@ -205,7 +205,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/issues.py` does not exist; `ImportError` in `setUp`.
       Test: `IssuesTest.test_open_issues`, `IssuesTest.test_closed_parks`,
       `IssuesTest.test_reads_fail`.
-- [ ] C05.2 **new** — `park` with no open `parked` issue of that title records `label create
+      Evidence: `IssuesTest.test_open_issues`, `IssuesTest.test_closed_parks`, `IssuesTest.test_reads_fail` (#34).
+      seen red: python -m unittest tests.test_issues on main → FAILED (errors=3) (#34)
+- [x] C05.2 **new** — `park` with no open `parked` issue of that title records `label create
       parked ... --force`, then `issue create --title <line> --label parked --body-file -`, with
       the body in `bodies.jsonl` holding no `\r`, and returns the new number; with an open `parked`
       issue of that title it records only `issue comment <n> --body-file -`, the body starting
@@ -215,7 +217,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       (before it).
       Test: `IssueWritesTest.test_park_opens`, `IssueWritesTest.test_park_comments`,
       `IssueWritesTest.test_park_title_cut`, `IssueWritesTest.test_park_fails`.
-- [ ] C05.3 **new** — `open_run` with no open "Driver run" issue creates one titled "Driver run "
+      Evidence: `IssueWritesTest.test_park_opens`, `IssueWritesTest.test_park_comments`, `IssueWritesTest.test_park_title_cut`, `IssueWritesTest.test_park_fails` (#35).
+      seen red: python -m unittest tests.test_issues.IssueWritesTest on main → FAILED (errors=8) (#35)
+      broken: the body sent in text-mode line endings → AssertionError: 'park: the end of Phase 1\r\n\r\nstep: x\r\n' != 'park: the end of Phase 1\n\nstep: x\n' (#35)
+- [x] C05.3 **new** — `open_run` with no open "Driver run" issue creates one titled "Driver run "
       and a stamp, unlabelled, its body holding "step: ", the sentence, "session: " and the uuid;
       with one open, it comments on it and creates none. `close` records `issue comment <n>
       --body-file -` then `issue close <n>`, and returns `None` on an issue the fake holds as
@@ -224,7 +229,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: as C05.2.
       Test: `IssueWritesTest.test_open_run_creates`, `IssueWritesTest.test_open_run_reuses`,
       `IssueWritesTest.test_close`, `IssueWritesTest.test_close_times_out`.
-- [ ] C05.4 **new** — `decide()` on a spec step that opens Phase 1, with `answered` holding "park:
+      Evidence: `IssueWritesTest.test_open_run_creates`, `IssueWritesTest.test_open_run_reuses`, `IssueWritesTest.test_close`, `IssueWritesTest.test_close_times_out` (#35).
+      seen red: python -m unittest tests.test_issues.IssueWritesTest on main → FAILED (errors=8) (#35)
+      Not replayed in CI, it bites on Windows only (D05.10): "the timeout kills only gh, not its
+      tree", `taskkill` without "/T", failed `IssueWritesTest.test_close_times_out` with the call
+      returning after about 5 s, not under 3; on Linux the timeout kills the process group and
+      the break's line is never run, so a local Windows run guards it, not CI (#35).
+- [x] C05.4 **new** — `decide()` on a spec step that opens Phase 1, with `answered` holding "park:
       the end of Phase 0: Day 03 starts Phase 1", gives "start: " and the sentence; with that
       answer and a branch of the step on the remote, the branch's park; with `answered` holding
       another phase's line, the phase's park; called without `answered`, the phase's park, as Day
@@ -232,13 +243,19 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `decide()` takes no `answered`; `TypeError` on each call that passes it.
       Test: `AnsweredTest.test_answered_phase_end_starts`,
       `AnsweredTest.test_answered_still_checks_branches`, `AnsweredTest.test_other_answer`.
-- [ ] C05.5 **new** — `runlog.failures` on a log of four sessions of one prefix (ended "opened:
+      Evidence: `AnsweredTest.test_answered_phase_end_starts`, `AnsweredTest.test_answered_still_checks_branches`, `AnsweredTest.test_other_answer` (#36).
+      seen red: python -m unittest tests.test_failures on main → FAILED (errors=6) (#36)
+      broken: decide() ignores answered → AssertionError: Tuples differ: ('park: the end of Phase 0: Day 03 starts Phase 1', 'park') != ('park: a branch of this step exists: day-03/spec-x', 'park') (#36)
+- [x] C05.5 **new** — `runlog.failures` on a log of four sessions of one prefix (ended "opened:
       #5 ...", "park: ...", "park: ...", and one with no end) and one park of another prefix
       returns the two parked sessions of the prefix, in order; no log gives `([], None)`; a torn
       last line gives `(None, "the run log cannot be read at line <n>")`.
       Red today: `runlog` has no `failures`; `AttributeError`.
       Test: `FailuresTest.test_failures`, `FailuresTest.test_no_log`, `FailuresTest.test_torn_log`.
-- [ ] C05.6 **new** — `--once` from a copy of the driver with the fake `gh` and the fake `claude`,
+      Evidence: `FailuresTest.test_failures`, `FailuresTest.test_no_log`, `FailuresTest.test_torn_log` (#36).
+      seen red: python -m unittest tests.test_failures on main → FAILED (errors=6) (#36)
+      broken: failures() counts a session with no end → AssertionError: Tuples differ: (['s2', 's3', 's4'], None) != (['s2', 's3'], None) (#36)
+- [x] C05.6 **new** — `--once` from a copy of the driver with the fake `gh` and the fake `claude`,
       each case starting no session (the fake records only `--version` and `--help`) unless it
       says so: an open "STOP now" by `me` gives the STOP line on stderr, exit 2, and
       `<state>/halt` holding "STOP issue #`<n>`"; a "STOP" by `someone` is not read (the step
@@ -256,7 +273,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `OnceParksTest.test_wait_on_parked`, `OnceParksTest.test_phase_end_answered`,
       `OnceParksTest.test_failed_twice`, `OnceParksTest.test_issues_unreadable`,
       `OnceParksTest.test_stale_run_json_removed`.
-- [ ] C05.7 **new** — Each park `--once` prints (a dirty tree, the evidence run `failure`, an open
+      Evidence: `OnceParksTest.test_stop_at_start`, `OnceParksTest.test_stop_from_another_author`, `OnceParksTest.test_wait_on_parked`, `OnceParksTest.test_phase_end_answered`, `OnceParksTest.test_failed_twice`, `OnceParksTest.test_issues_unreadable`, `OnceParksTest.test_stale_run_json_removed` (#37).
+      seen red: python -m unittest tests.test_once_parks on main → AssertionError: Tuples differ: ('park: the session ended with no pull requ[76 chars]1, 1) != ('wait: parked #3, #5', '', 0, 0) (#37)
+      seen red: python -m unittest tests.test_once_parks.OnceParksTest.test_stop_from_another_author on main → AssertionError: Tuples differ: (False, 0, 'opened: #5 from `day-01/track-a-x`', 1) != (True, 0, 'opened: #5 from `day-01/track-a-x`', 1) (#37)
+      broken: step 9a ignores a closed park of the failed-twice title → AssertionError: Tuples differ: ('par[64 chars]00000000` and `22222222-0000-4000-8000-000000000000`', 1, 0, 0) != ('par[64 chars]00000000` and `22222222-0000-4000-8000-000000000000`', 1, 0, 1) (#37)
+      broken: step 6a does not wait on open parked issues → AssertionError: Tuples differ: ('park: the session ended with no pull requ[76 chars]1, 1) != ('wait: parked #3, #5', '', 0, 0) (#37)
+      broken: step 7 does not pass the closed parks to decide() → AssertionError: Tuples differ: ('park: the end of Phase 0: Day 03 starts Phase 1', 1, 0, 0) != ('park: the end of Phase 0: Day 03 starts Phase 1', 1, 0, 1) (#37)
+- [x] C05.7 **new** — Each park `--once` prints (a dirty tree, the evidence run `failure`, an open
       run-log line, and the session's five parks: no JSON result, an error, `PARK:`, no pull
       request and no `PARK:`, more than one pull request) leaves one open `parked` issue in the
       fake whose title is the printed line, whose body (in `bodies.jsonl`) holds the line and
@@ -272,7 +295,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `OnceParkIssuesTest.test_each_park_is_an_issue`,
       `OnceParkIssuesTest.test_open_park_waits`, `OnceParkIssuesTest.test_closed_park_parks_again`,
       `OnceParkIssuesTest.test_park_issue_fails`.
-- [ ] C05.8 **new** — With every check passing, `--once` starts one session: the fake records
+      Evidence: `OnceParkIssuesTest.test_each_park_is_an_issue`, `OnceParkIssuesTest.test_open_park_waits`, `OnceParkIssuesTest.test_closed_park_parks_again`, `OnceParkIssuesTest.test_park_issue_fails` (#38).
+      seen red: python -m unittest tests.test_once_park_issues on main → AssertionError: Tuples differ: ('par[41 chars] 1, [], 1, []) != ('par[41 chars] 1, ["cannot open the park's issue: gh label c[19 chars], []) (#38)
+      broken: the session's park opens no issue → AssertionError: Tuples differ: (True, [], ['park: the step has more than one pul[31 chars]', 1) != (True, [('park: the step has more than one pull r[108 chars]', 1) (#38)
+- [x] C05.8 **new** — With every check passing, `--once` starts one session: the fake records
       exactly the arguments of Day 4's step 11 after the program, with the uuid that the run
       log's `start` line holds, and on its stdin the two lines of the prompt, in UTF-8, the
       sentence's en dash as `\xe2\x80\x93`; on Windows the fake is a `.cmd`, as npm's `claude`
@@ -298,7 +324,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `OnceTest.test_session_command`, `OnceRunTest.test_run_json_during_session`, `OnceRunTest.test_run_issue_closed`,
       `OnceRunTest.test_run_issue_reused`, `OnceRunTest.test_park_on_run_issue`,
       `OnceRunTest.test_halt_during_step_reported`, `OnceRunTest.test_no_call_after_gh_fails`.
-- [ ] C05.9 **new** — `run-steps.py halt --state <state>` with a lock naming a live stand-in (as
+      Evidence: `OnceTest.test_session_command`, `OnceRunTest.test_run_json_during_session`, `OnceRunTest.test_run_issue_closed`, `OnceRunTest.test_run_issue_reused`, `OnceRunTest.test_park_on_run_issue`, `OnceRunTest.test_halt_during_step_reported`, `OnceRunTest.test_no_call_after_gh_fails` (#39, the `Test:` field as #40 left it).
+      seen red: python -m unittest tests.test_once_run tests.test_once.OnceTest.test_session_command on main → AssertionError: Tuples differ: (True, True, True, True, True, True, False, False) != (True, True, True, True, True, True, True, True) (#39)
+      broken: the run's issue left open after the session → AssertionError: Tuples differ: (1, True, [], 'open', [], 'opened: #5 from `day-01/track-a-x`', 0) != (1, True, [], 'closed', ['opened: #5 from `day-01/track-[43 chars]', 0) (#39)
+      broken: run.json kept after the session → AssertionError: Tuples differ: (['gh', 'issue', 'project', 'session', 'step'], 1, True, True, True, 0) != (['gh', 'issue', 'project', 'session', 'step'], 1, True, True, False, 0) (#39)
+- [x] C05.9 **new** — `run-steps.py halt --state <state>` with a lock naming a live stand-in (as
       Day 3's test) and a `run.json` naming the fake `gh`, a scratch project on `day-05/track-a-x`
       with one commit and one untracked file, issue 4, a step and a session: stdout is the Day 3
       kill line, then "halt: reported on #4", exit 0; the fake's issue 4 is closed, and its comment
@@ -310,7 +340,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: halt prints the kill line only, and the fake records no call.
       Test: `HaltReportTest.test_report`, `HaltReportTest.test_unreadable_run_json`,
       `HaltReportTest.test_report_fails`, `HaltReportTest.test_detached_clean`.
-- [ ] C05.10 **new** — `run-steps.py off --project <p> --gh <fake>`: with open "Driver run" issues
+      Evidence: `HaltReportTest.test_report`, `HaltReportTest.test_unreadable_run_json`, `HaltReportTest.test_report_fails`, `HaltReportTest.test_detached_clean` (#41).
+      seen red: python -m unittest tests.test_halt_report tests.test_off on main → AssertionError: Lists differ: [] != ['off: no run is going'] (#41)
+      broken: halt closes the run's issue with an empty comment → AssertionError: 'step: Start Day 5' not found in '' (#41)
+- [x] C05.10 **new** — `run-steps.py off --project <p> --gh <fake>`: with open "Driver run" issues
       #2 and #4 by `me`, both closed in the fake, each with an "off from the PC at " comment, and
       two lines "off: closed the run's issue #2; ..." and "... #4; ...", exit 0; with none, "off:
       no run is going", exit 0, and no `issue comment`; with `issue_code` 1, "cannot read the
@@ -319,7 +352,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: argparse refuses `off`: "invalid choice: 'off'", exit 2.
       Test: `OffTest.test_off_closes_runs`, `OffTest.test_off_no_run`, `OffTest.test_off_gh_fails`,
       `OffTest.test_off_no_config`.
-- [ ] C05.11 **new** — `--once --poll 0.5` on a fake session that starts a child and both sleep,
+      Evidence: `OffTest.test_off_closes_runs`, `OffTest.test_off_no_run`, `OffTest.test_off_gh_fails`, `OffTest.test_off_no_config` (#41).
+      seen red: python -m unittest tests.test_halt_report tests.test_off on main → AssertionError: Lists differ: [] != ['off: no run is going'] (#41)
+      broken: off closes every open issue, not only Driver run ones → AssertionError: Lists differ: ["off[102 chars]sue #3; the current step finishes, nothing new[85 chars]rts"] != ["off[102 chars]sue #4; the current step finishes, nothing new starts"] (#41)
+- [x] C05.11 **new** — `--once --poll 0.5` on a fake session that starts a child and both sleep,
       writing their pids: once the pids are written, the test adds an open "STOP" issue #9 by `me`
       to the fake. Within 10 s `<state>/halt` holds "STOP issue #9", the fake and its child are
       gone, stdout's first line is "halt: the STOP issue #9 is open; the session is stopped" and
@@ -336,7 +372,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       session runs to its end.
       Test: `OnceStopTest.test_stop_during_session`, `OnceStopTest.test_refuses_after_stop`,
       `OnceStopTest.test_stop_when_report_fails`, `OnceStopTest.test_failed_poll_skipped`.
-- [ ] C05.12 **hold** — Earlier days' tests pass with their files unedited, but for the fake `gh`
+      Evidence: `OnceStopTest.test_stop_during_session`, `OnceStopTest.test_refuses_after_stop`, `OnceStopTest.test_stop_when_report_fails`, `OnceStopTest.test_failed_poll_skipped` (#42); the POSIX branch (`killpg`, exit `-9`) ran first in #42's CI on `ubuntu-latest`, and the close ran it again on Linux in Docker.
+      seen red: python -m unittest tests.test_once_stop on main → AssertionError: 0 != 2 : the session did not start its child (#42)
+      seen red: python -m unittest tests.test_once_stop.OnceStopTest.test_failed_poll_skipped on main → AssertionError: 2 != 0 (#42)
+      broken: the poll's STOP match never matches → AssertionError: the driver did not end within 10 s (#42)
+- [x] C05.12 **hold** — Earlier days' tests pass with their files unedited, but for the fake `gh`
       in `tests/test_github.py` and `test_session_command`'s `gh` calls in `tests/test_once.py`:
       `git -c core.safecrlf=false diff --exit-code 93c94de -- tests/test_contract.py
       tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_kit_copy.py
@@ -348,6 +388,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       To break once, in Track A1: one listed test file edited → the diff exits 1. In Track C2:
       `--once` prints the park's issue number after its line → `OnceTest.test_refusals` fails on
       its `every_day_done`, `evidence_failed` and `open_run_log` cases.
+      Evidence: the commands above, on `main` at `1db9ce1` after #42: the diff printed nothing,
+      and `python -m unittest discover -s tests` ran 138 tests, "OK (skipped=4)"; each track PR
+      ran the same (#34 to #42).
+      broken: tests/test_decide.py edited (a test renamed) → # Every reason applies at once; each step below removes one, so the next reason shows. (#34)
+      broken: --once prints the park's issue number after its line → AssertionError: Tuples differ: (1, ['stdout'], False, 0) != (1, ['stdout'], True, 0) (#38)
 
 ## Verify
 ```bash
@@ -389,9 +434,51 @@ git -c core.safecrlf=false diff --exit-code 93c94de -- tests/test_contract.py te
 - **Defect** D05.2 — found: Track D · cause: spec · made: Day 05 · the Tracks table gave `report`
   to Track E, but C05.8's halt case (Track D) needs its "branch: " line, and E comes after D.
   `report` moves to Track D's row.
+- **Defect** D05.3 — found: seen red · cause: implementation · made: Day 05 · Track C1's first
+  push of `test_stop_from_another_author` checked only that the step starts, which `main`'s code,
+  reading no issue, also does; CI's "Track tests seen red" failed #37 ("it does not see the
+  change"). The second commit also checks that the first `gh` call is `issue list --author @me`.
+- **Defect** D05.4 — found: break on purpose · cause: process · made: Day 05 · Track A2's first
+  tree break replaced the Windows branch with `if False:`, so on Windows the test ran
+  `os.killpg`, which does not exist there, and stopped with an error, which proves nothing. It
+  was redone by dropping "/T" (#35).
+- **Defect** D05.5 — found: break on purpose · cause: environment · made: none · Git Bash's
+  path conversion rewrote "/F" and "/T" in `break.py`'s arguments, so its `--find` matched
+  nothing until it ran with `MSYS_NO_PATHCONV=1` (#35).
+- **Defect** D05.6 — found: review · cause: process · made: Day 05 · the implementer reported "4
+  changed files" for Track B; the diff had 3. Every number in #36 was recounted.
+- **Defect** D05.7 — found: break on purpose · cause: implementation · made: Day 05 · Track D's
+  first break of the run's issue reported `IndexError`: the test read `comments()[-1]` of an
+  empty list, an error and not a failure. The test was fixed before #39.
+- **Defect** D05.8 — found: break on purpose · cause: implementation · made: Day 05 · Track D's
+  `run.json` break printed a set, whose order changes between runs, and the dashed step, which
+  prints by the console's encoding: no replay could match it. The test now compares a list of
+  sorted keys and the step as a bool (#39).
+- **Defect** D05.9 — found: break on purpose · cause: process · made: Day 05 · same-as: D04.6 ·
+  Track E's first halt break, removing the `_report(state)` call, reported the stand-in's pid,
+  which changes on every run. It was replaced by the empty-comment break, run twice to the same
+  report (#41).
+- **Defect** D05.10 — found: close · cause: process · made: Day 05 · same-as: D04.7 · Track A2's
+  tree break ("/T" dropped from `taskkill`) bites on Windows only: on Linux the replay passed it
+  ("The check passed with the break in"), and its report held a duration (5.109 s) no run
+  prints again. It stays a sentence under C05.3, not in the manifest. The close replayed every
+  track break twice on Linux in Docker before writing the manifest: the other 14 matched.
+- **Defect** D05.11 — found: close · cause: environment · made: none · in a Docker container
+  with no init process, `OnceStopTest.test_stop_during_session` fails on `main` with no break
+  ("the fake still runs"): nothing reaps the killed fake, and `driver.lock`'s `posix_process`
+  asks `os.kill(pid, 0)`, which succeeds on a zombie. With `docker run --init` it passes, as on
+  CI's `ubuntu-latest`. Whether the driver should read a zombie as gone is the maintainer's call.
+- **Defect** D05.12 — found: close · cause: process · made: Day 05 · the Note below promised two
+  `gh` behaviours "checked before A2 merges"; #35 handed them to the maintainer and merged with
+  no record that they ran. They are still unverified at the close.
 - Unverified: `gh issue create` printing its URL last, and `gh issue close` exiting 0 on a closed
   issue (gh 2.93.0 holds "is already closed"). Both write: the auditor could not run them, and a
   scratch repository was refused by the session's permission classifier. Checked before A2 merges.
+  At the close, still not run (D05.12): #35's "Maintainer action before merge" gives the two
+  commands (H05.5).
+- The blind relabel (`scripts/relabel.py`, the defect-rater): stage 11 of 12 agree, cause 12 of
+  12, made 12 of 12. D05.2's stage, rater unclear: kept `found: Track D`, since #39 found it while
+  writing C05.8's halt case, before its merge; the text does not say so, which the rater noted.
 - **Hand-off** H05.1 → Day 6: `on` opens one run's issue and keeps it across steps; between steps
   the loop reads it, and a closed one (`off`, or the phone) ends the run; `STOP` is polled while
   the loop waits on checks and on the merge, not only during a session.
@@ -403,3 +490,6 @@ git -c core.safecrlf=false diff --exit-code 93c94de -- tests/test_contract.py te
 - **Hand-off** H05.4 → Day 7: the park on uncommitted changes or on an unfinished branch names, in
   its issue, the paths, the branch, the last commit and the session id (`plan.md`, "Recovery", the
   table's rows 5 and 6); Day 5's issue holds the line, which counts the paths.
+- **Hand-off** H05.5 → the maintainer: run #35's two `gh` commands on a scratch repository (the
+  URL last from `gh issue create`, exit 0 from a second `gh issue close`) before Day 6 relies on
+  `park` and `close` against a real project (D05.12). If either differs, that is a spec change.
