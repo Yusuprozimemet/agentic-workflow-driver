@@ -34,7 +34,7 @@ def _is_branch_of(step: Step, name: str) -> bool:
     return re.fullmatch(re.escape(step.prefix) + tail + r"(-.*)?", name) is not None
 
 
-def decide(drift: dict, facts: Facts) -> Action:
+def decide(drift: dict, facts: Facts, answered=frozenset()) -> Action:
     sentence = drift["now"]["next_step"]
     open_prs = drift["now"]["open_prs"]
     step = classify(sentence)
@@ -56,7 +56,8 @@ def decide(drift: dict, facts: Facts) -> Action:
     if step.kind == "park":
         return _park(step.reason)
     reason = phase_end(step, drift["order"], drift["days"])
-    if reason:
+    # A phase's end the maintainer answered (a closed `parked` issue of that title) goes on.
+    if reason and f"park: {reason}" not in answered:
         return _park(reason)
     if step.kind == "step":
         # Local branches first, then the remote's.
