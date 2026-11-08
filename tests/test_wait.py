@@ -65,7 +65,11 @@ class WaitTest(unittest.TestCase):
         self.folder = folder
         self.project = str(folder / "project")
         self.args = SimpleNamespace(
-            state=str(folder / "state"), gh=gh, poll=0.01, wait_minutes=wait_minutes
+            state=str(folder / "state"),
+            gh=gh,
+            poll=0.01,
+            wait_minutes=wait_minutes,
+            session_minutes=120,
         )
         self.record = {"issue": 7, "step": STEP, "session": SESSION}
         self.command = [

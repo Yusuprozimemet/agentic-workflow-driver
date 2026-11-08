@@ -70,6 +70,8 @@ def resume(args, project, number, record, command, failed, used):
     if done is None:
         # A STOP issue stopped the session; the report and the halt file are already written.
         return "halt: the resumed session was stopped", 1
+    if done is once.PAST:
+        return once.past_bound(args, session)
     stdout, returncode = done
     out = stdout.decode("utf-8", errors="replace")
     line, code = once.outcome(out, returncode, session, project, args.gh, record["step"])
