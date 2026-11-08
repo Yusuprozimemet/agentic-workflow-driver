@@ -1857,6 +1857,11 @@ function howExcerpt(x, caption) {
   const body = howHas(x) ? `<pre>${esc(x.text)}</pre>` : howMissing(x);
   return `<figure class="how-ex"><figcaption>${esc(caption)}</figcaption>${body}</figure>`;
 }
+function howRecheck(x, id) {
+  if (!howHas(x)) return howExcerpt(x, "The latest re-check");
+  if (!x.text.checks.length) return `<figure class="how-ex"><figcaption>${esc(id)}</figcaption><pre>not re-checked yet</pre></figure>`;
+  return `<figure class="how-ex"><figcaption>${esc(id)} at its latest re-check${x.text.pr ? `, the merge of PR #${x.text.pr}` : ""}</figcaption><pre>${x.text.checks.map(c => `${esc(c.check)} → <span class="put">${esc(c.state)}</span>`).join("\n")}</pre></figure>`;
+}
 const howLink = (text, step) => `<a href="#how-step-${step}" data-how="${step}">${text}</a>`;
 const HOW_BLOB = "https://github.com/Yusuprozimemet/agentic-workflow-driver/blob/main/";
 const HOW_PLAN_GLOSS = {
@@ -1901,8 +1906,7 @@ function drawHow() {
   const bugs = howHas(X.bugs) ? X.bugs.text.map((b, i) => `<figure class="how-ex"><figcaption>Planted bug ${i + 1}, in ${esc(b.file)}: ${esc(b.what)}</figcaption><pre><span class="gone">${esc(b.find)}</span>\n<span class="put">${esc(b.replace)}</span>\n<span class="out">The test reported → ${esc(b.reported)}</span></pre></figure>`).join("")
     : howExcerpt(X.bugs, "The planted bugs");
   const tick = howHas(X.tick) && howHas(X.evidence) ? { source: X.tick.source, text: `${X.tick.text}\n      Evidence: ${X.evidence.text}` } : howHas(X.tick) ? X.evidence : X.tick;
-  const recheck = howHas(X.recheck) ? `<figure class="how-ex"><figcaption>${id} at its latest re-check${X.recheck.text.pr ? `, the merge of PR #${X.recheck.text.pr}` : ""}</figcaption><pre>${X.recheck.text.checks.map(c => `${esc(c.check)} → <span class="put">${esc(c.state)}</span>`).join("\n")}</pre></figure>`
-    : howExcerpt(X.recheck, "The latest re-check");
+  const recheck = howRecheck(X.recheck, id);
   const groups = Object.keys(PROMISE_GROUPS).map(g => [g, inGroup(promises, g).length]).filter(([, n]) => n);
   const bad = inGroup(promises, "broken").length + inGroup(promises, "repair").length;
   const tally = !groups.length ? "<p>No re-check of the promises is on record.</p>"

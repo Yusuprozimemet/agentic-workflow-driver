@@ -1855,10 +1855,10 @@ HOW_TEMPLATE = "specs/_template.md"
 HOW_REPLAY = "docs/dashboard/replay-history.json"
 HOW_PLAN = "plan.md"
 HOW_PLAN_PARTS = ("Short answer", "Who does what", "When the driver parks", "Phases", "Stopping points")
-# A promise is followed only if every one of these is on record: its track, PR, seen-red line,
-# planted bugs and re-check among them.
+# A promise is followed only if every one of these is on record: its track, PR, seen-red line and
+# planted bugs among them. Its re-check is not: the newest day has none until the replay reaches it.
 HOW_NEEDED = ("crumbs", "day_goal", "day_out_of_scope", "day_tracks", "day_criteria", "claim", "red_today", "test",
-              "evidence", "seen_red", "tick", "bugs", "recheck", "plan_phase")
+              "evidence", "seen_red", "tick", "bugs", "plan_phase")
 HOW_NO_PROMISE = "every finished promise is missing a step of its record"
 
 
@@ -1933,6 +1933,8 @@ def how_excerpts_of(read, promise):
 
     def recheck():
         rows = [r for r in json.loads(files[HOW_REPLAY])["rows"] if r["criterion"] == cid]
+        if promise and not rows:
+            return dict(pr=None, checks=[])  # read, and none on record: not the same as a file gone
         newest = max(r["n"] for r in rows)
         rows = [r for r in rows if r["n"] == newest]
         return dict(pr=rows[0].get("pr"), checks=[dict(check=r["check"], state=replay_row_state(r)) for r in rows])
@@ -1972,7 +1974,7 @@ def how_excerpts_of(read, promise):
             value = get()
         except (ValueError, KeyError, TypeError, IndexError, AttributeError, StopIteration):
             value = None
-        why = (HOW_NO_PROMISE if not promise and key in HOW_NEEDED else
+        why = (HOW_NO_PROMISE if not promise and key in HOW_NEEDED + ("recheck",) else
                "the file is missing or empty" if not files[source] else "the passage is no longer there")
         out[key] = dict(source=source, text=value) if value else dict(source=source, missing=why)
     return out
