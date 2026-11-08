@@ -58,7 +58,8 @@ if probe:
     sys.exit(0)
 if spec["do"]:
     exec(spec["do"])
-session = args[args.index("--session-id") + 1] if "--session-id" in args else None
+flag = "--resume" if "--resume" in args else "--session-id"
+session = args[args.index(flag) + 1] if flag in args else None
 print(json.dumps({**spec["result"], "session_id": session}))
 """
 
