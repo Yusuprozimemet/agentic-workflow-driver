@@ -1613,6 +1613,117 @@ function drawPromises() {
     + `<span><i class="promise pending"></i><b>Not counted</b> not finished yet, or replaced by a later promise</span>`;
 }
 
+/* ---------- how this works: one promise, followed through its steps ---------- */
+const howHas = x => Boolean(x && x.text && !x.missing);
+function howMissing(x) {
+  return `<span class="how-missing">Missing from this build: ${esc((x && x.source) || "this excerpt")} (${esc((x && x.missing) || "not in this data")})</span>`;
+}
+function howExcerpt(x, caption) {
+  const body = howHas(x) ? `<pre>${esc(x.text)}</pre>` : howMissing(x);
+  return `<figure class="how-ex"><figcaption>${esc(caption)}</figcaption>${body}</figure>`;
+}
+const howLink = (text, step) => `<a href="#how-step-${step}" data-how="${step}">${text}</a>`;
+const HOW_BLOB = "https://github.com/Yusuprozimemet/agentic-workflow-driver/blob/main/";
+const HOW_PLAN_GLOSS = {
+  "Short answer": "Can the human leave the loop, and what must stay with them.",
+  "Who does what": "The maintainer, the driver and the sessions.",
+  "When the driver parks": "The reasons the driver stops and waits for a person.",
+  Phases: "Groups of days, each with one goal.",
+  "Stopping points": "Where work halts until the maintainer lifts the stop.",
+};
+const HOW_SPEC_GLOSS = {
+  Goal: "What is true at the end of the day that was not at the start.",
+  "In scope": "What this day builds.",
+  "Out of scope": "What it leaves, and which day owns it.",
+  Tracks: "The work, split into pull requests that can each be reviewed alone.",
+  "Acceptance criteria": "The day's promises: step 3.",
+  Verify: "Commands anyone can run from the repository alone.",
+  Notes: "What went wrong and what was handed on, written at the close.",
+};
+const HOW_CAST = [
+  ["The maintainer", "A person. Owns the plan and, today, merges every pull request.", "bug"],
+  ["Main AI session", "Usually writes the specs and briefs, reviews the code, plants the bugs and writes the pull requests.", "bug"],
+  ["Implementer", "A smaller AI model. Usually writes code and tests from a brief, and never commits.", "red"],
+  ["Plan-auditor", "At the start and end of a phase: is the plan still right for the code?", "goal"],
+  ["Spec-auditor", "Before every day: is each claim true, and can each check fail?", "spec"],
+  ["Defect-rater", "At every close: labels the day's mistakes without seeing the original labels.", "close"],
+  ["Three end-of-phase auditors", "Security, agentic engineering and architecture. Run once, after the last phase in the plan.", "goal"],
+];
+function drawHow() {
+  const X = DATA.how_this_works || {}, { promises, inGroup } = promiseReading(), id = "C03.3";
+  const value = x => howHas(x) ? esc(x.text) : howMissing(x);
+  const src = (path, label) => `<a class="how-src" href="${HOW_BLOB}${path}" target="_blank" rel="noopener">Read ${esc(label || path)}</a>`;
+  const anat = rows => `<dl class="how-anat">${rows.map(([k, g, v]) => `<div><dt>${esc(k)}</dt><dd><span>${esc(g)}</span>${v ? `<span class="mono">${v}</span>` : ""}</dd></div>`).join("")}</dl>`;
+  const promise = criteria.find(c => c.id === id);
+  document.getElementById("how-route").innerHTML = `Below is the route one real promise took: <strong>${promise ? esc(promise.plain || promise.claim) : howMissing({ source: id })}</strong> Select a step to see what happened there.`;
+  document.getElementById("how-path").innerHTML = howHas(X.crumbs) ? X.crumbs.text.map(c => `<b>${esc(c)}</b>`).join("›") : howMissing(X.crumbs);
+
+  const planParts = howHas(X.plan_parts) ? anat(X.plan_parts.text.map(p => [p, HOW_PLAN_GLOSS[p] || ""])) : howMissing(X.plan_parts);
+  const dayValues = { Goal: X.day_goal, "Out of scope": X.day_out_of_scope, Tracks: X.day_tracks, "Acceptance criteria": X.day_criteria };
+  const specParts = howHas(X.template_parts)
+    ? anat(X.template_parts.text.map(p => [p, HOW_SPEC_GLOSS[p] || "", dayValues[p] ? value(dayValues[p]) : ""])) : howMissing(X.template_parts);
+  const bugs = howHas(X.bugs) ? X.bugs.text.map((b, i) => `<figure class="how-ex"><figcaption>Planted bug ${i + 1}, in ${esc(b.file)}: ${esc(b.what)}</figcaption><pre><span class="gone">${esc(b.find)}</span>\n<span class="put">${esc(b.replace)}</span>\n<span class="out">The test reported → ${esc(b.reported)}</span></pre></figure>`).join("")
+    : howExcerpt(X.bugs, "The planted bugs");
+  const tick = howHas(X.tick) && howHas(X.evidence) ? { source: X.tick.source, text: `${X.tick.text}\n      Evidence: ${X.evidence.text}` } : howHas(X.tick) ? X.evidence : X.tick;
+  const recheck = howHas(X.recheck) ? `<figure class="how-ex"><figcaption>${id} at its latest re-check${X.recheck.text.pr ? `, the merge of PR #${X.recheck.text.pr}` : ""}</figcaption><pre>${X.recheck.text.checks.map(c => `${esc(c.check)} → <span class="put">${esc(c.state)}</span>`).join("\n")}</pre></figure>`
+    : howExcerpt(X.recheck, "The latest re-check");
+  const groups = Object.keys(PROMISE_GROUPS).map(g => [g, inGroup(promises, g).length]).filter(([, n]) => n);
+  const bad = inGroup(promises, "broken").length + inGroup(promises, "repair").length;
+  const tally = !groups.length ? "<p>No re-check of the promises is on record.</p>"
+    : `<p>All ${plural(promises.length, "promise", "promises")} at their latest re-check:</p>`
+      + `<div class="how-bar" role="img" aria-label="${groups.map(([g, n]) => `${n} ${PROMISE_GROUPS[g].word}`).join(", ")}">${groups.map(([g, n]) => `<i class="promise ${g}" style="--n:${n}"></i>`).join("")}</div>`
+      + `<div class="how-barkey">${groups.map(([g, n]) => `<span>${promiseTile(g)}<div><b>${n}</b> ${esc(PROMISE_GROUPS[g].means)}</div></span>`).join("")}</div>`
+      + `<p>${bad ? `${plural(bad, "promise needs", "promises need")} attention.` : "None is broken."} This check is run by hand, so it can lag behind the newest change.</p>`;
+
+  const STEPS = [
+    { id: "goal", kind: "doc", name: "The goal", line: "What we want built, in phases", gate: "<b>plan-auditor</b>, at a phase's start and end, asks: do the days still add up to the goal?",
+      body: `<p>One document says what the whole project is for, what stays with a person, and the order of the work. It rarely changes. There is only one plan, so it has no template. These are some of the sections it contains.</p>${planParts}`
+        + howExcerpt(X.plan_halt, "Why our promise exists: plan.md, what a halt does") + howExcerpt(X.plan_phase, "Where it was scheduled: plan.md, Phase 1") + src("plan.md") },
+    { id: "spec", kind: "doc", name: "A day's spec", line: "One day's work, written down first", gate: "<b>spec-auditor</b> runs every check on the code as it is and tries to prove each claim wrong",
+      body: `<p>Each day gets one file, filled in from the same template. The template forces the awkward questions early: what is left out, and who picks it up.</p>${specParts}` + src("specs/_template.md", "the template") + src("specs/day-03-the-stop.md", "Day 3's spec") },
+    { id: "promise", kind: "doc", name: "A promise", line: "One sentence someone else can check", gate: "",
+      body: `<p>A promise is what the specs call an <em>acceptance criterion</em>. It must be checkable by someone who did not write the code. It is tagged <strong>new</strong> if the behaviour does not exist yet, or <strong>hold</strong> if it is true today and must stay true.</p>`
+        + howExcerpt(X.form, "The blank form, from the template") + `<p>Filled in, for this promise:</p>`
+        + anat([[id, "The promise, as the spec words it.", value(X.claim)], ["Red today", "How it must fail before the work.", value(X.red_today)], ["Test", "The named tests that decide it.", value(X.test)]])
+        + `<p>The spec stays the source of truth. The bold sentence above is only a rewording.</p>` },
+    { id: "red", kind: "try", name: "A test that fails first", line: "Proof the behaviour isn't there yet", gate: "<b>implementer</b>, a smaller AI model, usually writes the code and tests from a brief. It never commits",
+      body: `<p>The tests are written to the promise and run against the code as it stands. They have to fail, and fail the way the spec predicted. A test that passes on code that lacks the feature is testing nothing.</p>`
+        + howExcerpt(X.seen_red, `What was recorded for ${id}`) + `<p>Compare it with the “Red today” line in step 3.</p>` },
+    { id: "bug", kind: "try", name: "The code, then a planted bug", line: "Does the test actually notice?", gate: "<b>The maintainer</b> reviews and merges. Today nothing merges without a person",
+      body: `<p>Once the tests pass, the finished code is sabotaged on purpose and they are run again. If they still pass, they would not have caught a real failure. The sabotage is undone and never merges.</p>${bugs}`
+        + `<p>Each last line is what the test reported with the bug in place: the test failing is the good result. Automated checks also run on the pull request: style, every test, and a limit of 400 changed lines so it stays reviewable.</p>` + src("specs/breaks/day-03.json", "Day 3's planted bugs") },
+    { id: "close", kind: "after", name: "The day closes", line: "Each tick cites its evidence", gate: "<b>defect-rater</b> labels the day's mistakes blind, to see if a second reader agrees",
+      body: `<p>A last pull request ticks each promise and names what proves it. A box with no evidence stays unticked, with the reason written under it.</p>${howExcerpt(tick, `The tick on ${id}`)}`
+        + `<ul><li>Mistakes go in the Notes, including the AI's own.</li><li>Automation replays the recorded evidence against the closing commit. If that fails, the next day does not start.</li></ul>` + src("docs/lab-notebook.md", "the lab notebook") },
+    { id: "recheck", kind: "after", name: "The re-check", line: "Are the promises still true later?", gate: null,
+      body: `<p>Code keeps changing after a day closes. So finished promises are tested again on later merged code, and the planted bugs are put back to see if the tests still notice.</p>${recheck}${tally}` + src("docs/dashboard/replay-history.json", "the re-check results") },
+  ];
+  const spine = document.getElementById("how-spine"), detail = document.getElementById("how-detail"), flow = document.getElementById("how-flow");
+  const narrow = matchMedia("(max-width: 760px)"), stepOf = s => STEPS.find(x => x.id === s);
+  spine.innerHTML = STEPS.map((s, i) => `<button type="button" class="how-step how-${s.kind}" id="how-step-${s.id}" data-how="${s.id}" aria-expanded="false" aria-controls="how-detail"><span class="how-dot">${i + 1}</span><span><strong>${s.name}</strong><small>${s.line}</small></span></button>`
+    + (s.gate === null ? "" : `<div class="how-gate">${s.gate}</div>`)).join("");
+  document.getElementById("how-cast").innerHTML = HOW_CAST.map(([who, what, s]) => `<button type="button" class="how-row" data-how="${s}"><strong>${who}</strong><span>${what}</span><em>Step ${STEPS.indexOf(stepOf(s)) + 1}: ${stepOf(s).name}</em></button>`).join("");
+  let current = "promise";
+  const place = () => {
+    if (narrow.matches) document.getElementById("how-step-" + current).after(detail);
+    else if (detail.parentElement !== flow) flow.append(detail);
+  };
+  const show = (s, scroll) => {
+    current = s;
+    spine.querySelectorAll(".how-step").forEach(b => b.setAttribute("aria-expanded", b.dataset.how === s));
+    detail.innerHTML = `<div class="how-kicker">Step ${STEPS.indexOf(stepOf(s)) + 1} of ${STEPS.length}</div><h3>${stepOf(s).name}</h3>${stepOf(s).body}`;
+    place();
+    if (scroll) document.getElementById("how-step-" + s).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  [[spine, false], [document.getElementById("how-cast"), true], [document.getElementById("summary-known"), true]].forEach(([box, scroll]) => box.addEventListener("click", e => {
+    const b = e.target.closest("[data-how]");
+    if (b) { e.preventDefault(); show(b.dataset.how, scroll); }
+  }));
+  narrow.addEventListener("change", place);
+  const wanted = location.hash.startsWith("#how-step-") && location.hash.slice(10);
+  show(stepOf(wanted) ? wanted : current, Boolean(stepOf(wanted)));
+}
+
 /* ---------- the summary ---------- */
 function drawSummary() {
   const reading = promiseReading(), { rp, promises, inGroup, newest } = reading, now = DATA.now, days = DATA.days;
@@ -1647,12 +1758,12 @@ function drawSummary() {
   const list = items => `<ul>${items.filter(Boolean).map(t => `<li>${t}</li>`).join("")}</ul>`;
   const kept = count("proven") + count("unproven");
   const yes = known ? [
-    `${kept} of ${plural(promises.length, "finished promise", "finished promises")} kept at the last re-check`,
-    `${plural(count("proven"), "promise", "promises")} caught a planted bug`,
+    howLink(`${kept} of ${plural(promises.length, "finished promise", "finished promises")} kept at the last re-check`, "recheck"),
+    howLink(`${plural(count("proven"), "promise", "promises")} caught a planted bug`, "bug"),
   ] : [];
-  if (checked.length) yes.push(`${plural(tally("passed"), "check", "checks")} of the recorded evidence replayed, each at its day's close, ${failed} failed`);
+  if (checked.length) yes.push(howLink(`${plural(tally("passed"), "check", "checks")} of the recorded evidence replayed, each at its day's close, ${failed} failed`, "close"));
   const I = DATA.test_inventory;
-  if (I && I.total) yes.push(`${plural(I.total, "test", "tests")} in the project`);
+  if (I && I.total) yes.push(howLink(`${plural(I.total, "test", "tests")} in the project`, "red"));
   const live = I && (I.groups.find(g => g.key === "live") || {}).tests;
   const no = [
     !known && "Whether the promises still hold: no re-check is on record",
@@ -1699,7 +1810,7 @@ function drawTested() {
 }
 panel("attention-list", drawCriteria); panel("promise-days", drawPromises); panel("test-groups", drawTested);
 
-panel("summary-cards", drawSummary); panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
+panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);

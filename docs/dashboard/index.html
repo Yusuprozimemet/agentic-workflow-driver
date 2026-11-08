@@ -21,6 +21,7 @@
     <summary>Sections</summary>
     <ol>
       <li><a href="#summary">Summary</a></li>
+      <li><a href="#how-this-works">How this works</a></li>
       <li><a href="#promises">The promises</a></li>
       <li><a href="#tested">What is tested</a></li>
       <li><a href="#measurements">Measurements</a></li>
@@ -32,9 +33,37 @@
     <div class="panel-head">
       <h2>Summary</h2>
       <p class="plain-what">This project builds a script, <code>run-steps.py</code>, that runs a software project's AI coding work one step at a time, each step in a fresh Claude session. The aim is that a person stops approving every pull request and instead owns the plan, the safety checks and anything the script stops on.</p>
+      <p class="plain-what">Running this work by hand means a person typing “start Day N”, pressing merge, typing “merged” and opening a new session, over and over. The script is being built to do that repetition. The current phase builds the part that starts each step, and the maintainer still merges. Writing the plan and owning the checks stay with a person at every level.</p>
     </div>
     <div class="summary-cards" id="summary-cards"><p class="load-error">Loading the latest data…</p></div>
     <div class="known-grid" id="summary-known"></div>
+  </section>
+
+  <section class="panel" id="how-this-works">
+    <div class="panel-head">
+      <h2>How this works: follow one promise</h2>
+      <p>Every day of work here is written down before it is built. The written version makes promises: single sentences saying what the software must do. Each promise then has to survive a series of checks, some by AI reviewers with no stake in it and some by a person.</p>
+      <p id="how-route"></p>
+      <p class="limit">The names on the arrows describe the usual process for any day. They are not a record of who did what on this one pull request.</p>
+    </div>
+    <div class="how-path" id="how-path"></div>
+    <div class="how-legend"><span class="how-doc"><i></i>Written down first</span><span class="how-try"><i></i>Tried on the code</span><span class="how-after"><i></i>Checked afterwards</span></div>
+    <div class="how-flow" id="how-flow">
+      <div class="how-spine" id="how-spine"></div>
+      <div class="how-detail" id="how-detail" aria-live="polite"></div>
+    </div>
+    <h3>When something is wrong, the work goes back</h3>
+    <div class="how-two">
+      <div><b>An auditor finds the spec is wrong</b><p>The spec is corrected in its own pull request before any code is written.</p></div>
+      <div><b>A test never failed</b><p>A test that has only ever passed proves nothing, so it has to be seen failing before its pull request is opened.</p></div>
+      <div><b>A later day changes the behaviour</b><p>Its spec names the old promise on a <code>Replaces:</code> line, and the old one stops counting.</p></div>
+      <div><b>A step needs a person</b><p>The driver parks: it opens an issue saying why and stops until the maintainer closes that issue. It does not guess.</p></div>
+    </div>
+    <details class="technical">
+      <summary>Who does what</summary>
+      <p class="limit">Each reviewer is a separate AI agent that starts with no memory of the work, so the session that built something is never the only one checking it. Select one to see where it acts.</p>
+      <div class="how-rows" id="how-cast"></div>
+    </details>
   </section>
 
   <section class="panel" id="promises">

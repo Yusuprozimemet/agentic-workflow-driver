@@ -360,3 +360,60 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
   .measure > summary { grid-template-columns: minmax(0, 1fr); }
   .promise-items, .facts, .tech { margin-left: 0; padding-left: 0; }
 }
+
+/* ---------- how this works ---------- */
+.how-path { display: flex; flex-wrap: wrap; gap: 4px 8px; font: 500 12.5px/1.5 var(--mono); color: var(--ink-2); align-items: center; }
+.how-path b { color: var(--ink); font-weight: 500; background: var(--surface-2); padding: 1px 7px; border-radius: 4px; }
+.how-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); }
+.how-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.how-legend i { width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid var(--c); }
+.how-doc { --c: var(--spec); } .how-try { --c: var(--code); } .how-after { --c: var(--close); }
+.how-flow { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.how-spine { display: grid; min-width: 0; }
+.how-step { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 8px 10px 8px 6px; border-radius: 8px; cursor: pointer; width: 100%; }
+.how-step:hover, .how-step[aria-expanded="true"] { background: var(--surface-2); }
+.how-step:focus-visible, .how-row:focus-visible { outline: 2px solid var(--spec); outline-offset: 1px; }
+.how-dot { width: 32px; height: 32px; border-radius: 50%; border: 2.5px solid var(--c); display: grid; place-items: center; font: 500 13px/1 var(--mono); background: var(--surface); }
+.how-step[aria-expanded="true"] .how-dot { background: var(--c); color: #fff; }
+.how-step strong { display: block; font-weight: 600; line-height: 1.3; padding-top: 1px; }
+.how-step small { display: block; font-size: 13px; line-height: 1.4; color: var(--ink-2); margin-top: 2px; }
+.how-gate { margin-left: 21px; border-left: 2px solid var(--axis); padding: 5px 0 5px 25px; font-size: 12.5px; line-height: 1.4; color: var(--muted); min-height: 16px; }
+.how-gate b { color: var(--ink); font-weight: 600; }
+.how-detail { background: var(--surface-2); border-radius: 10px; padding: clamp(16px, 2.4vw, 24px); display: grid; gap: 14px; min-width: 0; position: sticky; top: 12px; }
+.how-kicker { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
+.how-detail h3 { margin: -8px 0 0; font-size: 19px; }
+.how-detail ul { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+.how-ex { margin: 0; display: grid; gap: 4px; min-width: 0; }
+.how-ex figcaption { font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.how-ex pre { margin: 0; padding: 10px 12px; font: 400 12.5px/1.55 var(--mono); background: var(--surface); border: 1px solid var(--grid); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.how-ex .out { color: var(--ink-2); }
+.how-ex .gone { text-decoration: line-through; color: var(--ink-2); }
+.how-ex .put { color: var(--code); font-weight: 500; }
+.how-missing { display: block; padding: 8px 10px; border: 2px dashed var(--r-weak); border-radius: 6px; font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
+.how-anat { margin: 0; display: grid; border-top: 1px solid var(--axis); }
+.how-anat > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 2px 12px; padding: 7px 0; border-bottom: 1px solid var(--axis); }
+.how-anat dt { font-weight: 600; font-size: 13.5px; }
+.how-anat dd { margin: 0; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 3px; min-width: 0; }
+.how-anat .mono { font: 400 12.5px/1.55 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.how-src { font-size: 13.5px; color: var(--spec); font-weight: 500; overflow-wrap: anywhere; }
+.how-bar { display: flex; height: 16px; border-radius: 4px; overflow: hidden; gap: 2px; }
+.how-bar i.promise { flex: var(--n) 1 0; width: auto; height: 16px; border-radius: 0; }
+.how-barkey { display: grid; gap: 3px; font-size: 13.5px; color: var(--ink-2); }
+.how-barkey span { display: flex; gap: 8px; align-items: baseline; }
+.how-barkey b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.how-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 36px; }
+.how-two > div { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.how-two b { font-weight: 600; }
+.how-two p { font-size: 14px; color: var(--ink-2); }
+.how-rows { display: grid; border-top: 1px solid var(--grid); margin-top: 8px; }
+.how-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 20px; padding: 11px 6px; border-bottom: 1px solid var(--grid); cursor: pointer; width: 100%; align-items: baseline; }
+.how-row:hover { background: var(--surface-2); }
+.how-row strong { font-weight: 600; }
+.how-row span { color: var(--ink-2); font-size: 14px; }
+.how-row em { font-style: normal; font-size: 13px; color: var(--spec); font-weight: 500; white-space: nowrap; }
+@media (max-width: 760px) {
+  .how-flow, .how-two, .how-row, .how-anat > div { grid-template-columns: minmax(0, 1fr); }
+  .how-detail { position: static; margin: 6px 0 2px; }
+  .how-row em { white-space: normal; }
+}
+@media (prefers-reduced-motion: no-preference) { .how-step, .how-row { transition: background .12s; } }
