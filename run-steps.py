@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from driver import once, switches
+from driver import loop, once, switches
 from driver.config import load as load_config
 from driver.decide import Facts, decide
 from driver.preflight import cli_lines, git, kit_lines
@@ -62,8 +62,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["preflight", "halt", "clear", "off"],
-        help="check the kit and the Claude Code CLI, or halt, clear or turn off the driver",
+        choices=["preflight", "halt", "clear", "off", "on"],
+        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, or run on",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
@@ -95,7 +95,13 @@ def main(argv=None) -> int:
         "--poll",
         type=float,
         default=30,
-        help="seconds between --once's reads of the project's issues during a session",
+        help="seconds between reads of the project's issues during a session or a wait",
+    )
+    parser.add_argument(
+        "--wait-minutes",
+        type=float,
+        default=30,
+        help="minutes on waits that have a bound: no checks, the evidence run",
     )
     args = parser.parse_args(argv)
     if args.once:
@@ -103,6 +109,11 @@ def main(argv=None) -> int:
             print("run-steps.py: --once goes alone", file=sys.stderr)
             return 2
         return once.run(args, Path(__file__).resolve().parent, read_facts)
+    if args.command == "on":
+        if args.dry_run:
+            print("run-steps.py: on goes alone", file=sys.stderr)
+            return 2
+        return loop.run(args, Path(__file__).resolve().parent, read_facts)
     # halt and clear touch only the state folder, so they run with no project and no config.
     if args.command == "halt":
         return switches.halt(args.state)
