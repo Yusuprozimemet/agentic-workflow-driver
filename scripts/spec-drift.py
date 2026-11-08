@@ -347,10 +347,31 @@ RELABEL = re.compile(r"relabel\.py compare`\)?:?\s*([^`]{0,120})")
 RELABEL_FIELD = re.compile(r"\b(stage|cause|made)\s+(\d+)\s+of\s+(\d+)")
 
 
-def relabel(text):
-    """How often the blind defect-rater agreed with the tags the close gave, as the spec's Notes
-    quote `relabel.py compare` ("stage 3 of 4, cause 3 of 4, made 4 of 4"), or None where the
-    Notes tell it in prose: those days are not counted, not counted as agreeing."""
+# The count lines `relabel.py compare` prints and a closing PR pastes, one line per axis.
+RELABEL_LINE = re.compile(r"^[ \t]*(stage|cause|made): (\d+) of (\d+) agree\b", re.M)
+
+
+def final_run(body):
+    """The last `relabel.py compare` run a closing PR's body pastes (a day may rerun the rater): its
+    counts, None where it pastes none, False where the lines are not whole runs or their last run
+    cannot be right. False is never guessed into a count."""
+    lines = RELABEL_LINE.findall(body or "")
+    if not lines:
+        return None
+    if [f for f, _, _ in lines] != ["stage", "cause", "made"] * (len(lines) // 3):
+        return False
+    last = {f: [int(a), int(n)] for f, a, n in lines[-3:]}
+    return last if all(0 < n and a <= n for a, n in last.values()) else False
+
+
+def relabel(text, bodies=()):
+    """How often the blind defect-rater agreed with the tags the close gave: the final run the day's
+    closing PR bodies paste; where none pastes one, what the spec's Notes quote from `relabel.py
+    compare` ("stage 3 of 4, cause 3 of 4, made 4 of 4"). None where a body's lines are unclear, two
+    closing PRs differ, or the day tells it in prose: not counted, and not counted as agreeing."""
+    runs = [r for r in map(final_run, bodies) if r is not None]
+    if runs:
+        return runs[0] if runs[0] and all(r == runs[0] for r in runs) else None
     for m in RELABEL.finditer(text):
         found = {f: [int(a), int(n)] for f, a, n in RELABEL_FIELD.findall(m.group(1))}
         if found:
@@ -448,7 +469,7 @@ def verification(prs, runs):
         if p.get("state") == "MERGED":
             pushes, failed, failed_in = ci.get(p["headRefName"], (0, 0, []))
             k = kind(p["title"], day_branch(p))
-            out.append(dict(number=p["number"], day=day_of(day_branch(p)), kind=k, step=step_kind(k, p["headRefName"]),
+            out.append(dict(number=p["number"], url=p.get("url"), day=day_of(day_branch(p)), kind=k, step=step_kind(k, p["headRefName"]),
                             hours=hours_open(p), breaks=break_state(p.get("body"), p["number"]), pushes=pushes,
                             failed=failed, failed_in=failed_in))
     return out
@@ -1158,7 +1179,8 @@ def roadmap(snaps, prs, blobs):
                          worked=[worked[0], worked[-1]] if worked else None,
                          evidence_format=in_evidence_format(ev),
                          break_format=any(p["number"] >= BREAK_LINE_FROM_PR for p in mine),
-                         evidence=ev, removal_checks=removal_checks(text), relabel=relabel(text),
+                         evidence=ev, removal_checks=removal_checks(text),
+                         relabel=relabel(text, [p.get("body") for p in mine if kind(p["title"], day_branch(p)) == "close"]),
                          defects=defect_lines(text, d)))
         days[-1]["broken_at_close"] = broken_at_close(days[-1])
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])

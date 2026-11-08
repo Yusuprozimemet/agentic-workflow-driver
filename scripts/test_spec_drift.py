@@ -1838,7 +1838,7 @@ class PageTest(unittest.TestCase):
         self.assertIsNone(error)
         relabel = panels.get("relabel", "")
         self.assertNotIn("All counted", relabel)
-        self.assertIn("No finished day yet: a day is counted once its Notes quote", relabel)
+        self.assertIn("No finished day yet: a day is counted once its closing PR pastes", relabel)
 
     def test_the_relabel_table_counts_each_days_repeated_defects(self):
         days = [dict(a_day(n), status="done", phase=0, title="t", prs=[]) for n in (21, 28)]

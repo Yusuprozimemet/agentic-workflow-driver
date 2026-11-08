@@ -346,15 +346,23 @@
   </section>
   </details>
 
-  <details class="measure">
+  <details class="measure" open>
     <summary><span class="measure-name">Does a second reader agree with the defect tags?</span><span class="measure-what">Whether an independent reader labels the defects the same way.</span></summary>
   <section class="panel" id="second-reader">
     <div class="panel-head">
       <h2>Does a second reader agree with the defect tags?</h2>
-      <p>At each close, <code>scripts/relabel.py</code> strips the <code>found:</code>, <code>cause:</code> and <code>made:</code> tags from the day's Defect lines, and the defect-rater agent, which wrote none of the day's work, tags the text again. This is how many of the day's tags it gave the same way, as the spec's Notes quote <code>relabel.py compare</code>. Where they agree the tags measure the defects; where they do not, the tags may only measure what the session that wrote them believed. A day whose Notes quote no counts from <code>relabel.py compare</code>, because it skipped the comparison or told it in prose, is not counted. <i>Repeats</i> counts the day's Defect lines whose <code>same-as:</code> names an earlier defect's ID: a problem that came back.</p>
+      <p>An AI reader that did none of the day's work labels each problem found that day from its description alone; each square is one label, filled where it matched the label the day gave.</p>
     </div>
-    <div class="scroll-x"><table id="relabel"></table></div>
-    <p id="recurrence"></p>
+    <div id="relabel-plot"></div>
+    <details class="exact">
+      <summary>Exact numbers</summary>
+      <div class="scroll-x"><table id="relabel"></table></div>
+      <p id="recurrence"></p>
+    </details>
+    <details class="counted">
+      <summary>How this is counted</summary>
+      <p>At each close, <code>scripts/relabel.py</code> strips the <code>found:</code>, <code>cause:</code> and <code>made:</code> tags from the day's Defect lines, and the defect-rater agent, which wrote none of the day's work, tags the text again. This is how many of the day's tags it gave the same way, from the last run of <code>relabel.py compare</code> pasted in the day's closing PR. Where they agree the tags measure the defects; where they do not, the tags may only measure what the session that wrote them believed. A day with no whole run pasted is not counted, and is not counted as agreeing; neither are lines that do not make whole runs, or two closing PRs that differ. <i>Repeats</i> counts the day's Defect lines whose <code>same-as:</code> names an earlier defect's ID: a problem that came back.</p>
+    </details>
   </section>
   </details>
 

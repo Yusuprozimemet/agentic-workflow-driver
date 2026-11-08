@@ -1410,11 +1410,44 @@ function drawAgents(T, sum, ctx, perReply, color) {
   });
 }
 
-// Per finished day, how many tags the blind defect-rater gave the same way; null where the Notes have no counts.
+// Shared by the plots. HTML and CSS, so each reflows at phone width. A bar's length is its total
+// out of `max`, so a small sample looks small; parts are { n, cls }, in the order they are drawn.
+function stackedBar(parts, max, label) {
+  const total = parts.reduce((a, p) => a + p.n, 0);
+  return `<div class="stack" role="img" aria-label="${esc(label)}" title="${esc(label)}" style="width:${total / max * 100}%">`
+    + parts.filter(p => p.n).map(p => `<i class="${p.cls}" style="flex:${p.n} 1 0"></i>`).join("") + `</div>`;
+}
+const tileRow = (tiles, label) => `<span class="mini-tiles" role="img" aria-label="${esc(label)}" title="${esc(label)}">${tiles.join("")}</span>`;
+const notMeasured = text => `<span class="not-measured">${esc(text)}</span>`;
+
+const READER_AXES = [["stage", "When it was found"], ["cause", "Why it happened"], ["made", "Which day made it"]];
+const READER_NONE = "Not counted yet: a day is counted once its closing PR pastes the comparison’s lines.";
+
+// Plot 7: one tile per label the second reader gave, per day and per question. Differing is not a failure, so no alarm colour.
+function drawReaderPlot(days) {
+  const box = document.getElementById("relabel-plot");
+  if (!days.some(d => d.relabel)) { box.innerHTML = notMeasured(READER_NONE); return; }
+  const tile = cls => `<i class="mini-tile ${cls}"></i>`;
+  const count = (a, n) => `${a} of ${n}`;
+  box.innerHTML = `<div class="legend">${[["agree", "Same label as the day gave"], ["differ", "A different label"]].map(([c, w]) => `<span>${tile(c)}<b>${w}</b></span>`).join("")}</div>`
+    + `<div class="reader-axes">` + READER_AXES.map(([f, head]) => {
+      const [a, n] = days.reduce((t, d) => d.relabel && d.relabel[f] ? [t[0] + d.relabel[f][0], t[1] + d.relabel[f][1]] : t, [0, 0]);
+      return `<div><h3>${head}</h3>` + (n ? `<div class="reader-total">${stackedBar([{ n: a, cls: "agree" }, { n: n - a, cls: "differ" }], n, `${head}: ${count(a, n)} agree, all counted days`)}<b class="num">${count(a, n)}</b></div>` : "")
+        + days.map(d => {
+          const p = d.relabel && d.relabel[f];
+          return `<div class="reader-row"><span class="num">Day ${dd(d.day)}</span>` + (p
+            ? `${tileRow([...Array(p[0]).fill(tile("agree")), ...Array(p[1] - p[0]).fill(tile("differ"))], `Day ${dd(d.day)}: ${count(p[0], p[1])} agree`)}<span class="num">${count(p[0], p[1])}</span>`
+            : notMeasured("not counted")) + `</div>`;
+        }).join("") + `</div>`;
+    }).join("") + `</div>`;
+}
+
+// Per finished day, how many tags the blind defect-rater gave the same way; null where nothing gives counts.
 function drawRelabel() {
   const days = DATA.days.filter(finished).sort((a, b) => rank(a.day) - rank(b.day));
+  drawReaderPlot(days);
   if (!days.length) {
-    document.getElementById("relabel").innerHTML = `<tbody><tr><td class="t">No finished day yet: a day is counted once its Notes quote <code>relabel.py compare</code>.</td></tr></tbody>`;
+    document.getElementById("relabel").innerHTML = `<tbody><tr><td class="t">No finished day yet: a day is counted once its closing PR pastes <code>relabel.py compare</code>’s lines.</td></tr></tbody>`;
     return;
   }
   const F = ["stage", "cause", "made"];
@@ -1427,7 +1460,7 @@ function drawRelabel() {
     : `<td class="r">${R.recurrences.filter(r => ns.includes(+r.id.slice(1).split(".")[0])).length}</td>`;
   document.getElementById("relabel").innerHTML = `<thead><tr><th>Day</th>${F.map(f => `<th class="r">${f[0].toUpperCase() + f.slice(1)}</th>`).join("")}${R ? '<th class="r">Repeats</th>' : ""}<th>Title</th></tr></thead><tbody>` +
     days.map(d => `<tr><td class="num">${dd(d.day)}</td>${d.relabel ? F.map(f => cell(d.relabel[f])).join("")
-      : `<td class="r pre" colspan="3">not counted: the Notes give no counts</td>`}${rep([d.day])}<td class="t">${md(d.title)}</td></tr>`).join("") +
+      : `<td class="r pre" colspan="3">not counted: no closing PR gives a whole run</td>`}${rep([d.day])}<td class="t">${md(d.title)}</td></tr>`).join("") +
     `<tr><td><b>All counted</b></td>${tot.map(p => cell(p[1] ? p : null)).join("")}${rep(days.map(d => d.day))}<td></td></tr></tbody>`;
   if (R) document.getElementById("recurrence").innerHTML =
     `${R.recurrences.length} of ${R.with_id} Defect lines with an ID ${R.recurrences.length === 1 ? "repeats" : "repeat"} an earlier defect` +
@@ -1824,7 +1857,7 @@ function drawNotMeasured() {
   const empty = [
     ["services", "Service boundaries", !R.some(r => movedShare(r) != null), said("moved")],
     ["second-reader", "Does a second reader agree with the defect tags?", !DATA.days.some(d => finished(d) && d.relabel) && !(rec && rec.recurrences.length),
-      DATA.days.some(finished) ? "No finished day’s Notes give counts yet: a day is counted once its Notes quote <code>relabel.py compare</code>." : said("relabel")],
+      DATA.days.some(finished) ? READER_NONE : said("relabel")],
     ["infra", "Infrastructure", !I.latest && !I.runs.length, said("infra-head")],
     ["deployment", "Deployment", !DATA.deployment, said("deployment-head")],
     ["removal-checks", "Removal checks", !(DATA.removals || []).length, said("removals")],

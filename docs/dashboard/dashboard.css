@@ -417,3 +417,25 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
   .how-row em { white-space: normal; }
 }
 @media (prefers-reduced-motion: no-preference) { .how-step, .how-row { transition: background .12s; } }
+/* Shared by the plots: a bar scaled to its count, a row of tiles, not measured, and the two collapsed layers under a plot. */
+.stack { display: flex; height: 12px; gap: 2px; min-width: 2px; }
+.stack i:first-child { border-radius: 3px 0 0 3px; }
+.stack i:last-child { border-radius: 0 3px 3px 0; }
+.stack i:only-child { border-radius: 3px; }
+.mini-tiles { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
+.mini-tile { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 2px; }
+.legend i.mini-tile { width: 9px; height: 9px; border-radius: 2px; }
+.agree { background: var(--ink-2); }
+.differ { box-shadow: inset 0 0 0 1.5px var(--muted); }
+.not-measured { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12.5px; font-style: italic; color: var(--ink-2); background: repeating-linear-gradient(45deg, var(--grid) 0 2px, transparent 2px 6px); }
+details.exact, details.counted { margin-top: 12px; }
+details.exact > summary, details.counted > summary { color: var(--ink-2); font-size: 13.5px; font-weight: 500; }
+details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
+/* Plot 7, the second reader. */
+.reader-axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 18px 32px; margin-top: 12px; }
+.reader-axes h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.reader-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 13px; }
+.reader-total b { font-weight: 600; }
+.reader-row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 3px 0; font-size: 13px; color: var(--ink-2); }
+.reader-row .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reader-row .not-measured { grid-column: 2 / -1; justify-self: start; }
