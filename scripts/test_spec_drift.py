@@ -2208,7 +2208,7 @@ class EvidenceReportPageTest(unittest.TestCase):
         error, panels, _ = drawn([self.ROW], evidence_checks=ec)
         self.assertIsNone(error)
         box = panels["evidence-checks"]
-        self.assertIn('<td class="r none">3/4 passed · 2 n/a</td>', box)
+        self.assertIn('<td class="r none">3/4 found · 2 n/a</td>', box)
         self.assertIn('<td class="r pre">– · 1 n/a</td>', box)  # nothing ran: no share
         self.assertIn('<td class="r pre">none</td>', box)
         self.assertIn("stale</span> checked at close aaaaaaa", box)

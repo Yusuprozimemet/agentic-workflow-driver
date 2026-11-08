@@ -6,6 +6,7 @@ and stays visible with its table collapsed under it. The page tests run dashboar
 
 import html.parser
 import os
+import pathlib
 import re
 import shutil
 import sys
@@ -14,6 +15,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_spec_drift import a_day, drawn, page_row  # noqa: E402
 
+HERE = pathlib.Path(__file__).resolve().parent
 ROWS = [page_row(0, None, "origin", 50)]
 
 
@@ -172,12 +174,41 @@ class EvidencePlotTest(unittest.TestCase):
             ),
         )["plot-evidence"]
         status = [s for _, s in self.rows(box)]
-        self.assertIn("3 checks replayed, none failed", status[0])
+        self.assertIn(
+            "3 named tests found; 0 Verify commands and 0 breaks re-run; none failed", status[0]
+        )
         self.assertIn('class="plot-bad">2 failed', status[1])
         self.assertIn('class="plot-bad"', status[2])
         self.assertIn("stale", status[2])
         self.assertIn(NONE, status[3])
         self.assertIn("not checked", status[3])
+
+    def counted_day(self):
+        n = lambda p: dict(passed=p, failed=0, error=0, not_applicable=0)  # noqa: E731
+        return report(
+            dict(
+                day=1,
+                state="current",
+                why=[],
+                problems=[],
+                counts=dict(named_test=n(3), verify=n(2), proof=n(5), **{"break": n(1)}),
+            )
+        )
+
+    def test_a_named_test_looked_up_is_not_counted_as_re_run(self):
+        box = draw(days=[evidence_day(1)], order=[1], evidence_checks=self.counted_day())[
+            "plot-evidence"
+        ]
+        self.assertIn("3 named tests found; 2 Verify commands and 1 break re-run; none failed", box)
+
+    def test_the_collapsed_column_says_found_only_for_named_tests(self):
+        box = draw(days=[evidence_day(1)], order=[1], evidence_checks=self.counted_day())[
+            "evidence-checks"
+        ]
+        self.assertIn(">3/3 found</td>", box)
+        self.assertIn(">2/2 passed</td>", box)
+        self.assertIn(">1/1 passed</td>", box)
+        self.assertNotIn("3/3 passed", box)
 
     def test_no_report_is_never_drawn_as_a_pass(self):
         box = draw(days=[evidence_day(1)], order=[1], evidence_checks=dict(state="absent"))[
@@ -359,6 +390,16 @@ class TokenPlotsTest(unittest.TestCase):
         self.assertEqual(widths(box), ["100", "50"])
         self.assertIn("background:var(--m-haiku)", box)
         self.assertIn("background:var(--m-opus)", box)
+
+    def test_output_by_date_keeps_fewer_date_labels_at_phone_width(self):
+        many = [tokens(1, date=f"2026-01-{d:02d}") for d in range(1, 10)]
+        box = draw(tokens=many)["token-bars"]
+        self.assertEqual(box.count("tk-date"), 9)
+        self.assertEqual(box.count("tk-skip"), 4)
+        self.assertRegex(box, r'class="num tk-date">01-09<')
+        self.assertEqual(draw(tokens=many[:3])["token-bars"].count("tk-skip"), 0)
+        css = (HERE / ".." / "docs" / "dashboard" / "dashboard.css").read_text(encoding="utf-8")
+        self.assertIn("#token-bars .tk-skip, #token-bars .tk-ctx { display: none; }", css)
 
     def test_no_tokens_is_not_measured(self):
         panels = draw(tokens=[])

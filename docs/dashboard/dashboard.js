@@ -1034,10 +1034,10 @@ function drawEvidenceChecks() {
     return;
   }
   // passed / (passed + failed + error): with none run, no share.
-  const cell = n => {
+  const cell = (n, word) => {
     if (!n) return `<td class="r pre">none</td>`;
     const ran = n.passed + n.failed + n.error, na = n.not_applicable ? ` · ${n.not_applicable} n/a` : "";
-    return ran ? `<td class="r${n.passed < ran ? " none" : ""}">${n.passed}/${ran} passed${n.error ? `, ${n.error} error` : ""}${na}</td>`
+    return ran ? `<td class="r${n.passed < ran ? " none" : ""}">${n.passed}/${ran} ${word}${n.error ? `, ${n.error} error` : ""}${na}</td>`
       : `<td class="r pre">–${na}</td>`;
   };
   const r = ec.runner || {};
@@ -1045,7 +1045,7 @@ function drawEvidenceChecks() {
     `<div class="scroll-x"><table><thead><tr><th>Day</th><th>Report</th>${CHECK_KINDS.map(([, h]) => `<th class="r">${h}</th>`).join("")}</tr></thead><tbody>` +
     ec.days.map(d => d.state === "not checked"
       ? `<tr><td class="num">${dd(d.day)}</td><td class="pre" colspan="${CHECK_KINDS.length + 1}">not checked: the report leaves this day out</td></tr>`
-      : `<tr${d.state === "stale" ? ` class="off" title="${esc(d.why.join("; "))}"` : ""}><td class="num">${dd(d.day)}</td><td>${d.state === "stale" ? `<span class="pre-tag">stale</span> ${esc(d.why.join("; "))}` : "current"}</td>${CHECK_KINDS.map(([k]) => cell(d.counts[k])).join("")}</tr>`).join("") +
+      : `<tr${d.state === "stale" ? ` class="off" title="${esc(d.why.join("; "))}"` : ""}><td class="num">${dd(d.day)}</td><td>${d.state === "stale" ? `<span class="pre-tag">stale</span> ${esc(d.why.join("; "))}` : "current"}</td>${CHECK_KINDS.map(([k]) => cell(d.counts[k], k === "named_test" ? "found" : "passed")).join("")}</tr>`).join("") +
     `</tbody></table></div>`;
   const problems = ec.days.flatMap(d => (d.problems || []).map(p =>
     `<li>Day ${dd(d.day)}: ${esc(p.status)} · ${esc(p.label)}${p.diagnostic ? ` → ${esc(p.diagnostic)}` : ""}</li>`));
@@ -1296,6 +1296,7 @@ function drawTokens() {
   const dates = [...new Set(T.map(r => r.date))].sort();
   const H = 260, P = { l: 56, r: 12, t: 12, b: 46 }, bw = (LW - P.l - P.r) / dates.length;
   const perDate = dates.map(d => T.filter(r => r.date === d));
+  const labelEvery = Math.ceil(dates.length / 6);
   const top = Math.max(...perDate.map(rs => sum(rs, "output")));
   const yMax = Math.ceil(top / 10 ** Math.floor(Math.log10(top)) * 2) / 2 * 10 ** Math.floor(Math.log10(top));
   const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
@@ -1320,8 +1321,8 @@ function drawTokens() {
       rect.addEventListener("mouseleave", hideTip);
       y += v;
     });
-    el("text", { x: x + bw / 2, y: H - P.b + 18, "text-anchor": "middle", class: "num" }, svg).textContent = dates[i].slice(5);
-    el("text", { x: x + bw / 2, y: H - P.b + 34, "text-anchor": "middle", class: "num" }, svg).textContent = perReply(rs) + " ctx";
+    el("text", { x: x + bw / 2, y: H - P.b + 18, "text-anchor": "middle", class: `num tk-date${(dates.length - 1 - i) % labelEvery ? " tk-skip" : ""}` }, svg).textContent = dates[i].slice(5);
+    el("text", { x: x + bw / 2, y: H - P.b + 34, "text-anchor": "middle", class: "num tk-ctx" }, svg).textContent = perReply(rs) + " ctx";
   });
   const days = [...new Set(T.map(r => r.day))].sort((a, b) => rank(a) - rank(b));
   const cell = (rs, m) => { const v = sum(rs.filter(r => r.model === m), "output"); return `<td class="num">${v ? kilo(v) : "–"}</td>`; };
@@ -1515,7 +1516,8 @@ function replayWord(d, ec) {
   if (day.state === "stale") return `<span class="plot-bad" title="${esc(day.why.join("; "))}">stale</span>`;
   const counts = CHECK_KINDS.map(([k]) => day.counts[k]).filter(Boolean);
   const failed = addUp(counts, "failed") + addUp(counts, "error");
-  return failed ? `<span class="plot-bad">${failed} failed</span>` : `<span class="plot-quiet">${addUp(counts, "passed")} checks replayed, none failed</span>`;
+  const passed = k => (day.counts[k] || {}).passed || 0;
+  return failed ? `<span class="plot-bad">${failed} failed</span>` : `<span class="plot-quiet">${plural(passed("named_test"), "named test", "named tests")} found; ${plural(passed("verify"), "Verify command", "Verify commands")} and ${plural(passed("break"), "break", "breaks")} re-run; none failed</span>`;
 }
 function drawEvidencePlot() {
   const box = document.getElementById("plot-evidence"), head = document.getElementById("evidence-headline"), skip = document.getElementById("evidence-skip");
