@@ -1,13 +1,15 @@
 """The driver's run log, the file <state>/run.jsonl: one JSON object per line, a start line before
-each session and an end line after it. Each line is fsynced before the call returns, so a crash
-leaves at most a torn last line. open_session() names the last session started for a prefix that
-has no end line, and a log it cannot read parks the driver: a torn log is never guessed past."""
+each session, an end line after it, and a fix line before each resume. Each line is fsynced
+before the call returns, so a crash leaves at most a torn last line. open_session() names the last
+session started for a prefix that has no end line, and a log it cannot read parks the driver: a
+torn log is never guessed past."""
 
 import datetime
 import json
 import os
 
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
+USED_WHEN_UNREADABLE = 2
 
 
 def path(state):
@@ -44,6 +46,11 @@ def end(state, session, outcome, cost_usd, denials):
             "denials": denials,
         },
     )
+
+
+def fix(state, session, pr, n):
+    # Written before the resume it records, so a crash during the resume still counts it.
+    append(state, {"event": "fix", "at": stamp(), "session": session, "pr": pr, "n": n})
 
 
 def append(state, record):
@@ -118,3 +125,19 @@ def open_session(state, prefix):
         if record.get("session") not in ended:
             return record.get("session"), None
     return None, None
+
+
+def fixes(state, session):
+    # Returns how many fix lines the session has. A log that cannot be read says nothing about how
+    # many were used, so it counts as both used (plan.md, "Recovery", rule 4).
+    try:
+        records, reason = _records(state)
+    except OSError:
+        return USED_WHEN_UNREADABLE
+    if reason:
+        return USED_WHEN_UNREADABLE
+    if records is None:
+        return 0
+    return sum(
+        1 for record in records if record.get("event") == "fix" and record.get("session") == session
+    )
