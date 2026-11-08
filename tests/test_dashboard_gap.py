@@ -349,5 +349,106 @@ class ProofKindsPanelTest(unittest.TestCase):
         self.assertIn('seg(d.proof.not_recorded, { fill: "none"', script)
 
 
+RELABEL_FULL = {"stage": [7, 15], "cause": [13, 15], "made": [14, 15]}
+
+
+def run_lines(stage, cause, made):
+    return f"stage: {stage} agree\ncause: {cause} agree\nmade: {made} agree\n"
+
+
+class RelabelCountsTest(unittest.TestCase):
+    """The second reader's counts come from what `relabel.py compare` printed into a closing PR."""
+
+    def test_a_pasted_run_is_counted(self):
+        body = (
+            "Blind relabel:\n\n```\n"
+            + run_lines("7 of 15", "13 of 15", "14 of 15")
+            + "rater unclear: stage 7\n```\n"
+        )
+        self.assertEqual(spec_drift.relabel("", [body]), RELABEL_FULL)
+
+    def test_crlf_and_a_not_compared_note_still_count(self):
+        body = run_lines("7 of 15", "13 of 15", "14 of 15").replace(
+            "agree", "agree (1 untagged, not compared)", 1
+        )
+        self.assertEqual(spec_drift.relabel("", [body.replace("\n", "\r\n")])["stage"], [7, 15])
+
+    def test_the_last_run_wins(self):
+        body = (
+            run_lines("14 of 16", "15 of 16", "16 of 16")
+            + "then again\n"
+            + run_lines("7 of 15", "13 of 15", "14 of 15")
+        )
+        self.assertEqual(spec_drift.relabel("", [body]), RELABEL_FULL)
+
+    def test_prose_about_an_earlier_run_is_not_a_run(self):
+        body = (
+            run_lines("7 of 15", "13 of 15", "14 of 15")
+            + "The first run gave stage 12 of 16 and cause: 1 of 2.\n"
+        )
+        self.assertEqual(spec_drift.relabel("", [body]), RELABEL_FULL)
+
+    def test_lines_that_are_not_whole_runs_are_not_counted(self):
+        for body in (
+            "stage: 1 of 2 agree\ncause: 1 of 2 agree\n",
+            run_lines("1 of 2", "1 of 2", "1 of 2") + "stage: 2 of 2 agree\n",
+            "cause: 1 of 2 agree\nstage: 1 of 2 agree\nmade: 1 of 2 agree\n",
+            run_lines("3 of 2", "1 of 2", "1 of 2"),
+            run_lines("0 of 0", "1 of 2", "1 of 2"),
+        ):
+            with self.subTest(body=body):
+                self.assertIsNone(spec_drift.relabel("", [body]))
+
+    def test_an_unclear_body_does_not_fall_back_to_the_notes(self):
+        notes = "(`relabel.py compare`): stage 3 of 4, cause 3 of 4, made 4 of 4"
+        self.assertIsNone(spec_drift.relabel(notes, ["stage: 1 of 2 agree\n"]))
+
+    def test_two_closing_prs_that_differ_are_not_counted(self):
+        one, other = (
+            run_lines("7 of 15", "13 of 15", "14 of 15"),
+            run_lines("8 of 15", "13 of 15", "14 of 15"),
+        )
+        self.assertIsNone(spec_drift.relabel("", [one, other]))
+        self.assertEqual(spec_drift.relabel("", [one, one, None]), RELABEL_FULL)
+
+    def test_with_no_paste_the_notes_are_still_read(self):
+        notes = "(`relabel.py compare`): stage 3 of 4, cause 3 of 4, made 4 of 4"
+        self.assertEqual(spec_drift.relabel(notes, ["no counts here", None])["made"], [4, 4])
+        self.assertIsNone(spec_drift.relabel("told in prose", ["no counts here"]))
+
+    def test_a_merged_pr_carries_its_link(self):
+        pr = {
+            "number": 9,
+            "state": "MERGED",
+            "url": "https://example.test/pull/9",
+            "title": "Tooling: x",
+            "headRefName": "tooling/x",
+            "body": "",
+            "createdAt": "2026-11-08T10:00:00Z",
+            "mergedAt": "2026-11-08T10:06:00Z",
+        }
+        self.assertEqual(
+            spec_drift.verification({9: pr}, [])[0]["url"], "https://example.test/pull/9"
+        )
+
+
+class ReaderPlotTest(unittest.TestCase):
+    """The second reader's plot is visible by default, its table stays in the page, collapsed."""
+
+    def test_plot_visible_and_table_collapsed_under_it(self):
+        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
+        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
+        section = page[page.rindex("<details", 0, page.index('id="second-reader"')) :]
+        self.assertTrue(section.startswith('<details class="measure" open>'))
+        plot, exact = (
+            section.index('<div id="relabel-plot"></div>'),
+            section.index('<details class="exact">'),
+        )
+        self.assertLess(plot, exact)
+        self.assertLess(exact, section.index('<table id="relabel">'))
+        self.assertIn("drawReaderPlot(days);", script)
+        self.assertIn('notMeasured("not counted")', script)
+
+
 if __name__ == "__main__":
     unittest.main()

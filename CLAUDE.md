@@ -43,8 +43,8 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    transcripts or the guards' refusal log they count. Then relabel the
    day's defects blind: `python scripts/relabel.py blind specs/day-NN-*.md --out <dir>`, give
    `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run
-   `python scripts/relabel.py compare <dir>`, and put its lines in the PR with a decision on each
-   disagreement: the tag kept, and why, or changed in the Notes. Commit the break manifest
+   `python scripts/relabel.py compare <dir>`, and paste its lines unchanged in the PR (the dashboard
+   counts the last whole run there) with a decision on each disagreement: the tag kept, and why, or changed in the Notes. Commit the break manifest
    `specs/breaks/day-NN.json` with the actual mutation arguments, the `manifest:` lines the
    track PRs recorded (format and example in
    [`specs/README.md`](specs/README.md#evidence-at-the-close)). After this closing PR merges,
