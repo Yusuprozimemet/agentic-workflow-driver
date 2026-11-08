@@ -149,6 +149,37 @@ changes (#32, #40), a specs-map branch (#33) and Tracks A1 to F (#34, #35, #36, 
 - **Hand-offs:** 5. Picked up H01.1, H03.2 and H04.1. H05.1 → Day 6, H05.2 and H05.4 → Day 7,
   H05.3 → Day 8, H05.5 to the maintainer.
 
+## Phase reads
+
+**Read at the end of Phase 0.** Phase 0 set out to show that the driver can read a project and
+name its next action without starting anything (`plan.md`, "Phase 0"). Days 1 and 2 closed on
+2026-11-06, in ten merged PRs (#1 to #10). `--dry-run` prints one action, `start`, `wait` or
+`park`, from the kit's next-step sentence and the project's git state. Its tests record every
+command it runs, and every one is a read. `preflight` names each piece of the kit a project
+lacks, and checks the CLI's version and nine flags. The plan-auditor, run on `main` after #10,
+found the Done-when met.
+
+The auditors did most of the finding. 20 of the phase's 29 defects were found in the specs
+before any code, and 21 of the 29 have `cause: spec`. All 14 criteria were ticked. The 12 `new`
+ones had their 25 tests seen red, and the 2 `hold` ones were each broken once. Of the 8 breaks
+recorded, 6 replay. The other two printed a commit hash and a Windows path, and only the close's
+rehearsals caught them. Three defects made on Day 1 escaped into Day 2: two edits Day 1's close
+promised and left undone, and a strict UTF-8 read of the kit's output that an en dash breaks on
+Windows (D02.2, D02.3, D02.11). The 8 merged PRs the two closes counted cost $13.48, $1.69 each
+beside the kit's $1.86, with 32.3 replies each beside 34.4.
+
+Still open: the tests ran the dry run on fixture projects. The one live run (#9) found D02.11,
+which the fixtures missed because their script prints nothing; Day 4 fixed it. Of Phase 0's 13
+hand-offs, two wait for Day 6: H01.2, a clean branch brought to `main`, and H02.3, `on` running
+the preflight first. H01.4 stays with the maintainer: writing a day spec is a park, not a step
+the driver starts.
+
+What Phase 1 had to know: its day titles were too thin to write specs from. No day owned the
+lock, the config, the driver's check of its own repository, or the run's issue. `auto` came only
+from the maintainer's own settings. Plan change #11 and Days 3 to 5 took these up. A fixture that
+prints nothing cannot catch an encoding fault, and a break whose report holds a hash or a path
+cannot replay.
+
 ## What is being measured
 
 | Question | Evidence it will be judged on | Day 01 | Day 02 | Day 03 | Day 04 | Day 05 |
