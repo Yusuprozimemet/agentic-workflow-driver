@@ -4,6 +4,7 @@ is closed; a park whose issue cannot be opened says so on stderr and still exits
 copy of the driver with the fake gh and the fake claude of tests/test_once.py and
 tests/test_github.py."""
 
+import concurrent.futures
 import json
 import shutil
 import sys
@@ -111,12 +112,19 @@ class OnceParkIssuesTest(unittest.TestCase):
             ("no_pr", {"prs": ()}),
             ("two_prs", {"prs": (STEP_PR, OTHER_PR)}),
         ]
-        for name, kwargs in cases:
+
+        def run_case(name, kwargs):
+            kwargs.setdefault("drift", drift_of(DASHED))
+            folder = self.folder_of(name)
+            return folder, once(self.copy, *build(folder, **kwargs))
+
+        # Each case has its own folder; only the read-only driver copy is shared, so the
+        # cases run at once and are checked in order.
+        with concurrent.futures.ThreadPoolExecutor(len(cases)) as pool:
+            futures = [pool.submit(run_case, *case) for case in cases]
+        for (name, _), future in zip(cases, futures):
             with self.subTest(name):
-                kwargs.setdefault("drift", drift_of(DASHED))
-                folder = self.folder_of(name)
-                flags = build(folder, **kwargs)
-                code, out, err = once(self.copy, *flags)
+                folder, (code, out, err) = future.result()
                 line = out.strip()
                 # The run's issue is created too, and its body is not a park's: only parks are read.
                 bodies = [body for body in created_bodies(folder) if CLOSE in body]

@@ -2,6 +2,7 @@
 line, and the driver's repository checked again after the session. Each case runs from its own copy
 of the driver, with the fake claude and the fake gh of tests/test_once.py and tests/test_github.py."""
 
+import concurrent.futures
 import importlib
 import json
 import shutil
@@ -133,9 +134,13 @@ class OutcomeTest(unittest.TestCase):
                 "stderr",
             ),
         ]
-        for name, arguments, line, code, stream in rows:
+        # Each case has its own folders; only the read-only driver copy is shared, so the
+        # cases run at once and are checked in order.
+        with concurrent.futures.ThreadPoolExecutor(len(rows)) as pool:
+            futures = [pool.submit(self.run_case, copy=copy, **row[1]) for row in rows]
+        for (name, _, line, code, stream), future in zip(rows, futures):
             with self.subTest(case=name):
-                result = self.run_case(copy=copy, **arguments)
+                result = future.result()
                 streams = (("stdout", result["out"]), ("stderr", result["err"]))
                 printed = [n for n, text in streams if text]
                 text = (result["err"] or result["out"]).strip()
