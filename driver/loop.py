@@ -3,13 +3,16 @@ at a start, is polled every --poll seconds: first the halt file, then the projec
 then the checks. Red checks on a pull request the run's session opened resume that session to fix
 them, at most twice; red checks on a pull request with no session, or no checks at all for longer
 than --wait-minutes, end the wait with a park line. A STOP issue halts the run, and the run's issue
-closed ends it with no new step."""
+closed ends it with no new step. Once the checks are green, the path check parks a pull request that
+touches plan.md or a human-only path, the merge wait holds until the maintainer merges it, pulls
+main, and waits for the evidence run on the new head."""
 
 import os
 import re
 from time import monotonic, sleep
 
-from driver import github, issues, once, runlog
+from driver import github, issues, once, runlog, tree
+from driver.steps import Step
 
 
 def read_switches(args, project, record):
@@ -111,3 +114,92 @@ def wait_pr(args, project, number, record, command=None):
             print(line, flush=True)
             number = int(re.match(r"opened: #(\d+)", line).group(1))
         sleep(args.poll)
+
+
+# to_main keeps off a project with a branch of the step it is given. The step that just merged still
+# has its branch, and the project is usually on it; nothing is left there to protect.
+MERGED = Step("merged")
+
+
+def gated(paths, body, human_only, number):
+    # The first that applies, or None. The number is only for the line.
+    if "plan.md" in paths:
+        return f"park: #{number} touches plan.md"
+    for path in paths:
+        for entry in human_only:
+            if path == entry or (entry.endswith("/") and path.startswith(entry)):
+                return f"park: #{number} touches a human-only path: `{path}`"
+    if any(line.startswith("Oversized:") for line in body.splitlines()):
+        return f"park: #{number} carries Oversized:"
+    return None
+
+
+def poll(args, project, record, read):
+    # Every --poll seconds, as wait_pr: the switches first, then read(), which returns (result,
+    # reason): result is the (line, code) that ends the wait, or None to go on; reason says a read
+    # failed. A failed read is skipped, and nothing is read while the issues cannot be, up to
+    # --wait-minutes.
+    blind_since = None
+    while True:
+        line, code, reason = read_switches(args, project, record)
+        if line:
+            return line, code
+        result, reason = (None, reason) if reason else read()
+        if result:
+            return result
+        if reason is None:
+            blind_since = None
+        else:
+            blind_since = monotonic() if blind_since is None else blind_since
+            if monotonic() - blind_since > args.wait_minutes * 60:
+                return f"cannot read the project: {reason}", 2
+        sleep(args.poll)
+
+
+def wait_evidence(args, project, record, sha):
+    # Day 4's line for the commit: a run that ended badly parks at once; one not finished, or not
+    # there yet, is waited out up to --wait-minutes.
+    started = monotonic()
+
+    def read():
+        line = github.evidence_line(project, args.gh, sha)
+        if line is None:
+            return (None, 0), None
+        if line.startswith("cannot read the project: "):
+            return None, line.removeprefix("cannot read the project: ")
+        if " ended `" in line:
+            return (line, 1), None
+        if monotonic() - started > args.wait_minutes * 60:
+            return (f"{line} after {args.wait_minutes:g} minutes", 1), None
+        return None, None
+
+    return poll(args, project, record, read)
+
+
+def wait_merge(args, project, number, record, human_only, read_facts, git=("git",)):
+    # After wait_pr's green: the path check, the maintainer's merge (no bound on it), main pulled,
+    # and the evidence run on the new origin/main head. Returns (line, code); (None, 0) means the
+    # next step can start.
+    def read():
+        state, _, paths, body, reason = github.pr_state(project, args.gh, number)
+        if reason:
+            return None, reason
+        line = gated(paths, body, human_only, number)
+        if line:
+            return (line, 1), None
+        if state == "CLOSED":
+            return (f"park: #{number} was closed without a merge", 1), None
+        if state == "MERGED":
+            return (None, 0), None
+        return None, None
+
+    line, code = poll(args, project, record, read)
+    if line is not None:
+        return line, code
+    _, line = tree.to_main(project, read_facts(project), MERGED, git)
+    if line:
+        return line, 1
+    sha = read_facts(project).origin_main
+    if sha is None:
+        return f"cannot read the project: no origin/main after #{number} merged", 2
+    return wait_evidence(args, project, record, sha)

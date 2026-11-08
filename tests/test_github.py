@@ -24,9 +24,9 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # `label create`) from fake.json (`issue_code` fails every issue and label call), and exits 99 on
 # anything else. A call with `--body-file -` also appends its stdin to bodies.jsonl beside it. A
 # fake.json with `sleep_on` (an `issue` subcommand) and `sleep` makes that call sleep first, for
-# the timeout test. `pr checks`, `pr view` and `run view` answer from the lists `checks`, `views`
-# and `logs` in fake.json, each entry `{"code": n, "out": ...}` (a string printed as it is, anything
-# else as JSON), one per call, the last repeated.
+# the timeout test. `pr checks`, `pr view`, `run view` and `run list` with `run_steps` answer from the
+# lists `checks`, `views`, `logs` and `run_steps` in fake.json, each entry `{"code": n, "out": ...}`
+# (a string printed as it is, anything else as JSON), one per call, the last repeated.
 FAKE = """import json
 import sys
 import time
@@ -62,6 +62,8 @@ if spec["code"] != 0:
 if args[0] in ("issue", "label") and spec.get("issue_code", 0) != 0:
     sys.exit(spec["issue_code"])
 if args[:2] == ["run", "list"]:
+    if spec["run_steps"]:
+        step("run_steps")
     print(json.dumps(spec["runs"]))
     sys.exit(0)
 if args[:2] == ["pr", "list"]:
@@ -134,6 +136,7 @@ def fake_gh(
     checks=None,
     views=None,
     logs=None,
+    run_steps=None,
 ):
     spec = {
         "runs": runs or [],
@@ -144,6 +147,7 @@ def fake_gh(
         "checks": checks or [],
         "views": views or [],
         "logs": logs or [],
+        "run_steps": run_steps or [],
     }
     # Files are written as bytes: on Windows, text mode would add a carriage return to each line.
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
