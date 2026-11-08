@@ -11,7 +11,7 @@
   --spec: #2a78d6;
   --code: #eb6834;
   --close: #1baf7a;
-  --other: #9aa1ad;
+  --other: #858c98;
   --gap: #0e1116;
   --ooo: #8a4fd6;
   --away: #b8862b; --closer: #3b5fc7;
@@ -227,6 +227,7 @@ tr.sel td { background: var(--surface-2); }
 #attention-list { display: grid; gap: 6px; }
 #attention-list button { text-align: left; font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--grid); border-radius: 6px; padding: 9px; cursor: pointer; overflow-wrap: anywhere; }
 #criteria-matrix tbody tr { cursor: pointer; }
+#criteria-matrix .replay-bad { color: var(--fail); }
 #criteria-matrix tbody tr:hover, #criteria-matrix tbody tr:focus { background: var(--surface-2); }
 #criterion-inspector { display: grid; gap: 6px; overflow-wrap: anywhere; }
 #criterion-inspector h3, #criterion-inspector ul { margin: 0; }

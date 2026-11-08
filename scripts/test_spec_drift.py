@@ -1234,6 +1234,17 @@ class OtherGroupsTest(unittest.TestCase):
         self.assertIsNone(error)
         self.assertIn("Other · 4", panels["pr-total-legend"])
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_other_areas_are_one_segment_and_split_in_the_legend(self):
+        # Three shades of one grey could not be told apart in the bar.
+        rows = [dict(page_row(0, None, "origin", 50), branch="")] + [
+            dict(page_row(i, i, "other", 50), branch=b) for i, b in enumerate(("tooling/a", "tooling/b", "dashboard/a"), 1)]
+        error, panels, _ = drawn(rows, other_groups=[{"name": "tooling", "count": 2}, {"name": "dashboard", "count": 1}])
+        self.assertIsNone(error)
+        self.assertEqual(panels["pr-total"].count('fill="var(--other)"'), 1)
+        self.assertNotIn("opacity", panels["pr-total"] + panels["pr-total-legend"])
+        self.assertIn("Other · 3 (tooling · 2, dashboard · 1)", panels["pr-total-legend"])
+
 
 class MergeTimeTest(unittest.TestCase):
     PRS = {n: dict(number=n, title=t, headRefName=b, state=s, body="", createdAt=o, mergedAt=m)
@@ -1308,6 +1319,32 @@ class CriterionPanelsTest(unittest.TestCase):
         box = panels["attention-list"]
         self.assertNotIn("Nothing needs attention", box)
         self.assertLess(box.index("Evidence missing"), box.index("Can’t be broken here"))
+
+    def test_open_hand_offs_need_attention_and_skippable_tests_are_noted(self):
+        attention = [dict(id="H05.1", reason="handoff_next", detail="Day 06: a"),
+                     dict(id="H01.4", reason="handoff_unpicked", detail="b"),
+                     dict(id="C03.8", reason="test_skippable", detail="LiveCliTest.test_x")]
+        error, panels, _ = drawn([self.ROW], criteria_index=[], attention=attention)
+        self.assertIsNone(error)
+        box = panels["attention-list"]
+        self.assertNotIn("Nothing needs attention", box)
+        heads = ["Hand-off for the next day", "Hand-off no later day picks up", "Can be skipped in CI (expected)", "LiveCliTest.test_x"]
+        self.assertEqual([h for h in heads if h not in box], [])
+        self.assertEqual([box.index(h) for h in heads], sorted(box.index(h) for h in heads))
+        _, panels, _ = drawn([self.ROW], criteria_index=[], attention=attention[2:])
+        self.assertIn("Nothing needs attention", panels["attention-list"])
+
+    def test_the_replay_column_counts_statuses_with_failures_first(self):
+        row = dict(id="C1", day=1, tag="hold", claim="x", spec="s.md", track="A", prs=[3], tests=[], cited=True, test_found=None,
+                   seen_red=dict(state=True, lines=[]), replay=dict(state="current", status=["passed"] * 11, why=[], checks=[]),
+                   replaces=[], replaced_by=[])
+        mixed = dict(row, id="C2", replay=dict(row["replay"], status=["passed"] * 4 + ["not_applicable", "error", "failed"]))
+        error, panels, _ = drawn([self.ROW], criteria_index=[row, mixed, dict(row, id="C3", replay=dict(row["replay"], status=None))])
+        self.assertIsNone(error)
+        cells = re.findall(r"<td>([^<]*(?:<b[^>]*>[^<]*</b>[^<]*)*|<span[^>]*>–</span>)</td></tr>", panels["criteria-matrix"])
+        self.assertEqual(cells[0], "11/11 passed")
+        self.assertEqual(cells, ["11/11 passed",'<b class="replay-bad">✗ 1 failed</b> · <b class="replay-bad">✗ 1 error</b> · 4 passed · 1 not_applicable',
+                                 '<span title="not measured">–</span>'])
 
     def test_old_and_empty_data(self):
         error, panels, logged = drawn([self.ROW])
@@ -1429,9 +1466,22 @@ class PageTest(unittest.TestCase):
         # and the spec's share of it is -5 / 5. Counting the direct commit would make it -5 / 15.
         moved = [page_row(0, None, "origin", 50), page_row(1, None, "origin", 40), page_row(2, 1, "spec", 45),
                  page_row(3, 2, "code", 35)]
-        self.assertEqual(page(moved)[1]("Share of the gap closed by the spec"), "-100%")
+        self.assertEqual(page(moved)[1]("Name gap moved, by kind of PR"), "net −5.0°")
         flat = [page_row(0, None, "origin", 70.8), page_row(1, None, "origin", 70.8), page_row(2, 1, "other", 70.8)]
-        self.assertEqual(page(flat)[1]("Share of the gap closed by the spec"), "–")
+        self.assertEqual(page(flat)[1]("Name gap moved, by kind of PR"), "net ±0.0°")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_headline_stats_say_degrees_and_lines_with_their_units(self):
+        # "-226%" read like a bug, and "−67 / +2198 lines" had no unit; the share stays in a tooltip.
+        moved = [page_row(0, None, "origin", 50), dict(page_row(1, 1, "spec", 55), deleted=67, added=2198),
+                 page_row(2, 2, "code", 45), dict(page_row(3, 3, "code", 40), deleted=67, added=2198)]
+        error, panels, _ = drawn(moved, origin_lines=822)
+        self.assertIsNone(error)
+        stats = re.sub(r"<[^>]+>", "", panels["stats"])
+        self.assertIn("1 spec-change PR widened it by 5.0°, naming what was not built yet; 2 code PRs closed it by 15.0°", stats)
+        self.assertIn("net −10.0°", stats)
+        self.assertIn('title="Share of the gap closed: spec -50%, code 150%"', panels["stats"])
+        self.assertIn("67 of 822 original spec lines rewritten · 2,198 added", stats)
 
     def test_the_day_total_is_the_run_order_and_the_cut_days_with_specs(self):
         # Specs for Days 12 and 36 and a cut Day 29; plan.md runs 12, 18, 17, 36 and 40.
@@ -1831,7 +1881,7 @@ class CriterionIndexTest(unittest.TestCase):
                 dict(criterion=None, status="error", diagnostic="runner crashed")]),
             dict(day=2, state="stale", why=["spec changed"], checks=[]),
             dict(day=3, state="not checked")])
-        handoffs = [dict(picked=False, text="C3.1 needs follow-up", source="Day 03 Notes")]
+        handoffs = [dict(to=4, picked=False, text="C3.1 needs follow-up", source="Day 03 Notes")]
         rows, attention = repo.inside(lambda blobs: sd.criterion_index(days, reports, handoffs, repo.snaps, blobs))
         self.assertEqual(len(rows), 12)
         by_id = {row["id"]: row for row in rows}
@@ -1902,6 +1952,43 @@ class CriterionIndexTest(unittest.TestCase):
                           ("C1.5", "not_breakable", "the variables live outside the repository"),
                           ("C1.6", "not_breakable", "the variables live outside the repository")])
         self.assertEqual([a["id"] for a in attention if a["reason"] == "evidence_missing"], ["C1.3", "C1.6"])
+
+    def one_day(self, block, test_file=""):
+        repo = Repo()
+        self.addCleanup(repo.close)
+        path = "specs/day-01-x.md"
+        files = {"plan.md": PLAN, path: "# Day 01 — Example\n\n**Phase:** 1\n\n## Acceptance criteria\n\n" + block + "\n## Notes\n"}
+        if test_file:
+            files["tests/test_live.py"] = test_file
+        repo.merge(files)
+        return repo, [dict(day=1, phase=1, file=path, status="done", evidence=sd.criteria(sd.section(files[path], "Acceptance criteria")))]
+
+    def test_open_hand_offs_for_the_next_day_and_unpicked_ones_follow_the_criteria(self):
+        # handoff_unclaimed needs a hand-off to name a criterion; these name their own ID and a day.
+        repo, days = self.one_day("- [x] C1.1 **hold** — Claim.\n      broken: x → y (#1)\n")
+        handoffs = [dict(to=2, id="H01.1", picked=False, source="Day 01 Notes", text="- **Hand-off** H01.1 → Day 2: do x."),
+                    dict(to=2, id="H01.2", picked=True, source="Day 01 Notes", text="picked"),
+                    dict(to=3, picked=False, source="Day 01 Notes", text="for a later day"),
+                    dict(to=None, id="H01.3", picked=False, source="Day 01 Notes", text="**Hand-off** H01.3 → the maintainer: y.")]
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(
+            days, dict(state="loaded", days=[]), handoffs, repo.snaps, blobs, order=[1, 2, 3]))
+        self.assertEqual([a["id"] for a in attention[:-2]], ["C1.1"] * (len(attention) - 2))
+        self.assertEqual(attention[-2:], [
+            dict(id="H01.1", reason="handoff_next", detail="Day 02: **Hand-off** H01.1 → Day 2: do x."),
+            dict(id="H01.3", reason="handoff_unpicked", detail="**Hand-off** H01.3 → the maintainer: y.")])
+
+    def test_a_named_test_ci_can_skip_is_noted_last(self):
+        live = ("import os, unittest\n\n\n@unittest.skipUnless(os.environ.get('DRIVER_LIVE_CLI'), 'live')\n"
+                "class LiveTest(unittest.TestCase):\n    def test_live(self): pass\n")
+        repo, days = self.one_day("- [x] C1.1 **hold** — Claim.\n      Evidence: `LiveTest.test_live` (#1).\n"
+                                  "      broken: x → y (#1)\n", live)
+        rows, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
+        self.assertTrue(rows[0]["test_found"])
+        self.assertEqual(attention[-1], dict(id="C1.1", reason="test_skippable", detail="LiveTest.test_live"))
+        # "Tests on main" counts the names the whole block gives (C04.14 names LiveOnceTest in its claim).
+        days[0]["evidence"][0]["tests"] = {"LiveTest.test_live": "skippable", "LiveOnceTest": "skippable"}
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
+        self.assertEqual(attention[-1]["detail"], "LiveTest.test_live, LiveOnceTest")
 
 
 class EvidenceReportTest(unittest.TestCase):
