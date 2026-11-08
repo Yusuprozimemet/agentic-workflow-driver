@@ -1297,7 +1297,7 @@ class CriterionPanelsTest(unittest.TestCase):
         matrix = panels["criteria-matrix"]
         self.assertIn('<td><span title="not measured">–</span></td>', matrix)
         self.assertIn('<td>no</td>', matrix)
-        inspector = panels["criterion-inspector"]
+        inspector = panels["promise-days"]
         self.assertTrue("specs/day-01.md" in inspector and 'href="../../' not in inspector)
         self.assertIn("&lt;b&gt;x&lt;/b&gt;", inspector)
         self.assertNotIn("<b>x</b>", inspector)
@@ -1364,7 +1364,7 @@ class CriterionPanelsTest(unittest.TestCase):
                    replaces=[], replaced_by=[])
         error, panels, _ = drawn([self.ROW], criteria_index=[row], attention=[])
         self.assertIsNone(error)
-        inspector = panels["criterion-inspector"]
+        inspector = panels["promise-days"]
         self.assertIn("<code>classify()</code> gives a kind", inspector)
         self.assertIn("seen red on <code>41d6563</code>", inspector)
         self.assertNotIn("passed: ", inspector)
@@ -1375,20 +1375,49 @@ class CriterionPanelsTest(unittest.TestCase):
 class PageStructureTest(unittest.TestCase):
     """The page's layout: a contents in page order, and the gap's repeated views under one disclosure, open by default."""
 
-    ORDER = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
-             "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
+    ORDER = ["summary", "promises", "tested", "measurements"]
+    MEASURED = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
+                "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
 
     def setUp(self):
         with open(os.path.join(HERE, "..", "docs", "dashboard", "index.html"), encoding="utf-8") as f:
             self.page = f.read()
 
-    def test_the_contents_links_every_section_in_page_order(self):
+    def test_the_contents_links_every_layer_in_page_order(self):
         toc = re.search(r'<details class="toc" id="toc">(.*?)</details>', self.page, re.S)
         links = re.findall(r'href="#([\w-]+)"', toc.group(1) if toc else "")
         self.assertEqual([i for i in links if f'id="{i}"' not in self.page], [])
         self.assertEqual(links, self.ORDER)
         tops = re.findall(r'<(?:section|div)\b[^>]*\bid="([\w-]+)"', self.page)
         self.assertEqual([i for i in tops if i in self.ORDER], self.ORDER)
+
+    def test_every_measurement_is_still_there_in_its_order_under_measurements(self):
+        below = self.page[self.page.index('id="measurements"'):]
+        at = re.findall(r'\bid="([\w-]+)"', below)
+        self.assertEqual([i for i in self.MEASURED if i not in at], [])
+        self.assertEqual([i for i in at if i in self.MEASURED], self.MEASURED)
+
+    def test_each_measurement_says_what_it_tells_you_in_one_line(self):
+        rows = re.findall(r'<details class="measure"[^>]*>\s*<summary>(.*?)</summary>', self.page, re.S)
+        self.assertGreaterEqual(len(rows), 16)
+        for row in rows:
+            what = re.search(r'class="measure-what">([^<]+)<', row)
+            self.assertTrue(what and len(what.group(1)) <= 100, row)
+
+    def test_the_replay_bar_stays_inside_the_gap_section(self):
+        gap = re.search(r'<details class="measure" id="gap">(.*?)</details>\s*<details class="measure"', self.page, re.S)
+        self.assertIsNotNone(gap)
+        for box in ('class="scrubber"', 'id="stats"', 'id="lines"', 'id="cover"'):
+            self.assertIn(box, gap.group(1))
+        self.assertEqual(self.page.count('class="scrubber"'), 1)
+
+    def test_the_inspector_is_gone_and_the_table_is_under_technical_detail(self):
+        self.assertNotIn("criterion-inspector", self.page)
+        tech = re.search(r'<details class="technical" id="technical-detail">(.*?)</details>', self.page, re.S)
+        self.assertIn('id="criteria-matrix"', tech.group(1))
+
+    def test_the_caveat_stays_at_the_top(self):
+        self.assertLess(self.page.index("experimental diagnostic signals"), self.page.index('id="summary"'))
 
     def test_the_repeated_gap_views_sit_in_one_disclosure_open_by_default(self):
         more = re.search(r'<details id="more-gap" open>\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
@@ -1434,9 +1463,9 @@ class PromisesKeptTest(unittest.TestCase):
         box, legend = self.draw([self.cell("C01.1", 5, "code broken"), self.cell("C01.1", 15, "holds"),
                                  self.cell("C01.2", 15, "holds, never broken"), self.cell("C01.3", 15, "live only")])
         self.assertIn("Nothing was broken at the last re-check", box)
-        self.assertIn("We re-checked 3 promises the software makes, most recently 9 changes ago. 0 failed. 1 has a test never shown to catch a failure.", box)
-        self.assertIn("1 of 3 proven · checked 9 changes ago", box)
-        for line in ("Proven (1)", "Passes, but unproven (1)", "Not checked here (1)", "Broken (0)"):
+        self.assertIn("We re-checked 3 promises the software makes, most recently 9 changes ago. 0 failed. 1 passes with no planted bug tried.", box)
+        self.assertIn("1 of 3 caught a planted bug · checked 9 changes ago", box)
+        for line in ("Planted bug caught (1)", "Passes, no planted bug tried (1)", "Not checked here (1)", "Broken (0)"):
             self.assertIn(line, legend)
 
     def test_a_broken_promise_leads_and_is_named(self):
@@ -2525,6 +2554,222 @@ The cleanup day first.
         self.assertEqual(sd.day_branch(own), own["headRefName"])
         other = dict(headRefName="claude/focused-sagan-96xo1w", title="account-service README: pull the image")
         self.assertEqual(sd.day_branch(other), other["headRefName"])
+
+
+class PlainWordsTest(unittest.TestCase):
+    FILE = os.path.join(HERE, "..", "docs", "dashboard", "plain-promises.json")
+
+    def test_the_first_sentence_is_cut_at_its_end_and_loses_its_backticks(self):
+        self.assertEqual(sd.first_sentence("`classify()` gives a kind. Then more."), "classify() gives a kind.")
+        self.assertEqual(sd.first_sentence("Run `run-steps.py --once` first. Next."), "Run run-steps.py --once first.")
+        self.assertEqual(sd.first_sentence("No full stop here"), "No full stop here")
+        long = sd.first_sentence("word " * 80)
+        self.assertLessEqual(len(long), 201)
+        self.assertTrue(long.endswith("…"))
+
+    def write(self, text):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "plain.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        return path
+
+    def test_a_written_sentence_is_used_and_a_promise_with_none_falls_back(self):
+        rows = [dict(id="C1", claim="`x` does a thing. More."), dict(id="C2", claim="`y` does another. More.")]
+        sd.attach_plain(rows, self.write('{"C1": "Written for a reader."}'))
+        self.assertEqual((rows[0]["plain"], rows[0]["plain_source"]), ("Written for a reader.", "written"))
+        self.assertEqual((rows[1]["plain"], rows[1]["plain_source"]), ("y does another.", "first sentence"))
+
+    def test_a_file_that_cannot_be_read_breaks_nothing(self):
+        for text in ("not json", "[1]", '{"C1": 3}', '{"C1": "  "}'):
+            rows = [dict(id="C1", claim="It works. More.")]
+            sd.attach_plain(rows, self.write(text))
+            self.assertEqual(rows[0]["plain"], "It works.", text)
+        rows = [dict(id="C1", claim="It works.")]
+        sd.attach_plain(rows, os.path.join(HERE, "no-such-file.json"))
+        self.assertEqual(rows[0]["plain_source"], "first sentence")
+
+    def test_each_written_sentence_is_one_short_plain_sentence_of_a_real_criterion(self):
+        with open(self.FILE, encoding="utf-8") as f:
+            written = json.load(f)
+        specs = ""
+        for name in sorted(os.listdir(os.path.join(HERE, "..", "specs"))):
+            if re.match(r"day-\d+.*\.md$", name):
+                with open(os.path.join(HERE, "..", "specs", name), encoding="utf-8") as f:
+                    specs += f.read()
+        self.assertGreaterEqual(len(written), 62)
+        self.assertEqual([k for k in written if not re.search(rf"^- \[[ x]\] {re.escape(k)}\b", specs, re.M)], [])
+        for cid, text in written.items():
+            self.assertRegex(text, r"^[A-Z].*\.$", cid)
+            self.assertLessEqual(len(text), 200, cid)
+            self.assertNotIn("`", text, cid)
+            self.assertNotRegex(text, r"\bC\d\d\.\d", cid)
+
+
+class TestInventoryTest(unittest.TestCase):
+    MODULE = ("import unittest\nclass T(unittest.TestCase):\n    def test_a(self):\n        pass\n"
+              "    def test_b(self):\n        text = 'def test_in_a_string(self): pass'\n    def helper(self):\n        pass\n"
+              "def test_state():\n    pass\n")
+
+    def inventory(self, paths):
+        return {g["key"]: g for g in sd.test_inventory(paths, lambda path: self.MODULE)["groups"]}
+
+    def test_each_file_counts_in_the_first_group_that_names_it(self):
+        groups = self.inventory(["tests/test_live_cli.py", "tests/test_dashboard_gap.py", "tests/test_once.py", "scripts/test_break.py"])
+        self.assertEqual({k: g["tests"] for k, g in groups.items()}, dict(driver=2, live=2, gap=2, tooling=2))
+        self.assertEqual({k: g["files"] for k, g in groups.items()}, dict(driver=1, live=1, gap=1, tooling=1))
+
+    def test_only_a_test_method_of_a_class_counts(self):
+        self.assertEqual(self.inventory(["tests/test_x.py"])["driver"]["tests"], 2)
+
+    def test_files_that_are_not_tests_are_left_out_and_the_total_is_the_sum(self):
+        out = sd.test_inventory(["tests/helpers.py", "tests/test_a.py", "scripts/test_b.py", "scripts/break.py"], lambda path: self.MODULE)
+        self.assertEqual(out["total"], 4)
+
+    def test_a_module_that_does_not_parse_is_named_not_counted_as_zero_silently(self):
+        out = sd.test_inventory(["tests/test_bad.py"], lambda path: "def broken(:")
+        self.assertEqual(out["total"], 0)
+        self.assertEqual(out["unreadable"], ["tests/test_bad.py"])
+
+    def test_every_group_says_when_it_runs(self):
+        for g in sd.test_inventory([], lambda path: "")["groups"]:
+            self.assertTrue(g["label"] and g["when"], g)
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class PlainPageTest(unittest.TestCase):
+    """The summary, the promises and the trust table: every number from the data, unknowns as loud as knowns."""
+
+    MERGES = [dict(n=15, merge="bbb", pr=53, sample="day", run=1, copied=0)]
+    GROUPS = dict(total=7, unreadable=[], groups=[
+        dict(key="driver", label="Driver behaviour", when="Every push and pull request", files=1, tests=4),
+        dict(key="live", label="Live runs", when="By hand only", files=1, tests=3)])
+
+    @staticmethod
+    def criterion(cid, day, **more):
+        return dict(dict(id=cid, day=day, tag="new", claim=f"Claim `{cid}`.", plain=f"Plain sentence {cid}.", plain_source="written",
+                         spec="s.md", track="A", prs=[3], tests=[], ticked=True, cited=True, test_found=True,
+                         seen_red=dict(state=True, lines=["seen red"], none=[]),
+                         replay=dict(state="current", status=["passed"], why=[], checks=[]), replaces=[], replaced_by=[]), **more)
+
+    @staticmethod
+    def cell(cid, state):
+        return dict(criterion=cid, day=cid[1:3], n=15, state=state, mixed=False, checks=[dict(check="t", state=state)])
+
+    @staticmethod
+    def day(n, status="done"):
+        return dict(day=n, status=status, phase=0, title=f"Day {n}: title", prs=[], tracks=[], tracks_merged=[], track_work={},
+                    evidence=[], criteria=dict(ticked=0, total=0, new=0, hold=0))
+
+    def draw(self, **more):
+        index = [self.criterion("C01.1", 1), self.criterion("C01.2", 1), self.criterion("C01.3", 1),
+                 self.criterion("C01.4", 1, replaced_by=["C09.9"]),
+                 self.criterion("C06.1", 6, ticked=False, cited=None, seen_red=dict(state=None, lines=[], none=[]),
+                                replay=dict(state="not checked", status=None, why=[], checks=[]))]
+        cells = [self.cell("C01.1", "holds"), self.cell("C01.2", "holds, never broken"), self.cell("C01.3", "live only")]
+        tokens = [dict(date="2026-01-01", day=1, model="claude-opus-5-5", agent="main", input=1, output=1, cache_write=0, cache_read=0, replies=1, cost=12.5)]
+        now = dict(generated="2026-01-01T00:00", head="abc", last_pr=62, current_day=6, next_step="Day 06 Track C: C06.1: `x`", open_prs=[])
+        data = dict(now=now, criteria_index=index, attention=[], tokens=tokens, test_inventory=self.GROUPS, order=[1, 6, 7, 8],
+                    replay=dict(state="loaded", states=[], merges=self.MERGES, cells=cells), days=[self.day(1), self.day(6, "active")])
+        data.update(more)
+        days = data.pop("days")
+        rows = [dict(page_row(0, None, "origin", 40), code_churn=0, evidence=dict(present=135, skippable=0, missing=0, retired=0))]
+        error, panels, logged = drawn(rows, days=days, **data)
+        self.assertIsNone(error)
+        return panels
+
+    def test_a_day_has_one_result_line_counted_from_the_replay(self):
+        box = self.draw()["promise-days"]
+        self.assertIn("2 of 3 promises kept", box)
+        self.assertIn("1 replaced by a later promise", box)
+        self.assertIn("1 not checked here", box)
+        self.assertIn("0 of 1 promise finished so far", box)
+
+    def test_a_promise_reads_as_its_plain_sentence_and_three_facts(self):
+        box = self.draw()["promise-days"]
+        self.assertIn("Plain sentence C01.1.", box)
+        for name in ("Test passed at the last re-check", "Failure was recorded when built", "Planted bug caught on re-check"):
+            self.assertEqual(box.count(name), 5, name)
+
+    def test_the_facts_tell_the_measurements_apart(self):
+        box = self.draw()["promise-days"]
+        never = box[box.index("Plain sentence C01.2."):box.index("Plain sentence C01.3.")]
+        self.assertIn("Yes, noted in the spec", never)
+        self.assertIn("Not tried", never)
+        caught = box[box.index("Plain sentence C01.1."):box.index("Plain sentence C01.2.")]
+        self.assertIn("Yes, 9 changes ago", caught)
+
+    def test_nothing_on_the_page_calls_a_promise_proven(self):
+        panels = self.draw()
+        for name in ("summary-cards", "summary-known", "promise-days", "promise-key", "trust-table", "replay", "replay-legend"):
+            self.assertNotRegex(re.sub(r"<[^>]+>", " ", panels[name]), r"(?i)\bproven\b|\bproved\b", name)
+
+    def test_the_c_number_sits_under_technical_detail_only(self):
+        box = self.draw()["promise-days"]
+        self.assertEqual(box.count('class="tech"'), 5)
+        outside = re.sub(r'<details class="tech">.*?</details>|Plain sentence C\d+\.\d+', "", box, flags=re.S)
+        self.assertNotRegex(re.sub(r"<[^>]+>", " ", outside), r"\bC0\d\.\d")
+
+    def test_a_missing_plain_sentence_shows_the_claim(self):
+        row = dict(self.criterion("C01.1", 1))
+        del row["plain"]
+        self.assertIn("<code>C01.1</code>", self.draw(criteria_index=[row])["promise-days"])
+
+    def test_the_summary_says_what_is_not_known_beside_what_is(self):
+        panels = self.draw()
+        known = panels["summary-known"]
+        self.assertIn("What we do not know yet", known)
+        self.assertIn("1 promise passes, but no planted bug has tried it", known)
+        self.assertIn("1 promise cannot be checked here", known)
+        self.assertIn("1 promise is not finished yet", known)
+        self.assertIn("The last re-check was 9 changes ago, and it is run by hand", known)
+        cards = panels["summary-cards"]
+        self.assertIn("1 of 4 days finished", cards)
+        self.assertIn("Nothing was broken at the last re-check", cards)
+        self.assertIn("$12.50", cards)
+        self.assertIn("Plain sentence C06.1.", cards)
+
+    def test_a_broken_promise_leads_the_health(self):
+        cells = [self.cell("C01.1", "code broken"), self.cell("C01.2", "holds"), self.cell("C01.3", "holds")]
+        replay = dict(state="loaded", states=[], merges=self.MERGES, cells=cells)
+        cards = self.draw(replay=replay)["summary-cards"]
+        self.assertIn("1 promise is broken", cards)
+        self.assertNotIn("Nothing was broken", cards)
+
+    def test_no_recheck_is_not_reported_as_healthy(self):
+        panels = self.draw(replay=dict(state="absent"))
+        self.assertNotIn("Nothing was broken", panels["summary-cards"])
+        self.assertIn("Not known", panels["summary-cards"])
+        self.assertNotIn("promises kept", panels["promise-days"])
+        self.assertIn("no re-check on record", panels["promise-days"])
+
+    def test_the_test_table_comes_from_the_data_and_explains_the_chart(self):
+        panels = self.draw()
+        groups = panels["test-groups"]
+        self.assertIn("Driver behaviour", groups)
+        self.assertIn(">4<", groups)
+        self.assertIn(">7<", groups)
+        self.assertIn("By hand only", groups)
+        self.assertIn("135", panels["test-note"])
+        self.assertIn("not all tests", panels["test-note"])
+
+    def test_with_no_inventory_the_table_says_so(self):
+        self.assertIn("Not in this data", self.draw(test_inventory=None)["test-groups"])
+
+    def test_the_trust_table_is_per_feature_and_totals_the_promises(self):
+        panels = self.draw()
+        table = panels["trust-table"]
+        self.assertIn("Working out the next step", table)
+        self.assertIn("1 of 3", table)
+        self.assertIn("run by hand", panels["trust-note"])
+        self.assertIn("9 changes ago", panels["trust-note"])
+
+    def test_the_evidence_report_calls_the_recorded_proof_what_it_is(self):
+        with open(os.path.join(HERE, "..", "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
+            script = f.read()
+        self.assertNotIn('"Criteria proved"', script)
+        self.assertIn('["proof", "Evidence on record"]', script)
 
 
 if __name__ == "__main__":

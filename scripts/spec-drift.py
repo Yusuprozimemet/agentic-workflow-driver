@@ -44,6 +44,7 @@ the packages each service takes under `package_root` (`services`), and the infra
 (`infra_workflow`; none, and gh is not asked for its runs).
 """
 import argparse
+import ast
 import builtins
 import collections
 import datetime
@@ -1642,6 +1643,7 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
             claim = re.split(r"\n\s*(?:Evidence|Test|broken|Replaces):", block, maxsplit=1, flags=re.I)[0]
             claim = re.sub(r"^- \[[ x]\]\s*\S+\s*(?:\*\*(?:new|hold)\*\*\s*[—-]\s*)?", "", claim)
             row = dict(id=c["id"], day=day["day"], phase=day.get("phase"), tag=c["kind"], claim=" ".join(claim.split()),
+                       ticked=bool(c["ticked"]),
                        spec=day["file"] + "#acceptance-criteria", track=track,
                        prs=sorted({int(n) for n in CITED_PR.findall(evidence_text)}), tests=tests,
                        cited=cited, test_found=found, seen_red=dict(state=red, lines=red_lines, none=none), replay=replay,
@@ -1695,6 +1697,75 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
                 attention.append(dict(id=h.get("id") or h["source"], reason=reason,
                                       detail=(f"Day {to:02d}: " if to is not None else "") + text))
     return rows, attention
+
+
+def first_sentence(text, limit=200):
+    """A claim's first sentence for a reader, its backticks gone: the fallback for a promise with no plain
+    sentence. It ends at a full stop before a capital, a quote or the end, so `run-steps.py --once` stays whole."""
+    text = " ".join(text.replace("`", "").split())
+    match = re.match(r"(.+?[.!?])(?=\s+[A-Z\"]|\s*$)", text)
+    sentence = match.group(1) if match else text
+    return sentence if len(sentence) <= limit else sentence[:limit].rsplit(" ", 1)[0] + "…"
+
+
+def attach_plain(index, path=None):
+    """Each criterion's plain sentence from docs/dashboard/plain-promises.json, or the first sentence of
+    its claim: a new day with no entry, or a file that cannot be read, must not break the page."""
+    path = path or os.path.join(PAGE, "plain-promises.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            written = json.load(f)
+    except (OSError, ValueError):
+        written = {}
+    if not isinstance(written, dict):
+        written = {}
+    for row in index:
+        text = written.get(row["id"])
+        ok = isinstance(text, str) and text.strip()
+        row["plain"] = text.strip() if ok else first_sentence(row["claim"])
+        row["plain_source"] = "written" if ok else "first sentence"
+
+
+# What runs each test file, first match wins: tests.yml runs tests/ on every push and pull request, where
+# the live modules skip without DRIVER_LIVE_CLI; spec-drift-tests.yml runs scripts/test_*.py.
+TEST_GROUPS = (
+    ("live", r"^tests/test_live_", "Live runs against real Claude",
+     "By hand only: skipped in CI, which has no login or budget"),
+    ("gap", r"^tests/test_dashboard_gap\.py$", "The dashboard's gap numbers", "Every push and pull request"),
+    ("driver", r"^tests/test_[^/]*\.py$", "Driver behaviour", "Every push and pull request"),
+    ("tooling", r"^scripts/test_[^/]*\.py$", "Project tooling",
+     "Only on pull requests that touch a script or a file they read (spec-drift-tests.yml)"),
+)
+
+
+def count_tests(source):
+    """The test methods of a module's classes, as unittest finds them; a module that does not parse is None."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    return sum(isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f.name.startswith("test")
+               for c in ast.walk(tree) if isinstance(c, ast.ClassDef) for f in c.body)
+
+
+def test_inventory(paths, read):
+    """The tests on main by what runs them: each file counted once, in the first of TEST_GROUPS that
+    names it. `read` gives a path's text; a module that does not parse is named, not counted."""
+    groups = {key: dict(key=key, label=label, when=when, files=0, tests=0) for key, _, label, when in TEST_GROUPS}
+    unreadable = []
+    for path in sorted(paths):
+        key = next((k for k, pattern, _, _ in TEST_GROUPS if re.search(pattern, path)), None)
+        if key is None:
+            continue
+        count = count_tests(read(path))
+        if count is None:
+            unreadable.append(path)
+            continue
+        groups[key]["files"] += 1
+        groups[key]["tests"] += count
+    # In the order a reader meets them: what the driver does first.
+    ordered = [groups[k] for k in ("driver", "live", "gap", "tooling")]
+    return dict(groups=ordered, total=sum(g["tests"] for g in ordered), unreadable=unreadable)
 
 
 def criterion_evidence(block):
@@ -1907,6 +1978,9 @@ def main():
         handoffs = hand_offs(days, order, head, blobs)
         checks = evidence_checks(days, snaps)
         index, attention = criterion_index(days, checks, handoffs, snaps, blobs, order)
+        attach_plain(index)
+        tests = test_inventory(run("git", "ls-tree", "-r", "--name-only", head, "tests/", "scripts/").split("\n"),
+                               lambda path: blobs.read(head, path))
         now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
                    head=snaps[-1]["sha"], last_pr=snaps[-1]["pr"],
                    current_day=next((d["day"] for d in days if d["status"] == "active"), None),
@@ -1917,7 +1991,7 @@ def main():
                     order=[d for d in order if d not in PLACEHOLDERS],
                     out_of_order=out_of_order(order),
                     removals=removal_history(days, snaps, blobs),
-                    hand_offs=handoffs, criteria_index=index, attention=attention,
+                    hand_offs=handoffs, criteria_index=index, attention=attention, test_inventory=tests,
                     defect_recurrence=recurrence(days),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     other_groups=other_groups(rows),

@@ -1022,7 +1022,7 @@ function drawEvidence() {
 
 // The report scripts/evidence.py wrote, as spec-drift.py read it. No report is "not checked", and a
 // day the report leaves out is too: neither is ever drawn as a pass.
-const CHECK_KINDS = [["named_test", "Named tests"], ["verify", "Verify"], ["break", "Breaks replayed"], ["proof", "Criteria proved"]];
+const CHECK_KINDS = [["named_test", "Named tests"], ["verify", "Verify"], ["break", "Breaks replayed"], ["proof", "Evidence on record"]];
 function drawEvidenceChecks() {
   const ec = DATA.evidence_checks || { state: "absent" }, box = document.getElementById("evidence-checks");
   if (ec.state === "absent") {
@@ -1054,7 +1054,7 @@ function drawEvidenceChecks() {
 
 // spec-drift.py's proof_kinds, strongest first; not recorded is drawn apart, as an outline.
 const PROOF = [["test", "Named test", "var(--p-test)"], ["command", "Command", "var(--p-command)"],
-  ["break", "Break", "var(--p-break)"], ["reader", "Reader", "var(--p-reader)"], ["unproved", "Unproved", "var(--other)"]];
+  ["break", "Break", "var(--p-break)"], ["reader", "Reader", "var(--p-reader)"], ["unproved", "Nothing on record", "var(--other)"]];
 function drawProofKinds() {
   const ec = DATA.evidence_checks || { state: "absent" }, box = document.getElementById("proof-kinds");
   const legend = document.getElementById("proof-kinds-legend");
@@ -1070,7 +1070,7 @@ function drawProofKinds() {
   const yMax = Math.max(4, Math.ceil(Math.max(...days.map(total)) / 4) * 4);
   const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
   const bw = (LW - P.l - P.r) / days.length, w = Math.min(28, bw - 6);
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Criteria per finished day by what proved them" }, box);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Criteria per finished day by the evidence on record" }, box);
   steps(0, yMax, 4).forEach(t => {
     el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
     el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t;
@@ -1104,7 +1104,7 @@ function drawProofKinds() {
 const REPLAY_LOOK = {
   "code broken": { group: "broken" },
   "test weakened": { group: "repair", why: "its test no longer catches the bug it used to" },
-  "break no longer applies": { group: "repair", why: "the code moved, so its test could not be re-proven" },
+  "break no longer applies": { group: "repair", why: "the code moved, so the planted bug could not be put back" },
   "not runnable": { group: "skipped", why: "the check could not run" },
   "not applicable on this platform": { group: "skipped", why: "needs a different computer" },
   "live only": { group: "skipped", why: "needs a real live run" },
@@ -1115,8 +1115,8 @@ const REPLAY_LOOK = {
 const PROMISE_GROUPS = {
   broken: { word: "Broken", means: "the promise no longer holds", glyph: "✕" },
   repair: { word: "Test needs repair", means: "its test cannot be trusted to catch a failure", glyph: "!" },
-  proven: { word: "Proven", means: "we broke it on purpose and the test noticed" },
-  unproven: { word: "Passes, but unproven", means: "the test passes, but we never showed it can fail" },
+  proven: { word: "Planted bug caught", means: "we planted a bug on purpose and its test noticed" },
+  unproven: { word: "Passes, no planted bug tried", means: "the test passes, but no bug has been planted to see if it would notice" },
   skipped: { word: "Not checked here", means: "needs a real live run or a different computer" },
 };
 // A reader's name for what each finished day built. A day not named here shows its spec's title up to the colon.
@@ -1130,27 +1130,31 @@ const PROMISE_FEATURES = {
 const promiseFeature = day => PROMISE_FEATURES[day]
   || ((DATA.days.find(d => d.day === day) || {}).title || `Day ${day}`).replace(/`/g, "").split(":")[0];
 const promiseTile = group => `<i class="promise ${group}">${PROMISE_GROUPS[group].glyph || ""}</i>`;
+const plural = (n, one, more) => `${n} ${n === 1 ? one : more}`;
+// One reading of the re-check history for every panel that speaks about promises, so they cannot disagree:
+// each promise's newest check, less those not in force and those a later promise replaced.
+function promiseReading() {
+  const rp = DATA.replay || { state: "absent" }, index = DATA.criteria_index || [];
+  const replaced = new Set(index.filter(c => (c.replaced_by || []).length).map(c => c.id));
+  const latest = new Map();
+  (rp.cells || []).forEach(c => { if (!latest.has(c.criterion) || latest.get(c.criterion).n < c.n) latest.set(c.criterion, c); });
+  const promises = [...latest.values()].filter(c => REPLAY_LOOK[c.state].group && !replaced.has(c.criterion))
+    .map(c => ({ ...c, group: REPLAY_LOOK[c.state].group, day: Number(c.day) }));
+  const merges = rp.merges || [], byN = new Map(merges.map(m => [m.n, m])), lastPr = (DATA.now || {}).last_pr;
+  const age = pr => pr == null || lastPr == null ? "" : pr >= lastPr ? "at the latest change" : plural(lastPr - pr, "change ago", "changes ago");
+  const inGroup = (list, g) => list.filter(p => p.group === g);
+  return { rp, latest, promises, byN, age, inGroup, newest: merges.length ? age(merges[merges.length - 1].pr) : "" };
+}
 function drawReplay() {
-  const rp = DATA.replay || { state: "absent" }, box = document.getElementById("replay");
+  const reading = promiseReading(), { rp, promises, byN, age, inGroup, newest } = reading, box = document.getElementById("replay");
   const legend = document.getElementById("replay-legend"), table = document.getElementById("replay-table");
   box.innerHTML = legend.innerHTML = table.innerHTML = "";
   table.hidden = true;
   if (rp.state === "absent") { box.innerHTML = `<p class="off">No history: <code>python scripts/replay-history.py</code> writes <code>docs/dashboard/replay-history.json</code>.</p>`; return; }
   if (rp.state === "invalid") { box.innerHTML = `<p class="load-error">replay-history.json could not be read: ${esc(rp.why)}. Nothing is counted as holding.</p>`; return; }
-  const index = DATA.criteria_index || [], byN = new Map(rp.merges.map(m => [m.n, m]));
-  const claims = new Map(index.map(c => [c.id, c.claim]));
-  const replaced = new Set(index.filter(c => (c.replaced_by || []).length).map(c => c.id));
-  // A promise reads as its newest check; older merges stay in the table below.
-  const latest = new Map();
-  rp.cells.forEach(c => { if (!latest.has(c.criterion) || latest.get(c.criterion).n < c.n) latest.set(c.criterion, c); });
-  const promises = [...latest.values()].filter(c => REPLAY_LOOK[c.state].group && !replaced.has(c.criterion))
-    .map(c => ({ ...c, group: REPLAY_LOOK[c.state].group, day: Number(c.day) }));
+  const claims = new Map((DATA.criteria_index || []).map(c => [c.id, c.claim]));
   if (!promises.length) { box.innerHTML = `<p class="off">No merge sampled yet.</p>`; return; }
 
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  const inGroup = (list, g) => list.filter(p => p.group === g);
-  const lastPr = (DATA.now || {}).last_pr;
-  const age = pr => pr == null || lastPr == null ? "" : pr >= lastPr ? "at the latest change" : plural(lastPr - pr, "change ago", "changes ago");
   const sentence = p => {
     const text = (claims.get(p.criterion) || "No description found").replace(/`/g, "");
     return text.length > 170 ? text.slice(0, 170).replace(/\s+\S*$/, "") + "…" : text;
@@ -1165,10 +1169,9 @@ function drawReplay() {
   const verdict = broken.length ? plural(broken.length, "promise is broken", "promises are broken")
     : repair.length ? plural(repair.length, "test needs repair", "tests need repair")
     : "Nothing was broken at the last re-check";
-  const newest = age(rp.merges[rp.merges.length - 1].pr);
   const covered = `We re-checked ${plural(promises.length, "promise", "promises")} the software makes${newest ? `, most recently ${newest}` : ""}. ${broken.length} failed.`
     + (repair.length && broken.length ? ` ${plural(repair.length, "test needs", "tests need")} repair.` : "")
-    + (unproven ? ` ${plural(unproven, "has a test", "have tests")} never shown to catch a failure.` : "");
+    + (unproven ? ` ${plural(unproven, "passes", "pass")} with no planted bug tried.` : "");
   const problems = [...broken, ...repair];
 
   const days = [...new Set(promises.map(p => p.day))].sort((a, b) => a - b);
@@ -1179,7 +1182,7 @@ function drawReplay() {
     const oldest = age(byN.get(Math.min(...mine.map(p => p.n))).pr);
     const list = Object.keys(PROMISE_GROUPS).flatMap(g => inGroup(mine, g).map(item)).join("");
     return `<details class="promise-row"><summary><span class="promise-name">${esc(promiseFeature(day))}</span><span class="promise-tiles" role="img" aria-label="${esc(label)}">${tiles}</span>`
-      + `<span class="promise-age">${inGroup(mine, "proven").length} of ${mine.length} proven${oldest ? ` · checked ${oldest}` : ""}</span></summary><ul class="promise-list">${list}</ul></details>`;
+      + `<span class="promise-age">${inGroup(mine, "proven").length} of ${mine.length} caught a planted bug${oldest ? ` · checked ${oldest}` : ""}</span></summary><ul class="promise-list">${list}</ul></details>`;
   }).join("");
   box.innerHTML = `<p class="promise-verdict">${esc(verdict)}</p><p class="promise-covered">${esc(covered)}</p>`
     + (problems.length ? `<ul class="promise-list">${problems.map(item).join("")}</ul>` : "") + rows;
@@ -1491,25 +1494,31 @@ const replayCount = status => {
     ? `<b class="replay-bad">✗ ${n[s]} ${esc(s)}</b>` : `${n[s]} ${esc(s)}`).join(" · ");
 };
 const itemText = item => `<b>${esc(item.id)}</b> · ${esc(reasonLabels[item.reason] || item.reason)}: ${esc(item.detail)}`;
-function inspect(id) {
+// What the Inspector used to show for a criterion or day: now opened directly under what was clicked.
+function detailFor(id) {
   const row = criteria.find(c => c.id === id), items = attention.filter(a => a.id === id);
-  const box = document.getElementById("criterion-inspector");
-  if (!id) { box.innerHTML = DATA.criteria_index == null || DATA.attention == null ? "Not in this data" : "Select a criterion or day."; return; }
   // A check with no diagnostic says only its status: those are counted, not listed one by one.
   const tally = row ? Object.entries(row.replay.checks.reduce((n, c) => (n[c.status] = (n[c.status] || 0) + 1, n), {}))
     .map(([s, n]) => `${n} ${esc(s)}`).join(", ") : "";
   const details = row ? `<h3>${esc(row.id)}</h3><p>${md(row.claim)}</p>
     <p>Spec: ${row.spec ? esc(row.spec) : unknown} · Track: ${row.track == null ? unknown : esc(row.track)}</p>
     <p>PRs: ${values(row.prs)} · Tests: ${values(row.tests)}</p>
-    <p>Seen red: ${row.seen_red.lines && row.seen_red.lines.length ? row.seen_red.lines.map(md).join(", ") : unknown}</p>
+    <p>Failure recorded when built: ${row.seen_red.lines && row.seen_red.lines.length ? row.seen_red.lines.map(md).join(", ") : unknown}</p>
     <p>Replay: ${esc(row.replay.state)}${tally ? ` · checks: ${tally}` : ""} · ${values(row.replay.why)}</p>
     <ul>${row.replay.checks.filter(c => c.diagnostic != null).map(c => `<li>${esc(c.status)}: ${esc(c.diagnostic)}</li>`).join("")}</ul>
     <p>Replaces: ${values(row.replaces)} · Replaced by: ${values(row.replaced_by)}</p>` : `<h3>${esc(id)}</h3>`;
-  box.innerHTML = details + `<p>Attention:</p><ul>${items.map(a => `<li>${itemText(a)}</li>`).join("")}</ul>`;
+  return details + (items.length ? `<p>Attention:</p><ul>${items.map(a => `<li>${itemText(a)}</li>`).join("")}</ul>` : "");
+}
+// Opens html directly under the clicked element, or closes it if it is already open.
+function detailUnder(anchor, wrap) {
+  const next = anchor.nextElementSibling;
+  if (next && next.hasAttribute("data-detail")) { next.remove(); anchor.setAttribute("aria-expanded", "false"); return; }
+  anchor.insertAdjacentHTML("afterend", wrap);
+  anchor.setAttribute("aria-expanded", "true");
 }
 function drawCriteria() {
   const list = document.getElementById("attention-list"), matrix = document.getElementById("criteria-matrix");
-  const button = (a, i) => `<button type="button" data-attention="${i}">${itemText(a)}</button>`;
+  const button = (a, i) => `<button type="button" data-attention="${i}" aria-expanded="false">${itemText(a)}</button>`;
   const flagged = attention.map(button).filter((_, i) => !(attention[i].reason in NOTED));
   const noted = Object.entries(NOTED).map(([reason, [head, why]]) => {
     const items = attention.map(button).filter((_, i) => attention[i].reason === reason);
@@ -1517,17 +1526,180 @@ function drawCriteria() {
   }).join("");
   list.innerHTML = DATA.attention == null ? "Not in this data" : (flagged.length ? flagged.join("") : "Nothing needs attention") + noted;
   matrix.innerHTML = DATA.criteria_index == null ? "<caption>Not in this data</caption>" : !criteria.length ? "<caption>No criteria yet</caption>" :
-    `<thead><tr><th>Criterion</th><th>Day</th><th>Tag</th><th>Cites a PR</th><th>Test found</th><th>Seen red</th><th>Replay</th></tr></thead><tbody>${criteria.map((c, i) =>
-      `<tr tabindex="0" role="button" data-criterion="${i}"><td>${esc(c.id)}</td><td>${esc(c.day)}</td><td>${esc(c.tag)}</td><td>${measured(c.cited)}</td><td>${measured(c.test_found)}</td><td>${seenRed(c.seen_red)}</td><td>${replayCount(c.replay.status)}</td></tr>`).join("")}</tbody>`;
-  list.addEventListener("click", e => { const b = e.target.closest("button[data-attention]"); if (b) inspect(attention[+b.dataset.attention].id); });
-  const selectRow = e => { const r = e.target.closest("tr[data-criterion]"); if (r) inspect(criteria[+r.dataset.criterion].id); };
-  matrix.addEventListener("click", selectRow);
-  matrix.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRow(e); } });
-  inspect(attention.length ? attention[0].id : criteria.length ? criteria[0].id : null);
+    `<thead><tr><th>Criterion</th><th>Day</th><th>Tag</th><th>Cites a PR</th><th>Test found</th><th>Failure recorded when built</th><th>Replay</th></tr></thead><tbody>${criteria.map((c, i) =>
+      `<tr tabindex="0" role="button" aria-expanded="false" data-criterion="${i}"><td>${esc(c.id)}</td><td>${esc(c.day)}</td><td>${esc(c.tag)}</td><td>${measured(c.cited)}</td><td>${measured(c.test_found)}</td><td>${seenRed(c.seen_red)}</td><td>${replayCount(c.replay.status)}</td></tr>`).join("")}</tbody>`;
+  list.addEventListener("click", e => {
+    const b = e.target.closest("button[data-attention]");
+    if (b) detailUnder(b, `<div class="inline-detail" data-detail>${detailFor(attention[+b.dataset.attention].id)}</div>`);
+  });
+  const toggleRow = e => {
+    const r = e.target.closest("tr[data-criterion]");
+    if (r) detailUnder(r, `<tr class="detail-row" data-detail><td colspan="7"><div class="inline-detail">${detailFor(criteria[+r.dataset.criterion].id)}</div></td></tr>`);
+  };
+  matrix.addEventListener("click", toggleRow);
+  matrix.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleRow(e); } });
 }
-panel("attention-list", drawCriteria);
 
-panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
+/* ---------- the promises, in plain words ---------- */
+// Where a promise stands, from the same re-check data as "Do the promises still hold?": its group there,
+// or why it is not in that count.
+function promiseStatus(c, reading) {
+  const day = DATA.days.find(d => d.day === c.day);
+  if (!day || !finished(day)) return "building";
+  if ((c.replaced_by || []).length) return "replaced";
+  if (c.ticked === false) return "open";
+  const cell = reading.latest.get(c.id), look = cell && REPLAY_LOOK[cell.state];
+  return look && look.group ? look.group : "unchecked";
+}
+// The three measurements that once shared the word "proven", as separate facts. Each says how it knows.
+function promiseFacts(c, status, reading) {
+  const cell = reading.latest.get(c.id), look = cell ? REPLAY_LOOK[cell.state] : {};
+  const when = cell ? reading.age((reading.byN.get(cell.n) || {}).pr) : "";
+  const mixed = cell && cell.mixed ? " (its checks disagree)" : "";
+  const not = { building: "Not yet: this day is not finished", replaced: "No longer checked: replaced by a later promise",
+    open: "Not run: this promise was left unticked", unchecked: "Not run: no re-check on record" }[status];
+  const passed = not ? [null, not] : status === "skipped" ? [null, `Not run: ${look.why}`]
+    : status === "broken" ? [false, `No${when ? ", " + when : ""}: the promise no longer holds${mixed}`]
+    : status === "repair" ? [null, `Cannot be trusted: ${look.why}${mixed}`]
+    : [true, `Yes${when ? ", " + when : ""}${mixed}`];
+  const s = c.seen_red || {};
+  const recorded = status === "building" && s.state == null ? [null, "Not yet: this day is not finished"]
+    : s.state ? [true, "Yes, noted in the spec"]
+    : s.state === false ? (s.none && s.none.length ? [null, `Cannot be planted here: ${s.none.join("; ")}`] : [false, "No"])
+    : [null, "Not measured"];
+  const planted = not ? [null, not] : status === "skipped" ? [null, `Not run: ${look.why}`]
+    : status === "proven" ? [true, `Yes, ${when || "at the last re-check"}${mixed}`]
+    : status === "unproven" ? [null, "Not tried: no planted bug is on record for it"]
+    : status === "broken" ? [false, "Not reached: the test itself failed"]
+    : [false, `No: ${look.why}`];
+  return [["Test passed at the last re-check", ...passed], ["Failure was recorded when built", ...recorded], ["Planted bug caught on re-check", ...planted]];
+}
+const STATUS_TILE = { building: "pending", replaced: "pending", open: "pending", unchecked: "pending" };
+const statusTile = s => `<i class="promise ${STATUS_TILE[s] || s}">${(PROMISE_GROUPS[s] || {}).glyph || ""}</i>`;
+const plainOf = c => c.plain ? esc(c.plain) : md(c.claim);
+function drawPromises() {
+  const box = document.getElementById("promise-days"), key = document.getElementById("promise-key");
+  if (DATA.criteria_index == null) { box.innerHTML = `<p class="off">Not in this data</p>`; return; }
+  if (!criteria.length) { box.innerHTML = `<p class="off">No promises yet.</p>`; return; }
+  const reading = promiseReading();
+  const days = [...new Set(criteria.map(c => c.day))].sort((a, b) => rank(a) - rank(b));
+  box.innerHTML = days.map(day => {
+    const rows = criteria.filter(c => c.day === day).map(c => ({ c, status: promiseStatus(c, reading) }));
+    const n = s => rows.filter(r => r.status === s).length;
+    const building = n("building") === rows.length;
+    let line, parts;
+    if (building) {
+      const done = rows.filter(r => r.c.ticked).length;
+      line = `${done} of ${plural(rows.length, "promise", "promises")} finished so far`;
+      parts = ["this day is still being built"];
+    } else if (reading.rp.state !== "loaded") {
+      line = `${plural(rows.length, "promise", "promises")}: no re-check on record`;
+      parts = [];
+    } else {
+      const live = rows.length - n("replaced"), kept = n("proven") + n("unproven");
+      line = `${kept} of ${plural(live, "promise", "promises")} kept`;
+      parts = [n("broken") && `${n("broken")} broken`, n("repair") && plural(n("repair"), "test needs repair", "tests need repair"),
+        n("proven") && `${n("proven")} caught a planted bug`, n("unproven") && `${n("unproven")} with no planted bug tried`,
+        n("skipped") && `${n("skipped")} not checked here`, n("open") && `${n("open")} left unticked`, n("unchecked") && `${n("unchecked")} with no re-check`,
+        n("replaced") && `${n("replaced")} replaced by a later promise`].filter(Boolean);
+    }
+    const items = rows.map(({ c, status }) => `<li><details class="promise-item"><summary>${statusTile(status)}<span>${plainOf(c)}</span></summary>
+      <ul class="facts">${promiseFacts(c, status, reading).map(([name, ok, text]) => `<li class="fact ${ok === true ? "yes" : ok === false ? "no" : "unknown"}"><span class="fact-name">${name}</span><span class="fact-value">${esc(text)}</span></li>`).join("")}</ul>
+      <details class="tech"><summary>Technical detail</summary><div class="inline-detail">${detailFor(c.id)}</div></details></details></li>`).join("");
+    return `<details class="promise-row promise-day"><summary><span class="promise-name">Day ${dd(day)} · ${esc(promiseFeature(day))}</span><span class="promise-tiles" aria-hidden="true">${rows.map(r => statusTile(r.status)).join("")}</span><span class="promise-age"><b>${esc(line)}</b>${parts.length ? ` · ${esc(parts.join(" · "))}` : ""}</span></summary><ul class="promise-items">${items}</ul></details>`;
+  }).join("");
+  key.innerHTML = `<span><b>Kept</b> means the promise's test passed at the last re-check.</span>`
+    + Object.entries(PROMISE_GROUPS).map(([g, k]) => `<span>${promiseTile(g)}<b>${k.word}</b> ${k.means}</span>`).join("")
+    + `<span><i class="promise pending"></i><b>Not counted</b> not finished yet, or replaced by a later promise</span>`;
+}
+
+/* ---------- the summary ---------- */
+function drawSummary() {
+  const reading = promiseReading(), { rp, promises, inGroup, newest } = reading, now = DATA.now, days = DATA.days;
+  const planned = new Set([...ORDER, ...days.map(d => d.day)]).size, done = days.filter(finished).length;
+  const cur = days.find(d => d.day === now.current_day);
+  const count = g => inGroup(promises, g).length;
+  const building = criteria.filter(c => promiseStatus(c, reading) === "building").length;
+  const ec = DATA.evidence_checks || { state: "absent" };
+  const checked = ec.state === "loaded" ? ec.days.filter(d => d.counts) : [];
+  const stale = ec.state === "loaded" ? ec.days.filter(d => d.state !== "current").length : 0;
+  const tally = s => checked.reduce((t, d) => t + Object.values(d.counts).reduce((a, k) => a + k[s], 0), 0);
+  const failed = tally("failed") + tally("error");
+
+  const known = rp.state === "loaded" && promises.length > 0;
+  const health = !known ? ["Not known", "no re-check of the promises is on record", "unknown"]
+    : count("broken") ? [plural(count("broken"), "promise is broken", "promises are broken"), "see the promises below", "bad"]
+    : count("repair") ? [plural(count("repair"), "test needs repair", "tests need repair"), "see the promises below", "bad"]
+    : failed ? [plural(failed, "evidence check failed", "evidence checks failed"), "see Evidence behind the ticks", "bad"]
+    : ["Nothing was broken at the last re-check", `${plural(promises.length, "promise", "promises")} re-checked${newest ? `, most recently ${newest}` : ""}`, "good"];
+
+  const nextId = (now.next_step.match(/\bC\d+\.\d+/) || [])[0], nextRow = criteria.find(c => c.id === nextId);
+  const T = DATA.tokens || [], costed = T.filter(r => r.cost);
+  const total = costed.reduce((a, r) => a + r.cost, 0);
+  const card = (k, v, n, tone = "") => `<div class="stat-card ${tone}"><div class="stat-k">${k}</div><div class="stat-v">${v}</div><div class="stat-n">${n}</div></div>`;
+  document.getElementById("summary-cards").innerHTML =
+    card("Progress", `${done} of ${planned} days finished`, cur ? `Day ${dd(cur.day)} in progress: ${md(cur.title)}` : "between days")
+    + card("Health", esc(health[0]), esc(health[1]), health[2])
+    + card("What is next", nextRow ? esc(nextRow.plain || nextRow.claim) : md(now.next_step), md(now.next_step))
+    + card("Cost so far", costed.length ? `${costed.length < T.length ? "at least " : ""}$${fmt(total, 2)}` : "Not known",
+      costed.length ? "AI usage at list prices, counted on the maintainer's computer; sessions run elsewhere are not in it" : "no token counts yet");
+
+  const list = items => `<ul>${items.filter(Boolean).map(t => `<li>${t}</li>`).join("")}</ul>`;
+  const kept = count("proven") + count("unproven");
+  const yes = known ? [
+    `${kept} of ${plural(promises.length, "finished promise", "finished promises")} kept at the last re-check`,
+    `${plural(count("proven"), "promise", "promises")} caught a planted bug`,
+  ] : [];
+  if (checked.length) yes.push(`${plural(tally("passed"), "check", "checks")} of the recorded evidence replayed on the latest code, ${failed} failed`);
+  const I = DATA.test_inventory;
+  if (I && I.total) yes.push(`${plural(I.total, "test", "tests")} in the project`);
+  const live = I && (I.groups.find(g => g.key === "live") || {}).tests;
+  const no = [
+    !known && "Whether the promises still hold: no re-check is on record",
+    count("unproven") && (count("unproven") === 1 ? "1 promise passes, but no planted bug has tried it" : `${count("unproven")} promises pass, but no planted bug has tried them`),
+    count("skipped") && (count("skipped") === 1 ? "1 promise cannot be checked here" : `${count("skipped")} promises cannot be checked here`),
+    building && (building === 1 ? "1 promise is not finished yet" : `${building} promises are not finished yet`),
+    known && newest && `The last re-check was ${newest}, and it is run by hand`,
+    stale && plural(stale, "finished day's evidence report is out of date", "finished days' evidence reports are out of date"),
+    live && `${plural(live, "test runs", "tests run")} against real Claude only by hand, never in CI`,
+  ];
+  document.getElementById("summary-known").innerHTML =
+    `<div class="known yes"><h3>What we know</h3>${list(yes.length ? yes : ["Nothing yet"])}</div>`
+    + `<div class="known no"><h3>What we do not know yet</h3>${list(no.some(Boolean) ? no : ["Nothing listed"])}</div>`;
+}
+
+/* ---------- what is tested, and how much we trust it ---------- */
+function drawTested() {
+  const I = DATA.test_inventory, groups = document.getElementById("test-groups"), note = document.getElementById("test-note");
+  const present = ((R[N - 1] || {}).evidence || {}).present;
+  groups.innerHTML = !I ? "<caption>Not in this data</caption>"
+    : `<thead><tr><th>Group</th><th class="r">Tests</th><th>When they run</th></tr></thead><tbody>`
+      + I.groups.map(g => `<tr><td>${esc(g.label)}</td><td class="r">${g.tests}</td><td class="t">${esc(g.when)}</td></tr>`).join("")
+      + `<tr><td><b>Total</b></td><td class="r"><b>${I.total}</b></td><td></td></tr></tbody>`;
+  note.innerHTML = (present != null
+    ? `The “Tests on main” chart shows “present ${present}”: that counts the test names finished promises cite that still exist, not all tests.`
+    : `The “Tests on main” chart counts the test names finished promises cite that still exist, not all tests.`)
+    + (I && I.unreadable.length ? ` Not counted, because they could not be read: ${I.unreadable.map(esc).join(", ")}.` : "");
+
+  const reading = promiseReading(), { rp, promises, inGroup, newest } = reading;
+  const table = document.getElementById("trust-table"), trust = document.getElementById("trust-note");
+  if (rp.state !== "loaded" || !promises.length) {
+    table.innerHTML = `<caption>No re-check on record, so no confidence can be shown.</caption>`;
+    trust.textContent = "";
+    return;
+  }
+  const row = (name, list, tag = "td") => {
+    const c = g => inGroup(list, g).length, of = n => `${n} of ${list.length}`;
+    return `<tr><${tag}>${name}</${tag}><td class="r">${of(c("proven"))}</td><td class="r">${c("unproven")}</td><td class="r">${c("skipped")}</td><td class="r">${c("broken") + c("repair")}</td></tr>`;
+  };
+  const days = [...new Set(promises.map(p => p.day))].sort((a, b) => a - b);
+  table.innerHTML = `<thead><tr><th>Feature</th><th class="r">Planted bug caught</th><th class="r">Pass, no planted bug tried</th><th class="r">Not checked here</th><th class="r">Broken or needs repair</th></tr></thead><tbody>`
+    + days.map(d => row(esc(promiseFeature(d)), promises.filter(p => p.day === d))).join("") + row("<b>All</b>", promises) + `</tbody>`;
+  trust.textContent = `The re-check is run by hand, so it can be behind the latest change${newest ? `: the last one was ${newest}` : ""}. Confidence is per feature because planted bugs are recorded against promises, not against single tests; a score per test would be invented precision.`;
+}
+panel("attention-list", drawCriteria); panel("promise-days", drawPromises); panel("test-groups", drawTested);
+
+panel("summary-cards", drawSummary); panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
@@ -1556,10 +1728,19 @@ function drawNotMeasured() {
 }
 
 // The contents is open as a rail beside a wide screen's cards, and a menu on a narrow one that a picked link closes.
+// A link to something inside a closed measurement opens that measurement first.
+function openTarget() {
+  const target = location.hash && document.getElementById(location.hash.slice(1));
+  if (!target) return;
+  for (let d = target; d; d = d.parentElement) if (d.tagName === "DETAILS") d.open = true;
+  target.scrollIntoView();
+}
 function contents() {
   const toc = document.getElementById("toc"), wide = matchMedia("(min-width: 1440px)"), fit = () => { toc.open = wide.matches; };
   fit(); wide.addEventListener("change", fit);
   toc.addEventListener("click", e => { if (!wide.matches && e.target.closest("a")) toc.open = false; });
+  addEventListener("hashchange", openTarget);
+  openTarget();
 }
 
 function start() {
