@@ -1136,6 +1136,7 @@ class El {
   constructor(tag) { this.tag = tag; this.attrs = {}; this.kids = []; this.html = ""; this.style = {}; this.dataset = {}; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   appendChild(c) { this.kids.push(c); return c; }
+  after() {}
   set innerHTML(h) { this.html = String(h); this.kids = []; }
   get innerHTML() { return this.html + this.kids.map(k => k.out()).join(""); }
   set textContent(t) { this.innerHTML = t; }
@@ -1147,7 +1148,7 @@ class El {
 }
 const document = { getElementById: id => els[id] || (els[id] = new El("div")), createElementNS: (_, t) => new El(t),
   querySelectorAll: () => [] };
-const ctx = vm.createContext({ document, window: {}, matchMedia: () => ({ matches: true }), DATA: JSON.parse(fs.readFileSync(0, "utf8")),
+const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, matchMedia: () => ({ matches: true, addEventListener() {} }), DATA: JSON.parse(fs.readFileSync(0, "utf8")),
   console: { error: e => logged.push(String(e && e.message || e)) } });
 let error = null;
 try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
@@ -1375,7 +1376,7 @@ class CriterionPanelsTest(unittest.TestCase):
 class PageStructureTest(unittest.TestCase):
     """The page's layout: a contents in page order, and the gap's repeated views under one disclosure, open by default."""
 
-    ORDER = ["summary", "promises", "tested", "measurements"]
+    ORDER = ["summary", "how-this-works", "promises", "tested", "measurements"]
     MEASURED = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
                 "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
 
