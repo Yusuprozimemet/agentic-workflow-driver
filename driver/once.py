@@ -120,6 +120,19 @@ def stop_session(proc, args, project, number, record, stop_number):
             os.killpg(os.getpgid(0), signal.SIGKILL)
 
 
+def write_end(state, session, line, out):
+    # The cost and the refusals are the session's own counts; a reply that is not JSON has neither.
+    data = parsed(out) or {}
+    denials = data.get("permission_denials")
+    runlog.end(
+        state,
+        session,
+        line,
+        data.get("total_cost_usd"),
+        len(denials) if isinstance(denials, list) else 0,
+    )
+
+
 def run_session(command, prompt, args, project, number, record):
     # Returns (stdout, return code), or None when a STOP issue stopped the session. The prompt goes on
     # stdin once; each --poll seconds the project's issues are read while the session runs.
@@ -314,16 +327,7 @@ def checked(args, home, project, read_facts, config):
         print(line, file=sys.stderr)
     else:
         print(line)
-    # The cost and the refusals are the session's own counts; a reply that is not JSON has neither.
-    data = parsed(out) or {}
-    denials = data.get("permission_denials")
-    runlog.end(
-        args.state,
-        session,
-        line,
-        data.get("total_cost_usd"),
-        len(denials) if isinstance(denials, list) else 0,
-    )
+    write_end(args.state, session, line, out)
     # A gh that failed (exit 2) is what the step cannot use, so no further gh call is made.
     parked = None
     if code == 1:
