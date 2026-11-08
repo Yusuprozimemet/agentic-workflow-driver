@@ -1826,6 +1826,105 @@ def infra(workflow):
     return dict(runs=runs, latest=latest)
 
 
+# The one real promise the "How this works" panel follows, and the files its excerpts come from.
+HOW_PROMISE = "C03.3"
+HOW_SPEC = "specs/day-03-the-stop.md"
+HOW_TEMPLATE = "specs/_template.md"
+HOW_BREAKS = "specs/breaks/day-03.json"
+HOW_REPLAY = "docs/dashboard/replay-history.json"
+HOW_PLAN = "plan.md"
+HOW_PLAN_PARTS = ("Short answer", "Who does what", "When the driver parks", "Phases", "Stopping points")
+
+
+def how_excerpts(read):
+    """The panel's excerpts, each {source, text} from the real files through `read(path)` ("" for no
+    file), or {source, missing: why}: a file or passage that has gone shows as gone, never filled in."""
+    files = {p: read(p) for p in (HOW_SPEC, HOW_TEMPLATE, HOW_BREAKS, HOW_REPLAY, HOW_PLAN)}
+    spec, template, plan = files[HOW_SPEC], files[HOW_TEMPLATE], files[HOW_PLAN]
+
+    def flat(text):
+        return re.sub(r"\s+", " ", text).strip()
+
+    def passage(text, pattern):
+        m = re.search(pattern, text, re.M | re.S)
+        return m.group(1).rstrip() if m else None
+
+    def section(heading):
+        return passage(spec, rf"^## {heading}\n(.*?)(?=^## |\Z)")
+
+    block = passage(spec, rf"^(- \[[ x]\] {re.escape(HOW_PROMISE)} .*?)(?=^- \[|^## |\Z)")
+
+    def field(pattern):
+        return flat(passage(block, pattern))
+
+    def evidence():
+        return field(r"^\s*Evidence: (.*?)(?=^\s*seen red|^\s*broken:|\Z)")
+
+    def crumbs():
+        track = passage(section("Tracks"), rf"^\| (\w) \|[^\n]*{re.escape(HOW_PROMISE)}\b")
+        pr = passage(evidence(), r"\(#(\d+)\)")
+        phase = passage(spec, r"\*\*Phase:\*\* (\d+)")
+        day = int(re.search(r"day-(\d+)", HOW_SPEC).group(1))
+        return track and pr and phase and [HOW_PLAN, f"Phase {phase}", f"Day {day}", f"Track {track} (PR #{pr})", f"Promise {HOW_PROMISE}"]
+
+    def criteria_count():
+        day = HOW_PROMISE.split(".")[0]
+        count = len(re.findall(rf"^- \[[ x]\] {day}\.\d+ ", spec, re.M))
+        return f"{count} on this day" if count else None
+
+    def tracks():
+        letters = re.findall(r"^\| (\w) \|", section("Tracks"), re.M)
+        return "Tracks " + ", ".join(letters) if letters else None
+
+    def bugs():
+        manifest = json.loads(files[HOW_BREAKS])
+        out = []
+        for what, said in re.findall(r"broken: (.+?) → (.+?) \(#\d+\)", block):
+            entry = next(b for b in manifest if b["what"] == what)
+            out.append(dict(what=what, file=entry["file"], find=entry["find"], replace=entry["replace"], reported=said))
+        return out
+
+    def recheck():
+        rows = [r for r in json.loads(files[HOW_REPLAY])["rows"] if r["criterion"] == HOW_PROMISE]
+        newest = max(r["n"] for r in rows)
+        rows = [r for r in rows if r["n"] == newest]
+        return dict(pr=rows[0].get("pr"), checks=[dict(check=r["check"], state=replay_row_state(r)) for r in rows])
+
+    def plan_parts():
+        headings = re.findall(r"^## (.+)$", plan, re.M)
+        return list(HOW_PLAN_PARTS) if all(p in headings for p in HOW_PLAN_PARTS) else None
+
+    wanted = dict(
+        crumbs=(HOW_SPEC, crumbs),
+        day_goal=(HOW_SPEC, lambda: flat(section("Goal"))),
+        day_out_of_scope=(HOW_SPEC, lambda: flat(passage(section("Out of scope"), r"^- (.*?)(?=^- |\Z)"))),
+        day_tracks=(HOW_SPEC, tracks),
+        day_criteria=(HOW_SPEC, criteria_count),
+        claim=(HOW_SPEC, lambda: field(r"\*\*(?:new|hold)\*\* — (.*?)^\s*Red today:")),
+        red_today=(HOW_SPEC, lambda: field(r"^\s*Red today: (.*?)^\s*Test:")),
+        test=(HOW_SPEC, lambda: field(r"^\s*Test: (.*?)^\s*Evidence:")),
+        evidence=(HOW_SPEC, evidence),
+        seen_red=(HOW_SPEC, lambda: field(r"^\s*(seen red first.*?)$")),
+        tick=(HOW_SPEC, lambda: passage(block, r"^(- \[[ x]\] \S+ \*\*\w+\*\*)")),
+        form=(HOW_TEMPLATE, lambda: passage(template, r"^(- \[ \] CNN\.1 .*?)(?=^- \[ \] CNN\.2)")),
+        template_parts=(HOW_TEMPLATE, lambda: re.findall(r"^## (.+)$", template, re.M)),
+        bugs=(HOW_BREAKS, bugs),
+        recheck=(HOW_REPLAY, recheck),
+        plan_halt=(HOW_PLAN, lambda: passage(plan, r"^(1\. Writes the halt file.*?)(?=^2\. )")),
+        plan_phase=(HOW_PLAN, lambda: passage(plan, r"^(### Phase 1\b.*?)(?=^- Day 4)")),
+        plan_parts=(HOW_PLAN, plan_parts),
+    )
+    out = {}
+    for key, (source, get) in wanted.items():
+        try:
+            value = get()
+        except (ValueError, KeyError, TypeError, IndexError, AttributeError, StopIteration):
+            value = None
+        why = "the file is missing or empty" if not files[source] else "the passage is no longer there"
+        out[key] = dict(source=source, text=value) if value else dict(source=source, missing=why)
+    return out
+
+
 def fill(page, data, name):
     # PR titles and spec text are written by anyone: no "<" may reach the HTML parser from the data
     # line. "</script>" would end it early; "<!--" then "<script" (a spec quoting HTML, Day 12) keeps
@@ -2004,6 +2103,8 @@ def main():
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
+        if args.build:
+            real["how_this_works"] = how_excerpts(lambda path: blobs.read(head, path))
     payload = page_data(real, spec_days) if args.build else real
     data = json.dumps(payload, separators=(",", ":"))
     target = args.build or args.out
