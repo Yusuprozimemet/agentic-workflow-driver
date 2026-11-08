@@ -1373,7 +1373,7 @@ class CriterionPanelsTest(unittest.TestCase):
 
 
 class PageStructureTest(unittest.TestCase):
-    """The page's layout: a contents in page order, and the gap's repeated views folded under one disclosure."""
+    """The page's layout: a contents in page order, and the gap's repeated views under one disclosure, open by default."""
 
     ORDER = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
              "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
@@ -1390,8 +1390,8 @@ class PageStructureTest(unittest.TestCase):
         tops = re.findall(r'<(?:section|div)\b[^>]*\bid="([\w-]+)"', self.page)
         self.assertEqual([i for i in tops if i in self.ORDER], self.ORDER)
 
-    def test_the_repeated_gap_views_are_folded_into_one_disclosure(self):
-        more = re.search(r'<details id="more-gap">\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
+    def test_the_repeated_gap_views_sit_in_one_disclosure_open_by_default(self):
+        more = re.search(r'<details id="more-gap" open>\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
         inside = re.findall(r'\bid="([\w-]+)"', more.group(1) if more else "")
         self.assertEqual([b for b in ("deltas", "spec-steps", "pull-sum", "pull-steps", "pull-scale") if b not in inside], [])
         self.assertEqual([b for b in ("lines", "pull-totals", "cover") if b in inside], [])  # left open
@@ -1404,11 +1404,11 @@ class NotMeasuredTest(unittest.TestCase):
     ROW = dict(page_row(0, None, "origin", 40), code_churn=0)
     FOLD = ("deployment", "infra", "removal-checks", "second-reader", "services", "not-measured")
 
-    def test_a_panel_with_no_data_is_one_line_under_not_measured_yet(self):
+    def test_a_panel_with_no_data_stays_in_place_and_is_listed_under_not_measured_yet(self):
         error, panels, logged, hidden = drawn([self.ROW], hidden=True)
         self.assertIsNone(error)
         self.assertEqual(logged, [])
-        self.assertEqual(sorted(h for h in hidden if h in self.FOLD), ["deployment", "infra", "removal-checks", "second-reader", "services"])
+        self.assertEqual([h for h in hidden if h in self.FOLD], [])
         lines = re.findall(r"<li><b>(.*?)</b>: (.*?)</li>", panels.get("not-measured-list", ""))
         self.assertEqual([n for n, _ in lines], ["Service boundaries", "Does a second reader agree with the defect tags?",
                                                  "Infrastructure", "Deployment", "Removal checks"])

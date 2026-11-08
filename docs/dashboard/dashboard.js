@@ -1523,8 +1523,8 @@ panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel(
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel); panel("not-measured-list", drawNotMeasured);
 
-// A panel with nothing to draw yet is one line under "Not measured yet", in the words its box already
-// drew, and leaves the contents; once it has data it draws in its place as before.
+// A panel with nothing to draw yet stays in its place and is also one line under "Not measured yet",
+// in the words its box already drew; once it has data it drops off the list.
 function drawNotMeasured() {
   const said = id => (document.getElementById(id).innerHTML.match(/<(p|td)\b[^>]*>(.*?)<\/\1>/) || [])[2] || "";
   const rec = DATA.defect_recurrence, I = DATA.infra || { runs: [] };
@@ -1540,7 +1540,6 @@ function drawNotMeasured() {
     document.getElementById(id).hidden = !on;
     document.querySelectorAll(`#toc a[href="#${id}"]`).forEach(a => { a.parentElement.hidden = !on; });
   };
-  empty.forEach(([id]) => show(id, false));
   show("not-measured", empty.length);
   document.getElementById("not-measured-list").innerHTML = empty.map(([, name, , why]) => `<li><b>${name}</b>: ${why}</li>`).join("");
 }
