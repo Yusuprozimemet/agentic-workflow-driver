@@ -1151,7 +1151,7 @@ const ctx = vm.createContext({ document, window: {}, matchMedia: () => ({ matche
   console: { error: e => logged.push(String(e && e.message || e)) } });
 let error = null;
 try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
-console.log(JSON.stringify({ error, logged, panels: Object.fromEntries(Object.entries(els).map(([k, e]) => [k, e.innerHTML])) }));
+console.log(JSON.stringify({ error, logged, hidden: Object.keys(els).filter(k => els[k].hidden), panels: Object.fromEntries(Object.entries(els).map(([k, e]) => [k, e.innerHTML])) }));
 """
 
 
@@ -1165,10 +1165,10 @@ def page_data(rows, days=(), order=(), **more):
     return data
 
 
-def drawn(rows=(), days=(), order=(), page=None, **more):
+def drawn(rows=(), days=(), order=(), page=None, hidden=False, **more):
     """The error that stopped the page, or None, the HTML each box holds, and what was logged as an
-    error; `more` replaces fields of the data. With `page`, a page spec-drift.py --build wrote: its
-    inlined script draws its own data, and the other arguments are not used."""
+    error, then, with `hidden`, the boxes the page hid; `more` replaces fields of the data. With `page`,
+    a page spec-drift.py --build wrote: its inlined script draws its own data, and the other arguments are not used."""
     data = page_data(rows, days, order, **more)
     script = os.path.join(HERE, "..", "docs", "dashboard", "dashboard.js")
     with tempfile.TemporaryDirectory() as tmp:
@@ -1183,7 +1183,7 @@ def drawn(rows=(), days=(), order=(), page=None, **more):
             data = json.loads(re.search(r"^window\.SPEC_DRIFT = (.*);$", html, re.M).group(1))
         out = json.loads(subprocess.run(["node", "-e", DRAW, script], input=json.dumps(data),
                                         capture_output=True, encoding="utf-8", check=True).stdout)
-    return out["error"], out["panels"], out["logged"]
+    return (out["error"], out["panels"], out["logged"]) + ((out["hidden"],) if hidden else ())
 
 
 class OtherGroupsTest(unittest.TestCase):
@@ -1370,6 +1370,62 @@ class CriterionPanelsTest(unittest.TestCase):
         self.assertNotIn("passed: ", inspector)
         self.assertIn("3 passed, 1 failed", inspector)
         self.assertIn("<li>failed: boom</li>", inspector)
+
+
+class PageStructureTest(unittest.TestCase):
+    """The page's layout: a contents in page order, and the gap's repeated views folded under one disclosure."""
+
+    ORDER = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
+             "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
+
+    def setUp(self):
+        with open(os.path.join(HERE, "..", "docs", "dashboard", "index.html"), encoding="utf-8") as f:
+            self.page = f.read()
+
+    def test_the_contents_links_every_section_in_page_order(self):
+        toc = re.search(r'<details class="toc" id="toc">(.*?)</details>', self.page, re.S)
+        links = re.findall(r'href="#([\w-]+)"', toc.group(1) if toc else "")
+        self.assertEqual([i for i in links if f'id="{i}"' not in self.page], [])
+        self.assertEqual(links, self.ORDER)
+        tops = re.findall(r'<(?:section|div)\b[^>]*\bid="([\w-]+)"', self.page)
+        self.assertEqual([i for i in tops if i in self.ORDER], self.ORDER)
+
+    def test_the_repeated_gap_views_are_folded_into_one_disclosure(self):
+        more = re.search(r'<details id="more-gap">\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
+        inside = re.findall(r'\bid="([\w-]+)"', more.group(1) if more else "")
+        self.assertEqual([b for b in ("deltas", "spec-steps", "pull-sum", "pull-steps", "pull-scale") if b not in inside], [])
+        self.assertEqual([b for b in ("lines", "pull-totals", "cover") if b in inside], [])  # left open
+        at = [self.page.find(f'id="{b}"') for b in ("lines", "pull-totals", "more-gap", "cover")]
+        self.assertEqual(at, sorted(at))
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class NotMeasuredTest(unittest.TestCase):
+    ROW = dict(page_row(0, None, "origin", 40), code_churn=0)
+    FOLD = ("deployment", "infra", "removal-checks", "second-reader", "services", "not-measured")
+
+    def test_a_panel_with_no_data_is_one_line_under_not_measured_yet(self):
+        error, panels, logged, hidden = drawn([self.ROW], hidden=True)
+        self.assertIsNone(error)
+        self.assertEqual(logged, [])
+        self.assertEqual(sorted(h for h in hidden if h in self.FOLD), ["deployment", "infra", "removal-checks", "second-reader", "services"])
+        lines = re.findall(r"<li><b>(.*?)</b>: (.*?)</li>", panels.get("not-measured-list", ""))
+        self.assertEqual([n for n, _ in lines], ["Service boundaries", "Does a second reader agree with the defect tags?",
+                                                 "Infrastructure", "Deployment", "Removal checks"])
+        self.assertEqual([w.split(":")[0] for _, w in lines], ["No service code yet", "No finished day yet",
+                                                              "No infra summary on main yet", "Nothing deployed yet", "None"])
+
+    def test_a_panel_with_data_draws_as_a_card(self):
+        day = dict(a_day(5), status="done", phase=1, title="t", prs=[], evidence=[], relabel=dict(stage=[1, 1], cause=[1, 1], made=[0, 1]))
+        error, panels, logged, hidden = drawn(
+            [dict(self.ROW, placed={"billing": [10, 30]})], [day], [5], hidden=True,
+            infra=dict(runs=[], latest=dict(url="u", sha="abc", date="d", conclusion="success", summary={})),
+            deployment=dict(domain="x.test", checkedAt="t", checks=[]),
+            removals=[dict(day=5, cmd="grep -rn x src", base=".", since=0, hits=[0], files=[1], found=[])])
+        self.assertIsNone(error)
+        self.assertEqual(logged, [])
+        self.assertEqual([h for h in hidden if h in self.FOLD], ["not-measured"])
+        self.assertEqual(panels["not-measured-list"], "")
 
 
 class ConclusionTest(unittest.TestCase):
