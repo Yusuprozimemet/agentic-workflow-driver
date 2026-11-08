@@ -259,3 +259,19 @@ tr.sel td { background: var(--surface-2); }
 .pull-totals .sep { grid-column: 1 / -1; border-top: 1px solid var(--grid); margin: 4px 0; }
 .pull-totals .note { grid-column: 2 / -1; margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 @media (max-width: 560px) { .pull-totals { grid-template-columns: 3.4rem 1fr 1fr 4.6rem; } }
+
+/* A panel with no data is folded into "Not measured yet"; section.panel's grid would show it. */
+[hidden] { display: none !important; }
+.wrap > [id] { scroll-margin-top: 96px; }
+/* The contents: a menu at the top of a narrow screen, a rail beside the 1080px cards on a wide one. */
+.toc { border: 1px solid var(--ring); border-radius: 12px; padding: 10px 14px; background: var(--surface); }
+.toc ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 12px; font-size: 14px; }
+.toc a { display: block; padding: 3px 6px; border-radius: 6px; color: var(--ink-2); text-decoration: none; }
+.toc a:hover, .toc a:focus-visible { background: var(--surface-2); color: var(--ink); }
+@media (min-width: 1440px) {
+  .toc { position: fixed; top: 28px; left: calc(50% - 540px - 172px); width: 156px; max-height: calc(100vh - 56px); overflow-y: auto; border: 0; padding: 0; background: none; }
+  .toc summary { display: none; }
+  .toc ol { margin: 0; grid-template-columns: 1fr; font-size: 13px; }
+}
+#more-gap > * + * { margin-top: 14px; }
+.not-measured { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--ink-2); }

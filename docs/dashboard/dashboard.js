@@ -1521,10 +1521,40 @@ panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
-panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel);
+panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel); panel("not-measured-list", drawNotMeasured);
+
+// A panel with nothing to draw yet is one line under "Not measured yet", in the words its box already
+// drew, and leaves the contents; once it has data it draws in its place as before.
+function drawNotMeasured() {
+  const said = id => (document.getElementById(id).innerHTML.match(/<(p|td)\b[^>]*>(.*?)<\/\1>/) || [])[2] || "";
+  const rec = DATA.defect_recurrence, I = DATA.infra || { runs: [] };
+  const empty = [
+    ["services", "Service boundaries", !R.some(r => movedShare(r) != null), said("moved")],
+    ["second-reader", "Does a second reader agree with the defect tags?", !DATA.days.some(d => finished(d) && d.relabel) && !(rec && rec.recurrences.length),
+      DATA.days.some(finished) ? "No finished day’s Notes give counts yet: a day is counted once its Notes quote <code>relabel.py compare</code>." : said("relabel")],
+    ["infra", "Infrastructure", !I.latest && !I.runs.length, said("infra-head")],
+    ["deployment", "Deployment", !DATA.deployment, said("deployment-head")],
+    ["removal-checks", "Removal checks", !(DATA.removals || []).length, said("removals")],
+  ].filter(p => p[2]);
+  const show = (id, on) => {
+    document.getElementById(id).hidden = !on;
+    document.querySelectorAll(`#toc a[href="#${id}"]`).forEach(a => { a.parentElement.hidden = !on; });
+  };
+  empty.forEach(([id]) => show(id, false));
+  show("not-measured", empty.length);
+  document.getElementById("not-measured-list").innerHTML = empty.map(([, name, , why]) => `<li><b>${name}</b>: ${why}</li>`).join("");
+}
+}
+
+// The contents is open as a rail beside a wide screen's cards, and a menu on a narrow one that a picked link closes.
+function contents() {
+  const toc = document.getElementById("toc"), wide = matchMedia("(min-width: 1440px)"), fit = () => { toc.open = wide.matches; };
+  fit(); wide.addEventListener("change", fit);
+  toc.addEventListener("click", e => { if (!wide.matches && e.target.closest("a")) toc.open = false; });
 }
 
 function start() {
+  contents();
   if (window.SPEC_DRIFT) return boot(window.SPEC_DRIFT);
   document.getElementById("today").innerHTML = '<p class="load-error">The data did not load. Build the page with <code>python scripts/spec-drift.py --build dashboard.html</code>; if this is the built page, it was published without its data line.</p>';
 }
