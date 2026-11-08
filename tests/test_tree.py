@@ -199,6 +199,11 @@ class TreeTest(unittest.TestCase):
         code, out, _ = dry_run(project)
         self.assertEqual((code, out), (1, f"park: the project is on {DAY_05}, not on main\n"))
         self.assertEqual(position(project), before)
+        # The control: this same project is one to_main does move, so the dry run left it on purpose.
+        tree = importlib.import_module("driver.tree")
+        classify = importlib.import_module("driver.steps").classify
+        moved = tree.to_main(project, read_facts_of(project), classify(DASHED))
+        self.assertEqual(moved, (True, None))
 
 
 if __name__ == "__main__":
