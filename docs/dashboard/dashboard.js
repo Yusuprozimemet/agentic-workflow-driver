@@ -771,10 +771,10 @@ function drawVerification() {
   const recorded = n(since, "recorded"), none = n(since, "none");
   document.getElementById("breaks").innerHTML = `<p>${from ? `Since #${from}, ` : ""}${recorded} of ${since.length} code PRs record a break on purpose${none ? `, ${none} say why there is none` : ""}; ${silent.length} silent.</p>`
     + (from ? `<p style="font-size:13px;color:var(--muted)">${n(code, "not measured")} code PRs before #${from} are not measured.</p>` : "")
-    + (silent.length ? `<ul>${silent.map(v => `<li>#${v.number}${v.day ? ` · Day ${dd(v.day)}` : ""}</li>`).join("")}</ul>` : "");
+    + (silent.length ? `<ul>${silent.map(v => `<li>${v.url ? `<a href="${esc(v.url)}">#${v.number}</a>` : `#${v.number}`}${v.day ? ` · Day ${dd(v.day)}` : ""}</li>`).join("")}</ul>` : "");
   const sum = (vs, k) => vs.reduce((a, v) => a + v[k], 0);
   const pushes = sum(V, "pushes"), failed = sum(V, "failed"), bad = V.filter(v => v.failed);
-  document.getElementById("ci-legend").textContent = `${failed} of ${pushes} pushes CI ran on failed (${fmt(failed / Math.max(1, pushes) * 100, 1)}%), in ${bad.length} of ${V.length} merged PRs.`;
+  document.getElementById("ci-legend").textContent = `${bad.length} of ${V.length} merged PRs failed CI at least once (${failed} of ${pushes} pushes, ${fmt(failed / Math.max(1, pushes) * 100, 1)}%).`;
   document.getElementById("ci-fails").innerHTML = `<thead><tr><th>PR</th><th>Day</th><th class="r">Failed pushes</th><th>Workflows that failed</th></tr></thead><tbody>` +
     bad.map(v => `<tr><td class="num">#${v.number}</td><td class="num">${v.day ? dd(v.day) : "–"}</td><td class="r num">${v.failed} of ${v.pushes}</td><td>${esc(v.failed_in.join(", "))}</td></tr>`).join("") + "</tbody>";
 }
@@ -1411,11 +1411,11 @@ function drawAgents(T, sum, ctx, perReply, color) {
 }
 
 // Shared by the plots. HTML and CSS, so each reflows at phone width. A bar's length is its total
-// out of `max`, so a small sample looks small; parts are { n, cls }, in the order they are drawn.
+// out of `max`, so a small sample looks small; parts are { n, cls } or { n, color }, in the order they are drawn.
 function stackedBar(parts, max, label) {
   const total = parts.reduce((a, p) => a + p.n, 0);
   return `<div class="stack" role="img" aria-label="${esc(label)}" title="${esc(label)}" style="width:${total / max * 100}%">`
-    + parts.filter(p => p.n).map(p => `<i class="${p.cls}" style="flex:${p.n} 1 0"></i>`).join("") + `</div>`;
+    + parts.filter(p => p.n).map(p => `<i class="${p.cls || ""}" style="flex:${p.n} 1 0${p.color ? `;background:${p.color}` : ""}"></i>`).join("") + `</div>`;
 }
 const tileRow = (tiles, label) => `<span class="mini-tiles" role="img" aria-label="${esc(label)}" title="${esc(label)}">${tiles.join("")}</span>`;
 const notMeasured = text => `<span class="not-measured">${esc(text)}</span>`;
@@ -1466,6 +1466,206 @@ function drawRelabel() {
     `${R.recurrences.length} of ${R.with_id} Defect lines with an ID ${R.recurrences.length === 1 ? "repeats" : "repeat"} an earlier defect` +
     (R.recurrences.length ? ": " + R.recurrences.map(r => `<code>${esc(r.id)}</code> (same as <code>${esc(r.same_as)}</code>)`).join(", ") : "") + "." +
     (R.problems.length ? ` Not counted: ${R.problems.map(esc).join("; ")}.` : "");
+}
+
+/* ---------- the plots: HTML and CSS, so each reflows at phone width ---------- */
+const plotRow = (name, bar, value) => `<div class="plot-row"><span class="plot-name">${name}</span><span class="plot-bar">${bar}</span><span class="plot-value num">${value}</span></div>`;
+const plotKey = items => `<div class="legend">${items.map(([look, word]) => `<span>${look}<b>${word}</b></span>`).join("")}</div>`;
+const keyTile = (cls, style) => `<i class="mini-tile ${cls}"${style ? ` style="${style}"` : ""}></i>`;
+const addUp = (rows, k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
+const contextOf = rows => addUp(rows, "input") + addUp(rows, "cache_write") + addUp(rows, "cache_read");
+const mergedPrs = () => Array.isArray(DATA.verification) ? DATA.verification : [];
+
+// Plots 1 and 2: the same five states as the promise tiles, in one order, each bar as long as its count.
+const PROMISE_ORDER = ["proven", "unproven", "skipped", "repair", "broken"];
+function drawPromisePlots() {
+  const { rp, promises, inGroup, newest } = promiseReading();
+  const all = document.getElementById("plot-all"), features = document.getElementById("plot-features");
+  if (rp.state !== "loaded" || !promises.length) { all.innerHTML = features.innerHTML = notMeasured("No re-check on record yet."); return; }
+  const parts = list => PROMISE_ORDER.map(g => ({ n: inGroup(list, g).length, cls: `promise ${g}` }));
+  const says = list => PROMISE_ORDER.filter(g => inGroup(list, g).length).map(g => `${inGroup(list, g).length} ${PROMISE_GROUPS[g].word}`).join(", ");
+  all.innerHTML = `<p class="plot-headline"><b>${inGroup(promises, "proven").length} of ${promises.length}</b> promises caught a planted bug</p>`
+    + stackedBar(parts(promises), promises.length, says(promises))
+    + plotKey(PROMISE_ORDER.filter(g => inGroup(promises, g).length).map(g => [promiseTile(g), `${PROMISE_GROUPS[g].word} (${inGroup(promises, g).length})`]))
+    + `<p class="limit">Re-checked by hand, so this can be behind the latest change${newest ? `: the last re-check was ${esc(newest)}` : ""}.</p>`;
+  const days = [...new Set(promises.map(p => p.day))].sort((a, b) => a - b);
+  const most = Math.max(...days.map(d => promises.filter(p => p.day === d).length));
+  features.innerHTML = days.map(d => {
+    const mine = promises.filter(p => p.day === d);
+    return plotRow(esc(promiseFeature(d)), stackedBar(parts(mine), most, says(mine)), `${inGroup(mine, "proven").length} of ${mine.length}`);
+  }).join("");
+}
+
+// Plot 3: one bar per group. Each group has one "when", so nothing is stacked.
+function drawTestBars() {
+  const I = DATA.test_inventory, box = document.getElementById("plot-groups");
+  if (!I) { box.innerHTML = notMeasured("Not in this data"); return; }
+  const look = w => /^every/i.test(w) ? "n-strong" : /^by hand/i.test(w) ? "n-hollow" : "n-mid";
+  const when = w => w.split(/[:(]/)[0].trim(), most = Math.max(1, ...I.groups.map(g => g.tests));
+  box.innerHTML = I.groups.map(g => plotRow(esc(g.label), stackedBar([{ n: g.tests, cls: look(g.when) }], most, `${g.label}: ${g.tests} tests, ${when(g.when)}`), g.tests)).join("")
+    + plotKey([...new Set(I.groups.map(g => g.when))].map(w => [keyTile(look(w)), esc(when(w))]));
+}
+
+// Plot 4: a tile per ticked promise for what was written down when it was built, then what the replay says today.
+// Quiet unless something failed or is stale; no report, or a day it leaves out, is never drawn as a pass.
+function replayWord(d, ec) {
+  if (ec.state !== "loaded") return notMeasured("no report");
+  const day = ec.days.find(x => x.day === d.day);
+  if (!day || day.state === "not checked") return notMeasured("not checked");
+  if (day.state === "stale") return `<span class="plot-bad" title="${esc(day.why.join("; "))}">stale</span>`;
+  const counts = CHECK_KINDS.map(([k]) => day.counts[k]).filter(Boolean);
+  const failed = addUp(counts, "failed") + addUp(counts, "error");
+  return failed ? `<span class="plot-bad">${failed} failed</span>` : `<span class="plot-quiet">${addUp(counts, "passed")} checks replayed, none failed</span>`;
+}
+function drawEvidencePlot() {
+  const box = document.getElementById("plot-evidence"), head = document.getElementById("evidence-headline"), skip = document.getElementById("evidence-skip");
+  const ec = DATA.evidence_checks || { state: "absent" };
+  const days = DATA.days.filter(d => finished(d) && d.evidence.some(c => c.ticked)).sort((a, b) => rank(a.day) - rank(b.day));
+  if (!days.length) { box.innerHTML = notMeasured("No finished day yet."); head.innerHTML = skip.innerHTML = ""; return; }
+  const ticked = d => d.evidence.filter(c => c.ticked), asked = days.filter(d => d.evidence_format).flatMap(ticked);
+  const states = days.flatMap(d => ticked(d).flatMap(c => Object.values(c.tests))), n = s => states.filter(x => x === s).length;
+  const stat = (big, small) => `<div><b class="num">${big}</b><span>${small}</span></div>`;
+  head.innerHTML = stat(`${asked.filter(c => c.prs.length).length} of ${asked.length}`, "promises cite the pull request they landed in")
+    + stat(`${asked.filter(c => Object.keys(c.tests).length).length} of ${asked.length}`, "promises name a test")
+    + stat(`${n("present")} of ${states.length}`, `named tests are still on <code>main</code>${n("retired") ? `, ${n("retired")} retired` : ""}`);
+  const live = n("skippable");
+  skip.innerHTML = (live ? `${plural(live, "live test needs", "live tests need")} real Claude; CI skips them, run by hand.` : "")
+    + (n("missing") ? ` <span class="plot-bad">${plural(n("missing"), "named test has", "named tests have")} left <code>main</code>.</span>` : "");
+  const tile = (d, c) => {
+    const look = c.red ? "rec-yes" : d.break_format ? "rec-no" : "rec-none";
+    const said = `${c.id || c.claim}: ${c.red ? "failure recorded when built" : d.break_format ? "no failure recorded" : "not measured"}`;
+    return c.id ? `<button type="button" class="ev-tile ${look}" data-id="${esc(c.id)}" aria-expanded="false" aria-label="${esc(said)}" title="${esc(said)}"></button>` : `<i class="ev-tile ${look}" title="${esc(said)}"></i>`;
+  };
+  box.innerHTML = plotKey([[`<i class="ev-tile rec-yes"></i>`, "Failure recorded when built"], [`<i class="ev-tile rec-no"></i>`, "None recorded"], [`<i class="ev-tile rec-none"></i>`, "Not measured: written before this was asked for"]])
+    + `<div class="ev-row ev-head"><span>Day</span><span>Written down when built</span><span>Replayed today</span></div>`
+    + days.map(d => `<div class="ev-row"><span class="plot-name">Day ${dd(d.day)} · ${esc(promiseFeature(d.day))}</span><span class="ev-tiles">${ticked(d).map(c => tile(d, c)).join("")}</span><span class="ev-status">${replayWord(d, ec)}</span></div>`).join("");
+  box.addEventListener("click", e => {
+    const button = e.target.closest("button[data-id]");
+    if (!button) return;
+    const row = button.closest(".ev-row"), open = row.nextElementSibling, shown = open && open.hasAttribute("data-detail");
+    const same = shown && open.dataset.id === button.dataset.id;
+    if (shown) { open.remove(); row.querySelectorAll('[aria-expanded="true"]').forEach(b => b.setAttribute("aria-expanded", "false")); }
+    if (same) return;
+    row.insertAdjacentHTML("afterend", `<div class="inline-detail" data-detail data-id="${esc(button.dataset.id)}">${detailFor(button.dataset.id)}</div>`);
+    button.setAttribute("aria-expanded", "true");
+  });
+}
+
+// Plot 5: how many merged PRs each workflow failed on. A PR can fail on several, so the note says the bars overlap.
+function drawCiPlot() {
+  const V = mergedPrs(), box = document.getElementById("plot-ci"), bad = V.filter(v => v.failed);
+  if (!V.length) { box.innerHTML = notMeasured("No merged pull request yet."); return; }
+  if (!bad.length) { box.innerHTML = `<p class="plot-quiet">CI failed on no merged pull request.</p>`; return; }
+  const seen = new Map();
+  bad.forEach(v => new Set(v.failed_in).forEach(w => seen.set(w, (seen.get(w) || 0) + 1)));
+  const rows = [...seen].sort((a, b) => b[1] - a[1]), most = rows[0][1], total = rows.reduce((a, r) => a + r[1], 0);
+  box.innerHTML = rows.map(([w, n]) => plotRow(esc(w), stackedBar([{ n, cls: "ci-failed" }], most, `${w}: ${n} pull requests`), n)).join("")
+    + (total > bad.length ? `<p class="plot-note">The bars add up to ${total}, more than the ${bad.length} pull requests, because one can fail in several workflows.</p>` : "");
+}
+
+// Plot 6: a dot per merged PR on a log scale. Never green: quick is not the same as good.
+function drawOpenTimes() {
+  const box = document.getElementById("plot-open"), timed = mergedPrs().filter(v => typeof v.hours === "number");
+  if (!timed.length) { box.innerHTML = notMeasured("No merged pull request with its times yet."); return; }
+  const mins = v => Math.max(v.hours * 60, 0.5), all = timed.map(mins);
+  const lo = Math.floor(Math.log10(Math.min(...all))), hi = Math.max(lo + 1, Math.ceil(Math.log10(Math.max(...all))));
+  const at = m => (Math.log10(m) - lo) / (hi - lo) * 100;
+  const dot = v => {
+    const said = `#${v.number} · ${span(v.hours)}${v.failed ? " · CI failed on it" : ""}`, style = `left:${at(mins(v))}%;top:${6 + v.number * 7 % 28}px`;
+    const cls = `pr-dot${v.failed ? " failed" : ""}`;
+    return v.url ? `<a class="${cls}" style="${style}" href="${esc(v.url)}" title="${esc(said)}" aria-label="${esc(said)}"></a>` : `<i class="${cls}" style="${style}" title="${esc(said)}"></i>`;
+  };
+  const ticks = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  box.innerHTML = plotKey([[`<i class="pr-dot key"></i>`, "A merged pull request"], [`<i class="pr-dot failed key"></i>`, "CI failed on it first"], [`<i class="pr-median key"></i>`, "Median"]])
+    + Object.keys(STEP).map(k => [k, timed.filter(v => (v.step || v.kind) === k)]).filter(([, vs]) => vs.length).map(([k, vs]) => {
+      const middle = median(vs.map(v => v.hours));
+      return plotRow(STEP[k], `<span class="dot-track"><i class="pr-median" style="left:${at(Math.max(middle * 60, 0.5))}%"></i>${vs.map(dot).join("")}</span>`, span(middle));
+    }).join("")
+    + plotRow("", `<span class="dot-axis">${ticks.map(p => `<span style="left:${(p - lo) / (hi - lo) * 100}%">${(10 ** p).toLocaleString("en")}</span>`).join("")}</span>`, "minutes");
+}
+
+// Plot 8: every same-as: link followed back to the first defect of its family, one group per day.
+function drawRepeats() {
+  const box = document.getElementById("plot-repeats"), Rec = DATA.defect_recurrence;
+  if (!Rec) { box.innerHTML = notMeasured("Not in this data"); return; }
+  if (!Rec.recurrences.length) { box.innerHTML = `<p class="plot-quiet">No problem has been recorded as a repeat of an earlier one.</p>`; return; }
+  const dayOf = id => +id.slice(1).split(".")[0], same = new Map(Rec.recurrences.map(r => [r.id, r.same_as]));
+  const rootOf = id => { const seen = new Set(); while (same.has(id) && !seen.has(id)) { seen.add(id); id = same.get(id); } return id; };
+  const families = new Map();
+  Rec.recurrences.forEach(r => { const root = rootOf(r.id); families.set(root, [...(families.get(root) || [root]), r.id]); });
+  const within = Rec.recurrences.filter(r => dayOf(r.id) === dayOf(r.same_as)).length, across = Rec.recurrences.length - within;
+  const chip = id => {
+    const was = same.get(id), inDay = was && dayOf(was) === dayOf(id);
+    return `<code class="chain-id${inDay ? " same-day" : ""}" title="${esc(was ? `${id} is the same problem as ${was}` : `${id} is the first time this was recorded`)}">${esc(id)}</code>`;
+  };
+  box.innerHTML = `<p class="plot-headline"><b>${Rec.recurrences.length}</b> ${Rec.recurrences.length === 1 ? "problem repeated" : "problems repeated"} an earlier one: <b>${across}</b> on a later day, <b>${within}</b> the same day</p>`
+    + plotKey([[`<code class="chain-id">D1.2</code>`, "First seen, or came back on a later day"], [`<code class="chain-id same-day">D1.3</code>`, "Came back the same day"]])
+    + [...families.values()].sort((a, b) => b.length - a.length || dayOf(a[0]) - dayOf(b[0])).map(ids => {
+      const days = [...new Set(ids.map(dayOf))].sort((a, b) => a - b);
+      return `<div class="chain">${days.map(d => `<span class="chain-day"><small>Day ${dd(d)}</small>${ids.filter(i => dayOf(i) === d).map(chip).join("")}</span>`).join(`<span class="chain-arrow" aria-hidden="true">→</span>`)}</div>`;
+    }).join("");
+}
+
+// Plots 9 and 10: where the context went, then what each day wrote and on which model.
+function drawTokenPlots() {
+  const T = DATA.tokens || [], split = document.getElementById("plot-context"), byDay = document.getElementById("plot-days");
+  if (!T.length) { split.innerHTML = byDay.innerHTML = notMeasured("No token counts yet."); return; }
+  const outside = contextOf(T.filter(r => r.day == null)), inside = contextOf(T.filter(r => r.day != null)), all = outside + inside;
+  split.innerHTML = `<p class="plot-headline"><b>${pct(outside, all)}</b> of the context read was between days</p>`
+    + stackedBar([{ n: outside, cls: "n-strong" }, { n: inside, cls: "n-mid" }], all, `Between days ${kilo(outside)}, during days ${kilo(inside)}`)
+    + plotKey([[keyTile("n-strong"), `Between days (${kilo(outside)})`], [keyTile("n-mid"), `During days (${kilo(inside)})`]])
+    + `<p class="plot-note">Each reply re-read about <b class="num">${kilo(Math.round(all / Math.max(1, addUp(T, "replies"))))}</b> tokens of context.</p>`;
+  const days = [...new Set(T.map(r => r.day).filter(d => d != null))].sort((a, b) => rank(a) - rank(b));
+  if (!days.length) { byDay.innerHTML = notMeasured("No tokens counted against a day yet."); return; }
+  const models = [...new Set(T.map(r => r.model))].sort((a, b) => addUp(T.filter(r => r.model === b), "output") - addUp(T.filter(r => r.model === a), "output"));
+  const most = Math.max(...days.map(d => addUp(T.filter(r => r.day === d), "output")));
+  byDay.innerHTML = days.map(d => {
+    const rs = T.filter(r => r.day === d);
+    const parts = models.map(m => ({ n: addUp(rs.filter(r => r.model === m), "output"), color: MODEL_VAR[m] || "var(--other)" }));
+    return plotRow(`Day ${dd(d)}`, stackedBar(parts, most, models.filter(m => rs.some(r => r.model === m)).map(m => `${modelName(m)} ${kilo(addUp(rs.filter(r => r.model === m), "output"))}`).join(", ")), kilo(addUp(rs, "output")));
+  }).join("");
+}
+
+// Plot 11: a gate's catches by cause. Hooks sit apart, because a refusal is not a defect; cost stays a quiet number.
+const CAUSES = ["spec", "implementation", "process", "environment", "other"];
+function drawGatePlot() {
+  const G = DATA.gate_report, box = document.getElementById("plot-gates");
+  if (!G) { box.innerHTML = notMeasured("No gate report yet."); return; }
+  const gates = G.gates.filter(g => g.found !== null), hooks = G.gates.filter(g => g.found === null);
+  const name = c => c[0].toUpperCase() + c.slice(1), most = Math.max(1, ...gates.map(g => g.defects)), top = Math.max(1, ...hooks.map(g => g.refused || 0));
+  box.innerHTML = plotKey(CAUSES.filter(c => gates.some(g => g.causes[c])).map(c => [keyTile("", `background:var(--c-${c})`), name(c)]))
+    + gates.map(g => plotRow(esc(g.gate), stackedBar(CAUSES.map(c => ({ n: g.causes[c], color: `var(--c-${c})` })), most, CAUSES.filter(c => g.causes[c]).map(c => `${g.causes[c]} ${c}`).join(", ") || "nothing found"),
+      `${g.defects}${g.defects ? ` <small>$${fmt(g.cost / g.defects, 2)} each</small>` : ""}`)).join("")
+    + (hooks.length ? `<h4>Hooks refuse an action; a refusal is not a defect</h4>` + hooks.map(g => plotRow(esc(g.gate), g.refused == null ? notMeasured("not counted") : stackedBar([{ n: g.refused, cls: "n-mid" }], top, `${g.refused} refused`), g.refused == null ? "–" : `${g.refused} refused`)).join("") : "");
+}
+
+// Plots 12 and 13: per date. A refused Read is left out of "allowed", and a date before the refusal log is not a zero.
+function drawHookPlots() {
+  const H = (DATA.tokens || []).filter(r => "bash" in r), Refused = DATA.refusals || [];
+  const cut = document.getElementById("plot-cut"), reads = document.getElementById("plot-reads");
+  const shares = [...new Set(H.map(r => r.date))].sort().map(d => { const rs = H.filter(r => r.date === d); return { d, cut: addUp(rs, "cut"), bash: addUp(rs, "bash") }; }).filter(p => p.bash);
+  if (!shares.length) cut.innerHTML = notMeasured("No hook counts yet.");
+  else {
+    const share = p => p.cut / p.bash * 100, top = Math.max(1, ...shares.map(share)), peak = shares.reduce((a, p) => share(p) > share(a) ? p : a);
+    const time = p => Date.parse(p.d), t0 = time(shares[0]), t1 = time(shares[shares.length - 1]);
+    const x = p => t1 > t0 ? (time(p) - t0) / (t1 - t0) * 100 : 50, y = p => 100 - share(p) / top * 100;
+    const named = [...new Set([shares[0], peak, shares[shares.length - 1]])];
+    cut.innerHTML = `<div class="mini-line" role="img" aria-label="${esc(shares.map(p => `${p.d}: ${fmt(share(p), 1)}%`).join(", "))}"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${shares.map(p => `${x(p)},${y(p)}`).join(" ")}"/></svg>`
+      + shares.map(p => `<i style="left:${x(p)}%;top:${y(p)}%" title="${esc(`${p.d}: ${p.cut} of ${p.bash} cut`)}"></i>`).join("")
+      + named.map(p => `<span class="num" style="left:${x(p)}%;top:${y(p)}%">${fmt(share(p), 1)}%</span>`).join("") + `</div>`
+      + `<div class="mini-axis num">${named.map(p => `<span style="left:${x(p)}%">${esc(p.d.slice(5))}</span>`).join("")}</div>`;
+  }
+  const refusedOn = d => addUp(Refused.filter(r => r.date === d && r.guard === "read-guard"), "refused");
+  const logged = Refused.length ? Refused.map(r => r.date).sort()[0] : null;
+  const rows = [...new Set(H.map(r => r.date).concat(Refused.map(r => r.date)))].sort().map(d => ({ d, read: addUp(H.filter(r => r.date === d), "reads"), no: refusedOn(d) })).filter(r => r.read || r.no);
+  if (!rows.length) { reads.innerHTML = notMeasured("No hook counts yet."); return; }
+  const parts = r => [{ n: Math.max(0, r.read - r.no), cls: "n-strong" }, { n: r.no, cls: "n-hollow" }];
+  const most = Math.max(1, ...rows.map(r => Math.max(r.read, r.no)));
+  reads.innerHTML = plotKey([[keyTile("n-strong"), "Allowed"], [keyTile("n-hollow"), "Refused"]])
+    + rows.map(r => {
+      if (!logged || r.d < logged) return plotRow(esc(r.d.slice(5)), notMeasured("before the refusal log"), "–");
+      return plotRow(esc(r.d.slice(5)), stackedBar(parts(r), most, `${r.d}: ${r.no} refused, ${Math.max(0, r.read - r.no)} allowed`), `${r.no} of ${Math.max(r.read, r.no)}`);
+    }).join("");
 }
 
 // The infra workflow's last summary on main (scripts/infra-summary.py), and each of its runs on main.
@@ -1847,6 +2047,8 @@ panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", 
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
+panel("plot-all", drawPromisePlots); panel("plot-groups", drawTestBars); panel("plot-evidence", drawEvidencePlot); panel("plot-ci", drawCiPlot); panel("plot-open", drawOpenTimes);
+panel("plot-repeats", drawRepeats); panel("plot-context", drawTokenPlots); panel("plot-gates", drawGatePlot); panel("plot-cut", drawHookPlots);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel); panel("not-measured-list", drawNotMeasured);
 
 // A panel with nothing to draw yet stays in its place and is also one line under "Not measured yet",
