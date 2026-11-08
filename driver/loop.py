@@ -12,7 +12,7 @@ import os
 import re
 from time import monotonic, sleep
 
-from driver import github, issues, once, runlog, tree
+from driver import github, issues, livecheck, once, runlog, tree
 from driver import home as driver_home
 from driver.preflight import kit_lines
 from driver.steps import Step
@@ -223,6 +223,9 @@ def steps(args, home, project, read_facts, config):
     drift, code = once.preflight(args, project)
     if drift is None:
         return code
+    line = livecheck.refusal(args.state, args.claude)
+    if line:
+        return once.refuse([line])
     record, count, open_list = None, 0, []
 
     def end(line, code):
