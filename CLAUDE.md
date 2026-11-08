@@ -171,8 +171,9 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   file per process, slowest first, the failures printed whole. It is the same tests as
   `python -m unittest discover -s tests`, which CI (`tests.yml`) runs serially with `-v`, and
   which the specs' Verify blocks replay; on this machine the serial run takes 2 to 8 minutes
-  and the runner about a third of that, since the suite's time is spent starting processes
-  (#60). Run the serial command only to reproduce CI. Nothing is built first; the tests need
+  and the runner about half (337 s against 164 s, back to back), since the suite's time is
+  spent starting processes (#60); the runner's floor is its slowest file, `test_on.py`. Run
+  the serial command only to reproduce CI. Nothing is built first; the tests need
   `numpy` (`ContractTest` loads `scripts/spec-drift.py`). CI runs the style check and the
   serial command, nothing the local commands do not.
 - There is no test report directory: read unittest's "Ran N tests" and "OK" lines, and that N is
