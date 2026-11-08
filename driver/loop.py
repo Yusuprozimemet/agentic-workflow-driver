@@ -5,13 +5,16 @@ them, at most twice; red checks on a pull request with no session, or no checks 
 than --wait-minutes, end the wait with a park line. A STOP issue halts the run, and the run's issue
 closed ends it with no new step. Once the checks are green, the path check parks a pull request that
 touches plan.md or a human-only path, the merge wait holds until the maintainer merges it, pulls
-main, and waits for the evidence run on the new head."""
+main, and waits for the evidence run on the new head. `on` runs these steps one after another, until
+steps_per_night sessions have started or a park, a refusal or a halt ends the night."""
 
 import os
 import re
 from time import monotonic, sleep
 
 from driver import github, issues, once, runlog, tree
+from driver import home as driver_home
+from driver.preflight import kit_lines
 from driver.steps import Step
 
 
@@ -113,6 +116,7 @@ def wait_pr(args, project, number, record, command=None):
                 return line, code
             print(line, flush=True)
             number = int(re.match(r"opened: #(\d+)", line).group(1))
+            record["pr"] = number
         sleep(args.poll)
 
 
@@ -203,3 +207,76 @@ def wait_merge(args, project, number, record, human_only, read_facts, git=("git"
     if sha is None:
         return f"cannot read the project: no origin/main after #{number} merged", 2
     return wait_evidence(args, project, record, sha)
+
+
+def run(args, home, read_facts):
+    # `on`: --once's halt, config and lock checks, the lock held for the whole run.
+    return once.run(args, home, read_facts, steps)
+
+
+def steps(args, home, project, read_facts, config):
+    # Each step: the same start as --once's, then its pull request waited on, merged and pulled. A
+    # resume does not count as a step, and a pull request found at a start starts no session.
+    started, reason = driver_home.check(home)
+    if reason:
+        return once.refuse([f"cannot start: {reason}"])
+    drift, code = once.preflight(args, project)
+    if drift is None:
+        return code
+    record, count, open_list = None, 0, []
+
+    def end(line, code):
+        once.say(line, code)
+        return once.finish(args, home, project, started, record, line, code, open_list)
+
+    while True:
+        if record is not None:
+            # A STOP or a closed run's issue between steps, read as during a wait. A failed read
+            # goes on: ready() reads the issues next and refuses.
+            line, code, _ = read_switches(args, project, record)
+            if line:
+                return end(line, code)
+            # The project moved on when the step merged: the next step is read from the new main.
+            lines, drift = kit_lines(project)
+            if lines:
+                return end("\n".join(lines), 2)
+        step = once.ready(args, project, read_facts, drift)
+        open_list = step.open_list
+        if step.kind in ("park", "end"):
+            if record is None:
+                return once.stopped(args, project, step)
+            record = {**record, "step": step.sentence or record["step"], "session": "none"}
+            return end(step.line, step.code)
+        if step.kind == "wait":
+            once.say(step.line, step.code)
+            record, reason = once.open_record(args, project, step.sentence, "none", open_list)
+            if reason:
+                return once.refuse([f"cannot read the project: {reason}"])
+            record["pr"] = int(re.search(r"#(\d+)", step.line).group(1))
+            line, code = wait_found(args, project, step.line, record)
+        else:
+            record, command, prompt, reason = once.begin(args, home, project, config, step)
+            if reason:
+                return once.refuse([f"cannot read the project: {reason}"])
+            count += 1
+            done = once.one_session(command, prompt, args, project, record)
+            if done is None:
+                # The STOP issue stopped the session; the halt file and the report are written.
+                return 1
+            line, code = done
+            if code != 0 or driver_home.check(home, started)[1]:
+                return once.finish(args, home, project, started, record, line, code, open_list)
+            record["pr"] = int(re.match(r"opened: #(\d+)", line).group(1))
+            line, code = wait_pr(args, project, record["pr"], record, command)
+        if line is None:
+            line, code = wait_merge(
+                args, project, record["pr"], record, config["human_only"], read_facts
+            )
+        if line is None:
+            if count >= config["steps_per_night"]:
+                line, code = f"on: {count} steps, the night's count", 0
+            elif driver_home.check(home, started)[1]:
+                # A resume can change the driver's files too: finish() halts on it.
+                line, code = f"merged: #{record['pr']}", 0
+        if line is not None:
+            return end(line, code)
