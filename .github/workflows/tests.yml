@@ -2,9 +2,15 @@ name: Tests
 
 # The project's own checks: the style check and the unit tests. The kit's other workflows test
 # only the kit's tools.
+#
+# On pull requests and on main, not on every branch push: with `push:` unfiltered, each push to
+# a branch with an open PR ran this twice (48 push runs beside 25 pull_request runs in the 200 runs
+# up to 2026-11-08), and both appeared as checks on the PR. The pull_request run is the one
+# branch protection requires by name.
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
