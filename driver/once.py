@@ -19,7 +19,7 @@ import subprocess
 import sys
 import uuid
 
-from driver import github, issues, lock, runlog
+from driver import github, issues, lock, runlog, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -200,6 +200,13 @@ def checked(args, home, project, read_facts, config):
     facts = read_facts(project)
     # Read before decide, so that every park below can name the step it parked on.
     sentence = drift["now"]["next_step"]
+    moved, line = tree.to_main(project, facts, classify(sentence))
+    if line:
+        print(line)
+        park_issue(project, args.gh, line, sentence, None, open_list)
+        return 1
+    if moved:
+        facts = read_facts(project)
     action = decide(drift, facts)
     # A phase's end is answered by a closed parked issue of its exact title (decide's `answered`).
     answered = None
