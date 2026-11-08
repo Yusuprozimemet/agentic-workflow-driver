@@ -985,7 +985,7 @@ function drawEvidence() {
   // A day written before the evidence format was never asked to record these: its zero is "not measured".
   const cell = (n, of, pre) => pre ? `<td class="r pre">${n ? `${n}/${of}` : "not measured"}</td>`
     : `<td class="r${n ? "" : " none"}">${n}/${of}</td>`;
-  document.getElementById("evidence").innerHTML = `<thead><tr><th>Day</th><th class="r">Cite a PR</th><th class="r">Name a test</th><th class="r">Seen red, recorded</th><th class="r">Tests on main</th><th>Title</th></tr></thead><tbody>` +
+  document.getElementById("evidence").innerHTML = `<thead><tr><th>Day</th><th class="r">Cite a PR</th><th class="r">Name a test</th><th class="r">Failure recorded when built</th><th class="r">Tests on main</th><th>Title</th></tr></thead><tbody>` +
     days.map(d => {
       const ev = d.evidence.filter(c => c.ticked), states = ev.flatMap(c => Object.values(c.tests));
       // A retired test is a loss a later day chose, so only skippable and missing tests turn the cell orange.
@@ -1650,7 +1650,7 @@ function drawSummary() {
     `${kept} of ${plural(promises.length, "finished promise", "finished promises")} kept at the last re-check`,
     `${plural(count("proven"), "promise", "promises")} caught a planted bug`,
   ] : [];
-  if (checked.length) yes.push(`${plural(tally("passed"), "check", "checks")} of the recorded evidence replayed on the latest code, ${failed} failed`);
+  if (checked.length) yes.push(`${plural(tally("passed"), "check", "checks")} of the recorded evidence replayed, each at its day's close, ${failed} failed`);
   const I = DATA.test_inventory;
   if (I && I.total) yes.push(`${plural(I.total, "test", "tests")} in the project`);
   const live = I && (I.groups.find(g => g.key === "live") || {}).tests;
