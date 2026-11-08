@@ -40,9 +40,22 @@ from tests.test_preflight import HELP
 GREEN = {"code": 0, "out": [{"name": "tests", "bucket": "pass", "link": JOB}]}
 RED = {"code": 0, "out": [{"name": "tests", "bucket": "fail", "link": JOB}]}
 LOGS = [{"code": 0, "out": "one\nboom\n"}]
+# The next step after the merge: the same track, so the step's pull request is still the one found.
+SECOND = "Day 01 Track A: C01.4"
+# The drift is read from drift.json beside the case's folder, so a test can change it between sessions.
+DRIFT_FILE_SCRIPT = """import argparse
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--out")
+parser.add_argument("--cache")
+args = parser.parse_args()
+Path(args.out).write_bytes((Path(__file__).resolve().parents[2] / "drift.json").read_bytes())
+"""
 
 
-class OnTest(unittest.TestCase):
+# Shared with tests/test_live_check.py; not a TestCase, so that importing it collects no tests.
+class OnCase:
     @classmethod
     def setUpClass(cls):
         # Imported here, as in test_once: where driver/ is missing, each test fails alone.
@@ -65,11 +78,12 @@ class OnTest(unittest.TestCase):
         do="",
         help=None,
         drop=(),
+        script=None,
     ):
         # One case's scratch folder: a project, a fake claude and a fake gh, and the config as bytes.
         folder = Path(self.root) / name
         folder.mkdir()
-        project = make_project(folder, drift or drift_of(DASHED))
+        project = make_project(folder, drift or drift_of(DASHED), script)
         (folder / "claude").mkdir()
         (folder / "gh").mkdir()
         claude = fake_claude(folder / "claude", help=help or HELP, do=do)
@@ -94,6 +108,9 @@ class OnTest(unittest.TestCase):
         )
         self.folder = folder
         self.state = folder / "state"
+        # The version the fake claude prints is recorded as live-checked, so `on` goes on.
+        self.state.mkdir()
+        (self.state / "live-checked.txt").write_bytes(b"2.1.170 (Claude Code)\n")
         flags = ["--config", str(path), "--state", str(self.state), "--claude", claude, "--gh", gh]
         self.flags = [*flags, "--poll", "0.01", "--wait-minutes", "0.5"]
 
@@ -127,6 +144,8 @@ class OnTest(unittest.TestCase):
         bodies = read_bodies(self.folder / "gh")
         return [record["body"] for record in bodies if record["args"][:2] == ["issue", "comment"]]
 
+
+class OnTest(OnCase, unittest.TestCase):
     def test_refusals(self):
         # Each refusal is one line on stderr with exit 2, starts no session, and leaves no lock.
         for name, kwargs in (
@@ -137,7 +156,6 @@ class OnTest(unittest.TestCase):
             with self.subTest(case=name):
                 self.build(name, **kwargs)
                 if name == "halted":
-                    self.state.mkdir()
                     (self.state / "halt").write_bytes(b"halted")
                 claude = claude_program(self.folder / "claude")
                 want = {
@@ -290,4 +308,20 @@ class OnTest(unittest.TestCase):
         self.assertEqual(
             (code, out, err.splitlines(), self.sessions()),
             (2, "", ["run-steps.py: on goes alone"], []),
+        )
+
+    def test_next_step_read_after_merge(self):
+        # The first session stands in for the merge moving main: the drift says a new next step from
+        # then on. The second session must be told that step, not the first again.
+        do = (
+            f"text = {json.dumps(drift_of(SECOND))!r}\n"
+            '(folder.parent / "drift.json").write_bytes(text.encode("utf-8"))\n'
+        )
+        self.build("reread", script=DRIFT_FILE_SCRIPT, do=do)
+        (self.folder / "drift.json").write_bytes(json.dumps(drift_of(DASHED)).encode("utf-8"))
+        code, _, _ = self.on()
+        prompts = [bytes.fromhex(call["stdin"]).decode("utf-8") for call in self.sessions()]
+        self.assertEqual(
+            (code, [prompt.splitlines()[0] for prompt in prompts]),
+            (0, [f"Next step: {DASHED}", f"Next step: {SECOND}"]),
         )

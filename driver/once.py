@@ -20,12 +20,12 @@ import sys
 import uuid
 from collections import namedtuple
 
-from driver import github, issues, lock, runlog, tree
+from driver import github, issues, livecheck, lock, runlog, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
 from driver.decide import decide
-from driver.preflight import CLI, cli_lines, kit_lines
+from driver.preflight import cli_lines, kit_lines
 from driver.steps import classify
 
 
@@ -334,9 +334,7 @@ def begin(args, home, project, config, step):
     # The settings are written afresh, and the start line is in the log before the session runs.
     settings_path = driver_settings.write(args.state, home)
     path = shutil.which(args.claude)
-    probe = subprocess.run([path, "--version"], check=False, **CLI)
-    lines = probe.stdout.splitlines()
-    version = lines[0].strip() if lines else ""
+    version = livecheck.version(path)
     runlog.start(args.state, sentence, classify(sentence).prefix, session, version)
     command = [
         path,

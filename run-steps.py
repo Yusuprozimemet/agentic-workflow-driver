@@ -9,7 +9,9 @@ with one stderr line per problem. halt [--state <dir>] writes <dir>/halt and kil
 process tree when its lock names a live process, then reports on the run's issue from
 <dir>/run.json; clear [--state <dir>] removes the halt file and a stale lock, and refuses while a
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
-file. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
+file. live-check [--state] [--claude] [--python] runs the driver's own tests on the installed Claude
+Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
+refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] does one step's checks in order:
 halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
 evidence run, then the run log;
@@ -21,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from driver import loop, once, switches
+from driver import livecheck, loop, once, switches
 from driver.config import load as load_config
 from driver.decide import Facts, decide
 from driver.preflight import cli_lines, git, kit_lines
@@ -62,8 +64,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["preflight", "halt", "clear", "off", "on"],
-        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, or run on",
+        choices=["preflight", "halt", "clear", "off", "on", "live-check"],
+        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, run on, or run the live check",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
@@ -79,6 +81,11 @@ def main(argv=None) -> int:
         "--claude",
         default="claude",
         help="the Claude Code program the preflight checks, found on PATH",
+    )
+    parser.add_argument(
+        "--python",
+        default=sys.executable,
+        help="the Python that runs live-check's tests",
     )
     parser.add_argument(
         "--state",
@@ -119,6 +126,9 @@ def main(argv=None) -> int:
         return switches.halt(args.state)
     if args.command == "clear":
         return switches.clear(args.state)
+    # live-check needs no project or config either: it runs the driver's own tests.
+    if args.command == "live-check":
+        return livecheck.run(args, Path(__file__).resolve().parent)
     # The config is opened only when --project is not given: a project named on the command line
     # must not depend on a file the person may not have.
     if args.project is None:
