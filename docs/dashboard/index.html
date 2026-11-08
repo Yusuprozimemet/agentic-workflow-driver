@@ -14,33 +14,62 @@
 <div class="wrap">
   <header>
     <div class="eyebrow" id="eyebrow"></div>
-    <h1 id="headline">Spec and code, merge by merge</h1>
-    <p class="lede">Treat <code>plan.md</code> and the day specs as a vector, and the codebase as a second vector in the same space. Across every merge to <code>main</code>, this page tracks how far the spec rotated away from the plan as written, how far apart spec and code sit, and which side did the moving.</p>
+    <h1>A script that runs AI coding work one step at a time</h1>
     <p class="lede"><strong>This repository is an engineering experiment.</strong> Its metrics are experimental diagnostic signals, not optimization targets or standard measures of quality.</p>
   </header>
   <details class="toc" id="toc">
     <summary>Sections</summary>
     <ol>
-      <li><a href="#where">Where we are</a></li>
-      <li><a href="#attention">Needs attention</a></li>
-      <li><a href="#ticks">Evidence behind the ticks</a></li>
-      <li><a href="#handoffs">Hand-offs</a></li>
-      <li><a href="#stats">The spec–code gap</a></li>
-      <li><a href="#services">Service boundaries</a></li>
-      <li><a href="#work">Where the work went</a></li>
-      <li><a href="#verification">Verification</a></li>
-      <li><a href="#corrections">Corrections</a></li>
-      <li><a href="#second-reader">A second reader</a></li>
-      <li><a href="#infra">Infrastructure</a></li>
-      <li><a href="#deployment">Deployment</a></li>
-      <li><a href="#tokens">Tokens, hooks, gates</a></li>
-      <li><a href="#vectors">What the vectors say</a></li>
-      <li><a href="#conclusion">Conclusion</a></li>
-      <li hidden><a href="#not-measured">Not measured yet</a></li>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#promises">The promises</a></li>
+      <li><a href="#tested">What is tested</a></li>
+      <li><a href="#measurements">Measurements</a></li>
     </ol>
   </details>
   <div class="demo-banner" id="demo-banner" role="note" hidden></div>
 
+  <section class="panel" id="summary">
+    <div class="panel-head">
+      <h2>Summary</h2>
+      <p class="plain-what">This project builds a script, <code>run-steps.py</code>, that runs a software project's AI coding work one step at a time, each step in a fresh Claude session. The aim is that a person stops approving every pull request and instead owns the plan, the safety checks and anything the script stops on.</p>
+    </div>
+    <div class="summary-cards" id="summary-cards"><p class="load-error">Loading the latest data…</p></div>
+    <div class="known-grid" id="summary-known"></div>
+  </section>
+
+  <section class="panel" id="promises">
+    <div class="panel-head">
+      <h2>The promises</h2>
+      <p>Each day of work promises things the software must do. Open a day to read its promises in one plain sentence each, and open a promise to see the three facts behind it.</p>
+    </div>
+    <div id="promise-days"></div>
+    <div class="legend" id="promise-key"></div>
+    <details class="technical" id="technical-detail">
+      <summary>Technical detail: every promise by criterion number</summary>
+      <p class="limit">Each row shows the criterion, day and tag, whether it cites a PR, its test was found, a failure was recorded when it was built (“seen red”), and the replay statuses. – means not measured. Select a row to open its detail under it.</p>
+      <div class="scroll-x"><table id="criteria-matrix"></table></div>
+    </details>
+  </section>
+
+  <section class="panel" id="tested">
+    <div class="panel-head">
+      <h2>What is tested, and how much we trust it</h2>
+      <p>What the tests are, when they run, and for each feature how many of its promises have been shown to catch a bug planted on purpose.</p>
+    </div>
+    <h3>Tests by group</h3>
+    <div class="scroll-x"><table id="test-groups"></table></div>
+    <p class="limit" id="test-note"></p>
+    <h3>Confidence per feature</h3>
+    <div class="scroll-x"><table id="trust-table"></table></div>
+    <p class="limit" id="trust-note"></p>
+  </section>
+
+  <div class="measurements" id="measurements">
+    <h2>Measurements</h2>
+    <p>Everything else the repository records, for a technical reader. Open a section to read it.</p>
+
+  <details class="measure">
+    <summary><span class="measure-name">Where we are</span><span class="measure-what">How far along the work is, and the road ahead.</span></summary>
   <section class="panel" id="where">
     <div class="panel-head">
       <h2>Where we are</h2>
@@ -51,38 +80,40 @@
       <div class="roadmap" id="roadmap"></div>
     </div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Needs attention</span><span class="measure-what">Anything the automatic checks flagged for a person.</span></summary>
   <section class="panel" id="attention">
     <div class="panel-head"><h2>Needs attention</h2><p>Items are listed in the order supplied. Select one to inspect its criterion or day.</p></div>
     <div id="attention-list"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Evidence behind the ticks</span><span class="measure-what">What evidence stands behind each ticked promise, and whether it still holds.</span></summary>
   <section class="panel" id="ticks">
     <div class="panel-head">
       <h2>Evidence behind the ticks</h2>
       <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Grey is retired: a later day's spec names the test and that day's PR removed it; orange is gone with no spec saying so. Days marked <em>pre-format</em> were written before the evidence format: nothing asked their ticks to record any of this, so a zero there is not measured, not missing. If the <code>broken:</code> line was asked for only from a later PR, “Seen red” is not measured for a day none of whose PRs reaches it.</p>
     </div>
-    <div class="panel-head"><h2>Criteria</h2><p>Each row shows the criterion, day and tag, whether it cites a PR, its test was found, and it was seen red, and the replay statuses. – means not measured. Select a row for details.</p></div>
-    <div class="scroll-x"><table id="criteria-matrix"></table></div>
-    <div class="panel-head"><h2>Inspector</h2><p>Evidence and attention for the selected criterion or day.</p></div>
-    <div id="criterion-inspector" aria-live="polite"></div>
     <div class="scroll-x"><table id="evidence"></table></div>
     <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Evidence replayed</h2>
-      <p>What <code>scripts/close-evidence.py --all</code>, run by the dashboard workflow before each build and never committed, found when it replayed each finished day's evidence on <code>main</code>: the named tests looked up, the Verify commands run, the recorded breaks applied. The page build reads that report and runs nothing. “Seen red” above counts the <code>broken:</code> lines a day recorded; here a break counts as passed only if it reported what its line says. A share is passed over passed, failed and errored, with the not-applicable beside it; a day checked at another close, or on a spec or breaks file <code>main</code> has since changed, is stale, not a pass.</p>
+      <p>What <code>scripts/close-evidence.py --all</code>, run by the dashboard workflow before each build and never committed, found when it replayed each finished day's evidence on <code>main</code>: the named tests looked up, the Verify commands run, the recorded breaks applied. The page build reads that report and runs nothing. “Failure recorded when built” above counts the <code>broken:</code> and seen-red lines a day recorded; here a break counts as passed only if it reported what its line says. A share is passed over passed, failed and errored, with the not-applicable beside it; a day checked at another close, or on a spec or breaks file <code>main</code> has since changed, is stale, not a pass.</p>
       <p class="limit">Evidence: checks the recorded evidence against the revisions shown; does not establish complete behavioral coverage or current correctness.</p>
     </div>
     <div id="evidence-checks"></div>
     <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">How each criterion was proved</h2>
-      <p>The same report, by day: each criterion counted once, under the strongest thing that proved it, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Grey is unproved: unticked, or ticked with nothing behind it. A dashed outline is not recorded: a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither.</p>
+      <h2 style="font-size:17px">What evidence each criterion has on record</h2>
+      <p>The same report, by day: each criterion counted once, under the strongest evidence its spec names, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Nothing is run for this count: it reads the spec. Grey is nothing on record: unticked, or ticked with nothing behind it. A dashed outline is not recorded: a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither.</p>
     </div>
     <div class="legend" id="proof-kinds-legend"></div>
     <div id="proof-kinds"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Do the promises still hold?</h2>
-      <p>Each finished day promised things the software must do. We re-run those tests on the merged code, and put back the bugs they were shown to catch. One square is one promise; open a feature to read its promises. The re-check is run by hand (<code>scripts/replay-history.py</code>), so it can be behind the latest change.</p>
+      <p>Each finished day promised things the software must do. We re-run those tests on the merged code, and put back the bugs they were shown to catch. One square is one promise; open a feature to read its promises. “Planted bug caught” is the strongest of the three measurements on this page: “evidence on record” reads the spec, “failure recorded when built” reads a line in the spec, and this one re-runs the bug. The re-check is run by hand (<code>scripts/replay-history.py</code>), so it can be behind the latest change.</p>
     </div>
     <div id="replay"></div>
     <div class="legend" id="replay-legend"></div>
@@ -100,7 +131,10 @@
     <div class="scroll-x"><table id="removals"></table></div>
     </div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Hand-offs to days not yet run</span><span class="measure-what">Work finished days left for later days, so nothing is dropped.</span></summary>
   <section class="panel" id="handoffs">
     <div class="panel-head">
       <h2>Hand-offs to days not yet run</h2>
@@ -108,7 +142,14 @@
     </div>
     <div class="hand-offs" id="hand-offs"></div>
   </section>
+  </details>
 
+  <details class="measure" id="gap">
+    <summary><span class="measure-name">The spec–code gap</span><span class="measure-what">How closely the written plan and the code use the same names, merge by merge.</span></summary>
+    <div class="panel-head gap-intro">
+      <h2 id="headline">Spec and code, merge by merge</h2>
+      <p class="lede">Treat <code>plan.md</code> and the day specs as a vector, and the codebase as a second vector in the same space. Across every merge to <code>main</code>, this page tracks how far the spec rotated away from the plan as written, how far apart spec and code sit, and which side did the moving.</p>
+    </div>
   <div class="stats" id="stats"></div>
   <div class="finding caveats"><h3>What these figures cannot see</h3><ul id="caveats"></ul></div>
 
@@ -199,7 +240,10 @@
     <div id="cover"></div>
     <p class="axis-note" id="class-share"></p>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Service boundaries</span><span class="measure-what">How much of each service has moved into its own directory.</span></summary>
   <section class="panel" id="services">
     <div class="panel-head">
       <h2>Service boundaries</h2>
@@ -208,7 +252,10 @@
     <div id="moved"></div>
     <div class="finding" id="placed" style="margin-top:14px"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Where the work went</span><span class="measure-what">Where the changed lines went: specs, code, tests or tooling.</span></summary>
   <section class="panel" id="work">
     <div class="panel-head">
       <h2>Where the work went</h2>
@@ -235,7 +282,10 @@
     <div id="pr-total"></div>
     <div id="perday"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Verification the lines do not show</span><span class="measure-what">Checks that leave no trace in the code: planted bugs, failed CI runs, review time.</span></summary>
   <section class="panel" id="verification">
     <div class="panel-head">
       <h2>Verification the lines do not show</h2>
@@ -254,7 +304,10 @@
     </div>
     <div class="scroll-x"><table id="merge-time"></table></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Where the corrections landed</span><span class="measure-what">Which days' plans were rewritten, and when.</span></summary>
   <section class="panel" id="corrections">
     <div class="panel-head">
       <h2>Where the corrections landed</h2>
@@ -262,7 +315,10 @@
     </div>
     <div class="scroll-x" id="heat"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Does a second reader agree with the defect tags?</span><span class="measure-what">Whether an independent reader labels the defects the same way.</span></summary>
   <section class="panel" id="second-reader">
     <div class="panel-head">
       <h2>Does a second reader agree with the defect tags?</h2>
@@ -271,7 +327,10 @@
     <div class="scroll-x"><table id="relabel"></table></div>
     <p id="recurrence"></p>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Infrastructure, as CI last checked it</span><span class="measure-what">The last automatic check of the infrastructure.</span></summary>
   <section class="panel" id="infra">
     <div class="panel-head">
       <h2>Infrastructure, as CI last checked it</h2>
@@ -284,7 +343,10 @@
     <div class="scroll-x" id="infra-cost"></div>
     <div class="chips" id="infra-runs"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">The deployment, as it was checked live</span><span class="measure-what">Live checks of the deployed system.</span></summary>
   <section class="panel" id="deployment">
     <div class="panel-head">
       <h2>The deployment, as it was checked live</h2>
@@ -293,7 +355,10 @@
     <div id="deployment-head"></div>
     <div class="scroll-x" id="deployment-checks"></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">Tokens spent</span><span class="measure-what">What the AI work cost, and what each safety check found.</span></summary>
   <section class="panel" id="tokens">
     <div class="panel-head">
       <h2>Tokens spent</h2>
@@ -320,7 +385,10 @@
     <p id="gate-note"></p>
     <div class="scroll-x"><table id="gate-report"></table></div>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">What the vectors say</span><span class="measure-what">What the plan-versus-code numbers add up to so far.</span></summary>
   <section class="panel" id="vectors">
     <h2>What the vectors say</h2>
     <div class="findings" id="findings"></div>
@@ -347,7 +415,10 @@
       <div class="scroll-x"><table id="tbl"></table></div>
     </details>
   </section>
+  </details>
 
+  <details class="measure">
+    <summary><span class="measure-name">What the repository says so far</span><span class="measure-what">The project's own latest written reading of where it stands.</span></summary>
   <section class="panel" id="conclusion">
     <div class="panel-head">
       <div class="eyebrow" id="conclusion-eyebrow">Conclusion</div>
@@ -363,11 +434,16 @@
       <div style="overflow-x:auto"><table id="measured"></table></div>
     </div>
   </section>
+  </details>
 
-  <section class="panel" id="not-measured" hidden>
+  <details class="measure" id="not-measured" hidden>
+    <summary><span class="measure-name">Not measured yet</span><span class="measure-what">Panels with nothing to show yet, and why.</span></summary>
+  <section class="panel">
     <div class="panel-head"><h2>Not measured yet</h2><p>Panels with nothing to draw yet, each with the reason. Each stays in its place above, and draws there once its data exists.</p></div>
     <ul class="not-measured" id="not-measured-list"></ul>
   </section>
+  </details>
+  </div>
 </div>
 <div class="tip" id="tip" hidden></div>
 <script src="dashboard.js"></script>

@@ -149,7 +149,7 @@ def build_days(rows):
             index.append(dict(id=cid, day=d, phase=spec["phase"], tag=kind, claim=claim,
                               spec=f"specs/day-{d:02d}-{slug(d)}.md#acceptance-criteria", track="A",
                               prs=[track] if track else [], tests=[test], cited=True if ticked else None,
-                              test_found=True, seen_red=dict(state=ticked or None, lines=[block.splitlines()[-1]] if ticked else []),
+                              ticked=bool(ticked), test_found=True, seen_red=dict(state=ticked or None, lines=[block.splitlines()[-1]] if ticked else []),
                               replay=dict(state=state, status=["passed"] if finished else None,
                                           why=why, checks=[dict(criterion=cid, kind="test", status="passed",
                                                                 label=test, diagnostic=None)] if finished else []),
@@ -235,6 +235,11 @@ def demo():
                    dict(to=6, source="src/receipts/views.py:12", picked=False,
                         text="Receipts are numbered per shop, not per customer")],
         criteria_index=index, attention=attention,
+        test_inventory=dict(total=46, unreadable=[], groups=[
+            dict(key="driver", label="Driver behaviour", when="Every push and pull request", files=4, tests=30),
+            dict(key="live", label="Live runs", when="By hand only", files=1, tests=1),
+            dict(key="gap", label="The dashboard's gap numbers", when="Every push and pull request", files=1, tests=3),
+            dict(key="tooling", label="Project tooling", when="On pull requests that touch a script", files=2, tests=12)]),
         defect_recurrence=dict(defects=2, with_id=2, recurrences=[dict(id="D2.1", same_as="D1.1")], problems=[]),
         gate_report=dict(defects=2, elsewhere=1, gates=[
             dict(gate=g, found=f, defects=n, refused=r, runs=k, replies=3 * k, context=90000 * k, output=1500 * k,
