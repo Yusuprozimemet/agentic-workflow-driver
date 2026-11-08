@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
@@ -1136,7 +1137,7 @@ class El {
   constructor(tag) { this.tag = tag; this.attrs = {}; this.kids = []; this.html = ""; this.style = {}; this.dataset = {}; }
   setAttribute(k, v) { this.attrs[k] = String(v); }
   appendChild(c) { this.kids.push(c); return c; }
-  after() {}
+  after() {} scrollIntoView() {}
   set innerHTML(h) { this.html = String(h); this.kids = []; }
   get innerHTML() { return this.html + this.kids.map(k => k.out()).join(""); }
   set textContent(t) { this.innerHTML = t; }
@@ -1148,7 +1149,7 @@ class El {
 }
 const document = { getElementById: id => els[id] || (els[id] = new El("div")), createElementNS: (_, t) => new El(t),
   querySelectorAll: () => [] };
-const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, matchMedia: () => ({ matches: true, addEventListener() {} }), DATA: JSON.parse(fs.readFileSync(0, "utf8")),
+const ctx = vm.createContext({ document, window: {}, location: { hash: process.env.DRAW_HASH || "" }, matchMedia: () => ({ matches: true, addEventListener() {} }), DATA: JSON.parse(fs.readFileSync(0, "utf8")),
   console: { error: e => logged.push(String(e && e.message || e)) } });
 let error = null;
 try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
@@ -2771,6 +2772,44 @@ class PlainPageTest(unittest.TestCase):
             script = f.read()
         self.assertNotIn('"Criteria proved"', script)
         self.assertIn('["proof", "Evidence on record"]', script)
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class HowThisWorksPageTest(unittest.TestCase):
+    PICKED = dict(promise=dict(source="specs/day-05-parks.md", text=dict(
+        id="C05.2", day=5, spec="specs/day-05-parks.md", breaks="specs/breaks/day-05.json")))
+    NONE = dict(promise=dict(source="specs/", missing="every finished promise is missing a step of its record"))
+
+    def step(self, name, how):
+        """What the panel draws with that step open: the route line and the step's detail."""
+        with mock.patch.dict(os.environ, DRAW_HASH=f"#how-step-{name}"):
+            error, panels, _ = drawn([page_row(0, None, "origin", 50), page_row(1, 1, "other", 50)], how_this_works=how,
+                                    criteria_index=[dict(id="C05.2", claim="It parks.")])
+        self.assertIsNone(error)
+        self.assertIn("how-kicker", panels["how-detail"])
+        return panels["how-route"], panels["how-detail"]
+
+    def test_the_links_name_the_picked_day(self):
+        _, detail = self.step("spec", self.PICKED)
+        self.assertIn('blob/main/specs/day-05-parks.md"', detail)
+        self.assertIn("Day 5", detail)
+        _, detail = self.step("bug", self.PICKED)
+        self.assertIn('blob/main/specs/breaks/day-05.json"', detail)
+        self.assertIn("Day 5", detail)
+
+    def test_the_route_and_captions_follow_the_picked_promise(self):
+        route, detail = self.step("red", self.PICKED)
+        self.assertIn("It parks.", route)
+        self.assertIn("What was recorded for C05.2", detail)
+
+    def test_no_promise_picked_says_so_and_links_no_day(self):
+        route, detail = self.step("spec", self.NONE)
+        self.assertIn("every finished promise is missing a step of its record", route)
+        self.assertNotIn("blob/main/specs/day-", detail)
+        _, detail = self.step("bug", self.NONE)
+        self.assertNotIn("blob/main/specs/breaks/", detail)
+        _, detail = self.step("red", self.NONE)
+        self.assertIn("What was recorded for this promise", detail)
 
 
 if __name__ == "__main__":

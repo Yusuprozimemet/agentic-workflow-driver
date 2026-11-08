@@ -1885,12 +1885,13 @@ const HOW_CAST = [
   ["Three end-of-phase auditors", "Security, agentic engineering and architecture. Run once, after the last phase in the plan.", "goal"],
 ];
 function drawHow() {
-  const X = DATA.how_this_works || {}, { promises, inGroup } = promiseReading(), id = "C03.3";
+  const X = DATA.how_this_works || {}, { promises, inGroup } = promiseReading();
+  const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
   const value = x => howHas(x) ? esc(x.text) : howMissing(x);
   const src = (path, label) => `<a class="how-src" href="${HOW_BLOB}${path}" target="_blank" rel="noopener">Read ${esc(label || path)}</a>`;
   const anat = rows => `<dl class="how-anat">${rows.map(([k, g, v]) => `<div><dt>${esc(k)}</dt><dd><span>${esc(g)}</span>${v ? `<span class="mono">${v}</span>` : ""}</dd></div>`).join("")}</dl>`;
   const promise = criteria.find(c => c.id === id);
-  document.getElementById("how-route").innerHTML = `Below is the route one real promise took: <strong>${promise ? esc(promise.plain || promise.claim) : howMissing({ source: id })}</strong> Select a step to see what happened there.`;
+  document.getElementById("how-route").innerHTML = `Below is the route one real promise took: <strong>${promise ? esc(promise.plain || promise.claim) : howMissing(X.promise)}</strong> Select a step to see what happened there.`;
   document.getElementById("how-path").innerHTML = howHas(X.crumbs) ? X.crumbs.text.map(c => `<b>${esc(c)}</b>`).join("›") : howMissing(X.crumbs);
 
   const planParts = howHas(X.plan_parts) ? anat(X.plan_parts.text.map(p => [p, HOW_PLAN_GLOSS[p] || ""])) : howMissing(X.plan_parts);
@@ -1913,9 +1914,9 @@ function drawHow() {
   const STEPS = [
     { id: "goal", kind: "doc", name: "The goal", line: "What we want built, in phases", gate: "<b>plan-auditor</b>, at a phase's start and end, asks: do the days still add up to the goal?",
       body: `<p>One document says what the whole project is for, what stays with a person, and the order of the work. It rarely changes. There is only one plan, so it has no template. These are some of the sections it contains.</p>${planParts}`
-        + howExcerpt(X.plan_halt, "Why our promise exists: plan.md, what a halt does") + howExcerpt(X.plan_phase, "Where it was scheduled: plan.md, Phase 1") + src("plan.md") },
+        + howExcerpt(X.plan_phase, "Where it was scheduled: plan.md") + src("plan.md") },
     { id: "spec", kind: "doc", name: "A day's spec", line: "One day's work, written down first", gate: "<b>spec-auditor</b> runs every check on the code as it is and tries to prove each claim wrong",
-      body: `<p>Each day gets one file, filled in from the same template. The template forces the awkward questions early: what is left out, and who picks it up.</p>${specParts}` + src("specs/_template.md", "the template") + src("specs/day-03-the-stop.md", "Day 3's spec") },
+      body: `<p>Each day gets one file, filled in from the same template. The template forces the awkward questions early: what is left out, and who picks it up.</p>${specParts}` + src("specs/_template.md", "the template") + (chosen ? src(chosen.spec, `Day ${chosen.day}'s spec`) : "") },
     { id: "promise", kind: "doc", name: "A promise", line: "One sentence someone else can check", gate: "",
       body: `<p>A promise is what the specs call an <em>acceptance criterion</em>. It must be checkable by someone who did not write the code. It is tagged <strong>new</strong> if the behaviour does not exist yet, or <strong>hold</strong> if it is true today and must stay true.</p>`
         + howExcerpt(X.form, "The blank form, from the template") + `<p>Filled in, for this promise:</p>`
@@ -1926,7 +1927,7 @@ function drawHow() {
         + howExcerpt(X.seen_red, `What was recorded for ${id}`) + `<p>Compare it with the “Red today” line in step 3.</p>` },
     { id: "bug", kind: "try", name: "The code, then a planted bug", line: "Does the test actually notice?", gate: "<b>The maintainer</b> reviews and merges. Today nothing merges without a person",
       body: `<p>Once the tests pass, the finished code is sabotaged on purpose and they are run again. If they still pass, they would not have caught a real failure. The sabotage is undone and never merges.</p>${bugs}`
-        + `<p>Each last line is what the test reported with the bug in place: the test failing is the good result. Automated checks also run on the pull request: style, every test, and a limit of 400 changed lines so it stays reviewable.</p>` + src("specs/breaks/day-03.json", "Day 3's planted bugs") },
+        + `<p>Each last line is what the test reported with the bug in place: the test failing is the good result. Automated checks also run on the pull request: style, every test, and a limit of 400 changed lines so it stays reviewable.</p>` + (chosen ? src(chosen.breaks, `Day ${chosen.day}'s planted bugs`) : "") },
     { id: "close", kind: "after", name: "The day closes", line: "Each tick cites its evidence", gate: "<b>defect-rater</b> labels the day's mistakes blind, to see if a second reader agrees",
       body: `<p>A last pull request ticks each promise and names what proves it. A box with no evidence stays unticked, with the reason written under it.</p>${howExcerpt(tick, `The tick on ${id}`)}`
         + `<ul><li>Mistakes go in the Notes, including the AI's own.</li><li>Automation replays the recorded evidence against the closing commit. If that fails, the next day does not start.</li></ul>` + src("docs/lab-notebook.md", "the lab notebook") },
