@@ -128,11 +128,21 @@ class PickTest(unittest.TestCase):
             "no_bug": {"newest": [criterion("C98.1", bug=""), second]},
             "bug_not_in_manifest": {"newest": [criterion("C98.1", bug="another"), second]},
             "no_track": {"untracked": ("C98.1",)},
-            "no_recheck": {"rechecked": ("C98.2", "C97.1")},
         }
         for name, kwargs in cases.items():
             with self.subTest(name):
                 self.assertEqual(picked(world(**kwargs)), "C98.2")
+
+    def test_a_promise_with_no_recheck_is_still_picked(self):
+        got = spec_drift.how_excerpts(world(rechecked=("C97.1",)), [NEW, OLD])
+        self.assertEqual(got["promise"]["text"]["id"], "C98.1")
+        self.assertEqual(got["recheck"]["text"], {"pr": None, "checks": []})
+
+    def test_a_replay_file_gone_shows_as_missing_not_as_no_recheck(self):
+        got = spec_drift.how_excerpts(world(gone=(spec_drift.HOW_REPLAY,)), [NEW, OLD])
+        self.assertEqual(got["promise"]["text"]["id"], "C98.1")
+        self.assertNotIn("text", got["recheck"])
+        self.assertIn("missing or empty", got["recheck"]["missing"])
 
     def test_either_wording_of_seen_red_counts(self):
         line = "seen red first on `main`'s code: `python x` → FAILED"
@@ -141,7 +151,6 @@ class PickTest(unittest.TestCase):
 
     def test_an_older_day_serves_when_the_newest_has_none_whole(self):
         for name, read in (
-            ("no re-check", world(rechecked=("C97.1",))),
             ("spec gone", world(gone=(NEW,))),
             ("breaks gone", world(gone=(NEW_BREAKS,))),
             ("not scheduled", world(plan=PLAN.replace("- Day 98: the newer day.\n", ""))),
@@ -159,9 +168,9 @@ class PickTest(unittest.TestCase):
         self.assertEqual(spec_drift.how_specs(days), ["six", "five"])
 
     def test_no_whole_promise_shows_as_missing(self):
-        got = spec_drift.how_excerpts(world(rechecked=()), [NEW, OLD])
+        got = spec_drift.how_excerpts(world(gone=(NEW_BREAKS, OLD_BREAKS)), [NEW, OLD])
         self.assertNotIn("text", got["promise"])
-        for key in spec_drift.HOW_NEEDED:
+        for key in spec_drift.HOW_NEEDED + ("recheck",):
             self.assertEqual(got[key]["missing"], spec_drift.HOW_NO_PROMISE, key)
         self.assertIn("text", got["form"])
         self.assertEqual(
@@ -216,11 +225,13 @@ class ExcerptTest(unittest.TestCase):
             self.assertTrue(bug["reported"], bug)
 
     def test_the_recheck_is_the_promises_newest(self):
-        got = self.got["recheck"]["text"]
+        # Day 05 has been re-checked; the newest day, which the panel follows, need not have been.
+        excerpts = spec_drift.how_excerpts(real, ["specs/day-05-parks.md"])
+        got = excerpts["recheck"]["text"]
         rows = [
             r
             for r in json.loads(real(spec_drift.HOW_REPLAY))["rows"]
-            if r["criterion"] == self.chosen["id"]
+            if r["criterion"] == excerpts["promise"]["text"]["id"]
         ]
         newest = max(r["n"] for r in rows)
         self.assertEqual(

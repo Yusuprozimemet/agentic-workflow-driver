@@ -31,6 +31,39 @@ class PageTest(unittest.TestCase):
         ]
         self.assertEqual(links, sorted(links))
 
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's function")
+    def test_step_seven_says_when_there_is_no_recheck(self):
+        def part(pattern):
+            return re.search(pattern, self.script, re.MULTILINE | re.DOTALL).group(0)
+
+        code = "\n".join(
+            [
+                part(r"^const esc = .*?$"),
+                part(r"^const howHas = .*?$"),
+                part(r"^function howMissing\(.*?^}$"),
+                part(r"^function howExcerpt\(.*?^}$"),
+                part(r"^function howRecheck\(.*?^}$"),
+            ]
+        )
+        code += """
+console.log(howRecheck({source: "r", text: {pr: null, checks: []}}, "C1.1"));
+console.log("---");
+console.log(howRecheck({source: "r", text: {pr: 7, checks: [{check: "T.a", state: "pass"}]}}, "C1.1"));
+console.log("---");
+console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "C1.1"));
+"""
+        out = subprocess.run(
+            ["node", "-e", code], capture_output=True, text=True, encoding="utf-8", check=True
+        ).stdout
+        none, some, gone = out.split("---")
+        self.assertIn("not re-checked yet", none)
+        self.assertNotIn("at its latest re-check", none)
+        self.assertIn("C1.1 at its latest re-check, the merge of PR #7", some)
+        self.assertIn("T.a", some)
+        self.assertNotIn("not re-checked yet", some)
+        self.assertIn("Missing from this build: r (the file is missing or empty)", gone)
+        self.assertNotIn("not re-checked yet", gone)
+
     def test_the_panel_needs_no_diagram_library(self):
         self.assertNotIn("mermaid", (self.html + self.script).lower())
 
