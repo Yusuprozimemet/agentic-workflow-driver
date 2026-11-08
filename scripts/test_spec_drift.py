@@ -1985,6 +1985,10 @@ class CriterionIndexTest(unittest.TestCase):
         rows, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
         self.assertTrue(rows[0]["test_found"])
         self.assertEqual(attention[-1], dict(id="C1.1", reason="test_skippable", detail="LiveTest.test_live"))
+        # "Tests on main" counts the names the whole block gives (C04.14 names LiveOnceTest in its claim).
+        days[0]["evidence"][0]["tests"] = {"LiveTest.test_live": "skippable", "LiveOnceTest": "skippable"}
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
+        self.assertEqual(attention[-1]["detail"], "LiveTest.test_live, LiveOnceTest")
 
 
 class EvidenceReportTest(unittest.TestCase):

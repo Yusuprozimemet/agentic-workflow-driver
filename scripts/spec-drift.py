@@ -1662,8 +1662,12 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
                 flag(row, "not_seen_red", "No seen-red or broken line")
             if found is False:
                 flag(row, "test_not_found", ", ".join(t for t in tests if states[t] == "missing"))
-            # The "Tests on main" column's orange: a test CI can skip is noted here, not a fault.
-            skips = [t for t in tests if states[t] == "skippable"]
+            # The "Tests on main" column's orange: a test CI can skip is noted here, not a fault. That
+            # column reads the states evidence_history gives the names in the whole block, not only the
+            # Evidence line's; before it runs, `tests` is still the list of names.
+            day_states = c["tests"] if isinstance(c.get("tests"), dict) else {}
+            skips = list(dict.fromkeys([t for t in tests if states[t] == "skippable"]
+                                       + [t for t, s in day_states.items() if s == "skippable"]))
             if skips:
                 flag(row, "test_skippable", ", ".join(skips))
             for h in handoffs:
