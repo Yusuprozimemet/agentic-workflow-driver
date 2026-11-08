@@ -334,8 +334,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       kills the session's tree, prints "park: the session ran past 0.01 minutes (session `<id>`)",
       writes the `end` line with it, opens its `parked` issue and exits 1.
       Red today: "run-steps.py: error: argument command: invalid choice: '0.01' (choose from
-      preflight, halt, clear, off, on, live-check)": the value is read as the positional command
-      (D06.20).
+      preflight, halt, clear, off, on, live-check)": the value is read as the positional command.
       Test: `SessionBoundTest.test_session_past_its_bound_parks`.
       Evidence: `SessionBoundTest.test_session_past_its_bound_parks`, and a resumed session's bound in `SessionBoundTest.test_resumed_session_past_its_bound_parks` (#75).
       seen red: python -m unittest tests.test_session_bound.SessionBoundTest.test_session_past_its_bound_parks tests.test_session_bound.SessionBoundTest.test_resumed_session_past_its_bound_parks on main → AssertionError: 2 != 1 (#75)
@@ -517,8 +516,9 @@ git -c core.safecrlf=false diff --exit-code 6f9e72c -- tests/test_contract.py te
   second read (#70).
 - **Defect** D06.20 — found: Track H · cause: spec · made: Day 06 · same-as: D06.16 · C06.11's Red
   today quoted argparse's choices as `preflight, halt, clear, off`; #73 and #74 added `on` and
-  `live-check` before Track H ran, and #75 recorded the departure. Same failure. Corrected at this
-  close, confirmed by running `run-steps.py --session-minutes 0.01 --once` at #74's merge (33b93b8).
+  `live-check` before Track H ran, and #75 recorded the departure. Same failure. Corrected by #77, a
+  spec change merged before this close, not at the close; the new line was confirmed by running
+  `run-steps.py --session-minutes 0.01 --once` at #74's merge (33b93b8).
 - **Defect** D06.21 — found: close · cause: spec · made: Day 06 · same-as: D06.16 · C06.10's Red
   today says "as C06.8", an `on` that argparse refuses. #73 had added `on` before Track G, so its
   red was an assertion (`Tuples differ`, #74). The line is left as it was.
