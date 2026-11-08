@@ -83,14 +83,25 @@
   <section class="panel" id="tested">
     <div class="panel-head">
       <h2>What is tested, and how much we trust it</h2>
-      <p>What the tests are, when they run, and for each feature how many of its promises have been shown to catch a bug planted on purpose.</p>
+      <p>For each promise the software makes: has a test been shown to catch a bug planted on purpose?</p>
     </div>
-    <h3>Tests by group</h3>
-    <div class="scroll-x"><table id="test-groups"></table></div>
-    <p class="limit" id="test-note"></p>
-    <h3>Confidence per feature</h3>
-    <div class="scroll-x"><table id="trust-table"></table></div>
-    <p class="limit" id="trust-note"></p>
+    <div class="plot"><div id="plot-all"></div></div>
+    <div class="plot-grid">
+      <div class="plot">
+        <h3>Promises by feature</h3>
+        <p class="plot-say">Each bar is as long as the feature's number of promises.</p>
+        <div id="plot-features"></div>
+        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="trust-table"></table></div></details>
+        <details class="counted"><summary>How this is counted</summary><p class="limit" id="trust-note"></p></details>
+      </div>
+      <div class="plot">
+        <h3>Where the tests are</h3>
+        <p class="plot-say">How many tests each part has, shaded by when they run.</p>
+        <div id="plot-groups"></div>
+        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="test-groups"></table></div></details>
+        <details class="counted"><summary>How this is counted</summary><p class="limit" id="test-note"></p></details>
+      </div>
+    </div>
   </section>
 
   <div class="measurements" id="measurements">
@@ -119,44 +130,71 @@
   </section>
   </details>
 
-  <details class="measure">
+  <details class="measure" open>
     <summary><span class="measure-name">Evidence behind the ticks</span><span class="measure-what">What evidence stands behind each ticked promise, and whether it still holds.</span></summary>
   <section class="panel" id="ticks">
     <div class="panel-head">
       <h2>Evidence behind the ticks</h2>
-      <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Grey is retired: a later day's spec names the test and that day's PR removed it; orange is gone with no spec saying so. Days marked <em>pre-format</em> were written before the evidence format: nothing asked their ticks to record any of this, so a zero there is not measured, not missing. If the <code>broken:</code> line was asked for only from a later PR, “Seen red” is not measured for a day none of whose PRs reaches it.</p>
+      <p>Was each promise's evidence written down when it was built, and does it still replay today? Select a tile for that promise's detail.</p>
     </div>
-    <div class="scroll-x"><table id="evidence"></table></div>
-    <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Evidence replayed</h2>
-      <p>What <code>scripts/close-evidence.py --all</code>, run by the dashboard workflow before each build and never committed, found when it replayed each finished day's evidence on <code>main</code>: the named tests looked up, the Verify commands run, the recorded breaks applied. The page build reads that report and runs nothing. “Failure recorded when built” above counts the <code>broken:</code> and seen-red lines a day recorded; here a break counts as passed only if it reported what its line says. A share is passed over passed, failed and errored, with the not-applicable beside it; a day checked at another close, or on a spec or breaks file <code>main</code> has since changed, is stale, not a pass.</p>
+    <div class="plot-stats" id="evidence-headline"></div>
+    <div class="plot">
+      <div id="plot-evidence"></div>
       <p class="limit">Evidence: checks the recorded evidence against the revisions shown; does not establish complete behavioral coverage or current correctness.</p>
+      <p id="evidence-skip"></p>
+      <details class="exact">
+        <summary>Exact numbers</summary>
+        <h3>Recorded when built</h3>
+        <div class="scroll-x"><table id="evidence"></table></div>
+        <div class="finding" id="evidence-gaps" style="margin-top:14px"></div>
+        <h3>Replayed today</h3>
+        <div id="evidence-checks"></div>
+      </details>
+      <details class="counted">
+        <summary>How this is counted</summary>
+        <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Grey is retired: a later day's spec names the test and that day's PR removed it; orange is gone with no spec saying so. Days marked <em>pre-format</em> were written before the evidence format: nothing asked their ticks to record any of this, so a zero there is not measured, not missing. If the <code>broken:</code> line was asked for only from a later PR, “Seen red” is not measured for a day none of whose PRs reaches it.</p>
+        <p>What <code>scripts/close-evidence.py --all</code>, run by the dashboard workflow before each build and never committed, found when it replayed each finished day's evidence on <code>main</code>: the named tests looked up, the Verify commands run, the recorded breaks applied. The page build reads that report and runs nothing. “Failure recorded when built” above counts the <code>broken:</code> and seen-red lines a day recorded; here a break counts as passed only if it reported what its line says. A share is passed over passed, failed and errored, with the not-applicable beside it; a day checked at another close, or on a spec or breaks file <code>main</code> has since changed, is stale, not a pass.</p>
+      </details>
     </div>
-    <div id="evidence-checks"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">What evidence each criterion has on record</h2>
-      <p>The same report, by day: each criterion counted once, under the strongest evidence its spec names, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Nothing is run for this count: it reads the spec. Grey is nothing on record: unticked, or ticked with nothing behind it. A dashed outline is not recorded: a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither.</p>
+      <p>Each ticked promise, counted once under the strongest evidence its spec names.</p>
     </div>
     <div class="legend" id="proof-kinds-legend"></div>
     <div id="proof-kinds"></div>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>The same report, by day: each criterion counted once, under the strongest evidence its spec names, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Nothing is run for this count: it reads the spec. Grey is nothing on record: unticked, or ticked with nothing behind it. A dashed outline is not recorded: a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither.</p>
+      </details>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Do the promises still hold?</h2>
-      <p>Each finished day promised things the software must do. We re-run those tests on the merged code, and put back the bugs they were shown to catch. One square is one promise; open a feature to read its promises. “Planted bug caught” is the strongest of the three measurements on this page: “evidence on record” reads the spec, “failure recorded when built” reads a line in the spec, and this one re-runs the bug. The re-check is run by hand (<code>scripts/replay-history.py</code>), so it can be behind the latest change.</p>
+      <p>We re-run each finished day's tests on the merged code and put back the bugs they were shown to catch.</p>
     </div>
     <div id="replay"></div>
     <div class="legend" id="replay-legend"></div>
     <details id="replay-table"></details>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>Each finished day promised things the software must do. We re-run those tests on the merged code, and put back the bugs they were shown to catch. One square is one promise; open a feature to read its promises. “Planted bug caught” is the strongest of the three measurements on this page: “evidence on record” reads the spec, “failure recorded when built” reads a line in the spec, and this one re-runs the bug. The re-check is run by hand (<code>scripts/replay-history.py</code>), so it can be behind the latest change.</p>
+      </details>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Merge by merge</h2>
-      <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree with no spec saying so; grey is retired. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
+      <p>The tests finished days name, looked up at every merge; orange can be skipped or has left the tree.</p>
     </div>
     <div id="evidence-history"></div>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree with no spec saying so; grey is retired. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
+      </details>
     <div id="removal-checks">
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Removal checks</h2>
-      <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from the root or a directory under <code>verify_bases</code> in <code>spec-drift.config.json</code>, wherever their paths are. Paths follow the directories that moved since (its <code>moved</code>), because a grep of a path that is gone prints nothing too. CI runs none of them. A check is orange when it finds lines on <code>main</code>, listed under it; grey when it reads no files; green otherwise. Since is the merge where that state began.</p>
+      <p>Searches a finished day says must find nothing, re-run over the tree at every merge.</p>
     </div>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>The greps a finished day's criteria or Verify say must print nothing, run over the tree at every merge from the day's end, from the root or a directory under <code>verify_bases</code> in <code>spec-drift.config.json</code>, wherever their paths are. Paths follow the directories that moved since (its <code>moved</code>), because a grep of a path that is gone prints nothing too. CI runs none of them. A check is orange when it finds lines on <code>main</code>, listed under it; grey when it reads no files; green otherwise. Since is the merge where that state began.</p>
+      </details>
     <div class="scroll-x"><table id="removals"></table></div>
     </div>
   </section>
@@ -313,25 +351,35 @@
   </section>
   </details>
 
-  <details class="measure">
+  <details class="measure" open>
     <summary><span class="measure-name">Verification the lines do not show</span><span class="measure-what">Checks that leave no trace in the code: planted bugs, failed CI runs, review time.</span></summary>
   <section class="panel" id="verification">
     <div class="panel-head">
       <h2>Verification the lines do not show</h2>
-      <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose in the one line the rules fix (<code>broken: &lt;what&gt; → &lt;what it reported&gt;</code>), say why there is none (<code>broken: none → &lt;why&gt;</code>), or say nothing? If the line was asked for only from a later PR, a PR before it described its breaks in free text and is not measured; the panel names that PR. Any silent PR is listed below.</p>
+      <p>Bugs planted on purpose and failed CI runs leave nothing in the code, so these come from GitHub.</p>
     </div>
     <div id="breaks"></div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Pushes CI failed</h2>
-      <p>Every commit CI ran on for a pull request that later merged, counted once however many workflows ran on it, and failed if any of them failed (a cancelled run is not a failure). Pushes to <code>main</code> are not counted: what failed there had already merged. Each pull request CI failed on at least once is listed below, with the workflows that failed.</p>
-    </div>
     <p id="ci-legend"></p>
-    <div class="scroll-x"><table id="ci-fails"></table></div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Time from opened to merged</h2>
-      <p>Every merged pull request, from the time it was opened to the time it merged, by the step it was: a spec change, a code track, a day's close, a <code>tooling/</code> branch, or any other. Most of that time is the maintainer's review and the wait for CI, which leave nothing in git. A pull request GitHub gave no time for is left out.</p>
+    <div class="plot-grid">
+      <div class="plot">
+        <h3>Which checks failed</h3>
+        <p class="plot-say">How many merged pull requests each workflow failed on before they merged.</p>
+        <div id="plot-ci"></div>
+        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="ci-fails"></table></div></details>
+      </div>
+      <div class="plot">
+        <h3>Time a PR stayed open</h3>
+        <p class="plot-say">From opened to merged, on a scale where each step is ten times longer.</p>
+        <div id="plot-open"></div>
+        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="merge-time"></table></div></details>
+      </div>
     </div>
-    <div class="scroll-x"><table id="merge-time"></table></div>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>A break on purpose never merges and a failed CI run leaves nothing in git, so neither is in “Where the work went”. Both are read from GitHub instead. First, each code PR's description: does it record a break on purpose in the one line the rules fix (<code>broken: &lt;what&gt; → &lt;what it reported&gt;</code>), say why there is none (<code>broken: none → &lt;why&gt;</code>), or say nothing? If the line was asked for only from a later PR, a PR before it described its breaks in free text and is not measured; the panel names that PR. Any silent PR is listed below.</p>
+        <p>Every commit CI ran on for a pull request that later merged, counted once however many workflows ran on it, and failed if any of them failed (a cancelled run is not a failure). Pushes to <code>main</code> are not counted: what failed there had already merged. Each pull request CI failed on at least once is listed below, with the workflows that failed.</p>
+        <p>Every merged pull request, from the time it was opened to the time it merged, by the step it was: a spec change, a code track, a day's close, a <code>tooling/</code> branch, or any other. Most of that time is the maintainer's review and the wait for CI, which leave nothing in git. A pull request GitHub gave no time for is left out.</p>
+      </details>
   </section>
   </details>
 
@@ -363,6 +411,11 @@
       <summary>How this is counted</summary>
       <p>At each close, <code>scripts/relabel.py</code> strips the <code>found:</code>, <code>cause:</code> and <code>made:</code> tags from the day's Defect lines, and the defect-rater agent, which wrote none of the day's work, tags the text again. This is how many of the day's tags it gave the same way, from the last run of <code>relabel.py compare</code> pasted in the day's closing PR. Where they agree the tags measure the defects; where they do not, the tags may only measure what the session that wrote them believed. A day with no whole run pasted is not counted, and is not counted as agreeing; neither are lines that do not make whole runs, or two closing PRs that differ. <i>Repeats</i> counts the day's Defect lines whose <code>same-as:</code> names an earlier defect's ID: a problem that came back.</p>
     </details>
+    <div class="plot">
+      <h3>Problems that came back</h3>
+      <p class="plot-say">Each line is one problem, followed through the days it was recorded again.</p>
+      <div id="plot-repeats"></div>
+    </div>
   </section>
   </details>
 
@@ -394,33 +447,80 @@
   </section>
   </details>
 
-  <details class="measure">
+  <details class="measure" open>
     <summary><span class="measure-name">Tokens spent</span><span class="measure-what">What the AI work cost, and what each safety check found.</span></summary>
   <section class="panel" id="tokens">
     <div class="panel-head">
       <h2>Tokens spent</h2>
-      <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
+      <p>What the AI work read and wrote, counted from the session transcripts on the maintainer's machine.</p>
     </div>
-    <div class="legend" id="token-legend"></div>
+    <div class="plot-grid">
+      <div class="plot">
+        <h3>Where the context went</h3>
+        <p class="plot-say">Every reply re-reads its conversation, so this is most of what the project costs.</p>
+        <div id="plot-context"></div>
+      </div>
+      <div class="plot">
+        <h3>What each day wrote</h3>
+        <p class="plot-say">Output tokens per day, split by the model that wrote them.</p>
+        <div class="legend" id="token-legend"></div>
+        <div id="plot-days"></div>
+      </div>
+    </div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="token-days"></table></div></details>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
+      </details>
+    <div class="panel-head" style="margin-top:14px">
+      <h2 style="font-size:17px">Output by date</h2>
+      <p>The same output tokens by calendar date, including the work between days; on a wide screen, the context per reply is under each bar.</p>
+    </div>
     <div id="token-bars"></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Who spent them</h2>
-      <p>The same output tokens by agent: the main sessions, and each subagent by its type, from the <code>.meta.json</code> Claude Code writes beside a subagent's transcript. The auditors and the defect-rater check work they did not write; the implementer writes the track code from a brief. Hover a bar for the context it read.</p>
+      <p>The same output tokens by agent, coloured by the model it ran on.</p>
     </div>
     <p id="token-implementer"></p>
     <div id="token-agents"></div>
-    <div class="scroll-x"><table id="token-days"></table></div>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p>The same output tokens by agent: the main sessions, and each subagent by its type, from the <code>.meta.json</code> Claude Code writes beside a subagent's transcript. The auditors and the defect-rater check work they did not write; the implementer writes the track code from a brief. Hover a bar for the context it read.</p>
+      </details>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Hooks at work</h2>
-      <p><code>cap-output.py</code> cuts long Bash output, and <code>read-guard.py</code> refuses whole Reads of files over 8,000 bytes. The <i>Refused</i> columns count what <code>step-guard.py</code>, <code>read-guard.py</code> and <code>auditor-guard.py</code> refused, from the log each keeps (<code>scripts/refusal_log.py</code>); "–" is a date before the log began. Many refusals of one kind say a rule is read past, or is in the way. Each row is one date. A refused Read still counts as whole. Read sizes are the files' sizes now.</p>
+      <p>Whether the hooks that keep output short were needed, and followed.</p>
     </div>
-    <div class="scroll-x"><table id="token-hooks"></table></div>
+    <div class="plot-grid">
+      <div class="plot">
+        <h3>Bash output cut, by date</h3>
+        <p class="plot-say">The share of Bash results long enough to be cut.</p>
+        <div id="plot-cut"></div>
+      </div>
+      <div class="plot">
+        <h3>Reads of large files, by date</h3>
+        <p class="plot-say">Reads of a file over 8,000 bytes, and how many the rule refused.</p>
+        <div id="plot-reads"></div>
+      </div>
+    </div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="token-hooks"></table></div></details>
+    <details class="counted">
+        <summary>How this is counted</summary>
+        <p><code>cap-output.py</code> cuts long Bash output, and <code>read-guard.py</code> refuses whole Reads of files over 8,000 bytes. The <i>Refused</i> columns count what <code>step-guard.py</code>, <code>read-guard.py</code> and <code>auditor-guard.py</code> refused, from the log each keeps (<code>scripts/refusal_log.py</code>); "–" is a date before the log began. Many refusals of one kind say a rule is read past, or is in the way. Each row is one date. A refused Read still counts as whole. Read sizes are the files' sizes now.</p>
+      </details>
     <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">What each gate found, and what it cost</h2>
-      <p>Each gate's catches beside the tokens it spent. <i>Found</i> counts the Defect lines whose <code>found:</code> names the gate, split by their <code>cause:</code>; the hooks find no Defect line, so theirs are the guards' refusals. <i>Runs</i>, <i>Replies</i> and <i>Cost</i> come from <code>gates.json</code>, which <code>scripts/token-usage.py</code> counts from this machine's transcripts: an auditor's run is all of its replies; a call to <code>seen-red.py</code>, <code>break.py</code> or <code>evidence.py</code>, or one a guard refused, counts the reply that made it and the reply that read its result. Cost is at list prices. A gate that finds nothing may still be what kept a defect from being made.</p>
+      <h2 style="font-size:17px">What each gate found</h2>
+      <p>Each gate catches something different; a gate that finds nothing may still be what kept a defect from being made.</p>
     </div>
-    <p id="gate-note"></p>
-    <div class="scroll-x"><table id="gate-report"></table></div>
+    <div class="plot">
+      <div id="plot-gates"></div>
+      <p id="gate-note"></p>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="gate-report"></table></div></details>
+      <details class="counted">
+        <summary>How this is counted</summary>
+        <p>Each gate's catches beside the tokens it spent. <i>Found</i> counts the Defect lines whose <code>found:</code> names the gate, split by their <code>cause:</code>; the hooks find no Defect line, so theirs are the guards' refusals. <i>Runs</i>, <i>Replies</i> and <i>Cost</i> come from <code>gates.json</code>, which <code>scripts/token-usage.py</code> counts from this machine's transcripts: an auditor's run is all of its replies; a call to <code>seen-red.py</code>, <code>break.py</code> or <code>evidence.py</code>, or one a guard refused, counts the reply that made it and the reply that read its result. Cost is at list prices. A gate that finds nothing may still be what kept a defect from being made.</p>
+      </details>
+    </div>
   </section>
   </details>
 
