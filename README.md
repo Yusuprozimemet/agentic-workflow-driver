@@ -12,8 +12,9 @@ spec at a time, as the kit describes ([docs/kit.md](docs/kit.md)); the driver ne
 - Set up from the kit at `393dda6` (2026-11-06).
 - Kit commits the driver's contract test has passed on: `393dda6` (Day 1, #3).
 
-Run the tests with `python -m unittest discover -s tests` (they need `numpy`:
-`python -m pip install -r requirements.txt`), and the style check with
+Run the tests with `python scripts/test-parallel.py`, one test file per process (they need
+`numpy`: `python -m pip install -r requirements.txt`); CI runs the same tests serially with
+`python -m unittest discover -s tests`. The style check is
 `ruff check . && ruff format --check .`.
 
 ## Findings

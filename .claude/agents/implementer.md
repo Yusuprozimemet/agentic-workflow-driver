@@ -24,7 +24,7 @@ do not guess which one is right.
 - **Write code that reads like the code around it:** its comment density, naming and idiom.
   Comments say why, in the repository's plain style. Never name, in a comment, a thing the day's
   grep checks is gone.
-- **Run the tests the brief names**, from the repository root, with `python -m unittest <module>.<Class>.<test>` (all of them: `python -m unittest discover -s tests`). There is no report directory: read
+- **Run the tests the brief names**, from the repository root, with `python -m unittest <module>.<Class>.<test>` (all of them: `python scripts/test-parallel.py`, one file per process; CI runs the same tests serially as `python -m unittest discover -s tests`). There is no report directory: read
   unittest's "Ran N tests" and "OK" lines, not the exit code. CI also runs `ruff check . && ruff format --check .`: run it.
 - If a test fails, fix your change, not the test, unless the brief says the test changes.
 
