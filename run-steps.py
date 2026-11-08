@@ -11,7 +11,8 @@ process tree when its lock names a live process, then reports on the run's issue
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
 file. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] does one step's checks in order:
-halt, config, lock, the driver's own repository, preflight, decide, the evidence run, then the run log;
+halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
+evidence run, then the run log;
 for now it prints "would start: <sentence>" and starts nothing."""
 
 import argparse
