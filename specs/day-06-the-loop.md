@@ -1,6 +1,6 @@
 # Day 06 — The loop: `on`, the checks waited on, a fix resumed twice at most, the merge waited for, `main` pulled
 
-**Phase:** 1 · **Depends on:** Day 5 · **Expected PRs:** 10
+**Phase:** 1 · **Depends on:** Day 5 · **Expected PRs:** 11
 
 ## Goal
 `python run-steps.py on` runs steps one after another under one run's issue, at most
@@ -148,14 +148,16 @@ version the live check has not passed on.
 | C | | C06.3: `runlog.fix`, `runlog.fixes` |
 | D | | C06.4, C06.5: `wait_pr`'s checks, the resume, the fake `claude`'s `--resume`, the reads during the checks wait |
 | E | | C06.6, C06.7, C06.13: the path check, the merge wait, `main` pulled, the evidence waited for, the reads during those waits |
-| F | | C06.8, C06.9: `on`, the run's issue across steps, `steps_per_night` |
+| F1 | | No criterion of its own: `--once`'s `checked` split in `driver/once.py`, so that `on` can reuse its checks, the session's start and its end; `--once`'s lines unchanged, held by C04's and C05's tests |
+| F2 | | C06.8, C06.9: `on`, the run's issue across steps, `steps_per_night` |
 | G | | C06.10: `live-check` and the version check at `on` |
 | H | | C06.11: `--session-minutes` |
 
-A, B and C do not depend on each other; D needs B and C; E needs A, B and D; F needs E; G and H
-need F's `on` (H touches `run_session`, which F does not). C06.12 is held by every track.
-Estimated changed lines, from Day 5's: A 220, B 320, C 120, D 340, E 390, F 380, G 220, H 200.
-D, E and F sit near the limit: their briefs keep each test to the cases named here.
+A, B and C do not depend on each other; D needs B and C; E needs A, B and D; F2 needs E and F1;
+G and H need F2's `on` (H touches `run_session`, which F2 does not). C06.12 is held by every track.
+Estimated changed lines, from Day 5's: A 220, B 320, C 120, D 340, E 390, F1 170, F2 400, G 220,
+H 200 (F1 and F2 measured, D06.5).
+D, E and F2 sit near the limit: their briefs keep each test to the cases named here.
 A track over 400 is split by a spec change (D03.12).
 
 ## Acceptance criteria
@@ -364,6 +366,11 @@ git -c core.safecrlf=false diff --exit-code 6f9e72c -- tests/test_contract.py te
   to run their cases in parallel, with no spec change and no `Replaces:` line, so C05.12 has
   been red on `main` since. The assertions are unchanged. Found by both auditors on 2026-11-08;
   fixed by this spec change (C06.12 re-based on 6f9e72c, `Replaces: C05.12`).
+- **Defect** D06.5 — found: self · cause: spec · made: Day 06 · the Tracks table estimated Track F
+  at 380 changed lines. That counted `on` and its tests but not the split of `driver/once.py`'s
+  `checked`, one function holding `--once`'s checks, the session's start and its end, which `on`
+  must reuse. The first implementation measured 578 lines, over the limit of 400. Split by this
+  spec change into F1 (the split, 167 lines measured) and F2 (`on`, 398).
 - **Hand-off** H06.1 → Day 8: how a headless session reports the usage limit, recorded from the
   trial; the wait and retry follow it (Day 5's Out of scope gave it to Day 6).
 - **Hand-off** H06.2 → Day 7 | Day 8: the count of pull requests in a row merged at level 1
