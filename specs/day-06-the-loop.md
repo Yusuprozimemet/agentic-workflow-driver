@@ -252,8 +252,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 - [ ] C06.11 **new** — With `--session-minutes 0.01` and a fake `claude` that sleeps, `--once`
       kills the session's tree, prints "park: the session ran past 0.01 minutes (session `<id>`)",
       writes the `end` line with it, opens its `parked` issue and exits 1.
-      Red today: `run-steps.py: error: argument command: invalid choice: '0.01' (choose from
-      preflight, halt, clear, off)`: the value is read as the positional command.
+      Red today: "run-steps.py: error: argument command: invalid choice: '0.01' (choose from
+      preflight, halt, clear, off, on, live-check)": the value is read as the positional command.
       Test: `SessionBoundTest.test_session_past_its_bound_parks`.
 - [ ] C06.12 **hold** — Earlier days' tests pass with their files unedited, but for the fake
       `gh` in `tests/test_github.py` and the fake `claude` in `tests/test_once.py`:
