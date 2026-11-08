@@ -163,7 +163,7 @@ A track over 400 is split by a spec change (D03.12).
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C06.1 **new** — In a scratch git project with a bare remote, a clean tree on
+- [x] C06.1 **new** — In a scratch git project with a bare remote, a clean tree on
       `day-05/close-the-day` with `main` one commit behind `origin/main` is brought to `main`
       equal to `origin/main` by `to_main`, and `--once` then starts the step (fake `claude`);
       the git commands `to_main` runs, recorded through its `git` parameter, are exactly
@@ -176,7 +176,17 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/tree.py` does not exist; `ImportError`.
       Test: `TreeTest.test_brought_to_main`, `TreeTest.test_refusals_park`,
       `TreeTest.test_dry_run_moves_nothing`.
-- [ ] C06.2 **new** — With the fake `gh`: `checks` gives "pending" for a pending check and a
+      Evidence: `TreeTest.test_brought_to_main`, `TreeTest.test_refusals_park`, `TreeTest.test_dry_run_moves_nothing` (#62).
+      seen red: python -m unittest tests.test_tree on main → FAILED (errors=3) (#62)
+      broken: to_main no longer stops on a dirty tree → AssertionError: Tuples differ: (True, None) != (False, None) (#62)
+      broken: to_main no longer stops on a detached HEAD → AssertionError: Tuples differ: (True, None) != (False, None) (#62)
+      broken: to_main no longer stops on a branch of the step → AssertionError: Tuples differ: (True, None) != (False, None) (#62)
+      broken: the merge is no longer fast-forward only → AssertionError: Lists differ: [['fetch', 'origin'], ['merge', 'origin/main']] != [['fetch', 'origin'], ['merge', '--ff-only', 'origin/main']] (#62)
+      broken: to_main switches even when already on main → AssertionError: Lists differ: [['fetch', 'origin'], ['switch', 'main'], ['merge', '--ff-only', 'origin/main']] != [['fetch', 'origin'], ['merge', '--ff-only', 'origin/main']] (#62)
+      broken: once does not read the facts again after the move → AssertionError: 1 != 0 : (#62)
+      broken: once does not call to_main → AssertionError: 1 != 0 : (#62)
+      broken: the facts read switches the project to main → AssertionError: Tuples differ: (1, 'park: main is not origin/main\n') != (1, 'park: the project is on day-05/close-the-day, not on main\n') (#62)
+- [x] C06.2 **new** — With the fake `gh`: `checks` gives "pending" for a pending check and a
       passing one (exit 8), "red" with the names of a "fail" and a "cancel" check, "green" for
       "pass" and "skipping", "none" for an empty list, and "gh pr checks exited 1" for exit 1;
       `failed_lines` returns the last 40 lines of each failed job's `--log-failed`, cut to its
@@ -184,11 +194,28 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       recorded calls are exactly In scope's.
       Red today: `AttributeError: module 'driver.github' has no attribute 'checks'`.
       Test: `GitHubTest.test_checks`, `GitHubTest.test_failed_lines`, `GitHubTest.test_pr_state`.
-- [ ] C06.3 **new** — `fix` appends one fsynced line; `fixes` counts a session's `fix` lines
+      Evidence: `GitHubTest.test_checks`, `GitHubTest.test_failed_lines`, `GitHubTest.test_pr_state` (#64).
+      seen red: python -m unittest tests.test_github.GitHubTest.test_checks tests.test_github.GitHubTest.test_failed_lines tests.test_github.GitHubTest.test_pr_state on main → FAILED (errors=10) (#64)
+      broken: checks treats exit 8 as a failed call → AssertionError: Lists differ: [None, 'green', 'green'] != ['pending', 'green', 'green'] (#64)
+      broken: checks does not count a cancelled check as red → AssertionError: Lists differ: ['tests'] != ['tests', 'build'] (#64)
+      broken: a pending check beats a failed one → AssertionError: 'pending' != 'red' (#64)
+      broken: failed_lines keeps 41 lines of a log → AssertionError: 'line 9\nline 10\nline 11\nline 12\nline 13\nli[367 chars]om/x' != 'line 10\nline 11\nline 12\nline 13\nline 14\nl[359 chars]om/x' (#64)
+      broken: failed_lines keeps 6,001 characters → AssertionError: 'xxxx[272 chars]xxxxxx\n021xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[5694 chars]xxxx' != 'xxxx[272 chars]xxxxx\n021xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[5693 chars]xxxx' (#64)
+      broken: pr_state reads the wrong merge commit field → AssertionError: Tuples differ: ('MERGED', None, ['plan.md', 'driver/loop.py'], 'Ove[16 chars]None) != ('MERGED', '1dc0f03aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa[54 chars]None) (#64)
+- [x] C06.3 **new** — `fix` appends one fsynced line; `fixes` counts a session's `fix` lines
       only, 0 for a session with none, and 2 for a log with a torn line.
       Red today: `AttributeError: module 'driver.runlog' has no attribute 'fix'`.
       Test: `RunlogFixTest.test_fixes_counted`, `RunlogFixTest.test_torn_log_counts_both`.
-- [ ] C06.4 **new** — The wait on a pull request this run opened: checks red, red, green, with
+      Evidence: `RunlogFixTest.test_fixes_counted`, `RunlogFixTest.test_torn_log_counts_both` (#66).
+      seen red: python -m unittest tests.test_runlog_fix.RunlogFixTest.test_fixes_counted tests.test_runlog_fix.RunlogFixTest.test_torn_log_counts_both on main → FAILED (errors=5) (#66)
+      broken: fixes counts every session's fix lines → AssertionError: 2 != 1 (#66)
+      broken: fixes counts a session's start and end lines too → AssertionError: 3 != 1 (#66)
+      broken: a fix line leaves out n → AssertionError: Items in the second set but not the first: (#66)
+      broken: the run log's lines are not fsynced → AssertionError: 0 != 1 (#66)
+      broken: a missing log counts as both fixes used → AssertionError: 2 != 0 (#66)
+      broken: an unreadable log counts as one fix used → AssertionError: 1 != 2 (#66)
+      broken: a log that cannot be opened raises → FAILED (errors=1) (#66)
+- [x] C06.4 **new** — The wait on a pull request this run opened: checks red, red, green, with
       the fake `claude` opening the same PR each time, resumes the session twice, with
       `--resume <the session's id>`, the prompt starting "The required checks failed on #12:
       tests.", the failing lines in it and no PR title or body; two `fix` lines precede the
@@ -202,7 +229,16 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `WaitTest.test_red_resumed_twice_then_green`, `WaitTest.test_red_after_two_fixes_parks`,
       `WaitTest.test_red_without_session_parks`, `WaitTest.test_no_checks_parks`,
       `WaitTest.test_two_open_prs_park`.
-- [ ] C06.5 **new** — During the checks wait: a halt file written by the
+      Evidence: `WaitTest.test_red_resumed_twice_then_green`, `WaitTest.test_red_after_two_fixes_parks`, `WaitTest.test_red_without_session_parks`, `WaitTest.test_no_checks_parks`, `WaitTest.test_two_open_prs_park` (#67). Against the fake `gh` only: H06.3.
+      seen red: python -m unittest tests.test_wait on main → FAILED (errors=10) (#67)
+      broken: the resume keeps --session-id → AssertionError: '--resume' not found in ['-p', '--settings', '<tmp>/state/settings.json', '--session-id', '00000000-0000-4000-8000-000000000000'] (#67)
+      broken: the fix line is not written → AssertionError: Tuples differ: ('park: the session ended without a result[57 chars]', 1) != (None, 0) (#67)
+      broken: the failing lines left out of the prompt → AssertionError: 'boom' not found in "The required checks failed on #12: tests.\nFix this step's pull request, push, and stop.\n" (#67)
+      broken: a third fix allowed → AssertionError: 3 != 2 (#67)
+      broken: a pull request with no session is resumed → FAILED (errors=1) (#67)
+      broken: the park names a fixed number of minutes → AssertionError: Tuples differ: ('park: no required checks on #12 after 30 minutes', 1) != ('park: no required checks on #12 after 0.01 minutes', 1) (#67)
+      broken: two open pull requests are waited on → AssertionError: Tuples differ: (None, 0) != ('park: more than one open pull request: #3, #5', 1) (#67)
+- [x] C06.5 **new** — During the checks wait: a halt file written by the
       test ends the run within one poll, exit 1, nothing more started; an open `STOP` issue
       writes the halt file and the report on the run's issue, exit 1; the run's issue closed
       gives "off: the run's issue #7 is closed; nothing new starts", exit 0, and the PR is not
@@ -210,14 +246,29 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/loop.py` does not exist.
       Test: `WaitTest.test_halt_during_wait`, `WaitTest.test_stop_during_wait`,
       `WaitTest.test_off_during_wait`.
-- [ ] C06.6 **new** — `gated` gives, first that applies, "park: #12 touches plan.md",
+      Evidence: `WaitTest.test_halt_during_wait`, `WaitTest.test_stop_during_wait`, `WaitTest.test_off_during_wait` (#67).
+      seen red: python -m unittest tests.test_wait on main → FAILED (errors=10) (#67)
+      broken: the halt file is not read → AssertionError: the wait did not end on what the first sleep changed (#67)
+      broken: a STOP issue writes no halt file → FAILED (errors=1) (#67)
+      broken: a closed run's issue is not read → AssertionError: the wait did not end on what the first sleep changed (#67)
+      broken: the checks are read while the issues cannot be → AssertionError: Tuples differ: (None, 0) != ('cannot read the project: gh issue list exited 1', 2) (#67)
+- [x] C06.6 **new** — `gated` gives, first that applies, "park: #12 touches plan.md",
       "park: #12 touches a human-only path: `docs/kit.md`" (entry `docs/`), the same for an
       entry equal to the path, and "park: #12 carries Oversized:"; nothing for a PR that touches
       `driver/once.py` with `human_only` ["docs/"], or whose body only quotes the word in the
       middle of a line.
       Red today: `driver/loop.py` does not exist.
       Test: `GateTest.test_parks`, `GateTest.test_passes`.
-- [ ] C06.7 **new** — The merge wait: "OPEN" twice, then "MERGED", pulls `main` (C06.1's three
+      Evidence: `GateTest.test_parks`, `GateTest.test_passes`, `MergeWaitTest.test_gated_pr_parks` (#70).
+      seen red: python -m unittest tests.test_merge_wait on main → FAILED (errors=22) (#70)
+      broken: plan.md is not checked → AssertionError: 'park: #12 touches a human-only path: `docs/kit.md`' != 'park: #12 touches plan.md' (#70)
+      broken: any path holding plan.md parks → AssertionError: 'park: #12 touches plan.md' is not None (#70)
+      broken: an entry with no slash matches what is under it → AssertionError: 'park: #12 touches a human-only path: `docs/kit.md`' is not None (#70)
+      broken: an entry ending in a slash matches nothing under it → AssertionError: 'park: #12 carries Oversized:' != 'park: #12 touches a human-only path: `docs/kit.md`' (#70)
+      broken: Oversized: anywhere in a line parks → AssertionError: 'park: #12 carries Oversized:' is not None (#70)
+      broken: the wait skips the path check → AssertionError: Tuples differ: ('park: #12 was closed without a merge', 1) != ('park: #12 touches a human-only path: `docs/kit.md`', 1) (#70)
+      broken: the wait drops the config's human_only → AssertionError: Tuples differ: ('park: #12 was closed without a merge', 1) != ('park: #12 touches a human-only path: `docs/kit.md`', 1) (#70)
+- [x] C06.7 **new** — The merge wait: "OPEN" twice, then "MERGED", pulls `main` (C06.1's three
       git commands), then waits through an evidence run "in_progress" to "success" and returns
       to the next step; "CLOSED" gives "park: #12 was closed without a merge"; an evidence run
       that ends "failure" parks at once with Day 4's line, and one still "in_progress" past
@@ -227,20 +278,43 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `MergeWaitTest.test_merged_pulled_evidence_waited`,
       `MergeWaitTest.test_closed_parks`, `MergeWaitTest.test_evidence_failed_parks`,
       `MergeWaitTest.test_evidence_unfinished_parks`.
-- [ ] C06.8 **new** — `on` refuses with `--once`'s lines and exit 2, before any session and
+      Evidence: `MergeWaitTest.test_merged_pulled_evidence_waited`, `MergeWaitTest.test_closed_parks`, `MergeWaitTest.test_evidence_failed_parks`, `MergeWaitTest.test_evidence_unfinished_parks` (#70).
+      seen red: python -m unittest tests.test_merge_wait on main → FAILED (errors=22) (#70)
+      broken: a closed pull request counts as merged → AssertionError: Tuples differ: (None, 0) != ('park: #12 was closed without a merge', 1) (#70)
+      broken: the merged step's own branch keeps main from being pulled → AssertionError: Lists differ: [] != [['fetch', 'origin'], ['switch', 'main'], ['merge', '--ff-only', 'origin/main']] (#70)
+      broken: main is not pulled after the merge → AssertionError: Lists differ: [] != [['fetch', 'origin'], ['switch', 'main'], ['merge', '--ff-only', 'origin/main']] (#70)
+      broken: the evidence is read for another commit → AssertionError: False is not true : another commit read (#70)
+      broken: a failed evidence run counts as green → AssertionError: Tuples differ: (None, 0) != ('park: the evidence run on `<head>` ended `failure`', 1) (#70)
+      broken: an unfinished evidence run is not waited out → AssertionError: Tuples differ: ('park: the evidence run on `<head>` has n[44 chars]', 1) != (None, 0) (#70)
+      broken: the evidence park names a fixed number of minutes → AssertionError: Tuples differ: ('par[25 chars]head>` has not finished (`in_progress`) after 30 minutes', 1) != ('par[25 chars]head>` has not finished (`in_progress`) after 0.01 minutes', 1) (#70)
+      broken: no origin/main is passed to the evidence read → FAILED (errors=1) (#70)
+      broken: a failed pull request read ends the wait at once → AssertionError: 1 not greater than 1 (#70)
+      broken: a failed evidence read ends the wait at once → AssertionError: 1 not greater than 1 (#70)
+- [x] C06.8 **new** — `on` refuses with `--once`'s lines and exit 2, before any session and
       with no lock left behind, when the halt file exists ("cannot start: halted: …"), on a
       failed preflight, and on a missing config key; it takes the lock once for the whole run
       and releases it at the end.
       Red today: `run-steps.py: error: argument command: invalid choice: 'on'`.
       Test: `OnTest.test_refusals`, `OnTest.test_one_lock_for_the_run`.
-- [ ] C06.9 **new** — With `steps_per_night` 2 and the fake `gh` merging each PR: `on` starts two
+      Evidence: `OnTest.test_refusals`, `OnTest.test_one_lock_for_the_run` (#73).
+      seen red: python -m unittest tests.test_on on main → AssertionError: Tuples differ (#73)
+      Not replayable, so a sentence and not in the manifest: on goes on after a failed preflight was broken in #73 and `OnTest.test_refusals` failed, but unittest cuts the report inside the scratch directory's random name (D06.25).
+      broken: the lock is not released at the end → AssertionError: Tuples differ: (0, 1, 0, [True, True], True) != (0, 1, 1, [True, True], False) (#73)
+- [x] C06.9 **new** — With `steps_per_night` 2 and the fake `gh` merging each PR: `on` starts two
       sessions, opens one run's issue and comments on it for the second step, closes it with
       "on: 2 steps, the night's count", prints that line and exits 0; a resume within a step
       does not count as a step. With the run's issue closed after the first merge, the second
       session never starts and the line is C06.5's.
       Red today: as C06.8.
       Test: `OnTest.test_steps_per_night`, `OnTest.test_off_between_steps`.
-- [ ] C06.10 **new** — With `--claude` a fake printing `2.1.400 (Claude Code)`: `on` refuses with
+      Evidence: `OnTest.test_steps_per_night`, `OnTest.test_off_between_steps` (#73), and the next step re-read after a merge, `OnTest.test_next_step_read_after_merge` (#74).
+      seen red: python -m unittest tests.test_on on main → AssertionError: Tuples differ (#73)
+      broken: the night runs one step past its count → AssertionError: Tuples differ: (0, "on: 3 steps, the night's count", 3, 1, 1, ['1[50 chars]alse) != (0, "on: 2 steps, the night's count", 2, 1, 1, ['1[50 chars]alse) (#73)
+      broken: a resume counts as a step → AssertionError: Tuples differ: (0, "on: 1 steps, the night's count", 1, 1, 1, ['1[51 chars]alse) != (0, "on: 2 steps, the night's count", 2, 1, 1, ['1[50 chars]alse) (#73)
+      broken: the switches are not read between steps → AssertionError: Tuples differ: (0, "on: 2 steps, the night's count", 2, 2, [], [['issue', 'close', '2']]) != (0, "off: the run's issue #1 is closed; nothing new starts", 1, 1, [], []) (#73)
+      broken: the fix's pull request is not the one waited on → AssertionError: Tuples differ: (0, ['5'], "on: 1 steps, the night's count") != (0, ['13'], "on: 1 steps, the night's count") (#73)
+      broken: on does not re-read the next step after a merge → AssertionError: Tuples differ: (0, [[21 chars]ack A: C01.1–C01.3', 'Next step: Day 01 Track A: C01.1–C01.3']) != (0, [[21 chars]ack A: C01.1–C01.3', 'Next step: Day 01 Track A: C01.4']) (#74)
+- [x] C06.10 **new** — With `--claude` a fake printing `2.1.400 (Claude Code)`: `on` refuses with
       "cannot start: Claude Code `2.1.400 (Claude Code)` has not passed the live check; run
       run-steps.py live-check" when `<state>/live-checked.txt` is missing or lists another
       version, and goes on when it lists that line; `live-check` appends the line after a run
@@ -249,13 +323,27 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: as C06.8.
       Test: `LiveCheckTest.test_on_refuses_an_unchecked_version`,
       `LiveCheckTest.test_live_check_records_only_a_clean_pass`.
-- [ ] C06.11 **new** — With `--session-minutes 0.01` and a fake `claude` that sleeps, `--once`
+      Evidence: `LiveCheckTest.test_on_refuses_an_unchecked_version`, `LiveCheckTest.test_live_check_records_only_a_clean_pass` (#74).
+      seen red: python -m unittest tests.test_live_check on main → AssertionError: Tuples differ (#74)
+      broken: on skips the version check → AssertionError: Tuples differ: (0, "opened: #5 from `day-01/track-a-x`\no[707 chars]alse) != (2, '', ['cannot start: Claude Code `2.1.4[85 chars]alse) (#74)
+      broken: live-check counts OK (skipped=2) as a pass → AssertionError: Tuples differ: (0, b'2.1.400 (Claude Code)\n') != (1, None) (#74)
+      broken: live-check ignores the exit code → AssertionError: Tuples differ: (0, b'2.1.400 (Claude Code)\n') != (1, None) (#74)
+      broken: live-check names another program to the tests → AssertionError: Tuples differ: (['-m', 'unittest', 'tests.test_live_cli'], False, True) != (['-m', 'unittest', 'tests.test_live_cli'], True, True) (#74)
+      broken: --once reads the live-check record → AssertionError: Tuples differ: (2, 0) != (0, 1) (#74)
+- [x] C06.11 **new** — With `--session-minutes 0.01` and a fake `claude` that sleeps, `--once`
       kills the session's tree, prints "park: the session ran past 0.01 minutes (session `<id>`)",
       writes the `end` line with it, opens its `parked` issue and exits 1.
-      Red today: `run-steps.py: error: argument command: invalid choice: '0.01' (choose from
-      preflight, halt, clear, off)`: the value is read as the positional command.
+      Red today: "run-steps.py: error: argument command: invalid choice: '0.01' (choose from
+      preflight, halt, clear, off, on, live-check)": the value is read as the positional command
+      (D06.20).
       Test: `SessionBoundTest.test_session_past_its_bound_parks`.
-- [ ] C06.12 **hold** — Earlier days' tests pass with their files unedited, but for the fake
+      Evidence: `SessionBoundTest.test_session_past_its_bound_parks`, and a resumed session's bound in `SessionBoundTest.test_resumed_session_past_its_bound_parks` (#75).
+      seen red: python -m unittest tests.test_session_bound.SessionBoundTest.test_session_past_its_bound_parks tests.test_session_bound.SessionBoundTest.test_resumed_session_past_its_bound_parks on main → AssertionError: 2 != 1 (#75)
+      broken: the kill past the bound removed → AssertionError: True is not false : a process of the session still runs (#75)
+      broken: the bound never reached → FAILED (errors=1) (#75)
+      Not replayable, so a sentence and not in the manifest: `past_bound` writing no end line was broken in #75 and the test failed, but its report holds the session's random id (D06.27).
+      broken: resume does not read PAST → FAILED (errors=1) (#75)
+- [x] C06.12 **hold** — Earlier days' tests pass with their files unedited, but for the fake
       `gh` in `tests/test_github.py` and the fake `claude` in `tests/test_once.py`:
       `git -c core.safecrlf=false diff --exit-code 6f9e72c -- tests/test_contract.py
       tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_kit_copy.py
@@ -277,7 +365,14 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       fake `gh` and `test_session_command`'s `gh` calls: the diff against 93c94de prints nothing
       (red on `main` since #60, D06.4).
       To break once, in Track A: one listed test file edited → the diff exits 1.
-- [ ] C06.13 **new** — During the merge wait and the evidence wait, as C06.5 during the checks
+      Evidence: the commands above, on `main` at `337f6b9` after #75: the diff printed nothing, and `python -m unittest discover -s tests` ran 212 tests, "OK (skipped=4)"; each track PR ran the same (#62 to #75). F1 (#72) had no criterion of its own: its five breaks are here because they show the earlier days' tests catching a wrong split.
+      broken: one listed earlier test file edited → tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True) (#62)
+      broken: an exit-2 line goes to stdout → AssertionError: Tuples differ: ('', 'cannot start: halted: the STOP issue [56 chars]e, 0) != ('cannot start: halted: the STOP issue #4 i[54 chars]e, 0) (#72)
+      broken: a park with no session opens no issue → AssertionError: Tuples differ: (True, [], ['park: the run log names session `000[75 chars]', 1) != (True, [('park: the run log names session `000000[196 chars]', 1) (#72)
+      broken: a session's park opens no issue → AssertionError: Tuples differ: (True, [], ['park: the step has more than one pul[31 chars]', 1) != (True, [('park: the step has more than one pull r[108 chars]', 1) (#72)
+      broken: a STOP issue at the start exits 0 → AssertionError: Tuples differ: ('', 'cannot start: halted: the STOP issue [56 chars]e, 0) != ('cannot start: halted: the STOP issue #4 i[54 chars]e, 0) (#72)
+      broken: the run's issue is left open at the step's end → AssertionError: Tuples differ: (1, True, [], 'open', [], 'opened: #5 from `day-01/track-a-x`', 0) != (1, True, [], 'closed', ['opened: #5 from `day-01/track-[43 chars]', 0) (#72)
+- [x] C06.13 **new** — During the merge wait and the evidence wait, as C06.5 during the checks
       wait: a halt file ends the run within one poll, exit 1; an open `STOP` issue writes the
       halt file and the report on the run's issue, exit 1; the run's issue closed gives "off:
       the run's issue #7 is closed; nothing new starts", exit 0, and no `pr close` call is
@@ -285,6 +380,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `driver/loop.py` does not exist.
       Test: `MergeWaitTest.test_halt_during_merge_wait`, `MergeWaitTest.test_stop_during_evidence_wait`,
       `MergeWaitTest.test_off_during_merge_wait`.
+      Evidence: `MergeWaitTest.test_halt_during_merge_wait`, `MergeWaitTest.test_stop_during_evidence_wait`, `MergeWaitTest.test_off_during_merge_wait` (#70).
+      seen red: python -m unittest tests.test_merge_wait on main → FAILED (errors=22) (#70)
+      broken: the pull request is read while the issues cannot be → AssertionError: Tuples differ: (None, 0) != ('cannot read the project: gh issue list exited 1', 2) (#70)
+      broken: the merge wait reads no halt file → AssertionError: the wait did not end on what the first sleep changed (#70)
+      broken: the evidence wait reads no STOP issue → AssertionError: the wait did not end on what the first sleep changed (#70)
+      broken: the merge wait reads no closed run's issue → AssertionError: the wait did not end on what the first sleep changed (#70)
 
 ## Verify
 ```bash
@@ -371,7 +472,98 @@ git -c core.safecrlf=false diff --exit-code 6f9e72c -- tests/test_contract.py te
   `checked`, one function holding `--once`'s checks, the session's start and its end, which `on`
   must reuse. The first implementation measured 578 lines, over the limit of 400. Split by this
   spec change into F1 (the split, 167 lines measured) and F2 (`on`, 398).
+- **Defect** D06.6 — found: seen red · cause: implementation · made: Day 06 ·
+  `TreeTest.test_dry_run_moves_nothing` passed on `main`'s code, so CI failed #62's first push.
+  It now also runs `to_main` on the same project, a control that the dry run had work to skip.
+- **Defect** D06.7 — found: self · cause: process · made: Day 06 · the command creating #64's
+  branch failed on a bad `git rev-parse`, so the implementer started while the checkout was on
+  `main`. The branch was created at the same commit before any edit; nothing landed on `main`.
+- **Defect** D06.8 — found: Track B · cause: spec · made: Day 06 · In scope says `checks` returns
+  failed checks' names, but `failed_lines` needs their links too, and a second `gh` call breaks
+  "the recorded calls are exactly In scope's". On red the list holds name and link (#64).
+- **Defect** D06.9 — found: self · cause: process · made: Day 06 · #66 branched from a local
+  `main` three commits behind `origin/main` (#65's). `git fetch` showed it before anything was
+  committed; the branch was fast-forwarded onto f274965 before the tests and the breaks.
+- **Defect** D06.10 — found: Track C · cause: spec · made: Day 06 · C06.3's Red today quotes
+  "no attribute 'fix'"; the test calls `fixes` first, so what it reported was "no attribute
+  'fixes'". Same cause, one word different (#66). The quote is left as it was.
+- **Defect** D06.11 — found: self · cause: implementation · made: Day 06 · #67's brief gave the
+  red fixture exit 1, which `checks` reads as a failed call. The implementer stopped and reported
+  it rather than patching; `gh`'s source shows exit 0, and the fixture now says so.
+- **Defect** D06.12 — found: self · cause: implementation · made: Day 06 · `test_*_during_wait`
+  could have polled for ever on a regression, and the first runs against D06.11's fixture sat in
+  the 30-minute bound. `on_sleep` now fails after five sleeps (#67).
+- **Defect** D06.13 — found: Track D · cause: spec · made: Day 06 · from `gh`'s source at v2.93.0,
+  read but not run: with no required checks, `gh pr checks --required --json` exits 1 before any
+  JSON, so `checks` never gives "none" and the wait ends as "cannot read the project", exit 2, not
+  C06.4's park. C06.2 and C06.4 pass on the fake's `[]`. Not fixed: the maintainer's call, H06.3.
+- **Defect** D06.14 — found: Track D · cause: spec · made: Day 06 · the same source: with `--json`,
+  `gh` returns right after the rows, so pending and red both exit 0. C06.2's "exit 8" for pending
+  does not hold there. `checks` accepts both, so nothing breaks (#67).
+- **Defect** D06.15 — found: Track E · cause: spec · made: Day 06 · In scope gives
+  `gated(paths, body, human_only)`, but C06.6's lines name the pull request, so it takes `number`
+  as a fourth parameter (#70).
+- **Defect** D06.16 — found: Track E · cause: spec · made: Day 06 · C06.6's, C06.7's and C06.13's
+  Red today say "`driver/loop.py` does not exist". Track D created it, so the red was `gated` and
+  `wait_merge` missing from it (`AttributeError`, #70). The quotes are left as they were.
+- **Defect** D06.17 — found: break on purpose · cause: implementation · made: Day 06 · the first
+  break of the path check hung for ten minutes: that test's pull request stayed OPEN and the merge
+  wait has no bound, as a real regression would have hung CI. Its view list now ends in CLOSED (#70).
+- **Defect** D06.18 — found: break on purpose · cause: process · made: Day 06 · same-as: D05.9 ·
+  four of Track E's breaks reported the scratch commit's sha, which differs on every run, so the
+  close's replay would have failed them. The test now prints `<head>` and they were rerun (#70).
+- **Defect** D06.19 — found: break on purpose · cause: implementation · made: Day 06 · the
+  failed-read tests first passed with a break that ended the wait at once; each now requires a
+  second read (#70).
+- **Defect** D06.20 — found: Track H · cause: spec · made: Day 06 · same-as: D06.16 · C06.11's Red
+  today quoted argparse's choices as `preflight, halt, clear, off`; #73 and #74 added `on` and
+  `live-check` before Track H ran, and #75 recorded the departure. Same failure. Corrected at this
+  close, confirmed by running `run-steps.py --session-minutes 0.01 --once` at #74's merge (33b93b8).
+- **Defect** D06.21 — found: close · cause: spec · made: Day 06 · same-as: D06.16 · C06.10's Red
+  today says "as C06.8", an `on` that argparse refuses. #73 had added `on` before Track G, so its
+  red was an assertion (`Tuples differ`, #74). The line is left as it was.
+- **Defect** D06.22 — found: close · cause: process · made: Day 06 · Track D's 11 `manifest:` lines
+  (#67) name this machine's absolute `python.exe`: run on CI's Linux they would not start. The
+  close's manifest gives `python` for each.
+- **Defect** D06.23 — found: evidence replay · cause: process · made: Day 06 · the report of
+  #67's break "the resume keeps --session-id" holds a Windows path separator, so Linux's replay
+  differed. The line now records the report CI's Linux run gives.
+- **Defect** D06.24 — found: evidence replay · cause: process · made: Day 06 · two of #72's breaks
+  counted a carriage return in unittest's cut ("[58 chars]" on Windows, "[56 chars]" on Linux).
+  The lines now record Linux's reports.
+- **Defect** D06.25 — found: evidence replay · cause: process · made: Day 06 · same-as: D06.18 ·
+  #73's break "on goes on after a failed preflight" reported a line that unittest cuts inside the
+  scratch directory's random name, so no two runs print it alike. It stays a sentence under C06.8,
+  not in the manifest.
+- **Defect** D06.26 — found: evidence replay · cause: process · made: Day 06 · two of #74's breaks
+  held Windows-only text: a carriage return, and an en dash the console turned into a replacement
+  character. The lines now record Linux's reports.
+- **Defect** D06.27 — found: evidence replay · cause: process · made: Day 06 · same-as: D06.18 ·
+  #75's break "past_bound writes no end line" reported the session's random id. It stays a
+  sentence under C06.11, not in the manifest.
+- **Defect** D06.28 — found: evidence replay · cause: process · made: Day 06 · same-as: D06.3 · #70
+  added a second `{args.wait_minutes:g} minutes` to `driver/loop.py`, so #67's break of it matched
+  twice and `break.py` refused it. The manifest now gives a find unique at the close.
+- **Defect** D06.29 — found: evidence replay · cause: process · made: Day 06 · same-as: D06.3 · #73
+  added two more `if line is None:` to `driver/loop.py`, so #70's break of it matched three times.
+  The manifest now breaks the line above it, with the same effect and the same report.
+- The close replayed its breaks on Linux in Docker before writing the lines: 66 of 75 matched at
+  first. Five `broken:` lines now record CI's reports, and a rehearsal on Windows fails those five.
+- The blind relabel (`scripts/relabel.py`, the defect-rater): stage 24 of 29 agree, cause 24 of
+  29, made 28 of 29, every tag kept. D06.2 (low): #51's own replay caught a bug in the repository's
+  own script. D06.4: `found:` names the gate, the auditor. D06.21: this close noticed it, after #74
+  merged. D06.25, D06.27, rater unclear: the close's rehearsal, which their text does not say.
+  D06.11 (low): the wrong exit code became a test fixture. D06.23, D06.24, D06.26, rater
+  `environment`: kept `process`, as D05.10: the defect is recording a report CI cannot reproduce.
+- Departures: Track H's kill is not STOP's, though In scope says "as a `STOP` kills it": on POSIX
+  a STOP kills `--once`'s own group, so the driver could not park. `kill_session` sends SIGKILL to
+  the session and its descendants from one `ps` snapshot (#75). #70 adds five tests to the spec's.
+- Unverified at the close: a `STOP` during `on` closes the run's issue twice, read from the code,
+  harmless if `gh issue close` exits 0 on a closed issue, which H05.5 still holds (#73). A break of
+  the descendant walk in `kill_session` was not run anywhere (#75).
 - **Hand-off** H06.1 → Day 8: how a headless session reports the usage limit, recorded from the
   trial; the wait and retry follow it (Day 5's Out of scope gave it to Day 6).
 - **Hand-off** H06.2 → Day 7 | Day 8: the count of pull requests in a row merged at level 1
   without a change asked, Level 2's entry condition; nothing in Phase 1 counts it yet.
+- **Hand-off** H06.3 → Day 7 | Day 8: `checks` against the real `gh` with no required checks
+  (D06.13): `_gh` must read stderr and C06.2 change, on the scratch repository with H05.5.
