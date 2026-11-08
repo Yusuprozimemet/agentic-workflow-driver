@@ -49,6 +49,7 @@ import builtins
 import collections
 import datetime
 import fnmatch
+import functools
 import hashlib
 import importlib.util
 import json
@@ -1848,21 +1849,46 @@ def infra(workflow):
     return dict(runs=runs, latest=latest)
 
 
-# The one real promise the "How this works" panel follows, and the files its excerpts come from.
-HOW_PROMISE = "C03.3"
-HOW_SPEC = "specs/day-03-the-stop.md"
+# The "How this works" panel follows one real promise, picked by how_excerpts, through its day's
+# files and these.
 HOW_TEMPLATE = "specs/_template.md"
-HOW_BREAKS = "specs/breaks/day-03.json"
 HOW_REPLAY = "docs/dashboard/replay-history.json"
 HOW_PLAN = "plan.md"
 HOW_PLAN_PARTS = ("Short answer", "Who does what", "When the driver parks", "Phases", "Stopping points")
+# A promise is followed only if every one of these is on record: its track, PR, seen-red line,
+# planted bugs and re-check among them.
+HOW_NEEDED = ("crumbs", "day_goal", "day_out_of_scope", "day_tracks", "day_criteria", "claim", "red_today", "test",
+              "evidence", "seen_red", "tick", "bugs", "recheck", "plan_phase")
+HOW_NO_PROMISE = "every finished promise is missing a step of its record"
 
 
-def how_excerpts(read):
-    """The panel's excerpts, each {source, text} from the real files through `read(path)` ("" for no
-    file), or {source, missing: why}: a file or passage that has gone shows as gone, never filled in."""
-    files = {p: read(p) for p in (HOW_SPEC, HOW_TEMPLATE, HOW_BREAKS, HOW_REPLAY, HOW_PLAN)}
-    spec, template, plan = files[HOW_SPEC], files[HOW_TEMPLATE], files[HOW_PLAN]
+def how_specs(days):
+    """The finished days' spec files, newest day first: what the panel may pick a promise from."""
+    return [d["file"] for d in sorted(days, key=lambda d: d["day"], reverse=True) if d["status"] in FINISHED]
+
+
+def how_excerpts(read, specs):
+    """The panel's excerpts for the first promise in `specs` (newest day first) tagged new, ticked and
+    on record at every step, under "promise" {id, day, spec, breaks}. Each is {source, text} from the
+    real files through `read(path)` ("" for no file), or {source, missing: why}: a file or passage that
+    has gone shows as gone, never filled in. A file every promise shares going does not end the pick."""
+    read = functools.cache(read)
+    for path in specs:
+        day = int(re.search(r"day-(\d+)", path).group(1))
+        for cid in re.findall(r"^- \[x\] (C\d+\.\d+) \*\*new\*\*", read(path), re.M):
+            promise = dict(id=cid, day=day, spec=path, breaks=f"specs/breaks/day-{day:02d}.json")
+            got = how_excerpts_of(read, promise)
+            if all("text" in got[k] for k in HOW_NEEDED if k != "plan_phase" or read(HOW_PLAN)):
+                return dict(got, promise=dict(source=path, text=promise))
+    return dict(how_excerpts_of(read, None), promise=dict(source="specs/", missing=HOW_NO_PROMISE))
+
+
+def how_excerpts_of(read, promise):
+    """The excerpts for one promise, or with None only those every promise shares."""
+    cid = promise["id"] if promise else ""
+    spec_path, breaks_path = (promise["spec"], promise["breaks"]) if promise else ("specs/", "specs/breaks/")
+    files = {p: read(p) for p in (HOW_TEMPLATE, HOW_REPLAY, HOW_PLAN) + ((spec_path, breaks_path) if promise else ())}
+    spec, template, plan = files.get(spec_path, ""), files[HOW_TEMPLATE], files[HOW_PLAN]
 
     def flat(text):
         return re.sub(r"\s+", " ", text).strip()
@@ -1874,7 +1900,7 @@ def how_excerpts(read):
     def section(heading):
         return passage(spec, rf"^## {heading}\n(.*?)(?=^## |\Z)")
 
-    block = passage(spec, rf"^(- \[[ x]\] {re.escape(HOW_PROMISE)} .*?)(?=^- \[|^## |\Z)")
+    block = passage(spec, rf"^(- \[[ x]\] {re.escape(cid)} .*?)(?=^- \[|^## |\Z)")
 
     def field(pattern):
         return flat(passage(block, pattern))
@@ -1883,23 +1909,22 @@ def how_excerpts(read):
         return field(r"^\s*Evidence: (.*?)(?=^\s*seen red|^\s*broken:|\Z)")
 
     def crumbs():
-        track = passage(section("Tracks"), rf"^\| (\w) \|[^\n]*{re.escape(HOW_PROMISE)}\b")
+        track = passage(section("Tracks"), rf"^\| (\w\d?) \|[^\n]*{re.escape(cid)}\b")
         pr = passage(evidence(), r"\(#(\d+)\)")
         phase = passage(spec, r"\*\*Phase:\*\* (\d+)")
-        day = int(re.search(r"day-(\d+)", HOW_SPEC).group(1))
-        return track and pr and phase and [HOW_PLAN, f"Phase {phase}", f"Day {day}", f"Track {track} (PR #{pr})", f"Promise {HOW_PROMISE}"]
+        return track and pr and phase and [HOW_PLAN, f"Phase {phase}", f"Day {promise['day']}", f"Track {track} (PR #{pr})", f"Promise {cid}"]
 
     def criteria_count():
-        day = HOW_PROMISE.split(".")[0]
+        day = cid.split(".")[0]
         count = len(re.findall(rf"^- \[[ x]\] {day}\.\d+ ", spec, re.M))
         return f"{count} on this day" if count else None
 
     def tracks():
-        letters = re.findall(r"^\| (\w) \|", section("Tracks"), re.M)
+        letters = re.findall(r"^\| (\w\d?) \|", section("Tracks"), re.M)
         return "Tracks " + ", ".join(letters) if letters else None
 
     def bugs():
-        manifest = json.loads(files[HOW_BREAKS])
+        manifest = json.loads(files[breaks_path])
         out = []
         for what, said in re.findall(r"broken: (.+?) → (.+?) \(#\d+\)", block):
             entry = next(b for b in manifest if b["what"] == what)
@@ -1907,7 +1932,7 @@ def how_excerpts(read):
         return out
 
     def recheck():
-        rows = [r for r in json.loads(files[HOW_REPLAY])["rows"] if r["criterion"] == HOW_PROMISE]
+        rows = [r for r in json.loads(files[HOW_REPLAY])["rows"] if r["criterion"] == cid]
         newest = max(r["n"] for r in rows)
         rows = [r for r in rows if r["n"] == newest]
         return dict(pr=rows[0].get("pr"), checks=[dict(check=r["check"], state=replay_row_state(r)) for r in rows])
@@ -1916,24 +1941,29 @@ def how_excerpts(read):
         headings = re.findall(r"^## (.+)$", plan, re.M)
         return list(HOW_PLAN_PARTS) if all(p in headings for p in HOW_PLAN_PARTS) else None
 
+    def plan_phase():
+        phase = passage(spec, r"\*\*Phase:\*\* (\d+)")
+        heading = passage(plan, rf"^(### Phase {phase}\b.*?)(?=^- Day )")
+        scheduled = passage(plan, rf"^(- Day {promise['day']}:.*?)(?=^\S|\Z)")
+        return heading and scheduled and f"{heading}\n{scheduled}"
+
     wanted = dict(
-        crumbs=(HOW_SPEC, crumbs),
-        day_goal=(HOW_SPEC, lambda: flat(section("Goal"))),
-        day_out_of_scope=(HOW_SPEC, lambda: flat(passage(section("Out of scope"), r"^- (.*?)(?=^- |\Z)"))),
-        day_tracks=(HOW_SPEC, tracks),
-        day_criteria=(HOW_SPEC, criteria_count),
-        claim=(HOW_SPEC, lambda: field(r"\*\*(?:new|hold)\*\* — (.*?)^\s*Red today:")),
-        red_today=(HOW_SPEC, lambda: field(r"^\s*Red today: (.*?)^\s*Test:")),
-        test=(HOW_SPEC, lambda: field(r"^\s*Test: (.*?)^\s*Evidence:")),
-        evidence=(HOW_SPEC, evidence),
-        seen_red=(HOW_SPEC, lambda: field(r"^\s*(seen red first.*?)$")),
-        tick=(HOW_SPEC, lambda: passage(block, r"^(- \[[ x]\] \S+ \*\*\w+\*\*)")),
+        crumbs=(spec_path, crumbs),
+        day_goal=(spec_path, lambda: flat(section("Goal"))),
+        day_out_of_scope=(spec_path, lambda: flat(passage(section("Out of scope"), r"^- (.*?)(?=^- |\Z)"))),
+        day_tracks=(spec_path, tracks),
+        day_criteria=(spec_path, criteria_count),
+        claim=(spec_path, lambda: field(r"\*\*(?:new|hold)\*\* — (.*?)^\s*Red today:")),
+        red_today=(spec_path, lambda: field(r"^\s*Red today: (.*?)^\s*Test:")),
+        test=(spec_path, lambda: field(r"^\s*Test: (.*?)^\s*Evidence:")),
+        evidence=(spec_path, evidence),
+        seen_red=(spec_path, lambda: field(r"^\s*(seen red\b.*?)$")),
+        tick=(spec_path, lambda: passage(block, r"^(- \[[ x]\] \S+ \*\*\w+\*\*)")),
         form=(HOW_TEMPLATE, lambda: passage(template, r"^(- \[ \] CNN\.1 .*?)(?=^- \[ \] CNN\.2)")),
         template_parts=(HOW_TEMPLATE, lambda: re.findall(r"^## (.+)$", template, re.M)),
-        bugs=(HOW_BREAKS, bugs),
+        bugs=(breaks_path, bugs),
         recheck=(HOW_REPLAY, recheck),
-        plan_halt=(HOW_PLAN, lambda: passage(plan, r"^(1\. Writes the halt file.*?)(?=^2\. )")),
-        plan_phase=(HOW_PLAN, lambda: passage(plan, r"^(### Phase 1\b.*?)(?=^- Day 4)")),
+        plan_phase=(HOW_PLAN, plan_phase),
         plan_parts=(HOW_PLAN, plan_parts),
     )
     out = {}
@@ -1942,7 +1972,8 @@ def how_excerpts(read):
             value = get()
         except (ValueError, KeyError, TypeError, IndexError, AttributeError, StopIteration):
             value = None
-        why = "the file is missing or empty" if not files[source] else "the passage is no longer there"
+        why = (HOW_NO_PROMISE if not promise and key in HOW_NEEDED else
+               "the file is missing or empty" if not files[source] else "the passage is no longer there")
         out[key] = dict(source=source, text=value) if value else dict(source=source, missing=why)
     return out
 
@@ -2126,7 +2157,7 @@ def main():
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
         if args.build:
-            real["how_this_works"] = how_excerpts(lambda path: blobs.read(head, path))
+            real["how_this_works"] = how_excerpts(lambda path: blobs.read(head, path), how_specs(days))
     payload = page_data(real, spec_days) if args.build else real
     data = json.dumps(payload, separators=(",", ":"))
     target = args.build or args.out
