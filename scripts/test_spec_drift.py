@@ -1400,6 +1400,60 @@ class PageStructureTest(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
+class PromisesKeptTest(unittest.TestCase):
+    """The replay panel says, in plain words, whether what was built still works."""
+
+    MERGES = [dict(n=5, merge="aaa", pr=43, sample="all", run=1, copied=0),
+              dict(n=15, merge="bbb", pr=53, sample="day", run=1, copied=0)]
+
+    @staticmethod
+    def cell(cid, n, state, **more):
+        return dict(criterion=cid, day=cid[1:3], n=n, state=state, mixed=False, checks=[dict(check="t", state=state)], **more)
+
+    def draw(self, cells, replaced=()):
+        ids = sorted({c["criterion"] for c in cells})
+        index = [dict(id=i, day=int(i[1:3]), tag="hold", claim=f"Promise {i[-1]} about `code`.", spec="s.md", track="A", prs=[3],
+                      tests=[], cited=True, test_found=None, seen_red=dict(state=False, lines=[]),
+                      replay=dict(state="current", status=None, why=[], checks=[]), replaces=[],
+                      replaced_by=["C09.9"] if i in replaced else []) for i in ids]
+        now = dict(generated="2026-01-01T00:00", head="abc", last_pr=62, current_day=None, next_step="x", open_prs=[])
+        error, panels, _ = drawn([dict(page_row(0, None, "origin", 40), code_churn=0)], now=now, criteria_index=index, attention=[],
+                                 replay=dict(state="loaded", states=[], merges=self.MERGES, cells=cells))
+        self.assertIsNone(error)
+        return panels["replay"], panels["replay-legend"]
+
+    def test_the_reader_sees_feature_names_and_no_internal_codes(self):
+        box, legend = self.draw([self.cell("C01.1", 5, "holds"), self.cell("C05.2", 15, "holds")])
+        self.assertIn("Working out the next step", box)
+        self.assertIn("Pausing for a person", box)
+        self.assertIn("Promise 2 about code.", box)
+        visible = re.sub(r' title="[^"]*"', "", box + legend)
+        self.assertNotRegex(visible, r"\bC0\d\.\d|\bD0\d\b|#\d")
+
+    def test_the_verdict_counts_each_promise_by_its_newest_check(self):
+        box, legend = self.draw([self.cell("C01.1", 5, "code broken"), self.cell("C01.1", 15, "holds"),
+                                 self.cell("C01.2", 15, "holds, never broken"), self.cell("C01.3", 15, "live only")])
+        self.assertIn("Nothing was broken at the last re-check", box)
+        self.assertIn("We re-checked 3 promises the software makes, most recently 9 changes ago. 0 failed. 1 has a test never shown to catch a failure.", box)
+        self.assertIn("1 of 3 proven · checked 9 changes ago", box)
+        for line in ("Proven (1)", "Passes, but unproven (1)", "Not checked here (1)", "Broken (0)"):
+            self.assertIn(line, legend)
+
+    def test_a_broken_promise_leads_and_is_named(self):
+        box, _ = self.draw([self.cell("C01.1", 15, "code broken"), self.cell("C01.2", 15, "test weakened"), self.cell("C01.3", 5, "holds")])
+        self.assertIn('<p class="promise-verdict">1 promise is broken</p>', box)
+        self.assertNotIn("Nothing was broken", box)
+        self.assertIn("1 test needs repair.", box)
+        self.assertLess(box.index("<b>Broken</b>: Promise 1"), box.index('class="promise-row"'))
+
+    def test_a_replaced_promise_and_one_not_yet_in_force_are_not_counted(self):
+        box, _ = self.draw([self.cell("C01.1", 15, "code broken"), self.cell("C01.2", 15, "not yet in force"), self.cell("C01.3", 15, "holds")],
+                           replaced=("C01.1",))
+        self.assertIn("We re-checked 1 promise the software makes", box)
+        self.assertIn("Nothing was broken", box)
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
 class NotMeasuredTest(unittest.TestCase):
     ROW = dict(page_row(0, None, "origin", 40), code_churn=0)
     FOLD = ("deployment", "infra", "removal-checks", "second-reader", "services", "not-measured")

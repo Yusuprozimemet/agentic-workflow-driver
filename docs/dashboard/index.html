@@ -81,11 +81,11 @@
     <div class="legend" id="proof-kinds-legend"></div>
     <div id="proof-kinds"></div>
     <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">Promises kept, merge by merge</h2>
-      <p>Each in-force criterion's checks replayed on <code>main</code> at a merge, by <code>scripts/replay-history.py</code>, run by hand and committed as <code>replay-history.json</code>: its tests run clean and each recorded break put back in. A row is a criterion, a column a merge. A cell shows the worst of its checks, in this order: code broken, test weakened, break no longer applies, not runnable, not applicable on this platform, live only, holds never broken, holds. "Holds, never broken", a hollow blue cell, is a criterion whose tests pass clean but that has no recorded break, so nothing shows they can fail. A cell is "not yet in force" only when every check is. A notch in the corner means its checks disagree. The strip above marks what each merge sampled: every criterion at a close, one day's criteria otherwise, and nothing where a day's merge waits for its close. A blank cell was not sampled.</p>
+      <h2 style="font-size:17px">Do the promises still hold?</h2>
+      <p>Each finished day promised things the software must do. We re-run those tests on the merged code, and put back the bugs they were shown to catch. One square is one promise; open a feature to read its promises. The re-check is run by hand (<code>scripts/replay-history.py</code>), so it can be behind the latest change.</p>
     </div>
-    <div class="legend" id="replay-legend"></div>
     <div id="replay"></div>
+    <div class="legend" id="replay-legend"></div>
     <details id="replay-table"></details>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Merge by merge</h2>

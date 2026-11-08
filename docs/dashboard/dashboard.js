@@ -1099,26 +1099,37 @@ function drawProofKinds() {
   oooNote(box);
 }
 
-/* ---------- replay history ---------- */
-// Colour for the four states a reader must act on, each with a glyph too; shape alone for the rest.
+/* ---------- promises kept ---------- */
+// What each replay state means to a reader: the group it counts in, and why it was not checked.
 const REPLAY_LOOK = {
-  "code broken": { fill: "var(--r-broken)", glyph: "✕", ink: "#fff" },
-  "test weakened": { fill: "var(--r-weak)", glyph: "↓", ink: "#0b0b0b" },
-  "break no longer applies": { fill: "var(--r-gone)", glyph: "?", ink: "#fff" },
-  "not runnable": { fill: "var(--muted)" },
-  "not applicable on this platform": { fill: "url(#replay-hatch)", stroke: "var(--muted)" },
-  "live only": { fill: "none", stroke: "var(--muted)" },
-  // Holds, unproven: the holds colour as an outline round a hollow centre, not a hue of its own.
-  "holds, never broken": { fill: "none", stroke: "var(--r-holds)", width: 2.5 },
-  "holds": { fill: "var(--r-holds)" },
-  "not yet in force": { dot: true },
+  "code broken": { group: "broken" },
+  "test weakened": { group: "repair", why: "its test no longer catches the bug it used to" },
+  "break no longer applies": { group: "repair", why: "the code moved, so its test could not be re-proven" },
+  "not runnable": { group: "skipped", why: "the check could not run" },
+  "not applicable on this platform": { group: "skipped", why: "needs a different computer" },
+  "live only": { group: "skipped", why: "needs a real live run" },
+  "holds, never broken": { group: "unproven" },
+  "holds": { group: "proven" },
+  "not yet in force": { group: null },
 };
-const replaySwatch = s => {
-  const k = REPLAY_LOOK[s] || {};
-  if (k.dot) return `<i class="dot rdot"></i>`;
-  const bg = s === "not applicable on this platform" ? "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px)" : k.fill === "none" ? "none" : k.fill;
-  return `<i class="dot" style="background:${bg};${k.stroke ? `box-shadow:inset 0 0 0 ${k.width || 1.5}px ` + k.stroke : ""};color:${k.ink || "inherit"}">${k.glyph || ""}</i>`;
+const PROMISE_GROUPS = {
+  broken: { word: "Broken", means: "the promise no longer holds", glyph: "✕" },
+  repair: { word: "Test needs repair", means: "its test cannot be trusted to catch a failure", glyph: "!" },
+  proven: { word: "Proven", means: "we broke it on purpose and the test noticed" },
+  unproven: { word: "Passes, but unproven", means: "the test passes, but we never showed it can fail" },
+  skipped: { word: "Not checked here", means: "needs a real live run or a different computer" },
 };
+// A reader's name for what each finished day built. A day not named here shows its spec's title up to the colon.
+const PROMISE_FEATURES = {
+  1: "Working out the next step",
+  2: "Checking the setup before starting",
+  3: "Stopping the driver safely",
+  4: "Running one step",
+  5: "Pausing for a person",
+};
+const promiseFeature = day => PROMISE_FEATURES[day]
+  || ((DATA.days.find(d => d.day === day) || {}).title || `Day ${day}`).replace(/`/g, "").split(":")[0];
+const promiseTile = group => `<i class="promise ${group}">${PROMISE_GROUPS[group].glyph || ""}</i>`;
 function drawReplay() {
   const rp = DATA.replay || { state: "absent" }, box = document.getElementById("replay");
   const legend = document.getElementById("replay-legend"), table = document.getElementById("replay-table");
@@ -1126,59 +1137,58 @@ function drawReplay() {
   table.hidden = true;
   if (rp.state === "absent") { box.innerHTML = `<p class="off">No history: <code>python scripts/replay-history.py</code> writes <code>docs/dashboard/replay-history.json</code>.</p>`; return; }
   if (rp.state === "invalid") { box.innerHTML = `<p class="load-error">replay-history.json could not be read: ${esc(rp.why)}. Nothing is counted as holding.</p>`; return; }
-  if (!rp.cells.length) { box.innerHTML = `<p class="off">No merge sampled yet.</p>`; return; }
-  const count = s => rp.cells.filter(c => c.state === s).length;
-  legend.innerHTML = rp.states.map(s => `<span>${replaySwatch(s)}${esc(s)} · ${count(s)}</span>`).join("")
-    + `<span><i class="dot" style="background:var(--surface);box-shadow:inset 0 0 0 1px var(--grid)"><b class="notch"></b></i>checks disagree</span>`;
-  const byN = new Map(rp.merges.map(m => [m.n, m]));
-  const first = rp.merges[0].n, cols = rp.merges[rp.merges.length - 1].n - first + 1;
-  const rows = [...new Map(rp.cells.map(c => [c.criterion, c.day])).entries()];
-  const cell = new Map(rp.cells.map(c => [c.criterion + "@" + c.n, c]));
-  const P = { l: 84, r: 16, t: 36, b: 34 }, ch = 15, dayGap = 7;
-  const cw = Math.min(30, (LW - P.l - P.r) / cols);
-  const ys = [];
-  let y = P.t;
-  rows.forEach(([, day], i) => { if (i && day !== rows[i - 1][1]) y += dayGap; ys.push(y); y += ch; });
-  const H = y + P.b, cx = n => P.l + (n - first) * cw;
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Each in-force criterion's replay state at each merge" }, box);
-  const pat = el("pattern", { id: "replay-hatch", width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, el("defs", {}, svg));
-  el("line", { x1: 0, y1: 0, x2: 0, y2: 4, stroke: "var(--muted)", "stroke-width": 1.5 }, pat);
-  // The strip: what each merge sampled.
-  el("text", { x: P.l - 8, y: 22, "text-anchor": "end", class: "lbl", style: "font-size:11px" }, svg).textContent = "sampled";
-  const every = Math.ceil(28 / cw);
-  for (let n = first; n < first + cols; n++) {
-    const m = byN.get(n), x = cx(n);
-    el("rect", m ? { x: x + 1, y: 14, width: cw - 2, height: 10, rx: 2, fill: m.sample === "all" ? "var(--ink-2)" : "var(--axis)" }
-      : { x: x + 1.5, y: 14.5, width: cw - 3, height: 9, rx: 2, fill: "none", stroke: "var(--axis)", "stroke-dasharray": "2 2" }, svg);
-    if ((n - first) % every === 0) el("text", { x: x + cw / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" }, svg).textContent = m && m.pr ? "#" + m.pr : "·";
-    const hit = el("rect", { x, y: 10, width: cw, height: 18, class: "hit" }, svg);
-    hit.addEventListener("mousemove", ev => showTip(ev, m
-      ? `<b>${m.pr ? "#" + m.pr : esc(m.merge)}</b><div style="margin:3px 0 6px">merge ${esc(m.merge)} · ${m.sample === "all" ? "every criterion (a close)" : "one day's criteria"}</div><div class="row"><span>checks run</span><span>${m.run}</span></div><div class="row"><span>copied, same inputs</span><span>${m.copied}</span></div>`
-      : `<b>Not sampled</b><div>a day's merge, waiting for that day's close</div>`));
-    hit.addEventListener("mouseleave", hideTip);
-  }
-  rows.forEach(([cid, day], i) => {
-    if (!i || day !== rows[i - 1][1]) el("text", { x: 4, y: ys[i] + 11, class: "lbl", style: "font-size:11px;font-weight:600" }, svg).textContent = "D" + day;
-    el("text", { x: P.l - 8, y: ys[i] + 11, "text-anchor": "end", class: "num", style: "font-size:11px" }, svg).textContent = cid;
-    for (let n = first; n < first + cols; n++) {
-      const c = cell.get(cid + "@" + n);
-      if (!c) continue;
-      const k = REPLAY_LOOK[c.state], x = cx(n) + 1, w = cw - 2, h = ch - 2, yy = ys[i] + 1;
-      if (k.dot) el("circle", { cx: x + w / 2, cy: yy + h / 2, r: 2, fill: "var(--muted)" }, svg);
-      else { const sw = k.stroke ? k.width || 1.5 : 0, inset = Math.max(0.75, sw / 2); el("rect", { x: x + inset, y: yy + inset, width: w - 2 * inset, height: h - 2 * inset, rx: 2, fill: k.fill, stroke: k.stroke || "none", "stroke-width": sw }, svg); }
-      if (k.glyph) el("text", { x: x + w / 2, y: yy + h / 2 + 3.5, "text-anchor": "middle", style: `font-size:10px;font-weight:700;fill:${k.ink}` }, svg).textContent = k.glyph;
-      if (c.mixed) el("path", { d: `M${x + w - 6} ${yy} H${x + w} V${yy + 6} Z`, fill: "var(--ink)" }, svg);
-      const m = byN.get(n), hit = el("rect", { x: cx(n), y: ys[i], width: cw, height: ch, class: "hit" }, svg);
-      hit.addEventListener("mousemove", ev => showTip(ev, `<b>${esc(cid)} · ${m.pr ? "#" + m.pr : esc(m.merge)}</b><div style="margin:3px 0 6px">${esc(c.state)}${c.mixed ? " (its checks disagree)" : ""}</div>`
-        + c.checks.map(k => `<div class="row"><span>${esc(k.check)}</span><span>${esc(k.state)}</span></div>`
-          + (k.detail || k.reused_from ? `<div style="color:var(--muted);font-size:11.5px;margin-bottom:3px">${esc([k.detail, k.reused_from && "copied from " + k.reused_from].filter(Boolean).join(" · "))}</div>` : "")).join("")));
-      hit.addEventListener("mouseleave", hideTip);
-    }
-  });
+  const index = DATA.criteria_index || [], byN = new Map(rp.merges.map(m => [m.n, m]));
+  const claims = new Map(index.map(c => [c.id, c.claim]));
+  const replaced = new Set(index.filter(c => (c.replaced_by || []).length).map(c => c.id));
+  // A promise reads as its newest check; older merges stay in the table below.
+  const latest = new Map();
+  rp.cells.forEach(c => { if (!latest.has(c.criterion) || latest.get(c.criterion).n < c.n) latest.set(c.criterion, c); });
+  const promises = [...latest.values()].filter(c => REPLAY_LOOK[c.state].group && !replaced.has(c.criterion))
+    .map(c => ({ ...c, group: REPLAY_LOOK[c.state].group, day: Number(c.day) }));
+  if (!promises.length) { box.innerHTML = `<p class="off">No merge sampled yet.</p>`; return; }
+
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const inGroup = (list, g) => list.filter(p => p.group === g);
+  const lastPr = (DATA.now || {}).last_pr;
+  const age = pr => pr == null || lastPr == null ? "" : pr >= lastPr ? "at the latest change" : plural(lastPr - pr, "change ago", "changes ago");
+  const sentence = p => {
+    const text = (claims.get(p.criterion) || "No description found").replace(/`/g, "");
+    return text.length > 170 ? text.slice(0, 170).replace(/\s+\S*$/, "") + "…" : text;
+  };
+  const item = p => {
+    const note = [REPLAY_LOOK[p.state].why, p.mixed && "its checks disagree"].filter(Boolean).join("; ");
+    return `<li title="${esc(p.criterion + ": " + (claims.get(p.criterion) || ""))}">${promiseTile(p.group)}<span><b>${PROMISE_GROUPS[p.group].word}</b>${note ? ` (${esc(note)})` : ""}: ${esc(sentence(p))}</span></li>`;
+  };
+
+  // The verdict: the worst thing found, then what the re-check covered.
+  const broken = inGroup(promises, "broken"), repair = inGroup(promises, "repair"), unproven = inGroup(promises, "unproven").length;
+  const verdict = broken.length ? plural(broken.length, "promise is broken", "promises are broken")
+    : repair.length ? plural(repair.length, "test needs repair", "tests need repair")
+    : "Nothing was broken at the last re-check";
+  const newest = age(rp.merges[rp.merges.length - 1].pr);
+  const covered = `We re-checked ${plural(promises.length, "promise", "promises")} the software makes${newest ? `, most recently ${newest}` : ""}. ${broken.length} failed.`
+    + (repair.length && broken.length ? ` ${plural(repair.length, "test needs", "tests need")} repair.` : "")
+    + (unproven ? ` ${plural(unproven, "has a test", "have tests")} never shown to catch a failure.` : "");
+  const problems = [...broken, ...repair];
+
+  const days = [...new Set(promises.map(p => p.day))].sort((a, b) => a - b);
+  const rows = days.map(day => {
+    const mine = promises.filter(p => p.day === day);
+    const tiles = Object.keys(PROMISE_GROUPS).flatMap(g => inGroup(mine, g).map(() => promiseTile(g))).join("");
+    const label = Object.keys(PROMISE_GROUPS).filter(g => inGroup(mine, g).length).map(g => `${inGroup(mine, g).length} ${PROMISE_GROUPS[g].word}`).join(", ");
+    const oldest = age(byN.get(Math.min(...mine.map(p => p.n))).pr);
+    const list = Object.keys(PROMISE_GROUPS).flatMap(g => inGroup(mine, g).map(item)).join("");
+    return `<details class="promise-row"><summary><span class="promise-name">${esc(promiseFeature(day))}</span><span class="promise-tiles" role="img" aria-label="${esc(label)}">${tiles}</span>`
+      + `<span class="promise-age">${inGroup(mine, "proven").length} of ${mine.length} proven${oldest ? ` · checked ${oldest}` : ""}</span></summary><ul class="promise-list">${list}</ul></details>`;
+  }).join("");
+  box.innerHTML = `<p class="promise-verdict">${esc(verdict)}</p><p class="promise-covered">${esc(covered)}</p>`
+    + (problems.length ? `<ul class="promise-list">${problems.map(item).join("")}</ul>` : "") + rows;
+  legend.innerHTML = Object.entries(PROMISE_GROUPS).map(([g, k]) => `<span>${promiseTile(g)}<b>${k.word} (${inGroup(promises, g).length})</b> ${k.means}</span>`).join("");
+
   // The table view: every check that does not hold, newest merge first.
   const off = rp.cells.flatMap(c => c.checks.filter(k => k.state !== "holds").map(k => ({ c, k }))).sort((a, b) => b.c.n - a.c.n);
   table.hidden = false;
-  table.innerHTML = `<summary>Every check that does not hold · ${off.length}</summary>` + (off.length ? `<table class="replay-off"><thead><tr><th>Merge</th><th>Criterion</th><th>Check</th><th>State</th><th>Detail</th></tr></thead><tbody>`
+  table.innerHTML = `<summary>Technical detail: every check that did not pass cleanly · ${off.length}</summary>` + (off.length ? `<table class="replay-off"><thead><tr><th>Merge</th><th>Criterion</th><th>Check</th><th>State</th><th>Detail</th></tr></thead><tbody>`
     + off.map(({ c, k }) => { const m = byN.get(c.n); return `<tr><td>${m.pr ? "#" + m.pr : esc(m.merge)}</td><td>${esc(c.criterion)}</td><td>${esc(k.check)}</td><td>${esc(k.state)}</td><td>${esc(k.detail || "")}</td></tr>`; }).join("")
     + `</tbody></table>` : `<p class="off">None: every check replayed holds.</p>`);
 }
