@@ -9,7 +9,8 @@ driver's own files in reach. Then the run's issue is closed with the outcome as 
 `run.json` removed. Every park it prints is also an open issue (Day 5), so that the maintainer can
 close it to let the driver go on. While the session runs, --once reads the project's issues every
 --poll seconds: an open STOP issue halts the driver, reports on the run's issue and kills the session
-(Day 5, "The phone's STOP during a session")."""
+(Day 5, "The phone's STOP during a session"). A session that runs past --session-minutes has its tree
+killed, and the step parks with a park line."""
 
 import json
 import os
@@ -17,6 +18,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from collections import namedtuple
 
@@ -134,20 +136,78 @@ def write_end(state, session, line, out):
     )
 
 
+# What run_session returns when the session ran past --session-minutes: its tree is killed, and the
+# step parks on it (past_bound).
+PAST = object()
+
+
+def past_bound(args, session):
+    # A session past its bound has no reply, so its end line carries no cost and no refusals.
+    line = f"park: the session ran past {args.session_minutes:g} minutes (session `{session}`)"
+    write_end(args.state, session, line, "")
+    return line, 1
+
+
+def descendants(pid):
+    # The pids under pid, from one snapshot of the process table. The whole snapshot is read before
+    # any kill, so a parent that dies first does not hide its children.
+    table = subprocess.run(["ps", "-A", "-o", "pid=,ppid="], capture_output=True, check=False)
+    children = {}
+    for line in table.stdout.decode("utf-8", errors="replace").splitlines():
+        fields = line.split()
+        if len(fields) == 2:
+            children.setdefault(int(fields[1]), []).append(int(fields[0]))
+    found, todo = [], [pid]
+    while todo:
+        for child in children.get(todo.pop(), []):
+            found.append(child)
+            todo.append(child)
+    return found
+
+
+def kill_session(proc):
+    # Kills the session's tree. Not killpg: the session stays in the driver's own process group so
+    # that `halt` still kills it (Day 3, "The tree"), and killing that group here would kill the
+    # driver before it can park.
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
+        )
+    else:
+        for pid in [proc.pid, *descendants(proc.pid)]:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    # A process that escaped the kill and still holds the output pipe must not hang the driver.
+    try:
+        proc.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 def run_session(command, prompt, args, project, number, record):
-    # Returns (stdout, return code), or None when a STOP issue stopped the session. The prompt goes on
-    # stdin once; each --poll seconds the project's issues are read while the session runs.
+    # Returns (stdout, return code), PAST when the session ran past --session-minutes, or None when a
+    # STOP issue stopped the session. The prompt goes on stdin once; each --poll seconds the project's
+    # issues are read while the session runs, and the bound is checked at each poll.
     proc = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=os.path.realpath(project)
     )
+    deadline = time.monotonic() + args.session_minutes * 60
     data = prompt.encode("utf-8")
     while True:
         try:
-            out, _ = proc.communicate(data, timeout=args.poll)
+            # The wait ends at the next poll or at the bound, whichever comes first.
+            out, _ = proc.communicate(
+                data, timeout=min(args.poll, max(0, deadline - time.monotonic()))
+            )
             return out, proc.returncode
         except subprocess.TimeoutExpired:
             # Passing the input again raises ValueError, so later calls send none.
             data = None
+            if time.monotonic() >= deadline:
+                kill_session(proc)
+                return PAST
         open_list, reason = issues.open_issues(project, args.gh)
         if reason:
             # A read that fails is skipped; the next poll reads again.
@@ -368,6 +428,10 @@ def one_session(command, prompt, args, project, record):
     done = run_session(command, prompt, args, project, record["issue"], record)
     if done is None:
         return None
+    if done is PAST:
+        line, code = past_bound(args, record["session"])
+        say(line, code)
+        return line, code
     stdout, returncode = done
     out = stdout.decode("utf-8", errors="replace")
     line, code = outcome(out, returncode, record["session"], project, args.gh, record["step"])
