@@ -178,6 +178,15 @@ CAVEATS = [
     "that the file runs in the product. Test and tool names may legitimately be absent from it.",
     "The clock graph shows the clock of the machine that last ran scripts/token-usage.py: its sessions "
     "are stamped with its offset, and GitHub's times are moved to it. A session on another machine is not drawn.",
+    "The clock graph draws only what leaves a time: a session's transcript, a pull request, its checks, a merge. "
+    "A session is busy while it writes and while it waits on a command it ran. The maintainer's reading, thinking "
+    "and typing leave no time, and neither does a command sent to the background, one run outside a session, "
+    "or a check that runs after a merge.",
+    "Every dollar here is what the tokens would cost on the pay-per-token API at list prices, counted from this "
+    "repository's sessions on the maintainer's computer. It is not what was paid: a subscription costs the same "
+    "whatever was used. A date with no cost is a date with no session in this repository.",
+    "A yardstick's figure for a Day covers everything merged between the close before it and its own, whichever "
+    "Day the work belonged to.",
 ]
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 # What git said about each merge, kept between runs: every call cached here names commits only by
@@ -1633,7 +1642,7 @@ YARDSTICKS = (
          unit="$", decimals=2, read="each"),
     dict(key="replies", name="Replies for each merged pull request, main sessions",
          question="Replies per merged PR", unit="", decimals=1, read="each"),
-    dict(key="escapes", name="Defects that escaped from an earlier day", question="Escapes per day",
+    dict(key="escapes", name="Defects that escaped from an earlier Day", question="Escapes per day",
          unit="", decimals=0, read="first"),
     dict(key="parks", name="Times the driver stopped for a person", question="Parks by reason",
          unit="", decimals=0, read="first"),

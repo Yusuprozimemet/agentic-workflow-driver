@@ -179,6 +179,44 @@ class SessionsTest(unittest.TestCase):
         local = datetime.datetime(2026, 10, 12, 10, 0, tzinfo=utc).astimezone()
         self.assertEqual((rows[0]["from"], rows[0]["date"]), (local.isoformat(timespec="seconds"), local.date().isoformat()))
 
+    @staticmethod
+    def call(tool_id, command, stamp, background=False):
+        entry = json.loads(line(f"msg_{tool_id}", f"req_{tool_id}"))
+        entry["timestamp"] = stamp
+        entry["message"]["content"] = [{"type": "tool_use", "id": tool_id, "name": "Bash",
+                                        "input": {"command": command, **({"run_in_background": True} if background else {})}}]
+        return json.dumps(entry)
+
+    @staticmethod
+    def result(tool_id, stamp):
+        return json.dumps({"type": "user", "timestamp": stamp, "gitBranch": "day-43/track-a2-x",
+                           "message": {"content": [{"type": "tool_result", "tool_use_id": tool_id, "content": "ok"}]}})
+
+    def test_a_command_the_session_waits_on_for_over_five_minutes_keeps_the_stretch_whole(self):
+        rows = self.sessions([self.call("t1", "python scripts/test-parallel.py", "2026-10-12T10:00:00Z"),
+                              self.result("t1", "2026-10-12T10:06:00Z"),  # six minutes of tests: work, not a gap
+                              self.at(line("msg_9", "req_9"), "2026-10-12T10:12:00Z")])  # six minutes of nothing: a gap
+        utc = lambda s: datetime.datetime.fromisoformat(s).astimezone(datetime.timezone.utc).strftime("%H:%M")
+        self.assertEqual([(utc(r["from"]), utc(r["to"]), r["replies"]) for r in rows], [("10:00", "10:06", 1), ("10:12", "10:12", 1)])
+        self.assertEqual(rows[0]["ran"], {"tests": 360})
+        self.assertEqual([(utc(a), utc(b), kind) for a, b, kind in rows[0]["runs"]], [("10:00", "10:06", "tests")])
+        self.assertNotIn("ran", rows[1])
+
+    def test_what_a_stretch_waited_on_is_counted_by_kind_and_a_shared_moment_once(self):
+        call, result = self.call, self.result
+        rows = self.sessions([call("t1", "gh pr checks 12 --watch", "2026-10-12T10:00:00Z"), result("t1", "2026-10-12T10:02:00Z"),
+                              # two calls in one reply run side by side: the minute they share is tests, not both
+                              call("t2", "python scripts/break.py --file a.py", "2026-10-12T10:03:00Z"), call("t3", "git status", "2026-10-12T10:03:00Z"),
+                              result("t2", "2026-10-12T10:04:00Z"), result("t3", "2026-10-12T10:04:30Z"),
+                              call("t4", "ruff check .", "2026-10-12T10:05:00Z", background=True), result("t4", "2026-10-12T10:07:00Z")])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ran"], {"checks": 120, "other": 30, "tests": 60})
+        # Only a wait of a minute or longer is drawn; the command sent to the background is no wait at all.
+        self.assertEqual([kind for _, _, kind in rows[0]["runs"]], ["checks", "tests"])
+        self.assertEqual([tu.run_kind(c) for c in ("python -m unittest discover -s tests", "python scripts/test_token_usage.py", "python scripts/seen-red.py -- x",
+                                                   "python scripts/close-evidence.py --rehearse b", "gh run watch 5", "gh pr view 3", "ls")],
+                         ["tests", "tests", "tests", "tests", "checks", "other", "other"])
+
     def test_a_subagents_stretch_carries_its_type(self):
         with tempfile.TemporaryDirectory() as folder:
             sub = os.path.join(folder, "subagents")
@@ -203,6 +241,23 @@ class SessionsTest(unittest.TestCase):
                 rows = json.load(f)
         self.assertEqual([(r["agent"], r["to"], r["replies"]) for r in rows],
                          [("implementer", "2026-11-07T20:04:00+01:00", 3), ("main", "2026-11-08T07:30:00+01:00", 26), ("defect-rater", "2026-11-08T07:41:00+01:00", 1)])
+
+    def test_a_written_stretch_inside_one_this_count_made_is_dropped_and_the_waits_are_this_counts(self):
+        row = lambda agent, start, end, n, **more: {"date": start[:10], "day": 6, "agent": agent, "from": start, "to": end, "replies": n, **more}
+        with tempfile.TemporaryDirectory() as folder:
+            out = os.path.join(folder, "sessions.json")
+            with open(out, "w", encoding="utf-8") as f:
+                json.dump([row("main", "2026-11-08T06:00:00+01:00", "2026-11-08T06:10:00+01:00", 5),  # the two halves a six-minute
+                           row("main", "2026-11-08T06:16:00+01:00", "2026-11-08T06:30:00+01:00", 7),  # test run used to leave
+                           row("implementer", "2026-11-08T06:16:00+01:00", "2026-11-08T06:20:00+01:00", 2),  # another agent's: kept
+                           row("main", "2026-11-08T09:00:00+01:00", "2026-11-08T09:05:00+01:00", 1)], f)  # outside: kept
+            runs = [["2026-11-08T06:10:00+01:00", "2026-11-08T06:16:00+01:00", "tests"]]
+            tu.write_sessions(out, [row("main", "2026-11-08T06:00:00+01:00", "2026-11-08T06:30:00+01:00", 12, ran={"tests": 360}, runs=runs)])
+            with open(out, encoding="utf-8") as f:
+                rows = json.load(f)
+        self.assertEqual([(r["agent"], r["from"][11:16], r["to"][11:16], r["replies"]) for r in rows],
+                         [("main", "06:00", "06:30", 12), ("implementer", "06:16", "06:20", 2), ("main", "09:00", "09:05", 1)])
+        self.assertEqual((rows[0]["ran"], rows[0]["runs"]), ({"tests": 360}, runs))
 
 
 class MergeTest(unittest.TestCase):

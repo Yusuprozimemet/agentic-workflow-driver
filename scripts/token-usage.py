@@ -45,7 +45,11 @@ GAP = datetime.timedelta(minutes=5)  # sessions(): a stretch of work ends when n
 CUTS = (100_000, 200_000, 300_000)
 PEAK = 150_000  # --compare: the share of sessions whose peak passed it, and of cost in replies above it
 CAPS = (2_000, 5_000)
-HOOKS_DAY = datetime.date(2026, 11, 2)  # read-guard.py and cap-output.py landed this day: --compare splits the replies at it
+RUN_MIN = datetime.timedelta(minutes=1)  # sessions(): a wait on a shell command this long or longer is drawn on the page
+SHELLS = ("Bash", "PowerShell")
+RUN_KINDS = (("tests", re.compile(r"unittest|test-parallel\.py|pytest|\btest_\w+\.py|seen-red\.py|break\.py|evidence\.py")),
+             ("checks", re.compile(r"\bgh\s+(?:pr\s+checks|run\s+watch)\b")))
+HOOKS_DAY =datetime.date(2026, 11, 2)  # read-guard.py and cap-output.py landed this day: --compare splits the replies at it
 TOOL_LIMIT = 8_000  # read-guard.py's LIMIT: a whole Read of a file over it is refused
 CUT_AT = 3_000  # cap-output.py's KEEP: its cut marker follows the head, this many characters in
 # List prices in dollars per million tokens: input, cache write for 5 minutes (1.25x input) and for
@@ -260,15 +264,42 @@ def gates(files):
     return rows
 
 
+def run_kind(command):
+    # What a shell command the session waited on was: its tests (a break, a seen-red run and a replay
+    # run tests too), GitHub's checks on a pull request, or anything else.
+    return next((kind for kind, pattern in RUN_KINDS if pattern.search(command)), "other")
+
+
+def waited(runs):
+    """The time a stretch spent waiting on shell commands, as [start, end, kind] pieces in order that
+    never overlap: calls made in one reply run side by side, and a moment two of them share counts
+    once, as the first kind in RUN_KINDS that was running."""
+    order = [kind for kind, _ in RUN_KINDS] + ["other"]
+    edges, pieces = sorted({t for start, end, _ in runs for t in (start, end)}), []
+    for a, b in zip(edges, edges[1:]):
+        on = [kind for start, end, kind in runs if start <= a and b <= end]
+        if not on:
+            continue
+        kind = min(on, key=order.index)
+        if pieces and pieces[-1][1] == a and pieces[-1][2] == kind:
+            pieces[-1][1] = b
+        else:
+            pieces.append([a, b, kind])
+    return pieces
+
+
 def sessions(files):
     """Each transcript's stretches of work, for docs/dashboard/sessions.json: a stretch runs from one
     line's timestamp to the next while no gap is longer than GAP, and carries its agent, the day of
     its branch and its replies, counted once each. A tool's result is a line too, so a test suite that
-    runs for four minutes keeps the stretch whole. The stamps are written on this machine's clock,
-    with its offset, so the page can show the maintainer's day and not the reader's."""
+    runs for four minutes keeps the stretch whole; one that runs for six does as well, since a shell
+    command the session is waiting on is work and not a gap. `ran` is the seconds of the stretch spent
+    waiting on such commands, by kind, and `runs` the waits of RUN_MIN or longer, which the page draws.
+    A command sent to the background returns at once and is not counted. The stamps are written on this
+    machine's clock, with its offset, so the page can show the maintainer's day and not the reader's."""
     rows = []
     for path in files:
-        who, stamps = agent(path), []
+        who, stamps, calls, runs = agent(path), [], {}, []
         with open(path, encoding="utf-8") as f:
             for line in f:
                 try:
@@ -278,33 +309,63 @@ def sessions(files):
                     continue
                 msg = reply(entry)
                 stamps.append((when, entry.get("gitBranch") or "", (msg.get("id"), entry.get("requestId")) if msg else None))
+                content = (entry.get("message") or {}).get("content")
+                for b in content if isinstance(content, list) else ():
+                    if not isinstance(b, dict):
+                        continue
+                    args = b.get("input") or {}
+                    if b.get("type") == "tool_use" and entry.get("type") == "assistant" and b.get("name") in SHELLS and not args.get("run_in_background"):
+                        calls[b.get("id")] = (when, run_kind(str(args.get("command") or "")))
+                    elif b.get("type") == "tool_result" and b.get("tool_use_id") in calls:
+                        asked, kind = calls.pop(b.get("tool_use_id"))
+                        if when > asked:
+                            runs.append((asked, when, kind))
+        long_runs = [(a, b) for a, b, _ in runs if b - a > GAP]
         stretches = []
         for when, branch, key in sorted(stamps, key=lambda s: s[0]):
-            if stretches and when - stretches[-1]["end"] <= GAP:
-                stretches[-1]["end"] = when
+            end = stretches[-1]["end"] if stretches else None
+            if stretches and (when - end <= GAP or any(a <= end and when <= b for a, b in long_runs)):
+                stretches[-1]["end"] = max(end, when)
             else:
                 stretches.append(dict(start=when, end=when, branch=branch, replies=set()))
             if key:
                 stretches[-1]["replies"].add(key)
+        stamp = lambda t: t.astimezone().isoformat(timespec="seconds")
         for s in stretches:
             start, day = s["start"].astimezone(), DAY_BRANCH.match(s["branch"])
-            rows.append({"date": start.date().isoformat(), "day": int(day.group(1)) if day else None, "agent": who,
-                         "from": start.isoformat(timespec="seconds"), "to": s["end"].astimezone().isoformat(timespec="seconds"),
-                         "replies": len(s["replies"])})
+            row = {"date": start.date().isoformat(), "day": int(day.group(1)) if day else None, "agent": who,
+                   "from": stamp(start), "to": stamp(s["end"]), "replies": len(s["replies"])}
+            pieces = waited([r for r in runs if s["start"] <= r[0] and r[1] <= s["end"]])
+            if pieces:
+                ran = collections.Counter()
+                for a, b, kind in pieces:
+                    ran[kind] += (b - a).total_seconds()
+                row["ran"] = {kind: round(seconds) for kind, seconds in sorted(ran.items()) if round(seconds)}
+                row["runs"] = [[stamp(a), stamp(b), kind] for a, b, kind in pieces if b - a >= RUN_MIN]
+            rows.append(row)
     return rows
 
 
 def write_sessions(out, rows):
     """The stretches beside those already in out, as token-usage.json keeps its rows: a stretch is its
     agent and start, and the later end and the larger count win, since a session can go on after it
-    was counted and Claude Code deletes old transcripts."""
+    was counted and Claude Code deletes old transcripts. What a stretch waited on is this count's. A
+    stretch in out that this count did not make, and that lies inside one it did make for the same
+    agent, is dropped: it was written before a long command joined its two halves."""
     kept = {}
     if os.path.exists(out):
         with open(out, encoding="utf-8") as f:
             kept = {(r["agent"], r["from"]): r for r in json.load(f)}
+    made, at = {(r["agent"], r["from"]) for r in rows}, datetime.datetime.fromisoformat
     for r in rows:
         k = kept.setdefault((r["agent"], r["from"]), r)
         k["to"], k["replies"] = max(k["to"], r["to"]), max(k["replies"], r["replies"])
+        k.update({f: r[f] for f in ("ran", "runs") if f in r})
+    spans = [(agent, at(kept[agent, start]["from"]), at(kept[agent, start]["to"])) for agent, start in made]
+    for key in [k for k in kept if k not in made]:
+        a, b = at(kept[key]["from"]), at(kept[key]["to"])
+        if any(agent == key[0] and start <= a and b <= end for agent, start, end in spans):
+            del kept[key]
     if not kept:
         return
     out_rows = sorted(kept.values(), key=lambda r: (r["from"], r["agent"]))

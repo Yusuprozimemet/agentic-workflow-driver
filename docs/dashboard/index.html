@@ -17,16 +17,26 @@
     <p class="eyebrow" id="eyebrow"></p>
     <h1>A script that runs AI coding work one step at a time</h1>
     <p class="lede">The whole project in ten graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
+    <dl class="words" id="words">
+      <div><dt>Day</dt><dd>A numbered step of the plan, written as a spec before it is built. It is not a calendar day: <span id="words-took">several Days can fit in one date</span>.</dd></div>
+      <div><dt>Date</dt><dd>A calendar date, on the maintainer's clock.</dd></div>
+      <div><dt>Close</dt><dd>The last pull request of a Day. It ticks each promise with its evidence, and the costs are counted then.</dd></div>
+      <div><dt>The kit</dt><dd>The way of working this script automates, and the project it was started from. Its figures, reached with a person driving every step, are the baseline.</dd></div>
+      <div><dt>Main session</dt><dd>The AI conversation that does a step. The auditors and the implementer are separate AI agents it starts.</dd></div>
+      <div><dt>Gates</dt><dd>The checks work must pass: the auditors, a test seen failing, a break on purpose, the close and the evidence replay.</dd></div>
+      <div><dt>Hooks</dt><dd>Small scripts that refuse a call that breaks a rule, or cut a long output short.</dd></div>
+      <div><dt>The stop</dt><dd>A point the plan names where the work halts until the maintainer says to go on.</dd></div>
+    </dl>
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
     <details class="attention" id="attention" hidden>
       <summary id="attention-n">Needs attention</summary>
-      <p class="limit">What the build could not confirm, in the order it found it. An item names the promise or the day it is about.</p>
+      <p class="limit">What the build could not confirm, in the order it found it. An item names the promise or the Day it is about.</p>
       <ul id="attention-list"></ul>
     </details>
   </header>
 
-  <div class="days" id="days" role="group" aria-label="Highlight one day in every graph"></div>
+  <div class="days" id="days" role="group" aria-label="Highlight one Day in every graph"></div>
 
   <h2 class="chapter">Where is it going?<small>what is left before the stop, and whether it is on the plan's yardsticks</small></h2>
 
@@ -39,7 +49,7 @@
     <div class="ladder" id="g1-ladder"></div>
     <div class="legend" id="g1-key"></div>
     <div class="scroll-x" id="g1-plot"></div>
-    <p class="limit">The graph ends at the stop: the phases after it are not specified, so it gives no percentage of the whole plan. The hand-offs counted are the numbered ones in each day's Notes.</p>
+    <p class="limit">The graph ends at the stop: the phases after it are not specified, so it gives no percentage of the whole plan. The hand-offs counted are the numbered ones in each Day's Notes.</p>
     <div class="readout" id="g1-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g1-table"></table></div></details>
   </section>
@@ -48,7 +58,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 2</p>
       <h2>Is it meeting what the plan judges it on?</h2>
-      <p class="graph-say">One row per yardstick the plan names, counted at each day's close. Each row has its own scale. The dashed line is the figure the kit reached with a person driving every step. The blue line across a row is its average so far.</p>
+      <p class="graph-say">One row per yardstick the plan names, counted at each Day's close. A Day's figure covers everything merged since the close before it, whichever Day the work belonged to. Dollars are API list prices, as in graph 8, and not what was paid. Each row has its own scale. The dashed line is the figure the kit reached with a person driving every step. The blue line across a row is its average so far.</p>
     </div>
     <div class="legend" id="g2-key"></div>
     <div class="scroll-x" id="g2-plot"></div>
@@ -63,7 +73,7 @@
       <div class="graph-head">
         <p class="graph-n">Graph 3</p>
         <h2>What can the driver do, and when did it learn it?</h2>
-        <p class="graph-say">Each cell counts the merged pull requests that grew one ability on one day. A darker cell means more of them.</p>
+        <p class="graph-say">Each cell counts the merged pull requests that grew one ability in one Day. A darker cell means more of them.</p>
       </div>
       <div class="g3-plot" id="g3-plot"></div>
       <div class="legend" id="g3-key"></div>
@@ -83,7 +93,7 @@
         <p class="graph-say small" id="g4-hist-say"></p>
         <div class="strip" id="g4-hist"></div>
       </div>
-      <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
+      <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
       <div class="readout" id="g4-read" aria-live="polite"></div>
       <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g4-table"></table></div></details>
     </section>
@@ -93,7 +103,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 5 · joins graphs 3 and 4</p>
       <h2>Which abilities can I rely on?</h2>
-      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew.</p>
+      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the Day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew.</p>
     </div>
     <div class="ab" id="g5-plot"></div>
     <div class="readout" id="g5-read" aria-live="polite"></div>
@@ -119,7 +129,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 7</p>
       <h2>Does the checking work, and is it worth it?</h2>
-      <p class="graph-say" id="g7-say">Each dot is one defect from a day's Notes, placed at the gate that caught it. Work passes the gates from left to right, so a dot further right was caught later.</p>
+      <p class="graph-say" id="g7-say">Each dot is one defect from a Day's Notes, placed at the gate that caught it. Work passes the gates from left to right, so a dot further right was caught later.</p>
     </div>
     <div class="legend" id="g7-key"></div>
     <div class="scroll-x" id="g7-plot"></div>
@@ -146,7 +156,7 @@
       <div class="graph-head">
         <p class="graph-n">Graph 9</p>
         <h2>Where did the work go?</h2>
-        <p class="graph-say">Lines changed in the merged pull requests of each day, sorted by what the file is.</p>
+        <p class="graph-say">Lines changed in the merged pull requests of each Day, sorted by what the file is.</p>
       </div>
       <div class="legend" id="g9-key"></div>
       <div class="bar-plot" id="g9-plot"></div>
@@ -158,8 +168,8 @@
   <section class="graph" id="g10">
     <div class="graph-head">
       <p class="graph-n">Graph 10</p>
-      <h2>Where does a day's time go, and who waits for whom?</h2>
-      <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing, a pull request waiting to be merged, its checks running, the maintainer merging. A day button above turns the clock to that day's last date; the dates here pick another.</p>
+      <h2>Where does a date's time go, and who waits for whom?</h2>
+      <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing or waiting on a command it ran, a pull request waiting to be merged, its checks running, the maintainer merging. The marks inside a session's bar are its waits of a minute or longer. Only this repository's sessions are drawn, and the maintainer's own reading and typing leave no mark, so a gap in a lane is not a rest. A Day button above turns the clock to that Day's last date; the dates here pick another.</p>
     </div>
     <div class="g10-dates" id="g10-dates" role="group" aria-label="One date on the clock"></div>
     <div class="legend" id="g10-key"></div>
@@ -180,9 +190,9 @@
   <section class="panel" id="how-this-works">
     <div class="graph-head">
       <h2>How this works: follow one promise</h2>
-      <p>Every day of work here is written down before it is built. The written version makes promises: single sentences saying what the software must do. Each promise then has to survive a series of checks, some by AI reviewers with no stake in it and some by a person.</p>
+      <p>Every Day of work here is written down before it is built. The written version makes promises: single sentences saying what the software must do. Each promise then has to survive a series of checks, some by AI reviewers with no stake in it and some by a person.</p>
       <p id="how-route"></p>
-      <p class="limit">The names on the arrows describe the usual process for any day. They are not a record of who did what on this one pull request.</p>
+      <p class="limit">The names on the arrows describe the usual process for any Day. They are not a record of who did what on this one pull request.</p>
     </div>
     <div class="how-path" id="how-path"></div>
     <div class="how-legend"><span class="how-doc"><i></i>Written down first</span><span class="how-try"><i></i>Tried on the code</span><span class="how-after"><i></i>Checked afterwards</span></div>
@@ -194,7 +204,7 @@
     <div class="how-two">
       <div><b>An auditor finds the spec is wrong</b><p>The spec is corrected in its own pull request before any code is written.</p></div>
       <div><b>A test never failed</b><p>A test that has only ever passed proves nothing, so it has to be seen failing before its pull request is opened.</p></div>
-      <div><b>A later day changes the behaviour</b><p>Its spec names the old promise on a <code>Replaces:</code> line, and the old one stops counting.</p></div>
+      <div><b>A later Day changes the behaviour</b><p>Its spec names the old promise on a <code>Replaces:</code> line, and the old one stops counting.</p></div>
       <div><b>A step needs a person</b><p>The driver parks: it opens an issue saying why and stops until the maintainer closes that issue. It does not guess.</p></div>
     </div>
     <details class="technical">
@@ -206,7 +216,7 @@
   </details>
 
   <footer>
-    <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal and gate counts come from <code>scripts/token-usage.py</code>, run on the maintainer's computer at each day's close. The page this one replaced, with its sixty panels, is the tag <a href="https://github.com/Yusuprozimemet/agentic-workflow-driver/tree/dashboard-v1/docs/dashboard"><code>dashboard-v1</code></a>.</p>
+    <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal and gate counts come from <code>scripts/token-usage.py</code>, run on the maintainer's computer at each Day's close. The page this one replaced, with its sixty panels, is the tag <a href="https://github.com/Yusuprozimemet/agentic-workflow-driver/tree/dashboard-v1/docs/dashboard"><code>dashboard-v1</code></a>.</p>
   </footer>
 
 </div>

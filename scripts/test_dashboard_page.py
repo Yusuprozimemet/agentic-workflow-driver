@@ -71,7 +71,7 @@ def a_day(n, status="done", **more):
 
 
 def data(**more):
-    """Three days, the third in progress, and nothing else; `more` adds or replaces fields."""
+    """Three Days, the third in progress, and nothing else; `more` adds or replaces fields."""
     return dict(dict(now=dict(generated="2026-01-03T09:30+00:00", head="abcdef1234", last_pr=9, current_day=3,
                               next_step="Day 03 Track A: `run`", stop_after=3, open_prs=[]),
                      days=[a_day(1), a_day(2), a_day(3, "active")], meta=dict(project="toy", caveats=["Names, not meaning."])), **more)
@@ -105,6 +105,14 @@ class ModelTest(unittest.TestCase):
         self.assertEqual((head["project"], head["when"], head["commit"], head["demo"]), ("toy", "3 Jan 2026 at 09:30", "abcdef1", False))
         self.assertEqual(head["now"], "Days 1 to 2 are closed and Day 3 is in progress.")
         self.assertEqual(head["next"], "Day 03 Track A: `run`")
+        self.assertEqual(head["took"], "")
+
+    def test_the_header_says_how_many_dates_the_days_took(self):
+        # A Day is a step of the plan, not a calendar day: two Days share a date here. The Day in progress is not
+        # counted, and neither is a pull request outside any Day that merged later, whatever Day its row carries.
+        days = [a_day(1, worked=["2026-01-02", "2026-01-02"]), a_day(2, worked=["2026-01-02", "2026-01-03"]), a_day(3, "active", worked=["2026-01-06", "2026-01-06"])]
+        rows = [dict(pr=4, date="2026-01-05", day=2)]
+        self.assertEqual(model(data(days=days, rows=rows))["head"]["took"], "Days 1 to 2 took 2 dates")
 
     def test_what_needs_attention_is_grouped_by_reason_and_detail(self):
         got = model(data(attention=[dict(id="C1.1", reason="evidence_missing", detail="Replay report: absent"),
@@ -119,7 +127,7 @@ class ModelTest(unittest.TestCase):
         g = model(data(user_stories=dict(ABILITIES, stories=[story(2, 1, "a"), story(1, 1, "a"), story(3, 2, "b"), story(4, None, "a"),
                                                              story(5, 1, "gone")]),
                        hand_offs=[dict(to=3, picked=True), dict(to=3, picked=False), dict(to=4, picked=False)]))["g3"]
-        self.assertEqual([(c["label"], c["mark"]) for c in g["cols"]], [("1", "✓"), ("2", "✓"), ("3", "now"), ("No day", "")])
+        self.assertEqual([(c["label"], c["mark"]) for c in g["cols"]], [("1", "✓"), ("2", "✓"), ("3", "now"), ("No Day", "")])
         self.assertEqual([(r["name"], [c["n"] for c in r["cells"]]) for r in g["rows"]],
                          [("Runs", [2, 0, 0, 1]), ("Stops", [0, 1, 0, 0]), ("No ability named", [1, 0, 0, 0])])
         first = g["rows"][0]["cells"][0]
@@ -127,7 +135,7 @@ class ModelTest(unittest.TestCase):
                          ("Runs · Day 1", ["2 merged pull requests grew this ability on Day 1: #1, #2."], 1))
         self.assertEqual(g["rows"][1]["cells"][0]["b"], ["No pull request grew this ability on Day 1."])
         self.assertEqual(g["read"]["t"], "5 merged pull requests, each tagged with the ability it grew")
-        self.assertEqual(g["read"]["b"], ["Days 1 to 2 are closed and Day 3 is in progress. 1 of the 2 notes earlier days left for Day 3 "
+        self.assertEqual(g["read"]["b"], ["Days 1 to 2 are closed and Day 3 is in progress. 1 of the 2 notes earlier Days left for Day 3 "
                                           "were picked up; 1 more wait for Day 4. The plan stops for the maintainer after Day 3."])
         self.assertEqual(g["table"]["rows"][0], ["Runs", 2, 0, 0, 1, 3])
 
@@ -152,7 +160,7 @@ class ModelTest(unittest.TestCase):
             "`C1.2` holds.",
             "✓ ticked at the close · ✓ cites its pull request · ✓ names a test that exists · ✓ a failure was recorded when it was built",
             "Last re-checked after pull request #8, 1 change ago. It grew “Stops”, and also “Runs”."])
-        self.assertEqual(tiles["C3.1"]["b"], ["`C3.1` holds.", "No evidence yet: the day is not closed."])
+        self.assertEqual(tiles["C3.1"]["b"], ["`C3.1` holds.", "No evidence yet: the Day is not closed."])
 
     def test_the_trust_strip_counts_the_promises_at_every_recheck(self):
         # C1.3 held at the first re-check, and is in neither count: a replaced promise is no longer one.
@@ -183,7 +191,7 @@ class ModelTest(unittest.TestCase):
     def test_an_ability_with_no_promise_says_whether_its_work_was_outside_the_days(self):
         story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
         rows = model(data(criteria_index=[], user_stories=dict(ABILITIES, stories=[story(1, None, "a"), story(2, 1, "b")])))["g5"]["rows"]
-        self.assertEqual([r["note"] for r in rows], ["No promise covers this ability. Its pull requests are work outside the day specs.",
+        self.assertEqual([r["note"] for r in rows], ["No promise covers this ability. Its pull requests are work outside the Day specs.",
                                                      "No promise covers this ability yet."])
 
     def test_graph_6_keeps_each_merges_gap_its_time_open_and_its_failed_check(self):
@@ -192,7 +200,7 @@ class ModelTest(unittest.TestCase):
         g = model(data(rows=[row(None, "origin", 0, 50.0), row(1, "spec", 1, 54.0), row(2, "code", 1, 48.0), row(3, "close", 1, 48.0),
                              row(4, "other", 2, 47.0, gap_chance=52.0, gap_chance_band=[50.0, 54.0])],
                        verification=[check(1, 0.05), check(2, 2.0, 2), check(3, 0.1), check(4, 0.1)]))["g6"]
-        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A day's close 1", "Other (tooling, dashboard) 2",
+        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A Day's close 1", "Other (tooling, dashboard) 2",
                                                    "A check failed before the merge 1"])
         self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=1, n=3), dict(day=2, n=1)])
         self.assertEqual([m["y"] for m in g["merges"]], [0.5, 0.1, 0.7, 0.7, 0.8])  # the scale runs from 55° down to 45°
@@ -226,13 +234,13 @@ class ModelTest(unittest.TestCase):
             ("D2.2", "other", False, False)])
         self.assertEqual((dots["D2.1"]["t"], dots["D2.1"]["b"]), (
             "D2.1 · process · caught by: the close",
-            ["Made on Day 1 and caught on Day 2: it escaped for 1 day. The same problem as D1.1, back again."]))
-        self.assertEqual(dots["D1.2"]["b"], ["Made outside any day: in the plan, a tool or a machine. Noticed by: Track A."])
-        self.assertEqual(dots["D2.2"]["b"], ["Caught on Day 2; its line does not say which day made it."])
+            ["Made on Day 1 and caught on Day 2: it escaped for 1 Day. The same problem as D1.1, back again."]))
+        self.assertEqual(dots["D1.2"]["b"], ["Made outside any Day: in the plan, a tool or a machine. Noticed by: Track A."])
+        self.assertEqual(dots["D2.2"]["b"], ["Caught on Day 2; its line does not say which Day made it."])
         self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "1 caught", "0 caught",
                                                          "1 caught · tracks, reviews, the session", "1 caught", "0 caught"])
         self.assertEqual(g["read"]["t"], "4 defects; the auditors caught 1 of them before any code was written")
-        self.assertEqual(g["read"]["b"], ["1 was in a spec. 1 escaped from an earlier day and 1 came back. A second reader gave 3 of 12 "
+        self.assertEqual(g["read"]["b"], ["1 was in a spec. 1 escaped from an earlier Day and 1 came back. A second reader gave 3 of 12 "
                                           "tags differently. Each catch cost about $1.00 at the auditors."])
 
     def test_graph_8_adds_up_each_dates_sessions_and_what_the_hooks_stopped(self):
@@ -248,10 +256,13 @@ class ModelTest(unittest.TestCase):
                                              "3 calls (3 by the read-guard) and cut 2 long outputs. 2 pull requests merged that date: $1.75 "
                                              "each, all sessions."])
         self.assertEqual([k[1] for k in g["key"]], ["Main session $5.00", "Auditors and the implementer $1.00"])
-        self.assertEqual(g["read"]["t"], "$6.00 of tokens; 83% of it in the main session")
-        self.assertEqual(g["read"]["b"], ["1 date of set-up cost $2.50 before Day 1. The days cost $3.50 over 1 date and 2 merged pull requests. "
-                                          "The hooks refused 3 calls and cut 3 long outputs. Counted at each close on the maintainer's computer, "
-                                          "so nothing after 2 Jan is in yet."])
+        # The dollars are list prices and not a bill, and the last date is counted only up to its close: the page says both.
+        self.assertEqual(g["read"]["t"], "$6.00 of tokens at list prices; 83% of it in the main session")
+        self.assertEqual(g["read"]["b"], ["1 date of set-up cost $2.50 before Day 1. The Days cost $3.50 over 1 date, on which 2 pull requests merged. "
+                                          "The hooks refused 3 calls and cut 3 long outputs. Counted at each Day's close on the maintainer's computer, "
+                                          "so 2 Jan is counted only up to the close run on it, and nothing after it is in yet."])
+        self.assertEqual(g["say"], "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, "
+                                   "counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.")
 
     def test_graph_9_adds_each_days_changed_lines_by_what_the_file_is(self):
         g = model(data(rows=[dict(pr=None, day=0, work=dict(spec=7)), dict(pr=1, day=1, work=dict(spec=10, context=5, prod=20, test=40, tooling=0)),
@@ -278,10 +289,11 @@ class ModelTest(unittest.TestCase):
                          ("Cost of each merged pull request · Day 2: $1.80, above the baseline of $1.50", ["$9 over 5"]))
         self.assertEqual(cost["cells"][2]["b"], ["Day 3 is in progress: it is counted at its close."])
         self.assertEqual((cost["note"], round(cost["line"], 3)), ("kit's baseline: $1.50", 0.833))
-        self.assertEqual(g["waiting"], [dict(name="Times it stopped", why="none yet: only fake projects")])
-        self.assertEqual(g["read"]["t"], "Above the kit's baseline on 1 of 2 days for cost")
-        self.assertIn(["Times it stopped", "none yet: only fake projects."], got["notMeasured"])
-        self.assertEqual(got["notMeasured"][-1][0], "Where a day's time goes, and who waits for whom")
+        # The row already says "Not measured yet": the cell's own "none yet:" is not said after it.
+        self.assertEqual(g["waiting"], [dict(name="Times it stopped", why="only fake projects")])
+        self.assertEqual(g["read"]["t"], "Above the kit's baseline on 1 of 2 Days for cost")
+        self.assertIn(["Times it stopped", "only fake projects."], got["notMeasured"])
+        self.assertEqual(got["notMeasured"][-1][0], "Where a date's time goes, and who waits for whom")
 
     def test_graph_1_counts_the_promises_built_and_written_at_each_merge_and_what_is_left_before_the_stop(self):
         # The unnumbered hand-off counts in `open` but not in the numbered count the graph draws.
@@ -300,7 +312,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual([(a["label"], a["day"], a["built"]) for a in g["ahead"]], [("F", 3, 5), ("G", 3, 6), ("close", 3, 7)])
         self.assertEqual((g["ahead"][0]["t"], g["ahead"][0]["b"]), ("Day 3 track F · specified, not merged",
                                                                      ["Would build C3.1, C3.2.", "5 of 14 built after it."]))
-        self.assertEqual(g["ahead"][2]["b"][0], "The close ticks each promise with its evidence and leaves the hand-offs for the days after.")
+        self.assertEqual(g["ahead"][2]["b"][0], "The close ticks each promise with its evidence and leaves the hand-offs for the Days after.")
         self.assertEqual([(u["day"], u["waits"], u["ids"]) for u in g["unknown"]], [(4, 1, ["H03.1"])])
         self.assertEqual((g["pMax"], g["hMax"], g["stop"]), (20, 6, 4))
         self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=2, n=3), dict(day=3, n=3)])
@@ -309,7 +321,7 @@ class ModelTest(unittest.TestCase):
                                           "Day 4 has no spec, so its size cannot be drawn. 1 hand-off waits for it (H03.1).",
                                           "After Day 4 the plan stops for the maintainer. What comes after is not specified, so the graph "
                                           "ends there and gives no percentage of the whole plan."])
-        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A day's close 1", "Other (tooling, dashboard) 1",
+        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A Day's close 1", "Other (tooling, dashboard) 1",
                                                    "Promises built", "Promises written", "Hand-offs open", "Specified, not merged", "Not specified yet"])
         self.assertEqual(g["table"]["head"], ["Merge", "Kind", "Day", "Built", "Written", "Hand-offs open"])
         self.assertEqual(g["table"]["rows"][0], ["start", "the first commit", "", 0, 10, 0])
@@ -378,13 +390,38 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["Pull request open", "Pull request #7", "10:30", "11:00", 30], jan2["table"]["rows"])
         self.assertEqual((g["read"], g["table"]), (jan2["read"], jan2["table"]))
         self.assertEqual([x["t"] for x in g["hours"]][:3], ["00:00", "03:00", "06:00"])
-        self.assertNotIn("Where a day's time goes, and who waits for whom", [n for n, _ in got["notMeasured"]])
+        self.assertNotIn("Where a date's time goes, and who waits for whom", [n for n, _ in got["notMeasured"]])
+
+    def test_graph_10_draws_what_a_session_waited_on_inside_its_busy_bar(self):
+        s = lambda agent, start, end, **more: {"date": start[:10], "day": 2, "agent": agent, "from": start, "to": end, "replies": 5, **more}
+        clock = dict(prs=[], sessions=[
+            s("main", "2026-01-02T08:00:00+01:00", "2026-01-02T10:00:00+01:00", ran=dict(tests=1800, checks=600, other=60),
+              runs=[["2026-01-02T08:10:00+01:00", "2026-01-02T08:40:00+01:00", "tests"], ["2026-01-02T09:00:00+01:00", "2026-01-02T09:10:00+01:00", "checks"]]),
+            s("implementer", "2026-01-02T09:00:00+01:00", "2026-01-02T09:30:00+01:00", ran=dict(tests=300),
+              runs=[["2026-01-02T09:05:00+01:00", "2026-01-02T09:10:00+01:00", "tests"]])])
+        g = model(data(clock=clock))["g10"]
+        self.assertEqual(g["runs"], [["tests", "waiting on tests"], ["checks", "waiting on GitHub's checks"], ["other", "waiting on another command"]])
+        date = g["dates"][0]
+        main = date["lanes"][0]
+        # The waits are drawn over the busy bar, which keeps its whole length: busy includes them.
+        self.assertEqual([(b["cls"], b["from"], b["to"]) for b in main["bars"]],
+                         [("busy", "08:00", "10:00"), ("run tests", "08:10", "08:40"), ("run checks", "09:00", "09:10")])
+        self.assertEqual([lane["sub"] for lane in date["lanes"]][:2], ["busy 2 h 0 min, 41 minutes of it waiting on commands", "busy 30 minutes, 5 minutes of it waiting on commands"])
+        self.assertEqual(main["bars"][0]["b"], ["5 replies, with no gap longer than 5 minutes. 41 minutes of it waiting on commands it ran: "
+                                                "30 minutes on tests, 10 minutes on GitHub's checks and 1 minute on other commands."])
+        self.assertEqual(main["bars"][1]["t"], "Main session · waiting on tests 08:10 to 08:40")
+        self.assertEqual(date["read"]["b"][1:3], [
+            "The main session was busy for 2 h 0 min and the implementer for 30 minutes.",
+            "Of that, the sessions waited 46 minutes on commands they had run: 35 minutes on tests, 10 minutes on GitHub's checks and "
+            "1 minute on other commands. The wait on GitHub's checks is drawn again under Checks running."])
+        self.assertIn(["Main session", "Main session, waiting on tests", "08:10", "08:40", 30], date["table"]["rows"])
+        self.assertIn(["Main session", "Main session", "08:00", "10:00", 120], date["table"]["rows"])
 
     def test_graph_10_without_any_time_recorded_says_so_under_not_measured(self):
         got = model(data())
         self.assertIn("sessions.json", got["g10"]["empty"])
         self.assertEqual(got["g10"]["dates"], [])
-        self.assertEqual(got["notMeasured"][-1][0], "Where a day's time goes, and who waits for whom")
+        self.assertEqual(got["notMeasured"][-1][0], "Where a date's time goes, and who waits for whom")
         self.assertEqual(got["notMeasured"][-1][1], got["g10"]["empty"])
 
     def test_one_graph_that_cannot_read_its_data_leaves_the_others_drawn(self):
@@ -451,6 +488,17 @@ class PageFilesTest(unittest.TestCase):
         self.assertIn("The angle matches names, not meaning", visible)
         self.assertIn('href="#cannot-see"', visible)
         self.assertIn('id="cannot-see"', read("index.html"))
+
+    def test_the_page_says_what_a_day_and_a_date_are_and_keeps_the_two_words_apart(self):
+        page = read("index.html")
+        self.assertIn("<dt>Day</dt><dd>A numbered step of the plan", page)
+        self.assertIn("<dt>Date</dt><dd>A calendar date", page)
+        self.assertIn('id="words-took"', page)
+        self.assertIn("<h2>Where does a date's time go, and who waits for whom?</h2>", page)
+        self.assertIn("Dollars are API list prices, as in graph 8, and not what was paid.", page)
+        # The plan's step is written "Day": a lower-case "a day" or "each day" would read as a calendar day.
+        text = re.sub(r"<[^>]+>", " ", page)
+        self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
     def test_the_ten_graphs_sit_in_order_under_four_group_headings(self):
         html = read("index.html")
