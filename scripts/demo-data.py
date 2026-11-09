@@ -222,15 +222,48 @@ RECHECKED = {
 def yardsticks():
     """Made-up figures for the plan's yardsticks, one per finished day; the parks are never counted."""
     def row(key, name, unit, decimals, baseline, values):
+        # The average so far, as if every day had merged the same number of pull requests.
+        average = [None if v is None else round(sum(values[:n]) / n, 2) for n, v in enumerate(values, 1)]
         return dict(key=key, name=name, unit=unit, decimals=decimals, baseline=baseline, source="docs/lab-notebook.md",
                     values=[dict(day=d, value=v, text="none yet" if v is None else f"Made-up figure for Day {d}.")
-                            for d, v in enumerate(values, 1)])
+                            for d, v in enumerate(values, 1)],
+                    average=average, average_over="pull requests" if key in ("cost", "replies") else "days")
     return dict(days=[1, 2, 3, 4, 5], problems=[], rows=[
         row("cost", "Cost of each merged pull request, main sessions", "$", 2, 1.5, [1.2, 1.8, 1.4, 1.65, 1.3]),
         row("replies", "Replies for each merged pull request, main sessions", "", 1, 30.0, [24.5, 33.0, 28.0, 31.5, 26.0]),
         row("escapes", "Defects that escaped from an earlier day", "", 0, None, [0, 1, 0, 0, 0]),
         row("parks", "Times the driver stopped for a person", "", 0, None, [None] * 5),
         row("refusals", "Calls the hooks refused", "", 0, None, [0, 0, 2, 1, 2])])
+
+
+def look_ahead(rows, index):
+    """Made-up figures for the graph that looks ahead: a day's promises are written at its spec change and built at
+    its track, the days with no pull request yet have theirs written from the start, and three hand-offs open, of
+    which one is picked up."""
+    ids = {}
+    for c in index:
+        ids.setdefault(c["day"], []).append(c["id"])
+    at = {r["pr"]: i for i, r in enumerate(rows) if r["pr"]}
+    ledger = [dict(id=None, source="src/receipts/views.py", to=[6], opened=0, closed=None, how=None,
+                   text="Receipts are numbered per shop, not per customer"),
+              dict(id="H2.1", source="Day 02 Notes", to=[4], opened=at[106], closed=at[110], how="picked",
+                   text="Checkout totals reuse the cart's rounding helper (H2.1)"),
+              dict(id="H3.1", source="Day 03 Notes", to=[], opened=at[109], closed=None, how=None,
+                   text="Ask the shop owner about gift cards (H3.1)")]
+    for h in ledger:
+        h.update(opened_pr=rows[h["opened"]]["pr"], closed_pr=None if h["closed"] is None else rows[h["closed"]]["pr"])
+    columns, built = [], 0
+    written = sum(len(ids.get(d, [])) for d in DAYS if d not in SHIPPED)
+    for i, r in enumerate(rows):
+        got = ids.get(r["day"], []) if r["kind"] == "code" else []
+        built += len(got)
+        written += len(ids.get(r["day"], [])) if r["kind"] == "spec" else 0
+        still = [h for h in ledger if h["opened"] <= i and (h["closed"] is None or h["closed"] > i)]
+        columns.append(dict(pr=r["pr"], built=built, got=got, written=written, open=len(still),
+                            open_numbered=sum(bool(h["id"]) for h in still),
+                            opened=sum(h["opened"] == i for h in ledger), closed=sum(h["closed"] == i for h in ledger)))
+    return dict(columns=columns, hand_offs=ledger, pending=dict(day=6, tracks=[], at_close=[]),
+                built=built, written=written)
 
 
 def clock(rows):
@@ -308,6 +341,7 @@ def demo():
                         text="Ask the shop owner about gift cards (H3.1)"),
                    dict(to=6, source="src/receipts/views.py:12", picked=False,
                         text="Receipts are numbered per shop, not per customer")],
+        look_ahead=look_ahead(rows, index),
         criteria_index=index, attention=attention,
         test_inventory=dict(total=46, unreadable=[], groups=[
             dict(key="driver", label="Driver behaviour", when="Every push and pull request", files=4, tests=30),
