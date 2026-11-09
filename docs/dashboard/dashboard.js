@@ -739,7 +739,7 @@ function draw(M, DATA) {
       put("g9-plot", h("div", { class: "clock" },
         h("div", { class: "lane head" }, h("div", { class: "lane-name" }, m.zone), h("div", { class: "lane-bars" }, m.hours.map(x => h("span", { class: "hour", style: `left:${x.x.toFixed(2)}%` }, x.t)))),
         d.lanes.map(l => h("div", { class: "lane" }, h("div", { class: "lane-name" }, h("strong", null, l.name), h("span", null, l.sub)),
-          h("div", { class: "lane-bars" }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%` }), b), b.days)))))));
+          h("div", { class: "lane-bars" }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `lane-bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%` }), b), b.days)))))));
       table("g9-table", d.table);
       mark.base(d.read);
       relight();
