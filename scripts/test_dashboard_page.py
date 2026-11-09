@@ -370,8 +370,10 @@ class PageFilesTest(unittest.TestCase):
         script = read("dashboard.js")
         how, page = script.index("/* ---------- how this works"), script.index("/* ---------- the page")
         self.assertLess(how, page)
-        # Only the walk-through builds HTML, from excerpts it passes through esc().
-        self.assertNotIn("innerHTML", script[:how] + script[page:])
+        # Only the walk-through builds HTML, from excerpts it passes through esc(). (The failure names the
+        # lines, not the script: a break's report goes in a pull request whole.)
+        outside = script[:how] + script[page:]
+        self.assertEqual([line.strip()[:60] for line in outside.splitlines() if "innerHTML" in line], [])
         self.assertIn("innerHTML", script[how:page])
 
     def test_every_colour_has_a_dark_value_and_both_dark_scopes_agree(self):
