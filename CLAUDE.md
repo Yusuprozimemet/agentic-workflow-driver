@@ -224,6 +224,11 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   session (a scratch virtualenv in the kit's workflow comparison). Leave a scratch directory in
   the session's scratchpad, remove it with `python -c "import shutil; shutil.rmtree('<dir>')"`,
   or let the build's `clean` delete old reports.
+- A project started from the kit inherits the kit's `docs/dashboard/token-usage.json`, and
+  `token-usage.py` never lowers a row: the kit's six dates stayed on graph 8 as $151.56 of
+  "set-up" until they were deleted by hand. Start that file empty, here and in the kit.
+- The dashboard's dollars are API list prices, not a bill, and its sessions are this repository's
+  only. On the page, "Day" is the plan's step and "date" the calendar's: keep the capital.
 
 What a session learns goes here, not into the next session's prompt: every session reads this
 file. None of this project's own yet.

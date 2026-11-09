@@ -231,7 +231,7 @@ def yardsticks():
     return dict(days=[1, 2, 3, 4, 5], problems=[], rows=[
         row("cost", "Cost of each merged pull request, main sessions", "$", 2, 1.5, [1.2, 1.8, 1.4, 1.65, 1.3]),
         row("replies", "Replies for each merged pull request, main sessions", "", 1, 30.0, [24.5, 33.0, 28.0, 31.5, 26.0]),
-        row("escapes", "Defects that escaped from an earlier day", "", 0, None, [0, 1, 0, 0, 0]),
+        row("escapes", "Defects that escaped from an earlier Day", "", 0, None, [0, 1, 0, 0, 0]),
         row("parks", "Times the driver stopped for a person", "", 0, None, [None] * 5),
         row("refusals", "Calls the hooks refused", "", 0, None, [0, 0, 2, 1, 2])])
 
