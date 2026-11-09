@@ -228,7 +228,7 @@ def steps(args, home, project, read_facts, config):
     line = livecheck.refusal(args.state, args.claude)
     if line:
         return once.refuse([line])
-    record, count, open_list = None, 0, []
+    record, count, open_list, shown = None, 0, [], None
 
     def end(line, code):
         once.say(line, code)
@@ -247,6 +247,17 @@ def steps(args, home, project, read_facts, config):
                 return end("\n".join(lines), 2)
         step = once.ready(args, project, read_facts, drift)
         open_list = step.open_list
+        if step.kind == "running":
+            # Row 2: said once. Each poll reads the table again; row 1 or the row below ends it.
+            if step.line != shown:
+                once.say(step.line, step.code)
+            shown = step.line
+            sleep(args.poll)
+            if record is None:  # with a record, the top of the loop reads the kit
+                lines, drift = kit_lines(project)
+                if lines:
+                    return once.refuse(lines)
+            continue
         if step.kind in ("park", "end"):
             if record is None:
                 return once.stopped(args, project, step)
