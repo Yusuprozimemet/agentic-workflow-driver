@@ -338,15 +338,28 @@ class ProofKindsTest(unittest.TestCase):
         )
 
 
-class ProofKindsPanelTest(unittest.TestCase):
-    """The page has the proof-kinds chart, drawn on every redraw, not recorded apart from unproved."""
+class ProofKindsColumnTest(unittest.TestCase):
+    """The proof kinds are a column of the evidence checklist, not a chart of their own: every kind
+    is named, strongest first, and not recorded stays apart from unproved."""
 
-    def test_panel_on_the_page_and_drawn(self):
+    def test_the_checklist_names_every_kind_and_the_chart_is_gone(self):
         page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
         script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
-        self.assertIn('<div id="proof-kinds"></div>', page)
-        self.assertIn('panel("proof-kinds", drawProofKinds)', script)
-        self.assertIn('seg(d.proof.not_recorded, { fill: "none"', script)
+        self.assertNotIn("proof-kinds", page + script)
+        self.assertNotIn("drawProofKinds", script)
+        kinds = script[script.index("const PROOF_WORDS = ") :]
+        kinds = kinds[: kinds.index(";\n")]
+        self.assertEqual(
+            [
+                k
+                for k in ("test", "command", "break", "reader", "unproved", "not_recorded")
+                if f'["{k}", ' in kinds
+            ],
+            ["test", "command", "break", "reader", "unproved", "not_recorded"],
+        )
+        self.assertLess(kinds.index('["unproved", '), kinds.index('["not_recorded", '))
+        self.assertIn("<th>Strongest evidence<small>on record</small></th>", script)
+        self.assertIn("“Strongest evidence” is the same report, by day", page)
 
 
 RELABEL_FULL = {"stage": [7, 15], "cause": [13, 15], "made": [14, 15]}

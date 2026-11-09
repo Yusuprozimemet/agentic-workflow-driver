@@ -15,8 +15,8 @@
   --gap: #0e1116;
   --ooo: #8a4fd6;
   --away: #b8862b; --closer: #3b5fc7;
-  /* Proof kinds, strongest to weakest: one blue ramp, dark to light (steps 700, 550, 400, 250). */
-  --p-test: #0d366b; --p-command: #1c5cab; --p-break: #3987e5; --p-reader: #86b6ef;
+  /* The second reader's table: a cell darkens towards this as more labels differ. Not a promise state, so not one of its colours. */
+  --heat: #6250d6;
   /* Causes of a defect: validated on both surfaces (dataviz validate_palette.js); other is the neutral. */
   --c-spec: #1baf7a; --c-implementation: #6250d6; --c-process: #e87ba4; --c-environment: #2a78d6; --c-other: #858c98;
   /* Replay states: one set, validated all-pairs on both surfaces (dataviz validate_palette.js). */
@@ -40,7 +40,7 @@
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --m-haiku-prev: #8f3a17; --w-context: #d4a02a; --fail: #e5534b;
     --away: #b98a34; --closer: #6a82dc;
     --c-spec: #199e70; --c-implementation: #9085e9; --c-process: #d55181; --c-environment: #3987e5; --c-other: #6c7380;
-    --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
+    --heat: #9085e9;
     --s-proven: #199e70; --s-passes: #3987e5; --s-repair: #c98500; --s-broken: #d03b3b;
   }
 }
@@ -53,7 +53,7 @@
     --m-opus: #3987e5; --m-opus-prev: #2b5a93; --m-sonnet: #199e70; --m-haiku: #d95926; --m-haiku-prev: #8f3a17; --w-context: #d4a02a; --fail: #e5534b;
   --away: #b98a34; --closer: #6a82dc;
   --c-spec: #199e70; --c-implementation: #9085e9; --c-process: #d55181; --c-environment: #3987e5; --c-other: #6c7380;
-  --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
+  --heat: #9085e9;
   --s-proven: #199e70; --s-passes: #3987e5; --s-repair: #c98500; --s-broken: #d03b3b;
 }
 * { box-sizing: border-box; }
@@ -280,7 +280,7 @@ tr.sel td { background: var(--surface-2); }
 
 /* A count out of a total, as a short bar before the figure. */
 .meter { display: inline-block; width: 48px; height: 6px; margin-right: 8px; border-radius: 3px; background: var(--grid); overflow: hidden; vertical-align: middle; }
-.meter i { display: block; height: 100%; background: var(--close); }
+.meter i { display: block; height: 100%; background: var(--ink-2); }
 
 #attention-list { display: grid; gap: 6px; }
 #attention-list button { text-align: left; font: inherit; color: var(--ink); background: var(--surface-2); border: 1px solid var(--grid); border-radius: 6px; padding: 9px; cursor: pointer; overflow-wrap: anywhere; }
@@ -411,8 +411,6 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
   .promise-day .promise-age em { display: inline; }
   .promise-day .promise-age em::before { content: " · "; }
   .promise-bar em { display: none; }
-  .trust-history { min-width: 800px; }
-  .trust-history text { font-size: 14px; }
   .fact { grid-template-columns: minmax(0, 1fr); }
   .measure > summary { grid-template-columns: minmax(0, 1fr); }
   .promise-items, .facts, .tech { margin-left: 0; padding-left: 0; }
@@ -482,20 +480,19 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
 .mini-tiles { display: flex; flex-wrap: wrap; gap: 2px; min-width: 0; }
 .mini-tile { display: inline-block; flex: none; width: 9px; height: 9px; border-radius: 2px; }
 .legend i.mini-tile { width: 9px; height: 9px; border-radius: 2px; }
-.agree { background: var(--ink-2); }
-.differ { box-shadow: inset 0 0 0 1.5px var(--muted); }
 .not-measured { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12.5px; font-style: italic; color: var(--ink-2); background: repeating-linear-gradient(45deg, var(--grid) 0 2px, transparent 2px 6px); }
 details.exact, details.counted { margin-top: 12px; }
 details.exact > summary, details.counted > summary { color: var(--ink-2); font-size: 13.5px; font-weight: 500; }
 details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
-/* Plot 7, the second reader. */
-.reader-axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 18px 32px; margin-top: 12px; }
-.reader-axes h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
-.reader-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 13px; }
-.reader-total b { font-weight: 600; }
-.reader-row { display: grid; grid-template-columns: 50px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 3px 0; font-size: 13px; color: var(--ink-2); }
-.reader-row .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.reader-row .not-measured { grid-column: 2 / -1; justify-self: start; }
+/* Plot 7, the second reader: a cell darkens with the share of its labels that differed. */
+.reader-heat { min-width: 520px; margin-top: 0; table-layout: fixed; font-size: 14px; }
+.reader-heat th, .reader-heat td { padding: 3px 6px 3px 0; border: 0; font-weight: 400; vertical-align: middle; }
+.reader-heat tr > :first-child { width: 5.5rem; color: var(--ink-2); }
+.reader-heat thead th { padding-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); vertical-align: bottom; line-height: 1.3; white-space: normal; }
+.reader-heat thead b { display: block; font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--ink); }
+.reader-heat thead small { display: block; font-weight: 400; color: var(--muted); }
+.reader-cell { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; background: color-mix(in oklab, var(--heat) calc(var(--d) * 1%), var(--surface-2)); }
+.legend i.reader-ramp { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--surface-2), color-mix(in oklab, var(--heat) 70%, var(--surface-2))); box-shadow: inset 0 0 0 1px var(--ring); }
 
 /* The plots: two beside each other on a wide screen, one column on a phone. */
 /* Two related views: stacked as if the wrapper were not there, and side by side above 1440px. */
@@ -526,8 +523,16 @@ details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
 .plot-quiet { font-size: 13px; color: var(--muted); }
 .plot-bad { font-size: 13px; font-weight: 600; color: var(--r-broken); }
 .plot .stack, .plot-row .stack { height: 16px; }
+/* A plot drawn as SVG scrolls sideways inside its panel below this width, so its text stays readable. */
+.svg-plot { min-width: 600px; }
+.svg-plot text { font-size: 12px; fill: var(--ink-2); }
+.svg-plot text.strong { fill: var(--ink); font-weight: 600; }
+.svg-plot text.none { font-style: italic; }
+.svg-plot .trend { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linejoin: round; }
+.svg-plot .pt { fill: var(--ink-2); stroke: var(--surface); stroke-width: 2; }
+/* After the rules above, or they would win: on a phone the plot is wider and its text larger. */
+@media (max-width: 620px) { .svg-plot { min-width: 800px; } .svg-plot text { font-size: 15px; } }
 /* Is trust growing? The promise states as stepped areas; the hatch is the one the "not checked here" tile wears. */
-.trust-history { min-width: 600px; }
 .trust-history .area { stroke: var(--surface); stroke-width: 2; }
 .trust-history .s-proven { fill: var(--s-proven); }
 .trust-history .s-unproven { fill: var(--s-passes); }
@@ -537,8 +542,6 @@ details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
 .trust-history .s-broken { fill: var(--s-broken); }
 .trust-history .hatch-ground { fill: var(--surface); }
 .trust-history .hatch-line { fill: var(--muted); }
-.trust-history text { font-size: 12px; fill: var(--ink-2); }
-.trust-history text.strong { fill: var(--ink); font-weight: 600; }
 .plot-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) minmax(3.2rem, max-content); gap: 10px; align-items: center; margin: 4px 0; }
 .plot-name { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
 .plot-bar { min-width: 0; display: block; }
@@ -548,42 +551,47 @@ details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
 .n-strong { background: var(--ink-2); }
 .n-mid { background: var(--muted); }
 .n-hollow { box-shadow: inset 0 0 0 1.5px var(--muted); }
-.ci-failed { background: var(--r-weak); }
-.plot-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-.plot-stats div { display: grid; gap: 2px; }
-.plot-stats b { font-size: 20px; color: var(--ink); }
-.plot-stats span { font-size: 13px; color: var(--ink-2); }
-/* Plot 4. */
-.ev-row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 20rem); gap: 10px; align-items: center; padding: 4px 0; }
-@media (max-width: 760px) { .ev-row { grid-template-columns: minmax(0, 1fr); gap: 3px; } }
-.ev-tiles { display: flex; flex-wrap: wrap; gap: 3px; }
-.ev-tile { display: inline-block; flex: none; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 3px; background: none; }
-button.ev-tile { cursor: pointer; }
-button.ev-tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
-.ev-tile.rec-yes { background: var(--p-break); }
-.ev-tile.rec-no { box-shadow: inset 0 0 0 2px var(--p-break); }
-.ev-tile.rec-none { background: repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px); }
-#plot-evidence .inline-detail { margin: 4px 0 10px; }
-/* Plot 6. */
-.dot-track { position: relative; display: block; height: 42px; border-bottom: 1px solid var(--grid); }
-.pr-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transform: translate(-50%, -50%); }
-.pr-dot.failed { background: var(--r-weak); border-radius: 1px; transform: translate(-50%, -50%) rotate(45deg); }
-a.pr-dot::after { content: ""; position: absolute; inset: -5px; }
-a.pr-dot:focus-visible { outline: 2px solid var(--ink); }
-.pr-dot.key { position: static; display: inline-block; transform: none; }
-.pr-dot.failed.key { transform: rotate(45deg); }
-.pr-median { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); transform: translateX(-1px); }
-.pr-median.key { position: static; display: inline-block; width: 2px; height: 12px; transform: none; }
-.dot-axis { position: relative; display: block; height: 16px; font-size: 11px; color: var(--muted); }
-.dot-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-.dot-axis span:last-child { transform: translateX(-100%); }
-/* Plot 8. */
-.chain { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 8px 0; }
-.chain-day { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 6px; background: var(--surface-2); }
-.chain-day small { font-size: 11px; color: var(--muted); }
-.chain-id { font-size: 12px; padding: 1px 5px; border-radius: 3px; background: var(--ink-2); color: var(--surface); }
-.chain-id.same-day { background: none; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--muted); }
-.chain-arrow { align-self: center; color: var(--muted); }
+.ci-failed { background: var(--ink-2); }
+/* Plot 3: a bar, its count and when the group runs; only by hand is marked. */
+.inv-row { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: 4px 14px; align-items: center; padding: 5px 0; }
+.inv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.inv-bar i { flex: none; height: 14px; min-width: 3px; border-radius: 0 4px 4px 0; background: var(--ink-2); }
+.inv-bar b { font-size: 13px; font-weight: 600; }
+.when { padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+.when.by-hand { background: none; box-shadow: inset 0 0 0 1.5px var(--ink); color: var(--ink); }
+@media (max-width: 620px) { .inv-row { grid-template-columns: minmax(0, 1fr); } }
+/* Plot 4, the evidence checklist: a whole cell is quiet, a gap draws a meter. */
+.checklist { min-width: 800px; margin-top: 0; font-size: 14px; }
+.checklist th, .checklist td { padding: 9px 12px 9px 0; border-bottom: 0; border-top: 1px solid var(--grid); vertical-align: middle; }
+.checklist thead th { border-top: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); vertical-align: bottom; line-height: 1.3; }
+.checklist small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.checklist tbody th { min-width: 11rem; font-weight: 600; white-space: normal; }
+.whole { color: var(--ink-2); white-space: nowrap; }
+.whole::before { content: "\2713\00a0"; font-weight: 700; }
+.part { display: inline-grid; grid-template-columns: 84px auto; gap: 8px; align-items: center; font-weight: 600; white-space: nowrap; }
+.gap-meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+.gap-meter i { display: block; height: 100%; border-radius: 4px; background: var(--ink-2); }
+.checklist tr.total > * { border-top: 2px solid var(--axis); font-weight: 600; }
+/* Plot 6, the swarm: grey marks, a dark diamond where CI failed first, a dark line at the median. */
+.swarm .pr { fill: var(--muted); }
+.swarm .pr.failed { fill: var(--ink); }
+.swarm .median { stroke: var(--ink); stroke-width: 2; }
+.swarm a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.legend i.key-pr { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.legend i.key-failed { width: 8px; height: 8px; border-radius: 1px; background: var(--ink); transform: rotate(45deg); }
+.legend i.key-median { width: 2px; height: 13px; border-radius: 0; background: var(--ink); }
+/* Plot 8: one lane per problem across the days; a dot holds how many times it was recorded that day. */
+.lanes { display: grid; gap: 2px; min-width: calc(9.5rem + var(--n) * 3.5rem); }
+.lane { display: grid; grid-template-columns: 9.5rem repeat(var(--n), minmax(0, 1fr)); align-items: center; padding: 7px 0; border-top: 1px solid var(--grid); }
+.lane.head { padding: 0 0 4px; border-top: 0; font-size: 12px; font-weight: 600; color: var(--ink-2); text-align: center; }
+.lane.head span:first-child { text-align: left; }
+.lane-name { grid-row: 1; grid-column: 1; font-size: 13px; }
+.lane-name small { display: block; font-family: var(--body); font-size: 12px; color: var(--muted); }
+.lane-day { grid-row: 1; display: grid; place-items: center; position: relative; z-index: 1; }
+.lane-dot, .legend i.lane-dot { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink-2); color: var(--surface); font-size: 13px; font-weight: 600; font-style: normal; box-shadow: 0 0 0 2px var(--surface); }
+.lane-dot.first, .legend i.lane-dot.first { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink-2), 0 0 0 2px var(--surface); }
+.legend i.lane-dot { width: 16px; height: 16px; }
+.lane-line { grid-row: 1; align-self: center; height: 2px; margin-inline: calc(50% / var(--span)); background: var(--ink-2); }
 /* Plot 12: the line stretches with the box, the dots and labels are HTML so they keep their size. */
 .mini-line { position: relative; height: 110px; margin: 22px 26px 0; border-bottom: 1px solid var(--grid); }
 .mini-line svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
@@ -593,19 +601,12 @@ a.pr-dot:focus-visible { outline: 2px solid var(--ink); }
 .mini-axis { position: relative; height: 16px; margin: 4px 26px 0; font-size: 11px; color: var(--muted); }
 .mini-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 #plot-gates h4 { margin: 12px 0 2px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
-/* .legend i draws a dash: the plots' key marks keep their own shape. */
-.legend i.ev-tile { width: 14px; height: 14px; border-radius: 3px; }
-.legend i.pr-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend i.pr-dot.failed { border-radius: 1px; }
-.legend i.pr-median { width: 2px; height: 12px; border-radius: 0; }
 /* An SVG's text shrinks with it, so at phone width Output by date keeps fewer, larger labels. */
 @media (max-width: 620px) {
   #token-bars svg text { font-size: 32px; }
   #token-bars .tk-date { transform: translateY(14px); }
   #token-bars .tk-skip, #token-bars .tk-ctx { display: none; }
 }
-.ev-head { font-size: 12.5px; font-weight: 500; color: var(--muted); }
-@media (max-width: 760px) { .ev-head { display: none; } }
 
 /* The ladder: a staircase where its box is wide enough, rows that step to the right on a phone. */
 #plot-ladder { container-type: inline-size; display: grid; gap: 10px; }

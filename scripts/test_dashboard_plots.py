@@ -161,13 +161,33 @@ class TestGroupsPlotTest(unittest.TestCase):
         ],
     )
 
-    def test_one_plain_bar_per_group_coloured_by_when_it_runs(self):
+    def test_one_bar_per_group_with_its_count_and_when_it_runs(self):
         box = draw(test_inventory=self.INVENTORY)["plot-groups"]
-        self.assertEqual(widths(box), ["100", "20"])
-        self.assertIn('<i class="n-strong"', box)
-        self.assertIn('<i class="n-hollow"', box)
-        self.assertIn("<b>By hand only</b>", box)
+        rows = re.findall(
+            r'<div class="inv-row"><span class="plot-name">(.*?)</span><span class="inv-bar">'
+            r'<i [^>]*style="width:([\d.]+)%"></i><b class="num">(\d+)</b>'
+            r'<span class="(when[^"]*)">(.*?)</span>',
+            box,
+        )
+        self.assertEqual(
+            rows,
+            [
+                ("Driver", "62", "100", "when", "Every push and pull request"),
+                ("Live", "12.4", "20", "when by-hand", "By hand only"),
+            ],
+        )
         self.assertNotIn("skipped in CI", re.sub(r'(title|aria-label)="[^"]*"', "", box))
+
+    def test_the_headline_counts_the_tests_no_person_has_to_run(self):
+        box = draw(test_inventory=self.INVENTORY)["plot-groups"]
+        self.assertIn(
+            '<b class="num">100 of 120</b> tests run without a person; 20 are run by hand</p>', box
+        )
+        no_hand = dict(self.INVENTORY, groups=self.INVENTORY["groups"][:1])
+        self.assertIn(
+            '<b class="num">100 of 100</b> tests run without a person</p>',
+            draw(test_inventory=no_hand)["plot-groups"],
+        )
 
     def test_no_inventory_is_not_measured(self):
         self.assertIn(NONE, draw(test_inventory=None)["plot-groups"])
@@ -227,18 +247,51 @@ def report(*days):
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
 class EvidencePlotTest(unittest.TestCase):
-    def rows(self, box):
-        return re.findall(
-            r'<div class="ev-row"><span class="plot-name">(.*?)</span>.*?<span class="ev-status">(.*?)</span></div>',
+    PROOF = dict(test=3, command=1, reader=0, unproved=0, not_recorded=0, **{"break": 0})
+
+    def cells(self, box):
+        """The checklist's rows, each a list of its cells' HTML."""
+        return [
+            re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", row)
+            for row in re.findall(r"<tr[^>]*>(.*?)</tr>", box)
+        ]
+
+    def table(self, box):
+        """The same rows with the tags dropped: what each cell says."""
+        return [[re.sub(r"<[^>]+>", "", c) for c in row] for row in self.cells(box)]
+
+    def test_one_row_per_finished_day_one_column_per_fact_and_a_row_that_adds_them_up(self):
+        box = draw(
+            days=[evidence_day(1), evidence_day(2, False)],
+            order=[1, 2],
+            evidence_checks=report(report_day(1), report_day(2)),
+        )["plot-evidence"]
+        head, one, two, total = self.table(box)
+        self.assertEqual(
+            head,
+            [
+                "Day",
+                "Cites its pull request",
+                "Names a test",
+                "Failure recordedwhen it was built",
+                "Strongest evidenceon record",
+                "Replays today",
+            ],
+        )
+        self.assertTrue(one[0].startswith("Day 01"), one[0])
+        self.assertEqual(one[1:4], ["1 of 2", "all 2", "1 of 2"])
+        self.assertEqual(two[1:4], ["1 of 2", "all 2", "0 of 2"])
+        self.assertEqual(total[:4], ["All finished days", "2 of 4", "all 4", "1 of 4"])
+        self.assertEqual(total[5], "2 of 2 days")
+
+    def test_a_whole_cell_is_quiet_and_a_gap_draws_a_meter(self):
+        box = draw(days=[evidence_day(1)], order=[1])["plot-evidence"]
+        self.assertIn('<td><span class="whole num">all 2</span></td>', box)
+        self.assertIn(
+            '<span class="gap-meter" role="img" aria-label="1 of 2"><i style="width:50%"></i></span>1 of 2',
             box,
         )
-
-    def test_a_tile_per_ticked_promise_that_opens_its_detail(self):
-        box = draw(days=[evidence_day(1)], order=[1], evidence_checks=report(report_day(1)))[
-            "plot-evidence"
-        ]
-        self.assertIn('<button type="button" class="ev-tile rec-yes" data-id="C01.1"', box)
-        self.assertIn('<button type="button" class="ev-tile rec-no" data-id="C01.2"', box)
+        self.assertNotIn("<button", box)
 
     def test_replay_is_quiet_unless_it_failed_or_is_stale(self):
         days = [evidence_day(n) for n in (1, 2, 3, 4)]
@@ -249,15 +302,19 @@ class EvidencePlotTest(unittest.TestCase):
                 report_day(1), report_day(2, failed=2), report_day(3, state="stale")
             ),
         )["plot-evidence"]
-        status = [s for _, s in self.rows(box)]
-        self.assertIn(
-            "3 named tests found; 0 Verify commands and 0 breaks re-run; none failed", status[0]
+        status = [row[-1] for row in self.cells(box)[1:]]
+        self.assertEqual(
+            status[0],
+            '<span class="whole" title="3 named tests found; 0 Verify commands and 0 breaks re-run">none failed</span>',
         )
-        self.assertIn('class="plot-bad">2 failed', status[1])
+        self.assertIn('class="plot-bad"', status[1])
+        self.assertIn(">2 failed<", status[1])
         self.assertIn('class="plot-bad"', status[2])
         self.assertIn("stale", status[2])
         self.assertIn(NONE, status[3])
         self.assertIn("not checked", status[3])
+        self.assertIn('aria-label="1 of 4"', status[4])
+        self.assertIn("1 of 4 days", status[4])
 
     def counted_day(self):
         n = lambda p: dict(passed=p, failed=0, error=0, not_applicable=0)  # noqa: E731
@@ -275,7 +332,9 @@ class EvidencePlotTest(unittest.TestCase):
         box = draw(days=[evidence_day(1)], order=[1], evidence_checks=self.counted_day())[
             "plot-evidence"
         ]
-        self.assertIn("3 named tests found; 2 Verify commands and 1 break re-run; none failed", box)
+        self.assertIn(
+            'title="3 named tests found; 2 Verify commands and 1 break re-run">none failed', box
+        )
 
     def test_the_collapsed_column_says_found_only_for_named_tests(self):
         box = draw(days=[evidence_day(1)], order=[1], evidence_checks=self.counted_day())[
@@ -290,21 +349,36 @@ class EvidencePlotTest(unittest.TestCase):
         box = draw(days=[evidence_day(1)], order=[1], evidence_checks=dict(state="absent"))[
             "plot-evidence"
         ]
-        self.assertIn("no report", box)
+        day, total = self.table(box)[1:]
+        self.assertEqual((day[4], day[5]), ("no report", "no report"))
+        self.assertEqual((total[4], total[5]), ("no report", "no report"))
         self.assertNotIn("none failed", box)
+        self.assertNotIn('class="whole">', box)
 
-    def test_a_day_before_the_format_is_not_measured(self):
-        day = evidence_day(1, False, break_format=False)
-        box = draw(days=[day], order=[1])["plot-evidence"]
-        self.assertIn("ev-tile rec-none", box.split("</div>", 1)[1])
-        self.assertNotIn('ev-tile rec-no"', box.split("</div>", 1)[1])
+    def test_a_day_written_before_a_fact_was_asked_for_is_not_measured_and_not_added_up(self):
+        days = [evidence_day(1, False, break_format=False, evidence_format=False), evidence_day(2)]
+        old, new, total = self.table(draw(days=days, order=[1, 2])["plot-evidence"])[1:]
+        self.assertEqual(old[1:4], ["not measured"] * 3)
+        self.assertEqual(new[1:4], ["1 of 2", "all 2", "1 of 2"])
+        self.assertEqual(total[1:4], ["1 of 2", "all 2", "1 of 2"])
 
-    def test_the_headline_counts_only_days_asked_for_that_evidence(self):
-        old = evidence_day(1, evidence_format=False)
-        panels = draw(days=[old, evidence_day(2)], order=[1, 2])
-        self.assertIn('<b class="num">1 of 2</b><span>promises cite', panels["evidence-headline"])
-        self.assertIn(
-            '<b class="num">2 of 4</b><span>named tests are still', panels["evidence-headline"]
+    def test_strongest_evidence_is_the_reports_count_of_each_kind(self):
+        gap = dict(self.PROOF, test=1, command=0, unproved=1)
+        box = draw(
+            days=[evidence_day(n) for n in (1, 2, 3)],
+            order=[1, 2, 3],
+            evidence_checks=report(
+                dict(report_day(1), proof=self.PROOF), dict(report_day(2), proof=gap), report_day(3)
+            ),
+        )["plot-evidence"]
+        self.assertEqual(
+            [row[4] for row in self.table(box)[1:]],
+            [
+                "3 tests · 1 command",
+                "1 test · 1 with nothing on record",
+                "not checked",
+                "4 tests · 1 command · 1 with nothing on record",
+            ],
         )
 
     def test_skipped_live_tests_are_one_line(self):
@@ -312,7 +386,48 @@ class EvidencePlotTest(unittest.TestCase):
         self.assertEqual(skip, "1 live test needs real Claude; CI skips them, run by hand.")
 
     def test_no_finished_day_is_not_measured(self):
-        self.assertIn(NONE, draw()["plot-evidence"])
+        panels = draw()
+        self.assertIn(NONE, panels["plot-evidence"])
+        self.assertIn(NONE, panels["plot-recorded"])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class RecordedLinePlotTest(unittest.TestCase):
+    """The line over the checklist: the share of a day's ticked promises with a failure recorded when built."""
+
+    def line(self, *days):
+        box = draw(days=list(days), order=[d["day"] for d in days])["plot-recorded"]
+        runs = [
+            [tuple(map(float, p.split(","))) for p in points.split()]
+            for points in re.findall(r'<polyline points="([^"]+)" class="trend">', box)
+        ]
+        return box, runs
+
+    def test_a_point_per_day_at_its_share_with_the_count_written_on_it(self):
+        box, runs = self.line(evidence_day(1), evidence_day(2, False), evidence_day(3))
+        self.assertEqual(
+            re.findall(r'class="strong num">([^<]+)</text>', box), ["1 of 2", "0 of 2", "1 of 2"]
+        )
+        self.assertEqual(len(runs), 1)
+        (x1, half), (x2, zero), (x3, again) = runs[0]
+        self.assertEqual(half, again)
+        self.assertGreater(zero, half)  # lower on the page
+        self.assertAlmostEqual(x2 - x1, x3 - x2, delta=0.2)
+        self.assertEqual(re.findall(r'class="num">(Day \d+)</text>', box), ["Day 01", "Day 02", "Day 03"])
+
+    def test_a_day_that_was_not_asked_for_it_breaks_the_line_and_is_not_a_zero(self):
+        days = [evidence_day(n) for n in (1, 2, 3, 4)]
+        days[1] = evidence_day(2, False, break_format=False)
+        box, runs = self.line(*days)
+        self.assertEqual([len(r) for r in runs], [2])
+        self.assertEqual(box.count("<circle"), 3)
+        self.assertEqual(re.findall(r'class="none">([^<]+)</text>', box), ["not measured"])
+        self.assertNotIn("0 of 2", box.split("</svg>")[0].split('">', 1)[1])
+
+    def test_no_day_asked_for_it_is_not_measured(self):
+        box, runs = self.line(evidence_day(1, False, break_format=False))
+        self.assertIn(NONE, box)
+        self.assertEqual(runs, [])
 
 
 def pr(number, hours=None, failed_in=(), step="code", url=None):
@@ -344,6 +459,7 @@ class CiPlotTest(unittest.TestCase):
         )["plot-ci"]
         self.assertEqual(re.findall(r'plot-name">([^<]+)<', box), ["Checks", "Tests"])
         self.assertEqual(widths(box), ["100", "50"])
+        self.assertEqual(box.count('<i class="ci-failed"'), 2)
 
     def test_says_so_when_the_bars_add_up_to_more_than_the_prs(self):
         box = draw(verification=[pr(1, failed_in=["Tests", "Checks"])])["plot-ci"]
@@ -364,30 +480,55 @@ class OpenTimesPlotTest(unittest.TestCase):
         pr(3, 100 / 60, step="spec"),
     ]
 
-    def test_dots_sit_on_a_log_axis_labelled_in_minutes(self):
-        box = draw(verification=self.PRS)["plot-open"]
-        at = {
-            int(n): round(float(x))
-            for x, n in re.findall(r'left:([\d.]+)%;top:\d+px"[^>]*title="#(\d+)', box)
-        }
-        self.assertEqual(at, {1: 0, 2: 50, 3: 100})
-        self.assertEqual(
-            re.findall(r'<span style="left:[\d.]+%">([\d,.]+)</span>', box), ["1", "10", "100"]
+    def marks(self, box):
+        """Where each pull request's mark sits: a circle's centre, or the centre a diamond is turned about."""
+        found = re.findall(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="4" class="pr"><title>#(\d+)', box)
+        found += re.findall(
+            r'transform="rotate\(45 ([\d.]+) ([\d.]+)\)" class="pr failed"><title>#(\d+)', box
         )
-        self.assertIn(">minutes<", box)
+        return {int(n): (float(x), float(y)) for x, y, n in found}
 
-    def test_a_dot_links_to_its_pr_and_one_with_no_link_is_still_drawn(self):
+    def test_marks_sit_on_a_log_axis_labelled_in_minutes_and_hours(self):
         box = draw(verification=self.PRS)["plot-open"]
-        self.assertRegex(box, r'<a class="pr-dot"[^>]*href="https://x/1"')
-        self.assertRegex(box, r'<i class="pr-dot failed"[^>]*title="#2')
+        at = self.marks(box)
+        self.assertEqual(sorted(at), [1, 2, 3])
+        self.assertAlmostEqual(at[2][0] - at[1][0], at[3][0] - at[2][0], delta=0.3)
+        self.assertGreater(at[2][0], at[1][0])
+        self.assertEqual(
+            re.findall(r'class="num tick">([^<]+)</text>', box),
+            ["1 min", "5 min", "10 min", "30 min", "1 h", "2 h"],
+        )
+
+    def test_marks_at_the_same_time_do_not_cover_each_other(self):
+        at = self.marks(draw(verification=[pr(n, 3 / 60) for n in range(1, 13)])["plot-open"])
+        self.assertEqual(len(at), 12)
+        self.assertEqual(len({x for x, _ in at.values()}), 1)
+        gaps = [
+            ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+            for i, a in at.items()
+            for j, b in at.items()
+            if i < j
+        ]
+        self.assertGreaterEqual(min(gaps), 9.4)
+
+    def test_a_mark_links_to_its_pr_and_one_with_no_link_is_still_drawn(self):
+        box = draw(verification=self.PRS)["plot-open"]
+        self.assertRegex(box, r'<a href="https://x/1" aria-label="#1 · 1 min"><circle')
+        self.assertEqual(box.count("<a "), 1)
+        self.assertRegex(box, r'class="pr failed"><title>#2 · 10 min · CI failed on it first</title>')
 
     def test_the_median_is_marked_per_step_and_speed_is_never_green(self):
-        box = draw(verification=self.PRS)["plot-open"]
-        self.assertEqual(box.count('<i class="pr-median"'), 2)
-        self.assertNotRegex(box, r"--close|--r-holds|proven")
+        panels = draw(verification=self.PRS)
+        box = panels["plot-open"]
+        self.assertEqual(box.count('class="median"'), 2)
+        self.assertEqual(re.findall(r">(median [^<]+)</text>", box), ["median 1.7 h", "median 6 min"])
+        self.assertIn("CI failed on it first", panels["open-key"])
+        self.assertNotRegex(box + panels["open-key"], r"--close|--r-|--s-|proven")
 
     def test_no_times_is_not_measured(self):
-        self.assertIn(NONE, draw(verification=[pr(1)])["plot-open"])
+        panels = draw(verification=[pr(1)])
+        self.assertIn(NONE, panels["plot-open"])
+        self.assertEqual(panels["open-key"], "")
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
@@ -403,22 +544,45 @@ class RepeatsPlotTest(unittest.TestCase):
         ],
     )
 
-    def test_links_are_followed_to_one_family_per_problem(self):
+    def lanes(self):
         box = draw(defect_recurrence=self.REC)["plot-repeats"]
-        chains = re.findall(r'<div class="chain">(.*?)</div>', box)
+        return box, re.findall(r'<div class="lane">(.*?)</div>', box)
+
+    def test_links_are_followed_to_one_lane_per_problem(self):
+        box, lanes = self.lanes()
         self.assertEqual(
-            [re.findall(r">(D\d+\.\d+)<", c) for c in chains],
-            [["D01.1", "D02.1", "D03.1", "D03.2"], ["D05.1", "D05.2"]],
+            [re.findall(r'lane-name num">(D\d+\.\d+)<small>([^<]+)<', lane) for lane in lanes],
+            [[("D01.1", "4 records, 3 days")], [("D05.1", "2 records, one day")]],
+        )
+        self.assertEqual(
+            [re.findall(r'title="([^"]+)">(\d+)</i>', lane) for lane in lanes],
+            [[("D01.1", "1"), ("D02.1", "1"), ("D03.1, D03.2", "2")], [("D05.1, D05.2", "2")]],
         )
 
-    def test_same_day_repeats_are_told_apart(self):
-        box = draw(defect_recurrence=self.REC)["plot-repeats"]
-        self.assertIn(
-            "<b>4</b> problems repeated an earlier one: <b>2</b> on a later day, <b>2</b> the same day",
-            box,
-        )
+    def test_every_day_from_the_first_to_the_last_has_a_column(self):
+        box, lanes = self.lanes()
         self.assertEqual(
-            re.findall(r'chain-id same-day" title="(D\d+\.\d+) ', box), ["D03.2", "D05.2"]
+            re.findall(r"<span>(Day \d+)</span>", box), [f"Day 0{n}" for n in (1, 2, 3, 4, 5)]
+        )
+        self.assertIn('style="--n:5"', box)
+        # The first problem's line runs from Day 01 to Day 03; a problem seen on one day has none.
+        self.assertIn('<span class="lane-line" style="grid-column:2 / 5;--span:3"></span>', lanes[0])
+        self.assertNotIn("lane-line", lanes[1])
+        self.assertEqual(
+            re.findall(r'lane-day" style="grid-column:(\d)"><i', lanes[1]), ["6"]
+        )
+
+    def test_a_first_record_alone_on_its_day_is_drawn_hollow(self):
+        box, lanes = self.lanes()
+        self.assertEqual(lanes[0].count('class="lane-dot num first"'), 1)
+        self.assertRegex(lanes[0], r'class="lane-dot num first"[^>]*title="D01.1">1</i>')
+        self.assertNotIn("first", lanes[1])
+
+    def test_same_day_repeats_are_told_apart(self):
+        box, _ = self.lanes()
+        self.assertIn(
+            "<b>4 repeats</b> of <b>2 problems</b>: <b>2</b> on a later day, <b>2</b> within the same day",
+            box,
         )
 
     def test_no_repeats_and_no_data_are_different(self):
@@ -427,6 +591,59 @@ class RepeatsPlotTest(unittest.TestCase):
             draw(defect_recurrence=dict(with_id=1, problems=[], recurrences=[]))["plot-repeats"],
         )
         self.assertIn(NONE, draw(defect_recurrence=None)["plot-repeats"])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class ReaderTablePlotTest(unittest.TestCase):
+    """The second reader: a row per day, a column per question, a cell shaded by the share that differed."""
+
+    SOME = dict(stage=[7, 15], cause=[13, 15], made=[14, 15])
+    ALL = dict(stage=[5, 5], cause=[5, 5], made=[5, 5])
+
+    def box(self, *relabels):
+        days = [evidence_day(n + 1, relabel=r) for n, r in enumerate(relabels)]
+        return draw(days=days, order=[d["day"] for d in days])["relabel-plot"]
+
+    def test_a_cell_says_how_many_agreed_and_darkens_with_the_share_that_differed(self):
+        cells = re.findall(
+            r'<div class="reader-cell num" style="--d:(\d+)" title="([^"]+)"><span>([^<]+)</span><span>([^<]+)</span>',
+            self.box(self.SOME, self.ALL),
+        )
+        self.assertEqual(
+            cells[:3],
+            [
+                ("70", "8 of 15 labels differ", "7 of 15", "47%"),
+                ("19", "2 of 15 labels differ", "13 of 15", "87%"),
+                ("9", "1 of 15 labels differ", "14 of 15", "93%"),
+            ],
+        )
+        self.assertEqual(cells[3:], [("0", "0 of 5 labels differ", "5 of 5", "100%")] * 3)
+
+    def test_each_question_is_added_up_in_its_heading(self):
+        heads = re.findall(
+            r'<th scope="col"><b class="num">(\d+)%</b>([^<]+)<small class="num">([^<]+)</small></th>',
+            self.box(self.SOME, self.ALL),
+        )
+        self.assertEqual(
+            heads,
+            [
+                ("60", "When it was found", "12 of 20 agree"),
+                ("90", "Why it happened", "18 of 20 agree"),
+                ("95", "Which day made it", "19 of 20 agree"),
+            ],
+        )
+
+    def test_a_day_with_no_count_is_not_counted_and_not_drawn_as_agreeing(self):
+        box = self.box(self.SOME, None)
+        self.assertIn(
+            '<th scope="row" class="num">Day 02</th><td colspan="3"><span class="not-measured">not counted</span></td>',
+            box,
+        )
+        self.assertEqual(box.count("reader-cell"), 3)
+        self.assertIn(NONE, self.box(None))
+
+    def test_differing_wears_no_alarm_colour(self):
+        self.assertNotRegex(self.box(self.SOME), r"--s-|--r-|--close|--fail|plot-bad")
 
 
 def tokens(day, date="2026-01-01", model="claude-opus-5-5", output=100, cache_read=300, **more):
@@ -797,6 +1014,7 @@ class PageLayoutTest(unittest.TestCase):
         "plot-all",
         "plot-history",
         "plot-groups",
+        "plot-recorded",
         "plot-evidence",
         "plot-ci",
         "plot-open",
@@ -852,6 +1070,31 @@ class PageLayoutTest(unittest.TestCase):
         at = [promises.find(f'id="{box}"') for box in boxes]
         self.assertNotIn(-1, at)
         self.assertEqual(at, sorted(at))
+
+    def test_the_evidence_is_one_checklist(self):
+        for gone in ("proof-kinds", "evidence-headline", "What evidence each criterion has on record", "Select a tile"):
+            self.assertNotIn(gone, self.page)
+        ticks = self.page[self.page.index('<section class="panel" id="ticks">') :]
+        at = [ticks.find(f'id="{box}"') for box in ("plot-recorded", "plot-evidence", "evidence", "evidence-checks")]
+        self.assertNotIn(-1, at)
+        self.assertEqual(at, sorted(at))
+
+    def test_only_a_promises_state_wears_a_promise_colour(self):
+        """In this chapter amber, green, blue and red say what state a promise is in; a count or a mark is neutral."""
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "dashboard")
+        with open(os.path.join(here, "dashboard.css"), encoding="utf-8") as f:
+            css = f.read()
+        with open(os.path.join(here, "dashboard.js"), encoding="utf-8") as f:
+            script = f.read()
+        marks = (".ci-failed", ".swarm .pr", ".swarm .pr.failed", ".swarm .median", ".inv-bar i", ".gap-meter i", ".meter i", ".lane-dot, .legend i.lane-dot", ".lane-line", ".svg-plot .trend", ".svg-plot .pt")
+        for mark in marks:
+            rule = re.search(r"^" + re.escape(mark) + r" \{([^}]*)\}", css, re.M)
+            self.assertIsNotNone(rule, mark)
+            self.assertRegex(rule.group(1), r"var\(--(ink|ink-2|muted)\)", mark)
+            self.assertNotRegex(rule.group(1), r"--s-|--r-|--close|--code|--spec", mark)
+        merges = re.search(r'getElementById\("evidence-history"\).*?\n  \}\);', script, re.S).group(0)
+        self.assertNotIn("--close", merges)
+        self.assertIn('{ name: "present", color: "var(--ink-2)"', merges)
 
     def test_what_a_plot_would_mislead_without_stays_visible(self):
         for sentence in (

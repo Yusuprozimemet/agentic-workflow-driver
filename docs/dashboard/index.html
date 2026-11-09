@@ -148,7 +148,7 @@
     <div class="plot">
       <h3>Is trust growing?</h3>
       <p class="plot-say" id="history-say"></p>
-      <div class="scroll-x"><div class="trust-history" id="plot-history"></div></div>
+      <div class="scroll-x"><div class="trust-history svg-plot" id="plot-history"></div></div>
       <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="history-table"></table></div></details>
       <details class="counted">
         <summary>How this is counted</summary>
@@ -166,7 +166,7 @@
   <section class="panel" id="tested">
     <div class="panel-head">
       <h2>Where the tests are</h2>
-      <p>How many tests each part has, shaded by when they run.</p>
+      <p>How many tests each part has, and when they run. Only the tests a person must run by hand are marked.</p>
     </div>
     <div class="plot">
       <div id="plot-groups"></div>
@@ -180,10 +180,11 @@
   <section class="panel" id="ticks">
     <div class="panel-head">
       <h2>Evidence behind the ticks</h2>
-      <p>Was each promise's evidence written down when it was built, and does it still replay today? Select a tile for that promise's detail.</p>
+      <p>Was each promise's evidence written down when it was built, and does it still replay today? In the table, one row is a finished day and one column is a fact about its ticked promises: a ✓ is all of them, a bar is a gap. Hover a “Replays today” cell for what was re-run.</p>
     </div>
-    <div class="plot-stats" id="evidence-headline"></div>
     <div class="plot">
+      <h3>Share of promises with a failure recorded when built, by day</h3>
+      <div class="scroll-x"><div class="svg-plot" id="plot-recorded"></div></div>
       <div id="plot-evidence"></div>
       <p class="limit">Evidence: checks the recorded evidence against the revisions shown; does not establish complete behavioral coverage or current correctness.</p>
       <p id="evidence-skip"></p>
@@ -199,18 +200,9 @@
         <summary>How this is counted</summary>
         <p>For each finished day: of its ticked criteria, how many cite the PR they landed in, name a test, and record a break seen red in a <code>broken:</code> line. Each named test is looked up on <code>main</code>. CI runs every test that is there, so a criterion goes quiet only when its test leaves the tree or can be skipped (a test run on a system property runs when a workflow passes the property as true). A test that moved is followed under its new name, of the same stem or listed by the PR that moved it. A name counts only if it was in the tree when the day's last PR merged. Grey is retired: a later day's spec names the test and that day's PR removed it; orange is gone with no spec saying so. Days marked <em>pre-format</em> were written before the evidence format: nothing asked their ticks to record any of this, so a zero there is not measured, not missing. If the <code>broken:</code> line was asked for only from a later PR, “Seen red” is not measured for a day none of whose PRs reaches it.</p>
         <p>What <code>scripts/close-evidence.py --all</code>, run by the dashboard workflow before each build and never committed, found when it replayed each finished day's evidence on <code>main</code>: the named tests looked up, the Verify commands run, the recorded breaks applied. The page build reads that report and runs nothing. “Failure recorded when built” above counts the <code>broken:</code> and seen-red lines a day recorded; here a break counts as passed only if it reported what its line says. A share is passed over passed, failed and errored, with the not-applicable beside it; a day checked at another close, or on a spec or breaks file <code>main</code> has since changed, is stale, not a pass.</p>
+        <p>“Strongest evidence” is the same report, by day: each criterion counted once, under the strongest evidence its spec names, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Nothing is run for this count: it reads the spec. “With nothing on record” is unticked, or ticked with nothing behind it; “not recorded” is a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither. The row “All finished days” adds each column up, and leaves a day out of a column it was not asked for; the line above the table is the “Failure recorded” column, day by day.</p>
       </details>
     </div>
-    <div class="panel-head" style="margin-top:14px">
-      <h2 style="font-size:17px">What evidence each criterion has on record</h2>
-      <p>Each ticked promise, counted once under the strongest evidence its spec names.</p>
-    </div>
-    <div class="legend" id="proof-kinds-legend"></div>
-    <div id="proof-kinds"></div>
-    <details class="counted">
-        <summary>How this is counted</summary>
-        <p>The same report, by day: each criterion counted once, under the strongest evidence its spec names, a named test, then a command, then a break, then a reader (a <code>Not proven:</code> line under a ticked criterion). Nothing is run for this count: it reads the spec. Grey is nothing on record: unticked, or ticked with nothing behind it. A dashed outline is not recorded: a report written before <code>evidence.py</code> kept <code>proved_by</code>, counted as neither.</p>
-      </details>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Merge by merge</h2>
       <p>The tests finished days name, looked up at every merge; orange can be skipped or has left the tree.</p>
@@ -218,7 +210,7 @@
     <div id="evidence-history"></div>
     <details class="counted">
         <summary>How this is counted</summary>
-        <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. Green is there and run by CI; orange can be skipped or has left the tree with no spec saying so; grey is retired. A green step is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
+        <p>The distinct tests the finished days name, looked up at every merge from the day each was ticked. The dark line is there and run by CI; orange can be skipped or has left the tree with no spec saying so; the dashed grey line is retired. A step up in the dark line is a day closing; a dip, or orange rising, is a check that has gone quiet.</p>
       </details>
     <div id="removal-checks">
     <div class="panel-head" style="margin-top:14px">
@@ -243,19 +235,18 @@
     </div>
     <div id="breaks"></div>
     <p id="ci-legend"></p>
-    <div class="plot-grid">
-      <div class="plot">
-        <h3>Which checks failed</h3>
-        <p class="plot-say">How many merged pull requests each workflow failed on before they merged.</p>
-        <div id="plot-ci"></div>
-        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="ci-fails"></table></div></details>
-      </div>
-      <div class="plot">
-        <h3>Time a PR stayed open</h3>
-        <p class="plot-say">From opened to merged, on a scale where each step is ten times longer.</p>
-        <div id="plot-open"></div>
-        <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="merge-time"></table></div></details>
-      </div>
+    <div class="plot">
+      <h3>Which checks failed</h3>
+      <p class="plot-say">How many merged pull requests each workflow failed on before they merged.</p>
+      <div id="plot-ci"></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="ci-fails"></table></div></details>
+    </div>
+    <div class="plot">
+      <h3>Time a PR stayed open</h3>
+      <p class="plot-say">From opened to merged. One mark is one merged pull request, moved up or down until it touches no other, so a pile of marks is a count; the spacing between the axis marks shrinks as time grows. Select a mark to open its pull request.</p>
+      <div id="open-key"></div>
+      <div class="scroll-x"><div class="svg-plot" id="plot-open"></div></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="merge-time"></table></div></details>
     </div>
     <details class="counted">
         <summary>How this is counted</summary>
@@ -271,7 +262,7 @@
   <section class="panel" id="second-reader">
     <div class="panel-head">
       <h2>Does a second reader agree with the defect tags?</h2>
-      <p>An AI reader that did none of the day's work labels each problem found that day from its description alone; each square is one label, filled where it matched the label the day gave.</p>
+      <p>An AI reader that did none of the day's work labels each problem found that day from its description alone. A cell is how many of a day's labels matched the label the day gave; it darkens as more of them differed.</p>
     </div>
     <div class="wide-pair"><div>
     <div id="relabel-plot"></div>
@@ -287,7 +278,7 @@
     </div><div>
     <div class="plot">
       <h3>Problems that came back</h3>
-      <p class="plot-say">Each line is one problem, followed through the days it was recorded again.</p>
+      <p class="plot-say">Each row is one problem, across the days it was recorded again.</p>
       <div id="plot-repeats"></div>
     </div>
     </div></div>
