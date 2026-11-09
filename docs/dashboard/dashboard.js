@@ -348,11 +348,11 @@ function drawLines() {
   document.getElementById("class-share").textContent = named ? `Of the ${named} code names the specs use at the latest merge, ${names.test} (${Math.round(100 * names.test / named)}%) are test names, ${names.prod} production identifiers; the specs also name ${names.flags} flags, counted apart because they do not enter the gap.` : "";
   lineChart(document.getElementById("evidence-history"), {
     H: 190, yMin: 0, yMax: evMax, ticks: steps(0, evMax, 4), unit: "", strip: false, digits: 0,
-    label: "Tests named by finished days: present on each merge, not running (orange), retired (grey)",
+    label: "Tests named by finished days: present on each merge, not running (orange), retired (dashed grey)",
     series: [
-      { name: "present", color: "var(--close)", get: r => r.evidence && r.evidence.present },
+      { name: "present", color: "var(--ink-2)", get: r => r.evidence && r.evidence.present },
       { name: "not running", color: "var(--code)", dy: 8, get: r => r.evidence && r.evidence.skippable + r.evidence.missing },
-      { name: "retired", color: "var(--muted)", dy: -7, get: r => r.evidence && (r.evidence.retired || 0) },
+      { name: "retired", color: "var(--muted)", dy: -7, dash: true, get: r => r.evidence && (r.evidence.retired || 0) },
     ],
   });
   lineChart(document.getElementById("moved"), {
@@ -1136,53 +1136,6 @@ function drawEvidenceChecks() {
   if (problems.length) box.innerHTML += `<h3>Failed or could not run</h3><ul>${problems.join("")}</ul>`;
 }
 
-// spec-drift.py's proof_kinds, strongest first; not recorded is drawn apart, as an outline.
-const PROOF = [["test", "Named test", "var(--p-test)"], ["command", "Command", "var(--p-command)"],
-  ["break", "Break", "var(--p-break)"], ["reader", "Reader", "var(--p-reader)"], ["unproved", "Nothing on record", "var(--other)"]];
-function drawProofKinds() {
-  const ec = DATA.evidence_checks || { state: "absent" }, box = document.getElementById("proof-kinds");
-  const legend = document.getElementById("proof-kinds-legend");
-  box.innerHTML = legend.innerHTML = "";
-  const days = ec.state === "loaded" ? ec.days.filter(d => d.proof).sort((a, b) => rank(a.day) - rank(b.day)) : [];
-  // One message whatever the report's state: the panel above names it.
-  if (!days.length) { box.innerHTML = `<p class="off">No replayed day to count: see the report above.</p>`; return; }
-  const sum = k => days.reduce((s, d) => s + d.proof[k], 0);
-  legend.innerHTML = PROOF.map(([k, name, c]) => `<span><i class="dot" style="background:${c}"></i>${name} · ${sum(k)}</span>`).join("")
-    + `<span><i class="dot" style="border:1.5px dashed var(--muted)"></i>Not recorded · ${sum("not_recorded")}</span>`;
-  const H = 220, P = { l: 44, r: 16, t: 22, b: 30 };
-  const total = d => PROOF.reduce((s, [k]) => s + d.proof[k], 0) + d.proof.not_recorded;
-  const yMax = Math.max(4, Math.ceil(Math.max(...days.map(total)) / 4) * 4);
-  const ly = v => P.t + (1 - v / yMax) * (H - P.t - P.b);
-  const bw = (LW - P.l - P.r) / days.length, w = Math.min(28, bw - 6);
-  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": "Criteria per finished day by the evidence on record" }, box);
-  steps(0, yMax, 4).forEach(t => {
-    el("line", { x1: P.l, x2: LW - P.r, y1: ly(t), y2: ly(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
-    el("text", { x: P.l - 8, y: ly(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = t;
-  });
-  days.forEach((d, j) => {
-    const x = P.l + j * bw + (bw - w) / 2, stale = d.state === "stale";
-    let base = 0;
-    const seg = (n, attrs) => {
-      if (!n) return;
-      // A 2px gap of surface between segments, taken from the top of each.
-      el("rect", { x, y: ly(base + n), width: w, height: Math.max(1, ly(base) - ly(base + n) - 2), rx: 2, ...attrs }, svg);
-      base += n;
-    };
-    PROOF.forEach(([k, , c]) => seg(d.proof[k], { fill: c, opacity: stale ? 0.5 : 1 }));
-    seg(d.proof.not_recorded, { fill: "none", stroke: "var(--muted)", "stroke-dasharray": "3 3" });
-    el("text", { x: x + w / 2, y: ly(base) - 6, "text-anchor": "middle", class: "num" }, svg).textContent = base;
-    el("text", { x: x + w / 2, y: H - P.b + 16, "text-anchor": "middle", class: "num" + (OOO.has(d.day) ? " ooo" : "") }, svg)
-      .textContent = "D" + dd(d.day) + (OOO.has(d.day) ? "*" : "");
-    const title = (DATA.days.find(x => x.day === d.day) || {}).title || "";
-    const hit = el("rect", { x: P.l + j * bw, y: P.t, width: bw, height: H - P.t - P.b, class: "hit" }, svg);
-    hit.addEventListener("mousemove", ev => showTip(ev, `<b>Day ${dd(d.day)}</b><div style="margin:3px 0 6px">${esc(title)}${stale ? " · stale report" : ""}</div>`
-      + PROOF.map(([k, name]) => `<div class="row"><span>${name}</span><span>${d.proof[k]}</span></div>`).join("")
-      + `<div class="row"><span>Not recorded</span><span>${d.proof.not_recorded}</span></div>`));
-    hit.addEventListener("mouseleave", hideTip);
-  });
-  oooNote(box);
-}
-
 /* ---------- promises kept ---------- */
 // What each replay state means to a reader: the group it counts in, and why it was not checked.
 const REPLAY_LOOK = {
@@ -1514,23 +1467,24 @@ const notMeasured = text => `<span class="not-measured">${esc(text)}</span>`;
 const READER_AXES = [["stage", "When it was found"], ["cause", "Why it happened"], ["made", "Which day made it"]];
 const READER_NONE = "Not counted yet: a day is counted once its closing PR pastes the comparison’s lines.";
 
-// Plot 7: one tile per label the second reader gave, per day and per question. Differing is not a failure, so no alarm colour.
+// Plot 7: a table, one row per day and one column per question. A cell says how many labels the second reader gave
+// the same way, and darkens with the share that differed, darkest from a half. Differing is not a failure, so the
+// shade is violet and no alarm colour.
 function drawReaderPlot(days) {
   const box = document.getElementById("relabel-plot");
   if (!days.some(d => d.relabel)) { box.innerHTML = notMeasured(READER_NONE); return; }
-  const tile = cls => `<i class="mini-tile ${cls}"></i>`;
-  const count = (a, n) => `${a} of ${n}`;
-  box.innerHTML = `<div class="legend">${[["agree", "Same label as the day gave"], ["differ", "A different label"]].map(([c, w]) => `<span>${tile(c)}<b>${w}</b></span>`).join("")}</div>`
-    + `<div class="reader-axes">` + READER_AXES.map(([f, head]) => {
-      const [a, n] = days.reduce((t, d) => d.relabel && d.relabel[f] ? [t[0] + d.relabel[f][0], t[1] + d.relabel[f][1]] : t, [0, 0]);
-      return `<div><h3>${head}</h3>` + (n ? `<div class="reader-total">${stackedBar([{ n: a, cls: "agree" }, { n: n - a, cls: "differ" }], n, `${head}: ${count(a, n)} agree, all counted days`)}<b class="num">${count(a, n)}</b></div>` : "")
-        + days.map(d => {
-          const p = d.relabel && d.relabel[f];
-          return `<div class="reader-row"><span class="num">Day ${dd(d.day)}</span>` + (p
-            ? `${tileRow([...Array(p[0]).fill(tile("agree")), ...Array(p[1] - p[0]).fill(tile("differ"))], `Day ${dd(d.day)}: ${count(p[0], p[1])} agree`)}<span class="num">${count(p[0], p[1])}</span>`
-            : notMeasured("not counted")) + `</div>`;
-        }).join("") + `</div>`;
-    }).join("") + `</div>`;
+  const pct = (a, n) => Math.round(a / n * 100), none = notMeasured("not counted");
+  const total = f => days.reduce((t, d) => d.relabel && d.relabel[f] ? [t[0] + d.relabel[f][0], t[1] + d.relabel[f][1]] : t, [0, 0]);
+  const head = ([f, name]) => {
+    const [a, n] = total(f);
+    return `<th scope="col">${n ? `<b class="num">${pct(a, n)}%</b>` : ""}${name}<small class="num">${n ? `${a} of ${n} agree` : "not counted"}</small></th>`;
+  };
+  const cell = p => !p ? `<td>${none}</td>`
+    : `<td><div class="reader-cell num" style="--d:${Math.min(70, Math.round((1 - p[0] / p[1]) / 0.5 * 70))}" title="${p[1] - p[0]} of ${p[1]} labels differ"><span>${p[0]} of ${p[1]}</span><span>${pct(p[0], p[1])}%</span></div></td>`;
+  box.innerHTML = `<div class="scroll-x"><table class="reader-heat"><thead><tr><td></td>${READER_AXES.map(head).join("")}</tr></thead><tbody>`
+    + days.map(d => `<tr><th scope="row" class="num">Day ${dd(d.day)}</th>`
+      + (d.relabel ? READER_AXES.map(([f]) => cell(d.relabel[f])).join("") : `<td colspan="${READER_AXES.length}">${none}</td>`) + `</tr>`).join("")
+    + `</tbody></table></div><div class="legend"><span>All agree</span><i class="reader-ramp"></i><span>Half or more differ</span></div>`;
 }
 
 // Per finished day, how many tags the blind defect-rater gave the same way; null where nothing gives counts.
@@ -1643,60 +1597,92 @@ function drawTrustHistory() {
   });
 }
 
-// Plot 3: one bar per group. Each group has one "when", so nothing is stacked.
+// Plot 3: one bar per group, its count, and when the group runs written beside it. Only by hand is marked.
 function drawTestBars() {
   const I = DATA.test_inventory, box = document.getElementById("plot-groups");
   if (!I) { box.innerHTML = notMeasured("Not in this data"); return; }
-  const look = w => /^every/i.test(w) ? "n-strong" : /^by hand/i.test(w) ? "n-hollow" : "n-mid";
-  const when = w => w.split(/[:(]/)[0].trim(), most = Math.max(1, ...I.groups.map(g => g.tests));
-  box.innerHTML = I.groups.map(g => plotRow(esc(g.label), stackedBar([{ n: g.tests, cls: look(g.when) }], most, `${g.label}: ${g.tests} tests, ${when(g.when)}`), g.tests)).join("")
-    + plotKey([...new Set(I.groups.map(g => g.when))].map(w => [keyTile(look(w)), esc(when(w))]));
+  const byHand = g => /^by hand/i.test(g.when), when = w => w.split(/[:(]/)[0].trim();
+  const most = Math.max(1, ...I.groups.map(g => g.tests)), all = addUp(I.groups, "tests"), hand = addUp(I.groups.filter(byHand), "tests");
+  // The longest bar is 62% of the row, so its count and its "when" still fit beside it.
+  box.innerHTML = `<p class="plot-headline"><b class="num">${all - hand} of ${all}</b> tests run without a person${hand ? `; ${hand} ${hand === 1 ? "is" : "are"} run by hand` : ""}</p>`
+    + I.groups.map(g => {
+      const said = esc(`${g.label}: ${g.tests} tests, ${when(g.when)}`);
+      return `<div class="inv-row"><span class="plot-name">${esc(g.label)}</span><span class="inv-bar"><i role="img" aria-label="${said}" title="${said}" style="width:${+(g.tests / most * 62).toFixed(1)}%"></i><b class="num">${g.tests}</b><span class="when${byHand(g) ? " by-hand" : ""}">${esc(when(g.when))}</span></span></div>`;
+    }).join("");
 }
 
-// Plot 4: a tile per ticked promise for what was written down when it was built, then what the replay says today.
-// Quiet unless something failed or is stale; no report, or a day it leaves out, is never drawn as a pass.
-function replayWord(d, ec) {
-  if (ec.state !== "loaded") return notMeasured("no report");
+// A share in a table cell: quiet when it is whole, a meter when there is a gap, and not measured when nothing asked for it.
+const shareCell = (a, n, unit = "") => !n ? notMeasured("not measured")
+  : a === n ? `<span class="whole num">${unit ? `${a} of ${n}${unit}` : `all ${n}`}</span>`
+    : `<span class="part num"><span class="gap-meter" role="img" aria-label="${a} of ${n}"><i style="width:${a / n * 100}%"></i></span>${a} of ${n}${unit}</span>`;
+// What a day's replay says today, and whether it counts as replaying: no report, or a day it leaves out, is never a pass.
+function replayCell(d, ec) {
+  if (ec.state !== "loaded") return [false, notMeasured("no report")];
   const day = ec.days.find(x => x.day === d.day);
-  if (!day || day.state === "not checked") return notMeasured("not checked");
-  if (day.state === "stale") return `<span class="plot-bad" title="${esc(day.why.join("; "))}">stale</span>`;
+  if (!day || day.state === "not checked") return [false, notMeasured("not checked")];
+  if (day.state === "stale") return [false, `<span class="plot-bad" title="${esc(day.why.join("; "))}">stale</span>`];
   const counts = CHECK_KINDS.map(([k]) => day.counts[k]).filter(Boolean);
   const failed = addUp(counts, "failed") + addUp(counts, "error");
   const passed = k => (day.counts[k] || {}).passed || 0;
-  return failed ? `<span class="plot-bad">${failed} failed</span>` : `<span class="plot-quiet">${plural(passed("named_test"), "named test", "named tests")} found; ${plural(passed("verify"), "Verify command", "Verify commands")} and ${plural(passed("break"), "break", "breaks")} re-run; none failed</span>`;
+  const ran = `${plural(passed("named_test"), "named test", "named tests")} found; ${plural(passed("verify"), "Verify command", "Verify commands")} and ${plural(passed("break"), "break", "breaks")} re-run`;
+  return failed ? [false, `<span class="plot-bad" title="${ran}">${failed} failed</span>`] : [true, `<span class="whole" title="${ran}">none failed</span>`];
 }
+// spec-drift.py's proof_kinds: each criterion once, under the strongest evidence its spec names, strongest first.
+const PROOF_WORDS = [["test", "test", "tests"], ["command", "command", "commands"], ["break", "break", "breaks"], ["reader", "reader only", "reader only"],
+  ["unproved", "with nothing on record", "with nothing on record"], ["not_recorded", "not recorded", "not recorded"]];
+const strongest = proof => PROOF_WORDS.filter(([k]) => proof[k]).map(([k, one, more]) => plural(proof[k], one, more)).join(" · ") || "none";
+
+// The share of each day's ticked promises with a failure recorded when built. A day that was not asked for it has no
+// point and breaks the line: it is not a zero.
+function drawRecordedLine(days, ticked) {
+  const box = document.getElementById("plot-recorded");
+  box.innerHTML = "";
+  const pts = days.map(d => d.break_format ? [ticked(d).filter(c => c.red).length, ticked(d).length] : null);
+  if (!pts.some(Boolean)) { box.innerHTML = notMeasured(days.length ? "Not measured: every finished day was written before this was asked for." : "No finished day yet."); return; }
+  const H = 190, P = { l: 44, r: 16, t: 30, b: 30 }, name = d => `${days.length > 14 ? "D" : "Day "}${dd(d.day)}`;
+  const x = i => +(P.l + (i + 0.5) / days.length * (LW - P.l - P.r)).toFixed(1), y = v => +(P.t + (1 - v) * (H - P.t - P.b)).toFixed(1);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${H}`, role: "img", "aria-label": `Share of promises with a failure recorded when built: ${days.map((d, i) => `Day ${dd(d.day)} ${pts[i] ? `${pts[i][0]} of ${pts[i][1]}` : "not measured"}`).join(", ")}` }, box);
+  [0, 0.5, 1].forEach(t => {
+    el("line", { x1: P.l, x2: LW - P.r, y1: y(t), y2: y(t), stroke: t ? "var(--grid)" : "var(--axis)" }, svg);
+    el("text", { x: P.l - 8, y: y(t) + 4, "text-anchor": "end", class: "num" }, svg).textContent = `${t * 100}%`;
+  });
+  let run = [];
+  const flush = () => { if (run.length > 1) el("polyline", { points: run.join(" "), class: "trend" }, svg); run = []; };
+  pts.forEach((p, i) => { if (p) run.push(`${x(i)},${y(p[0] / p[1])}`); else flush(); });
+  flush();
+  days.forEach((d, i) => {
+    const p = pts[i];
+    el("text", { x: x(i), y: H - P.b + 18, "text-anchor": "middle", class: "num" }, svg).textContent = name(d);
+    if (!p) { el("text", { x: x(i), y: y(0.5) + 4, "text-anchor": "middle", class: "none" }, svg).textContent = "not measured"; return; }
+    el("title", {}, el("circle", { cx: x(i), cy: y(p[0] / p[1]), r: 5, class: "pt" }, svg)).textContent = `Day ${dd(d.day)}: ${p[0]} of ${plural(p[1], "promise", "promises")}, ${Math.round(p[0] / p[1] * 100)}%`;
+    el("text", { x: x(i), y: y(p[0] / p[1]) - 12, "text-anchor": "middle", class: "strong num" }, svg).textContent = `${p[0]} of ${p[1]}`;
+  });
+}
+
+// Plot 4: the evidence checklist. One row per finished day, one column per fact about its ticked promises, and a
+// row that adds them up. A whole cell is quiet; a gap draws a meter; a day written before a fact was asked for is
+// not measured, and is left out of that column's total.
 function drawEvidencePlot() {
-  const box = document.getElementById("plot-evidence"), head = document.getElementById("evidence-headline"), skip = document.getElementById("evidence-skip");
+  const box = document.getElementById("plot-evidence"), skip = document.getElementById("evidence-skip");
   const ec = DATA.evidence_checks || { state: "absent" };
   const days = DATA.days.filter(d => finished(d) && d.evidence.some(c => c.ticked)).sort((a, b) => rank(a.day) - rank(b.day));
-  if (!days.length) { box.innerHTML = notMeasured("No finished day yet."); head.innerHTML = skip.innerHTML = ""; return; }
-  const ticked = d => d.evidence.filter(c => c.ticked), asked = days.filter(d => d.evidence_format).flatMap(ticked);
+  const ticked = d => d.evidence.filter(c => c.ticked);
+  drawRecordedLine(days, ticked);
+  if (!days.length) { box.innerHTML = notMeasured("No finished day yet."); skip.innerHTML = ""; return; }
   const states = days.flatMap(d => ticked(d).flatMap(c => Object.values(c.tests))), n = s => states.filter(x => x === s).length;
-  const stat = (big, small) => `<div><b class="num">${big}</b><span>${small}</span></div>`;
-  head.innerHTML = stat(`${asked.filter(c => c.prs.length).length} of ${asked.length}`, "promises cite the pull request they landed in")
-    + stat(`${asked.filter(c => Object.keys(c.tests).length).length} of ${asked.length}`, "promises name a test")
-    + stat(`${n("present")} of ${states.length}`, `named tests are still on <code>main</code>${n("retired") ? `, ${n("retired")} retired` : ""}`);
   const live = n("skippable");
   skip.innerHTML = (live ? `${plural(live, "live test needs", "live tests need")} real Claude; CI skips them, run by hand.` : "")
     + (n("missing") ? ` <span class="plot-bad">${plural(n("missing"), "named test has", "named tests have")} left <code>main</code>.</span>` : "");
-  const tile = (d, c) => {
-    const look = c.red ? "rec-yes" : d.break_format ? "rec-no" : "rec-none";
-    const said = `${c.id || c.claim}: ${c.red ? "failure recorded when built" : d.break_format ? "no failure recorded" : "not measured"}`;
-    return c.id ? `<button type="button" class="ev-tile ${look}" data-id="${esc(c.id)}" aria-expanded="false" aria-label="${esc(said)}" title="${esc(said)}"></button>` : `<i class="ev-tile ${look}" title="${esc(said)}"></i>`;
-  };
-  box.innerHTML = plotKey([[`<i class="ev-tile rec-yes"></i>`, "Failure recorded when built"], [`<i class="ev-tile rec-no"></i>`, "None recorded"], [`<i class="ev-tile rec-none"></i>`, "Not measured: written before this was asked for"]])
-    + `<div class="ev-row ev-head"><span>Day</span><span>Written down when built</span><span>Replayed today</span></div>`
-    + days.map(d => `<div class="ev-row"><span class="plot-name">Day ${dd(d.day)} · ${esc(promiseFeature(d.day))}</span><span class="ev-tiles">${ticked(d).map(c => tile(d, c)).join("")}</span><span class="ev-status">${replayWord(d, ec)}</span></div>`).join("");
-  box.addEventListener("click", e => {
-    const button = e.target.closest("button[data-id]");
-    if (!button) return;
-    const row = button.closest(".ev-row"), open = row.nextElementSibling, shown = open && open.hasAttribute("data-detail");
-    const same = shown && open.dataset.id === button.dataset.id;
-    if (shown) { open.remove(); row.querySelectorAll('[aria-expanded="true"]').forEach(b => b.setAttribute("aria-expanded", "false")); }
-    if (same) return;
-    row.insertAdjacentHTML("afterend", `<div class="inline-detail" data-detail data-id="${esc(button.dataset.id)}">${detailFor(button.dataset.id)}</div>`);
-    button.setAttribute("aria-expanded", "true");
-  });
+  const FACTS = [["evidence_format", c => c.prs.length], ["evidence_format", c => Object.keys(c.tests).length], ["break_format", c => c.red]];
+  const fact = (list, [asked, has]) => { const cs = list.filter(d => d[asked]).flatMap(ticked); return shareCell(cs.filter(has).length, cs.length); };
+  const proofOf = d => ec.state === "loaded" ? (ec.days.find(x => x.day === d.day) || {}).proof : null;
+  const proofs = days.map(proofOf), replays = days.map(d => replayCell(d, ec));
+  const sum = proofs.filter(Boolean).reduce((t, p) => Object.fromEntries(PROOF_WORDS.map(([k]) => [k, (t[k] || 0) + (p[k] || 0)])), {});
+  const kinds = p => p ? strongest(p) : notMeasured(ec.state === "loaded" ? "not checked" : "no report");
+  box.innerHTML = `<div class="scroll-x"><table class="checklist"><thead><tr><th>Day</th><th>Cites its pull request</th><th>Names a test</th><th>Failure recorded<small>when it was built</small></th><th>Strongest evidence<small>on record</small></th><th>Replays today</th></tr></thead><tbody>`
+    + days.map((d, i) => `<tr><th scope="row"><small class="num">Day ${dd(d.day)}</small>${esc(promiseFeature(d.day))}</th>${FACTS.map(f => `<td>${fact([d], f)}</td>`).join("")}<td>${kinds(proofs[i])}</td><td>${replays[i][1]}</td></tr>`).join("")
+    + `<tr class="total"><th scope="row">All finished days</th>${FACTS.map(f => `<td>${fact(days, f)}</td>`).join("")}<td>${proofs.some(Boolean) ? strongest(sum) : kinds(null)}</td>`
+    + `<td>${ec.state === "loaded" ? shareCell(replays.filter(r => r[0]).length, days.length, days.length === 1 ? " day" : " days") : notMeasured("no report")}</td></tr></tbody></table></div>`;
 }
 
 // Plot 5: how many merged PRs each workflow failed on. A PR can fail on several, so the note says the bars overlap.
@@ -1711,28 +1697,57 @@ function drawCiPlot() {
     + (total > bad.length ? `<p class="plot-note">The bars add up to ${total}, more than the ${bad.length} pull requests, because one can fail in several workflows.</p>` : "");
 }
 
-// Plot 6: a dot per merged PR on a log scale. Never green: quick is not the same as good.
+// Plot 6: a swarm, one mark per merged PR on a log axis of the time it stayed open. A mark is moved up or down until
+// it touches no other, so a pile of marks is a count. Never green: quick is not the same as good.
+const OPEN_TICKS = [1, 5, 10, 30, 60, 120, 360, 720, 1440, 4320, 10080, 43200];
+const SWARM_GAP = 9.5;
 function drawOpenTimes() {
-  const box = document.getElementById("plot-open"), timed = mergedPrs().filter(v => typeof v.hours === "number");
+  const box = document.getElementById("plot-open"), key = document.getElementById("open-key"), timed = mergedPrs().filter(v => typeof v.hours === "number");
+  box.innerHTML = key.innerHTML = "";
   if (!timed.length) { box.innerHTML = notMeasured("No merged pull request with its times yet."); return; }
-  const mins = v => Math.max(v.hours * 60, 0.5), all = timed.map(mins);
-  const lo = Math.floor(Math.log10(Math.min(...all))), hi = Math.max(lo + 1, Math.ceil(Math.log10(Math.max(...all))));
-  const at = m => (Math.log10(m) - lo) / (hi - lo) * 100;
-  const dot = v => {
-    const said = `#${v.number} · ${span(v.hours)}${v.failed ? " · CI failed on it" : ""}`, style = `left:${at(mins(v))}%;top:${6 + v.number * 7 % 28}px`;
-    const cls = `pr-dot${v.failed ? " failed" : ""}`;
-    return v.url ? `<a class="${cls}" style="${style}" href="${esc(v.url)}" title="${esc(said)}" aria-label="${esc(said)}"></a>` : `<i class="${cls}" style="${style}" title="${esc(said)}"></i>`;
-  };
-  const ticks = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-  box.innerHTML = plotKey([[`<i class="pr-dot key"></i>`, "A merged pull request"], [`<i class="pr-dot failed key"></i>`, "CI failed on it first"], [`<i class="pr-median key"></i>`, "Median"]])
-    + Object.keys(STEP).map(k => [k, timed.filter(v => (v.step || v.kind) === k)]).filter(([, vs]) => vs.length).map(([k, vs]) => {
-      const middle = median(vs.map(v => v.hours));
-      return plotRow(STEP[k], `<span class="dot-track"><i class="pr-median" style="left:${at(Math.max(middle * 60, 0.5))}%"></i>${vs.map(dot).join("")}</span>`, span(middle));
-    }).join("")
-    + plotRow("", `<span class="dot-axis">${ticks.map(p => `<span style="left:${(p - lo) / (hi - lo) * 100}%">${(10 ** p).toLocaleString("en")}</span>`).join("")}</span>`, "minutes");
+  const mins = v => Math.max(v.hours * 60, 0.5), L = 118, right = LW - 110;
+  const lo = Math.log10(0.5), hi = Math.log10(Math.max(10, ...timed.map(mins)) * 1.5);
+  const at = m => +(L + (Math.log10(m) - lo) / (hi - lo) * (right - L)).toFixed(1);
+  let top = 6;
+  const rows = Object.keys(STEP).map(k => [k, timed.filter(v => (v.step || v.kind) === k)]).filter(([, vs]) => vs.length).map(([k, vs]) => {
+    const placed = [];
+    [...vs].sort((a, b) => mins(a) - mins(b) || a.number - b.number).forEach(v => {
+      const x = at(mins(v));
+      let step = 0, y = 0;
+      while (placed.some(q => Math.hypot(q.x - x, q.y - y) < SWARM_GAP)) { step++; y = (step % 2 ? -1 : 1) * Math.ceil(step / 2) * SWARM_GAP / 2; }
+      placed.push({ x, y, v });
+    });
+    const half = Math.max(...placed.map(q => Math.abs(q.y))) + 12, row = { name: STEP[k], placed, half, middle: median(vs.map(v => v.hours)), cy: top + half };
+    top += half * 2;
+    return row;
+  });
+  key.innerHTML = plotKey([[`<i class="key-pr"></i>`, "A merged pull request"], [`<i class="key-failed"></i>`, "CI failed on it first"], [`<i class="key-median"></i>`, "Median"]]);
+  const svg = el("svg", { viewBox: `0 0 ${LW} ${top + 26}`, class: "swarm", role: "img", "aria-label": `Time each of ${plural(timed.length, "merged pull request", "merged pull requests")} stayed open, by kind of step: ${rows.map(r => `${r.name} median ${span(r.middle)}`).join(", ")}` }, box);
+  // Marks of the axis that would sit on top of the one before are left out.
+  OPEN_TICKS.filter(t => Math.log10(t) <= hi).reduce((last, t) => {
+    if (at(t) - last < 60) return last;
+    el("line", { x1: at(t), x2: at(t), y1: 0, y2: top, stroke: "var(--grid)" }, svg);
+    el("text", { x: at(t), y: top + 17, "text-anchor": "middle", class: "num tick" }, svg).textContent = t < 60 ? `${t} min` : t < 1440 ? `${t / 60} h` : `${t / 1440} d`;
+    return at(t);
+  }, -Infinity);
+  rows.forEach((r, i) => {
+    if (i) el("line", { x1: 0, x2: LW, y1: r.cy - r.half, y2: r.cy - r.half, stroke: "var(--grid)" }, svg);
+    el("text", { x: 0, y: r.cy + 4, class: "strong" }, svg).textContent = r.name;
+    el("text", { x: LW, y: r.cy + 4, "text-anchor": "end" }, svg).textContent = `median ${span(r.middle)}`;
+    const mx = at(Math.max(r.middle * 60, 0.5));
+    el("line", { x1: mx, x2: mx, y1: r.cy - r.half + 3, y2: r.cy + r.half - 3, class: "median" }, svg);
+    r.placed.forEach(({ x, y, v }) => {
+      const said = `#${v.number} · ${span(v.hours)}${v.failed ? " · CI failed on it first" : ""}`, cy = +(r.cy + y).toFixed(1);
+      const into = v.url ? el("a", { href: v.url, "aria-label": said }, svg) : svg;
+      const mark = v.failed ? el("rect", { x: +(x - 3.6).toFixed(1), y: +(cy - 3.6).toFixed(1), width: 7.2, height: 7.2, transform: `rotate(45 ${x} ${cy})`, class: "pr failed" }, into)
+        : el("circle", { cx: x, cy, r: 4, class: "pr" }, into);
+      el("title", {}, mark).textContent = said;
+    });
+  });
 }
 
-// Plot 8: every same-as: link followed back to the first defect of its family, one group per day.
+// Plot 8: every same-as: link followed back to the first defect of its family. One lane per problem across the days,
+// a dot holding how many times it was recorded that day; the IDs are in the dot's tooltip and under Exact numbers.
 function drawRepeats() {
   const box = document.getElementById("plot-repeats"), Rec = DATA.defect_recurrence;
   if (!Rec) { box.innerHTML = notMeasured("Not in this data"); return; }
@@ -1742,16 +1757,18 @@ function drawRepeats() {
   const families = new Map();
   Rec.recurrences.forEach(r => { const root = rootOf(r.id); families.set(root, [...(families.get(root) || [root]), r.id]); });
   const within = Rec.recurrences.filter(r => dayOf(r.id) === dayOf(r.same_as)).length, across = Rec.recurrences.length - within;
-  const chip = id => {
-    const was = same.get(id), inDay = was && dayOf(was) === dayOf(id);
-    return `<code class="chain-id${inDay ? " same-day" : ""}" title="${esc(was ? `${id} is the same problem as ${was}` : `${id} is the first time this was recorded`)}">${esc(id)}</code>`;
+  const every = [...families.values()].flat().map(dayOf), from = Math.min(...every), cols = Array.from({ length: Math.max(...every) - from + 1 }, (_, i) => from + i);
+  const lane = ids => {
+    const per = cols.map(d => ids.filter(i => dayOf(i) === d)), on = per.flatMap((p, i) => p.length ? [i] : []), a = on[0], b = on[on.length - 1];
+    return `<div class="lane"><span class="lane-name num">${esc(ids[0])}<small>${plural(ids.length, "record", "records")}, ${b > a ? `${on.length} days` : "one day"}</small></span>`
+      + (b > a ? `<span class="lane-line" style="grid-column:${a + 2} / ${b + 3};--span:${b - a + 1}"></span>` : "")
+      + per.map((p, i) => `<span class="lane-day" style="grid-column:${i + 2}">${p.length
+        ? `<i class="lane-dot num${i === a && p.length === 1 ? " first" : ""}" role="img" aria-label="${esc(`Day ${dd(cols[i])}: ${p.join(", ")}`)}" title="${esc(p.join(", "))}">${p.length}</i>` : ""}</span>`).join("") + `</div>`;
   };
-  box.innerHTML = `<p class="plot-headline"><b>${Rec.recurrences.length}</b> ${Rec.recurrences.length === 1 ? "problem repeated" : "problems repeated"} an earlier one: <b>${across}</b> on a later day, <b>${within}</b> the same day</p>`
-    + plotKey([[`<code class="chain-id">D1.2</code>`, "First seen, or came back on a later day"], [`<code class="chain-id same-day">D1.3</code>`, "Came back the same day"]])
-    + [...families.values()].sort((a, b) => b.length - a.length || dayOf(a[0]) - dayOf(b[0])).map(ids => {
-      const days = [...new Set(ids.map(dayOf))].sort((a, b) => a - b);
-      return `<div class="chain">${days.map(d => `<span class="chain-day"><small>Day ${dd(d)}</small>${ids.filter(i => dayOf(i) === d).map(chip).join("")}</span>`).join(`<span class="chain-arrow" aria-hidden="true">→</span>`)}</div>`;
-    }).join("");
+  box.innerHTML = `<p class="plot-headline"><b>${plural(Rec.recurrences.length, "repeat", "repeats")}</b> of <b>${plural(families.size, "problem", "problems")}</b>: <b>${across}</b> on a later day, <b>${within}</b> within the same day</p>`
+    + `<div class="scroll-x"><div class="lanes" style="--n:${cols.length}"><div class="lane head"><span>Problem</span>${cols.map(d => `<span>Day ${dd(d)}</span>`).join("")}</div>`
+    + [...families.values()].sort((a, b) => dayOf(a[0]) - dayOf(b[0]) || b.length - a.length).map(lane).join("") + `</div></div>`
+    + plotKey([[`<i class="lane-dot first"></i>`, "First recorded"], [`<i class="lane-dot"></i>`, "Recorded again: the number is how many times that day"]]);
 }
 
 // Plots 9 and 10: where the context went, then what each day wrote and on which model.
@@ -2200,7 +2217,7 @@ panel("attention-list", drawCriteria); panel("promise-days", drawPromises); pane
 panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("plot-ladder", drawLadder); panel("plot-grew", drawGrew); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
-panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
+panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
 panel("plot-all", drawPromisePlots); panel("replay", drawReplay); panel("plot-history", drawTrustHistory); panel("plot-groups", drawTestBars); panel("plot-evidence", drawEvidencePlot); panel("plot-ci", drawCiPlot); panel("plot-open", drawOpenTimes);
 panel("plot-repeats", drawRepeats); panel("plot-context", drawTokenPlots); panel("plot-gates", drawGatePlot); panel("plot-cut", drawHookPlots);
 panel("findings", drawFindings); panel("tbl", drawTable); setSel(sel); panel("not-measured-list", drawNotMeasured);
