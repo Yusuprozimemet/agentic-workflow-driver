@@ -198,7 +198,7 @@ ABILITIES = (
 )
 
 
-# What each finished day's promises grew, the first being where graph 3 draws them.
+# What each finished day's promises grew, the first being where graph 5 draws them.
 DAY_ABILITIES = {1: ("rehearse",), 2: ("rehearse", "stop"), 3: ("stop",), 4: ("loop",), 5: ("park", "loop")}
 # One made-up defect at each gate: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
 DEFECTS = (
@@ -267,7 +267,7 @@ def look_ahead(rows, index):
 
 
 def clock(rows):
-    """Made-up times for graph 9: each merged PR opened and merged on its date, its checks a few
+    """Made-up times for graph 10: each merged PR opened and merged on its date, its checks a few
     minutes after it opened, and three agents' stretches of work on every date with a merge, all
     stamped +02:00 so the page shows the machine's clock and not the reader's."""
     def stamp(date, minutes, offset="Z"):

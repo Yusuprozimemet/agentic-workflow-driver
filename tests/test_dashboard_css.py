@@ -1,5 +1,5 @@
 """The dashboard's stylesheet: one top-level rule per class, so a graph's bar style cannot
-silently restyle another graph's bars (graph 9's `.bar` once collapsed graphs 6 and 7)."""
+silently restyle another graph's bars (graph 10's `.bar` once collapsed graphs 8 and 9)."""
 
 import re
 import unittest
@@ -60,7 +60,7 @@ class StylesheetTest(unittest.TestCase):
     def test_no_top_level_class_is_declared_twice(self):
         self.assertEqual(declared_twice(self.css), [])
 
-    def test_graph_9_bars_have_their_own_class(self):
+    def test_graph_10_bars_have_their_own_class(self):
         self.assertIn("\n.lane-bar {", self.css)
         self.assertIn("class: `lane-bar ${b.cls}`", self.script)
         self.assertNotIn("class: `bar ${b.cls}`", self.script)

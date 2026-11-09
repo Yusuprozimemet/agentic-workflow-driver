@@ -1,4 +1,4 @@
-// The dashboard in nine graphs. Each answers one question, folds what used to be several panels into
+// The dashboard in ten graphs. Each answers one question, folds what used to be several panels into
 // its marks, and says the detail in the readout under it. model() reads the data and touches no
 // document, so a test can run it; draw() puts what it returns on the page.
 
@@ -82,7 +82,7 @@ function model(DATA) {
       now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length };
   }
 
-  /* Graph 1: ability by day */
+  /* Graph 3: ability by day */
   function abilityGraph() {
     const keyOf = s => named.some(a => a.key === s.ability) ? s.ability : null;
     const rowsOf = [...named, ...(stories.some(s => keyOf(s) === null) ? [{ key: null, name: "No ability named" }] : [])];
@@ -106,7 +106,7 @@ function model(DATA) {
         rows: rows.map(r => [r.name, ...r.cells.map(c => c.n), sum(r.cells, c => c.n)]) } };
   }
 
-  /* The promises: one reading for graphs 2 and 3, so they cannot disagree. Each promise takes the state of
+  /* The promises: one reading for graphs 4 and 5, so they cannot disagree. Each promise takes the state of
      its newest re-check; one whose day is unfinished, or that a later promise replaced, is drawn and not counted. */
   function promises() {
     const rp = DATA.replay || {}, index = DATA.criteria_index || [], byDay = new Map(days.map(d => [d.day, d]));
@@ -169,7 +169,7 @@ function model(DATA) {
     return { tiles, n, counted, board };
   }
 
-  /* Graph 3: each ability with the promises its pull requests built */
+  /* Graph 5: each ability with the promises its pull requests built */
   function reliedGraph(P) {
     const groupsOf = list => [...new Set(list.map(t => t.day))].sort((a, b) => a - b).map(day => ({ day, tiles: list.filter(t => t.day === day) }));
     const rows = named.map(a => {
@@ -196,7 +196,7 @@ function model(DATA) {
         rows: rows.map(r => [r.name, r.tiles.length, ...cols.map(s => P.n(r.tiles, s)), r.prs]) } };
   }
 
-  /* Graph 4: every merge, with the gap it left, how long it was open, and whether a check failed on it */
+  /* Graph 6: every merge, with the gap it left, how long it was open, and whether a check failed on it */
   function mergeGraph() {
     const R = DATA.rows || [], V = new Map((DATA.verification || []).map(v => [v.number, v]));
     const gaps = R.map(r => r.gap_full).filter(g => g != null);
@@ -235,7 +235,7 @@ function model(DATA) {
         rows: merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.date || "", m.gap == null ? "" : m.gap.toFixed(1), m.mins == null ? "" : Math.round(m.mins), m.failed ? "yes" : ""]) } };
   }
 
-  /* Graph 5: the sieve. Each defect at the gate that caught it */
+  /* Graph 7: the sieve. Each defect at the gate that caught it */
   function sieveGraph() {
     const spent = new Map(((DATA.gate_report || {}).gates || []).filter(g => g.found).map(g => [g.found, g]));
     const back = new Map((((DATA.defect_recurrence || {}).recurrences) || []).map(r => [r.id, r.same_as]));
@@ -274,7 +274,7 @@ function model(DATA) {
           r.dots.filter(o => o.escaped).length, r.dots.filter(o => o.back).length, r.differ == null ? "" : r.differ, r.tags == null ? "" : r.tags]) } };
   }
 
-  /* Graph 6: what each date cost, and what the hooks stopped on it */
+  /* Graph 8: what each date cost, and what the hooks stopped on it */
   function costGraph() {
     const T = DATA.tokens || [], F = DATA.refusals || [], dates = [...new Set(T.map(t => t.date))].sort();
     const start = days.map(d => (d.worked || [])[0]).filter(Boolean).sort()[0];
@@ -304,7 +304,7 @@ function model(DATA) {
         rows: bars.map(x => [x.label, x.days.join(", "), x.main.toFixed(2), x.aud.toFixed(2), x.other.toFixed(2), x.replies, x.refused, x.cut, x.merged]) } };
   }
 
-  /* Graph 7: the lines each day changed, by what the file is */
+  /* Graph 9: the lines each day changed, by what the file is */
   function workGraph() {
     const R = DATA.rows || [], part = (r, k) => { const w = r.work || {}; return k === "spec" ? (w.spec || 0) + (w.context || 0) : w[k] || 0; };
     const of = list => Object.fromEntries(WORK.map(([k]) => [k, sum(list, r => part(r, k))]));
@@ -326,13 +326,19 @@ function model(DATA) {
         rows: bars.map(x => [`Day ${x.day}`, ...WORK.map(([k]) => x.w[k]), x.total, x.prs, x.ratio]) } };
   }
 
-  /* Graph 8: the plan's yardsticks, each on its own scale, against the kit's baseline where it has one */
+  /* Graph 2: the plan's yardsticks, each on its own scale, against the kit's baseline where it has one */
   function yardGraph() {
     const Y = DATA.yardsticks || {}, all = Y.rows || [], cols = [...new Set([...days.map(d => d.day), ...(Y.days || [])])].sort((a, b) => a - b);
     const show = (r, v) => r.unit === "$" ? `$${v.toFixed(r.decimals)}` : `${v.toFixed(r.decimals)}${r.unit || ""}`;
     const has = r => (r.values || []).some(v => v.value != null);
     const rows = all.filter(has).map(r => {
-      const vals = r.values.filter(v => v.value != null), max = Math.max(...vals.map(v => v.value), r.baseline || 0) || 1;
+      // The average so far is drawn on the same scale, so the scale must reach it too.
+      const vals = r.values.filter(v => v.value != null), avgs = (r.average || []).map((a, i) => ({ a, day: (r.values[i] || {}).day })).filter(x => x.a != null);
+      const max = Math.max(...vals.map(v => v.value), ...avgs.map(x => x.a), r.baseline || 0) || 1;
+      // An average of whole counts is rarely whole: it keeps one decimal where the day's own figure has none.
+      const fine = { ...r, decimals: Math.max(1, r.decimals || 0) };
+      const avg = avgs.map(x => ({ day: x.day, value: x.a, text: show(fine, x.a), y: x.a / max })), lastAvg = avg[avg.length - 1];
+      const noun = { "pull requests": "pull request", days: "day" }[r.average_over];
       const cells = cols.map(day => {
         const v = r.values.find(x => x.day === day);
         if (!v || v.value == null) return { day, text: "·", h: 0, over: false, t: `${r.name} · Day ${day}`,
@@ -343,7 +349,8 @@ function model(DATA) {
       });
       return { key: r.key, name: r.name, cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
         over: cells.filter(c => c.over).length, n: vals.length, last: vals[vals.length - 1],
-        note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v) };
+        note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v),
+        avg, avgNote: lastAvg ? `average so far: ${lastAvg.text}${noun ? ` over every ${noun}` : ""}` : "" };
     });
     const waiting = all.filter(r => !has(r)).map(r => ({ name: r.name, why: ((r.values || []).filter(v => v.text).pop() || {}).text || "nothing is counted yet" }));
     const based = rows.filter(r => r.line != null);
@@ -352,7 +359,69 @@ function model(DATA) {
           : `${plural(rows.length, "yardstick", "yardsticks")}, counted at each day's close`,
         b: [based.map(r => `${r.name}: ${r.show(r.last.value)} on Day ${r.last.day}, against ${r.base} with a person driving every step.`).join(" ")
           + ((Y.problems || []).length ? ` ${plural(Y.problems.length, "cell", "cells")} could not be read.` : "")].filter(s => s.trim()) },
-      table: { head: ["Yardstick", "Kit's baseline", ...cols.map(d => `Day ${d}`)], rows: rows.map(r => [r.name, r.base, ...r.cells.map(c => c.value == null ? "" : c.text)]) } };
+      table: { head: ["Yardstick", "Kit's baseline", ...cols.map(d => `Day ${d}`), "Average so far"], rows: rows.map(r => [r.name, r.base, ...r.cells.map(c => c.value == null ? "" : c.text), r.avgNote]) } };
+  }
+
+  /* Graph 1: how far to the next stop. One column per merge, then the tracks of the open day that are specified and
+     not merged, then the days the plan has no spec for yet, which cannot be drawn. */
+  function lookGraph() {
+    const L = DATA.look_ahead || {}, R = DATA.rows || [], C = L.columns || [], P = L.pending || null, ledger = L.hand_offs || [];
+    const order = DATA.order || [], stop = now.stop_after != null ? now.stop_after : null, last = C[C.length - 1] || {};
+    const ceil = (n, step) => Math.max(step, Math.ceil(n / step) * step);
+    // The tracks, then the close, in the order the day runs them; each adds its promises to the running total.
+    let run = last.built || 0;
+    const ahead = P ? [...(P.tracks || []).map(t => ({ label: t.track, ids: t.ids || [], close: false })),
+      { label: "close", ids: P.at_close || [], close: true }].map(a => { run += a.ids.length; return { ...a, day: P.day, built: run }; }) : [];
+    const pMax = ceil(Math.max(0, ...C.map(c => c.written || 0), ...C.map(c => c.built || 0), ...ahead.map(a => a.built)), 20);
+    const hMax = ceil(Math.max(0, ...C.map(c => c.open_numbered || 0)), 6);
+    const written = last.written || 0, built = last.built || 0;
+    const merges = C.map((c, i) => {
+      const r = R[i] || {}, kind = r.kind in KINDS ? r.kind : "other", day = r.day || 0, got = c.got || [], open = c.open_numbered || 0;
+      const moved = i ? (c.written || 0) - (C[i - 1].written || 0) : 0;
+      const says = [moved > 0 ? `Its spec wrote ${plural(moved, "promise", "promises")}.` : moved < 0 ? `Its spec dropped ${plural(-moved, "promise", "promises")}.` : "",
+        got.length ? `Built ${got.join(", ")}.` : "Built no promise.", `${c.built || 0} of ${c.written || 0} built after it.`,
+        `${plural(open, "hand-off", "hand-offs")} open after it.`].filter(Boolean).join(" ");
+      return { pr: c.pr, kind, day, built: c.built || 0, written: c.written || 0, open, got, yb: 1 - (c.built || 0) / pMax, yw: 1 - (c.written || 0) / pMax, h: open / hMax,
+        t: `${c.pr ? `Pull request #${c.pr}` : "The first commit"} · ${KINDS[kind]} · ${day ? `Day ${day}` : "before Day 1"}`, b: [r.title, says] };
+    });
+    const aheadOut = ahead.map(a => ({ label: a.label, close: a.close, ids: a.ids, day: a.day, built: a.built, yb: 1 - a.built / pMax,
+      t: a.close ? `Day ${P.day}'s close · specified, not merged` : `Day ${P.day} track ${a.label} · specified, not merged`,
+      b: [a.close ? "The close ticks each promise with its evidence and leaves the hand-offs for the days after."
+        : a.ids.length ? `Would build ${a.ids.join(", ")}.` : "Builds no promise of its own.", `${a.built} of ${written} built after it.`] }));
+    // Days after today with no spec, up to the stop: the plan cannot draw their size, and the hand-offs that wait for them say so.
+    const at = order.indexOf(current), have = new Set(days.map(d => d.day));
+    const unknown = (at < 0 ? [] : order.slice(at + 1)).filter(d => !have.has(d) && (stop == null || d <= stop)).map(day => {
+      const waiting = ledger.filter(x => x.closed == null && x.id && (x.to || []).includes(day)), waits = waiting.length;
+      return { day, waits, ids: waiting.map(x => x.id), t: `Day ${day} · no spec yet`,
+        b: ["Its size cannot be drawn until its spec is written.", waits ? `${plural(waits, "hand-off waits", "hand-offs wait")} for it (${waiting.map(x => x.id).join(", ")}).` : ""].filter(Boolean) };
+    });
+    const bands = [];
+    merges.forEach(m => { const b = bands[bands.length - 1]; if (b && b.day === m.day) b.n++; else bands.push({ day: m.day, n: 1 }); });
+    if (aheadOut.length) { const b = bands[bands.length - 1]; if (b && b.day === P.day) b.n += aheadOut.length; else bands.push({ day: P.day, n: aheadOut.length }); }
+    const nKind = k => merges.filter(m => m.kind === k).length;
+    const left = aheadOut.length ? aheadOut[aheadOut.length - 1].built - built : 0;
+    const parts = [left > 0 ? plural(left, "promise", "promises") : "", ...unknown.map(u => `Day ${u.day}`)].filter(Boolean);
+    const tracks = P ? (P.tracks || []) : [];
+    const b = [P ? (tracks.length ? `Day ${P.day} has ${plural(tracks.length, "track left", "tracks left")} (${tracks.map(t => `${t.track}: ${(t.ids || []).length}`).join(", ")}) and its close.`
+        : `Day ${P.day} has only its close left.`) : "",
+      ...unknown.map(u => `Day ${u.day} has no spec, so its size cannot be drawn.` + (u.waits ? ` ${plural(u.waits, "hand-off waits", "hand-offs wait")} for it (${u.ids.join(", ")}).` : "")),
+      stop != null ? `After Day ${stop} the plan stops for the maintainer. What comes after is not specified, so the graph ends there and gives no percentage of the whole plan.` : ""].filter(Boolean);
+    const ticks = [], every = pMax > 120 ? 40 : 20;
+    for (let t = 0; t <= pMax; t += every) ticks.push({ label: String(t), y: 1 - t / pMax });
+    return { merges, ahead: aheadOut, unknown, stop, pMax, hMax, ticks, bands, barTicks: [{ label: String(hMax / 2), h: 0.5 }, { label: String(hMax), h: 1 }],
+      key: [["pt spec", `Spec merge ${nKind("spec")}`], ["pt code", `Code merge ${nKind("code")}`], ["pt close", `A day's close ${nKind("close")}`],
+        ["pt other", `Other (tooling, dashboard) ${nKind("other") + nKind("origin")}`], ["sw built", "Promises built"], ["sw written", "Promises written"],
+        ["sw handoff", "Hand-offs open"], ["pt todo", "Specified, not merged"], ["sw unknown", "Not specified yet"]],
+      say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the number of promises built once that merge landed; the dashed line above it is the number written. The bar under it is the numbered hand-offs still open. Right of today, the outlined dots are tracks that are specified and not merged.`,
+      ladder: [{ cls: "now", name: "Level 0 · today", need: "The maintainer starts each step and merges.", state: "Where the project is" },
+        { cls: "", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: "Enters at the Day 8 trial" },
+        { cls: "wait", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: "Not counted yet" },
+        { cls: "wait", name: "Level 3 · phases chain", need: "One whole phase at level 2 with no escape.", state: "Not counted yet" }],
+      read: !C.length ? { t: "Nothing is merged yet", b: [] }
+        : { t: `${built} of ${written} promises built` + (parts.length ? ` · ${andList(parts)}${stop != null ? " before the stop" : " still to come"}` : ""), b },
+      table: { head: ["Merge", "Kind", "Day", "Built", "Written", "Hand-offs open"],
+        rows: [...merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.built, m.written, m.open]),
+          ...aheadOut.map(a => [a.close ? "close" : `track ${a.label}`, "not merged", a.day, a.built, written, ""])] } };
   }
 
   function attention() {
@@ -365,7 +434,7 @@ function model(DATA) {
     return { total: (DATA.attention || []).length, groups };
   }
 
-  // Graph 9: one date on the clock. The sessions (docs/dashboard/sessions.json) are stamped with the offset of the
+  // Graph 10: one date on the clock. The sessions (docs/dashboard/sessions.json) are stamped with the offset of the
   // machine that recorded them, so the clock is the maintainer's and not the reader's; GitHub's times are UTC and
   // are moved to that offset. A stretch that crosses midnight is clipped to each date it touches.
   const LANES = [["main", "Main session"], ["implementer", "Implementer"], ["auditors", "Auditors"], ["other", "Other subagents"]];
@@ -434,11 +503,11 @@ function model(DATA) {
       clock.empty && ["Where a day's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
 
-  const P = safe(promises), g8 = safe(yardGraph), g9 = safe(clockGraph);
+  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), g1: safe(abilityGraph), g2: P.error ? P : P.board, g3: P.error ? P : safe(() => reliedGraph(P)), g4: safe(mergeGraph), g5: safe(sieveGraph),
-    g6: safe(costGraph), g7: safe(workGraph), g8, g9, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
-    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g8, g9) };
+    attention: attention(), g3: safe(abilityGraph), g4: P.error ? P : P.board, g5: P.error ? P : safe(() => reliedGraph(P)), g6: safe(mergeGraph), g7: safe(sieveGraph),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
+    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10) };
 }
 
 /* ---------- how this works: one promise, followed through its steps ---------- */
@@ -482,7 +551,7 @@ const HOW_CAST = [
   ["Three end-of-phase auditors", "Security, agentic engineering and architecture. Run once, after the last phase in the plan.", "goal"],
 ];
 // The excerpts are the build's own reading of the plan, the newest finished day's spec and its record; they go in
-// as HTML through esc(). `tally` is graph 2's count of the re-checked promises, so the two cannot disagree.
+// as HTML through esc(). `tally` is graph 4's count of the re-checked promises, so the two cannot disagree.
 function drawHow(DATA, tally) {
   const X = DATA.how_this_works || {}, criteria = DATA.criteria_index || [];
   const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
@@ -550,7 +619,7 @@ function drawHow(DATA, tally) {
     document.getElementById("how-fold").open = true;
     document.getElementById("how-step-" + s).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
-  // A step link anywhere on the page (graph 2 has four) opens the walk-through at that step.
+  // A step link anywhere on the page (graph 4 has four) opens the walk-through at that step.
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-how]");
     if (b) { e.preventDefault(); show(b.dataset.how, !spine.contains(b)); }
@@ -594,7 +663,7 @@ function draw(M, DATA) {
       ["mouseenter", "focus", "click"].forEach(ev => node.addEventListener(ev, pick));
       return node;
     };
-    mark.base = r => { base = r; clear(); say(r); };  // a graph that redraws (graph 9, per date) says its new whole
+    mark.base = r => { base = r; clear(); say(r); };  // a graph that redraws (graph 10, per date) says its new whole
     return mark;
   }
   const key = (id, items) => put(id, items.map(([cls, text, glyph]) => h("span", null, cls && h("i", { class: cls }, glyph || ""), text)));
@@ -624,7 +693,7 @@ function draw(M, DATA) {
 
   /* the day buttons: one day lit in every graph */
   let lit = null;
-  const onDay = [];  // what else happens when a day is picked: graph 9 turns to that day's last date
+  const onDay = [];  // what else happens when a day is picked: graph 10 turns to that day's last date
   const relight = () => marks.forEach(node => node.classList.toggle("dim", lit !== null && !node.dataset.days.split(" ").includes(String(lit))));
   const chips = [null, ...M.days.map(d => d.day)].map(day => h("button", { type: "button", "aria-pressed": day === null ? "true" : "false" }, day === null ? "All days" : `Day ${day}`));
   chips.forEach((chip, i) => chip.addEventListener("click", () => {
@@ -637,57 +706,102 @@ function draw(M, DATA) {
 
   /* Graph 1 */
   graph("g1", (m, mark) => {
-    const line = (name, cells, cls) => h("div", { class: `g1-row ${cls || ""}` }, h("div", { class: "g1-name" }, name), h("div", { class: "g1-cells" }, cells));
-    const col = c => c.day == null ? [] : [c.day];
-    put("g1-plot", line("Day", m.cols.map(c => forDays(h("div", { class: "g1-h" }, c.label), col(c))), "head"),
-      line("Closed", m.cols.map(c => forDays(h("div", { class: "g1-h mark" }, c.mark), col(c))), "head"),
-      m.rows.map(r => line(r.name, r.cells.map(c => forDays(mark(h("button", { type: "button", class: `g1-cell s${c.level}` }, c.n ? String(c.n) : "·"), c), col(c))))));
-    key("g1-key", [["", "Pull requests:"], ["sw s1", "1–2"], ["sw s2", "3–5"], ["sw s3", "6–9"], ["sw s4", "10 or more"]]);
-  });
-
-  /* Graph 2 */
-  graph("g2", (m, mark) => {
-    $("g2-say").textContent = m.say;
-    key("g2-key", m.key.map(k => [`tile ${k.status}`, k.text, k.glyph]));
-    put("g2-plot", m.rows.map(r => forDays(h("div", { class: "board-row" }, h("div", { class: "board-day" }, `Day ${r.day}`),
-      h("div", { class: "tiles" }, r.tiles.map(t => tile(t, mark))), h("div", { class: "board-count" }, r.count)), [r.day])));
-    $("g2-hist-say").textContent = m.histSay;
-    put("g2-hist", m.hist.map(x => mark(h("button", { type: "button", class: "strip-col" },
-      ["skipped", "broken", "repair", "unproven", "proven"].map(s => h("span", { class: s, style: `height:${px(x.counts[s] * 48 / m.histMax)}` }))), x)));
-    $("g2-hist").hidden = !m.hist.length;
+    const TOP = 200, ALL = 280, NS = "http://www.w3.org/2000/svg", n = m.merges.length, cols = Math.max(1, n + m.ahead.length);
+    const Y = v => (v * TOP).toFixed(1);
+    // A stepped line: each column's value runs across the column's own width, and a short step joins it to the next.
+    const steps = ys => ys.map((y, i) => `${i ? "L" : "M"}${i},${Y(y)} L${i + 1},${Y(y)}`).join(" ");
+    const yw = m.merges.map(x => x.yw), yb = m.merges.map(x => x.yb);
+    let gapD = "", writtenD = "", builtD = "", projD = "";
+    if (n) {
+      // The gap is the band between the written steps and the built steps, so the built steps run back under them.
+      gapD = steps(yw);
+      for (let i = n - 1; i >= 0; i--) gapD += ` L${i + 1},${Y(yb[i])} L${i},${Y(yb[i])}`;
+      gapD += " Z";
+      // Written stays flat over the columns still to come, since no promise is added to it until a spec merges.
+      writtenD = steps([...yw, ...m.ahead.map(() => yw[n - 1])]);
+      builtD = steps(yb);
+      projD = [`M${n - 0.5},${Y(yb[n - 1])}`, ...m.ahead.map((a, j) => `L${n + j + 0.5},${Y(a.yb)}`)].join(" ");
+    }
+    const path = (cls, d) => { const p = document.createElementNS(NS, "path"); p.setAttribute("class", cls); p.setAttribute("d", d); return p; };
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${cols} ${TOP}`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
+    svg.append(path("gap", gapD), path("written", writtenD), path("built", builtD), path("proj", projD));
+    const axis = h("div", { class: "g1-axis" }, h("span", { style: "top:0" }, "Day"), m.ticks.map(t => h("span", { style: `top:${px(22 + t.y * TOP - 7)}` }, t.label)),
+      m.barTicks.map(t => h("span", { style: `top:${px(22 + ALL - t.h * 60 - 7)}` }, t.label)));
+    const bands = h("div", { class: "g1-bands" }, m.bands.map((b, i) => forDays(h("div", { class: i % 2 ? "odd" : "", style: `flex-grow:${b.n}` }, b.day ? String(b.day) : "–"), b.day ? [b.day] : [])));
+    const colsEl = h("div", { class: "g1-cols" },
+      m.merges.map(x => forDays(mark(h("button", { type: "button", class: "g1-col" },
+        h("span", { class: `pt ${x.kind}`, style: `top:${px(x.yb * TOP)}` }), x.open > 0 && h("span", { class: "open-bar", style: `height:${px(x.h * 60)}` })), x), x.day ? [x.day] : [])),
+      m.ahead.map(a => forDays(mark(h("button", { type: "button", class: "g1-col ahead" }, h("span", { class: "pt todo", style: `top:${px(a.yb * TOP)}` }),
+        h("span", { class: "g1-under" }, a.close ? "✓" : a.label)), a), [a.day])));
+    const lines = [...m.ticks.map(t => t.y * TOP), TOP, ...m.barTicks.map(t => ALL - t.h * 60), ALL].map((y, i, a) => h("div", { class: `g1-line${y === TOP || i === a.length - 1 ? " strong" : ""}`, style: `top:${px(y)}` }));
+    const today = h("div", { class: "g1-today", style: `left:${(100 * n / cols).toFixed(2)}%` }, h("span", null, "today"));
+    const area = h("div", { class: "g1-area" }, lines, svg, colsEl, today);
+    const after = h("div", { class: "g1-after" },
+      m.unknown.map(u => forDays(mark(h("button", { type: "button", class: "g1-unknown" }, h("strong", null, `Day ${u.day}`), h("span", null, "no spec yet"),
+        h("span", null, "size unknown"), u.waits > 0 && h("span", { class: "g1-waits" }, `${u.waits} wait here`)), u), [u.day])),
+      m.stop != null && h("div", { class: "g1-stop" }, h("span", null, "stop")),
+      m.stop != null && h("div", { class: "g1-later" }, "After the stop: not specified until the maintainer lifts it"));
+    put("g1-plot", h("div", { class: "g1", style: `min-width:${Math.max(820, (n + m.ahead.length) * 9 + m.unknown.length * 110 + 120)}px` }, axis,
+      h("div", { class: "g1-main" }, h("div", { class: "g1-lane" }, bands, area), after)));
+    $("g1-say").textContent = m.say;
+    key("g1-key", m.key);
+    put("g1-ladder", m.ladder.map(r => h("div", { class: `rung ${r.cls}` }, h("b", null, r.name), r.need, h("small", null, r.state))));
   });
 
   /* Graph 3 */
   graph("g3", (m, mark) => {
-    put("g3-plot", m.rows.map(r => h("div", { class: "ab-row" }, h("div", { class: "ab-name" }, r.name),
+    const line = (name, cells, cls) => h("div", { class: `g3-row ${cls || ""}` }, h("div", { class: "g3-name" }, name), h("div", { class: "g3-cells" }, cells));
+    const col = c => c.day == null ? [] : [c.day];
+    put("g3-plot", line("Day", m.cols.map(c => forDays(h("div", { class: "g3-h" }, c.label), col(c))), "head"),
+      line("Closed", m.cols.map(c => forDays(h("div", { class: "g3-h mark" }, c.mark), col(c))), "head"),
+      m.rows.map(r => line(r.name, r.cells.map(c => forDays(mark(h("button", { type: "button", class: `g3-cell s${c.level}` }, c.n ? String(c.n) : "·"), c), col(c))))));
+    key("g3-key", [["", "Pull requests:"], ["sw s1", "1–2"], ["sw s2", "3–5"], ["sw s3", "6–9"], ["sw s4", "10 or more"]]);
+  });
+
+  /* Graph 4 */
+  graph("g4", (m, mark) => {
+    $("g4-say").textContent = m.say;
+    key("g4-key", m.key.map(k => [`tile ${k.status}`, k.text, k.glyph]));
+    put("g4-plot", m.rows.map(r => forDays(h("div", { class: "board-row" }, h("div", { class: "board-day" }, `Day ${r.day}`),
+      h("div", { class: "tiles" }, r.tiles.map(t => tile(t, mark))), h("div", { class: "board-count" }, r.count)), [r.day])));
+    $("g4-hist-say").textContent = m.histSay;
+    put("g4-hist", m.hist.map(x => mark(h("button", { type: "button", class: "strip-col" },
+      ["skipped", "broken", "repair", "unproven", "proven"].map(s => h("span", { class: s, style: `height:${px(x.counts[s] * 48 / m.histMax)}` }))), x)));
+    $("g4-hist").hidden = !m.hist.length;
+  });
+
+  /* Graph 5 */
+  graph("g5", (m, mark) => {
+    put("g5-plot", m.rows.map(r => h("div", { class: "ab-row" }, h("div", { class: "ab-name" }, r.name),
       h("div", { class: "ab-groups" }, r.groups.map(g => forDays(h("div", { class: "ab-group" }, h("span", { class: "mono" }, `D${g.day}`),
         h("div", { class: "tiles" }, g.tiles.map(t => tile(t, mark)))), [g.day])), r.note && h("span", { class: "ab-note" }, r.note)),
       h("div", { class: "ab-count" }, r.count))));
   });
 
-  /* Graph 4 */
-  graph("g4", (m, mark) => {
+  /* Graph 6 */
+  graph("g6", (m, mark) => {
     const TOP = 200, ALL = 280, n = Math.max(1, m.merges.length);
-    $("g4-say").textContent = m.say;
-    key("g4-key", m.key.map(([k, text]) => [`pt ${k}`, text]));
+    $("g6-say").textContent = m.say;
+    key("g6-key", m.key.map(([k, text]) => [`pt ${k}`, text]));
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path"), svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     path.setAttribute("d", m.merges.filter(x => x.y != null).map((x, i) => `${i ? "L" : "M"}${(m.merges.indexOf(x) + 0.5).toFixed(1)},${(x.y * TOP).toFixed(1)}`).join(" "));
     svg.setAttribute("viewBox", `0 0 ${n} ${TOP}`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true"); svg.append(path);
-    const axis = h("div", { class: "g4-axis" }, h("span", { style: "top:0" }, "Day"), m.ticks.map(t => h("span", { style: `top:${px(22 + t.y * TOP - 7)}` }, t.label)),
+    const axis = h("div", { class: "g6-axis" }, h("span", { style: "top:0" }, "Day"), m.ticks.map(t => h("span", { style: `top:${px(22 + t.y * TOP - 7)}` }, t.label)),
       m.barTicks.map(t => h("span", { style: `top:${px(22 + ALL - t.h * 60 - 7)}` }, t.label)));
-    const bands = h("div", { class: "g4-bands" }, m.bands.map((b, i) => forDays(h("div", { class: i % 2 ? "odd" : "", style: `flex-grow:${b.n}` }, b.day ? String(b.day) : "–"), b.day ? [b.day] : [])));
-    const cols = h("div", { class: "g4-cols" }, m.merges.map(x => forDays(mark(h("button", { type: "button", class: "g4-col" },
+    const bands = h("div", { class: "g6-bands" }, m.bands.map((b, i) => forDays(h("div", { class: i % 2 ? "odd" : "", style: `flex-grow:${b.n}` }, b.day ? String(b.day) : "–"), b.day ? [b.day] : [])));
+    const cols = h("div", { class: "g6-cols" }, m.merges.map(x => forDays(mark(h("button", { type: "button", class: "g6-col" },
       x.y != null && h("span", { class: `pt ${x.kind}`, style: `top:${px(x.y * TOP)}` }), x.failed && h("span", { class: "pt failed" }),
       h("span", { class: "open-bar", style: `height:${px(x.h * 60)}` })), x), x.day ? [x.day] : [])));
-    const lines = [...m.ticks.map(t => t.y * TOP), TOP, ...m.barTicks.slice(1).map(t => ALL - t.h * 60), ALL].map((y, i, a) => h("div", { class: `g4-line${y === TOP || i === a.length - 1 ? " strong" : ""}`, style: `top:${px(y)}` }));
-    put("g4-plot", h("div", { class: "g4", style: `min-width:${Math.max(820, n * 9)}px` }, axis, h("div", { class: "g4-main" }, bands, h("div", { class: "g4-area" }, lines, svg, cols))));
+    const lines = [...m.ticks.map(t => t.y * TOP), TOP, ...m.barTicks.slice(1).map(t => ALL - t.h * 60), ALL].map((y, i, a) => h("div", { class: `g6-line${y === TOP || i === a.length - 1 ? " strong" : ""}`, style: `top:${px(y)}` }));
+    put("g6-plot", h("div", { class: "g6", style: `min-width:${Math.max(820, n * 9)}px` }, axis, h("div", { class: "g6-main" }, bands, h("div", { class: "g6-area" }, lines, svg, cols))));
   });
 
-  /* Graph 5 */
-  graph("g5", (m, mark) => {
-    $("g5-say").textContent = m.say;
-    key("g5-key", [["", "Cause:"], ...m.key.map(k => [k.cls, k.text])]);
-    put("g5-plot", h("div", { class: "sieve" },
+  /* Graph 7 */
+  graph("g7", (m, mark) => {
+    $("g7-say").textContent = m.say;
+    key("g7-key", [["", "Cause:"], ...m.key.map(k => [k.cls, k.text])]);
+    put("g7-plot", h("div", { class: "sieve" },
       h("div", { class: "sieve-row head" }, h("div", { class: "sieve-day" }), h("div", { class: "sieve-gates" }, m.gates.map(g => h("div", { class: "sieve-gate" }, h("strong", null, g.name), h("span", null, g.sub)))),
         h("div", { class: "sieve-note" }, "Tags a second reader gave differently")),
       m.rows.map(r => forDays(h("div", { class: "sieve-row" }, h("div", { class: "sieve-day" }, `Day ${r.day}`),
@@ -695,7 +809,7 @@ function draw(M, DATA) {
         h("div", { class: "sieve-note mono" }, r.note)), [r.day]))));
   });
 
-  /* Graphs 6 and 7: stacked bars over a shared baseline, with rows of counts under them */
+  /* Graphs 8 and 9: stacked bars over a shared baseline, with rows of counts under them */
   function bars(g, m, mark, items, parts, under) {
     const H = 150;
     const stack = x => parts.map(([cls, value]) => [cls, value(x) / m.max * H]).filter(p => p[1] >= 1).map(([cls, hgt], i) => h("span", { class: `seg ${cls}${i ? "" : " cap"}`, style: `height:${Math.max(2, Math.round(hgt))}px` }));
@@ -703,44 +817,55 @@ function draw(M, DATA) {
       h("div", { class: "bar-labels" }, items.map(x => forDays(h("div", null, x.under), x.lit))),
       under.map(([name, value]) => h("div", { class: "bar-extra" }, h("p", null, name), h("div", { class: "mono" }, items.map(x => forDays(h("div", null, value(x)), x.lit))))));
   }
-  graph("g6", (m, mark) => {
-    $("g6-say").textContent = m.say;
-    key("g6-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-    bars("g6", m, mark, m.bars.map(x => ({ ...x, top: `$${Math.round(x.total)}`, under: x.label, lit: x.days })), [["rest", x => x.aud + x.other], ["main", x => x.main]],
+  graph("g8", (m, mark) => {
+    $("g8-say").textContent = m.say;
+    key("g8-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
+    bars("g8", m, mark, m.bars.map(x => ({ ...x, top: `$${Math.round(x.total)}`, under: x.label, lit: x.days })), [["rest", x => x.aud + x.other], ["main", x => x.main]],
       [["Calls the hooks refused", x => x.refused ? String(x.refused) : "·"], ["Long outputs the hooks cut short", x => x.cut ? String(x.cut) : "·"]]);
   });
-  graph("g7", (m, mark) => {
-    key("g7-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-    bars("g7", m, mark, m.bars.map(x => ({ ...x, top: x.label, under: String(x.day), lit: [x.day] })), [...m.key].reverse().map(([k]) => [k, x => x.w[k]]),
+  graph("g9", (m, mark) => {
+    key("g9-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
+    bars("g9", m, mark, m.bars.map(x => ({ ...x, top: x.label, under: String(x.day), lit: [x.day] })), [...m.key].reverse().map(([k]) => [k, x => x.w[k]]),
       [["Pull requests merged", x => String(x.prs)], ["Test lines for each production line", x => x.ratio]]);
   });
 
-  /* Graph 8 */
-  graph("g8", (m, mark) => {
-    key("g8-key", [["sw main", "At or under the kit's baseline, or no baseline"], ["sw over", "Above the kit's baseline"], ["dash", "Baseline"]]);
-    put("g8-plot", h("div", { class: "yard" },
+  /* Graph 2 */
+  graph("g2", (m, mark) => {
+    key("g2-key", [["sw main", "At or under the kit's baseline, or no baseline"], ["sw over", "Above the kit's baseline"], ["dash", "Baseline"], ["sw avg", "Average so far"]]);
+    // The average so far, over the row's columns on the bars' own 34px scale; the columns are centred at i + 0.5.
+    const NS = "http://www.w3.org/2000/svg";
+    const avgSvg = r => {
+      const pts = r.avg.map(a => [m.cols.indexOf(a.day) + 0.5, 34 * (1 - a.y)]);
+      const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x},${y.toFixed(1)}`).join(" "), dots = pts.map(([x, y]) => `M${x},${y.toFixed(1)} h0`).join(" ");
+      const path = (cls, d) => { const p = document.createElementNS(NS, "path"); p.setAttribute("class", cls); p.setAttribute("d", d); return p; };
+      const svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("class", "yard-avg"); svg.setAttribute("viewBox", `0 0 ${m.cols.length} 34`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
+      svg.append(path("halo", line), path("line", line), path("dots", dots));
+      return svg;
+    };
+    put("g2-plot", h("div", { class: "yard" },
       h("div", { class: "yard-row head" }, h("div", { class: "yard-name" }), h("div", { class: "yard-cells" }, m.cols.map(d => forDays(h("div", null, `Day ${d}`), [d]))), h("div", { class: "yard-note" })),
       m.rows.map(r => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, r.name),
         h("div", { class: "yard-cells" }, r.cells.map(c => forDays(mark(h("button", { type: "button", class: "yard-cell" }, h("b", null, c.text), h("span", { class: c.over ? "over" : "", style: `height:${px(c.h * 34)}` })), c), [c.day])),
-          r.line != null && h("div", { class: "yard-line", style: `bottom:${px(r.line * 34)}` })),
-        h("div", { class: "yard-note" }, r.note))),
+          r.line != null && h("div", { class: "yard-line", style: `bottom:${px(r.line * 34)}` }), r.avg.length > 0 && avgSvg(r)),
+        h("div", { class: "yard-note" }, r.note, r.avgNote ? h("span", { class: "yard-avg-note" }, r.avgNote) : null))),
       m.waiting.map(w => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, w.name), h("div", { class: "yard-wait" }, h("span", null, "Not measured yet: ", rich(w.why))), h("div", { class: "yard-note" }, "draws here once it is counted")))));
   });
 
-  /* Graph 9 */
-  graph("g9", (m, mark) => {
-    if (m.empty) { put("g9-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
-    key("g9-key", [["sw busy", "Busy"], ["", "Pull requests:"], ["sw spec", "Spec"], ["sw prod", "Code"], ["sw close", "The day's close"], ["sw tooling", "Other (tooling, dashboard)"], ["sw failed", "Checks with a failure"], ["sw merge", "Merge"]]);
+  /* Graph 10 */
+  graph("g10", (m, mark) => {
+    if (m.empty) { put("g10-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
+    key("g10-key", [["sw busy", "Busy"], ["", "Pull requests:"], ["sw spec", "Spec"], ["sw prod", "Code"], ["sw close", "The day's close"], ["sw tooling", "Other (tooling, dashboard)"], ["sw failed", "Checks with a failure"], ["sw merge", "Merge"]]);
     const dates = m.dates.map(d => forDays(h("button", { type: "button", "aria-pressed": "false" }, d.label), d.days));
-    put("g9-dates", h("span", null, "One date on the clock:"), dates);
+    put("g10-dates", h("span", null, "One date on the clock:"), dates);
     const show = i => {
       const d = m.dates[i];
       dates.forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
-      put("g9-plot", h("div", { class: "clock" },
+      put("g10-plot", h("div", { class: "clock" },
         h("div", { class: "lane head" }, h("div", { class: "lane-name" }, m.zone), h("div", { class: "lane-bars" }, m.hours.map(x => h("span", { class: "hour", style: `left:${x.x.toFixed(2)}%` }, x.t)))),
         d.lanes.map(l => h("div", { class: "lane" }, h("div", { class: "lane-name" }, h("strong", null, l.name), h("span", null, l.sub)),
           h("div", { class: "lane-bars" }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `lane-bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%` }), b), b.days)))))));
-      table("g9-table", d.table);
+      table("g10-table", d.table);
       mark.base(d.read);
       relight();
     };

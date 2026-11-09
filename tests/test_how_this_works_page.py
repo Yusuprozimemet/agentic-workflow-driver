@@ -23,7 +23,7 @@ class PageTest(unittest.TestCase):
 
     def test_the_panel_sits_folded_under_the_graphs(self):
         order = [
-            self.html.index(f'id="{name}"') for name in ("g2", "g8", "how-fold", "how-this-works")
+            self.html.index(f'id="{name}"') for name in ("g1", "g10", "how-fold", "how-this-works")
         ]
         self.assertEqual(order, sorted(order))
         self.assertRegex(self.html, r'<details class="fold" id="how-fold">\s*<summary>')
@@ -71,7 +71,7 @@ console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "
 
     def test_the_promise_board_links_to_the_steps_that_prove_a_promise(self):
         board = re.search(
-            r'<section class="graph" id="g2">.*?</section>', self.html, re.DOTALL
+            r'<section class="graph" id="g4">.*?</section>', self.html, re.DOTALL
         ).group(0)
         self.assertEqual(
             re.findall(r'<a href="#how-step-(\w+)" data-how="(\w+)">', board),

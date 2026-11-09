@@ -16,7 +16,7 @@
   <header>
     <p class="eyebrow" id="eyebrow"></p>
     <h1>A script that runs AI coding work one step at a time</h1>
-    <p class="lede">The whole project in nine graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
+    <p class="lede">The whole project in ten graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
     <details class="attention" id="attention" hidden>
@@ -28,122 +28,144 @@
 
   <div class="days" id="days" role="group" aria-label="Highlight one day in every graph"></div>
 
+  <h2 class="chapter">Where is it going?<small>what is left before the stop, and whether it is on the plan's yardsticks</small></h2>
+
+  <section class="graph" id="g1">
+    <div class="graph-head">
+      <p class="graph-n">Graph 1</p>
+      <h2>How far to the next stop?</h2>
+      <p class="graph-say" id="g1-say">One column per merge, oldest on the left, and on past today to what is specified and not merged.</p>
+    </div>
+    <div class="ladder" id="g1-ladder"></div>
+    <div class="legend" id="g1-key"></div>
+    <div class="scroll-x" id="g1-plot"></div>
+    <p class="limit">The graph ends at the stop: the phases after it are not specified, so it gives no percentage of the whole plan. The hand-offs counted are the numbered ones in each day's Notes.</p>
+    <div class="readout" id="g1-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g1-table"></table></div></details>
+  </section>
+
+  <section class="graph" id="g2">
+    <div class="graph-head">
+      <p class="graph-n">Graph 2</p>
+      <h2>Is it meeting what the plan judges it on?</h2>
+      <p class="graph-say">One row per yardstick the plan names, counted at each day's close. Each row has its own scale. The dashed line is the figure the kit reached with a person driving every step. The blue line across a row is its average so far.</p>
+    </div>
+    <div class="legend" id="g2-key"></div>
+    <div class="scroll-x" id="g2-plot"></div>
+    <div class="readout" id="g2-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g2-table"></table></div></details>
+  </section>
+
+  <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, and the promises behind them</small></h2>
+
   <div class="pair">
-    <section class="graph" id="g1">
+    <section class="graph" id="g3">
       <div class="graph-head">
-        <p class="graph-n">Graph 1</p>
+        <p class="graph-n">Graph 3</p>
         <h2>What can the driver do, and when did it learn it?</h2>
         <p class="graph-say">Each cell counts the merged pull requests that grew one ability on one day. A darker cell means more of them.</p>
       </div>
-      <div class="g1-plot" id="g1-plot"></div>
-      <div class="legend" id="g1-key"></div>
-      <div class="readout" id="g1-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g1-table"></table></div></details>
+      <div class="g3-plot" id="g3-plot"></div>
+      <div class="legend" id="g3-key"></div>
+      <div class="readout" id="g3-read" aria-live="polite"></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g3-table"></table></div></details>
     </section>
 
-    <section class="graph" id="g2">
+    <section class="graph" id="g4">
       <div class="graph-head">
-        <p class="graph-n">Graph 2</p>
+        <p class="graph-n">Graph 4</p>
         <h2>Can we trust it?</h2>
-        <p class="graph-say" id="g2-say">One tile per promise the specs made, in the state the last re-check found it.</p>
+        <p class="graph-say" id="g4-say">One tile per promise the specs made, in the state the last re-check found it.</p>
       </div>
-      <div class="legend" id="g2-key"></div>
-      <div class="board" id="g2-plot"></div>
+      <div class="legend" id="g4-key"></div>
+      <div class="board" id="g4-plot"></div>
       <div>
-        <p class="graph-say small" id="g2-hist-say"></p>
-        <div class="strip" id="g2-hist"></div>
+        <p class="graph-say small" id="g4-hist-say"></p>
+        <div class="strip" id="g4-hist"></div>
       </div>
       <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
-      <div class="readout" id="g2-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g2-table"></table></div></details>
+      <div class="readout" id="g4-read" aria-live="polite"></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g4-table"></table></div></details>
     </section>
   </div>
 
-  <section class="graph" id="g3">
-    <div class="graph-head">
-      <p class="graph-n">Graph 3 · joins graphs 1 and 2</p>
-      <h2>Which abilities can I rely on?</h2>
-      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the day that built them and coloured as in graph 2. A promise belongs to the ability its pull request grew.</p>
-    </div>
-    <div class="ab" id="g3-plot"></div>
-    <div class="readout" id="g3-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g3-table"></table></div></details>
-  </section>
-
-  <section class="graph" id="g4">
-    <div class="graph-head">
-      <p class="graph-n">Graph 4</p>
-      <h2>Do the spec and the code still agree?</h2>
-      <p class="graph-say" id="g4-say">One column per merge, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open.</p>
-    </div>
-    <div class="legend" id="g4-key"></div>
-    <div class="scroll-x" id="g4-plot"></div>
-    <p class="limit">The angle matches names, not meaning: a spec can name a thing the code has and still describe it wrongly. <a href="#cannot-see">What these figures cannot see</a> lists the rest.</p>
-    <div class="readout" id="g4-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g4-table"></table></div></details>
-  </section>
-
   <section class="graph" id="g5">
     <div class="graph-head">
-      <p class="graph-n">Graph 5</p>
-      <h2>Does the checking work, and is it worth it?</h2>
-      <p class="graph-say" id="g5-say">Each dot is one defect from a day's Notes, placed at the gate that caught it. Work passes the gates from left to right, so a dot further right was caught later.</p>
+      <p class="graph-n">Graph 5 · joins graphs 3 and 4</p>
+      <h2>Which abilities can I rely on?</h2>
+      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew.</p>
     </div>
-    <div class="legend" id="g5-key"></div>
-    <div class="scroll-x" id="g5-plot"></div>
+    <div class="ab" id="g5-plot"></div>
     <div class="readout" id="g5-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g5-table"></table></div></details>
   </section>
 
+  <h2 class="chapter">Is the way of working sound?<small>spec against code, and what the checks catch</small></h2>
+
+  <section class="graph" id="g6">
+    <div class="graph-head">
+      <p class="graph-n">Graph 6</p>
+      <h2>Do the spec and the code still agree?</h2>
+      <p class="graph-say" id="g6-say">One column per merge, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open.</p>
+    </div>
+    <div class="legend" id="g6-key"></div>
+    <div class="scroll-x" id="g6-plot"></div>
+    <p class="limit">The angle matches names, not meaning: a spec can name a thing the code has and still describe it wrongly. <a href="#cannot-see">What these figures cannot see</a> lists the rest.</p>
+    <div class="readout" id="g6-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g6-table"></table></div></details>
+  </section>
+
+  <section class="graph" id="g7">
+    <div class="graph-head">
+      <p class="graph-n">Graph 7</p>
+      <h2>Does the checking work, and is it worth it?</h2>
+      <p class="graph-say" id="g7-say">Each dot is one defect from a day's Notes, placed at the gate that caught it. Work passes the gates from left to right, so a dot further right was caught later.</p>
+    </div>
+    <div class="legend" id="g7-key"></div>
+    <div class="scroll-x" id="g7-plot"></div>
+    <div class="readout" id="g7-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
+  </section>
+
+  <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
+
   <div class="pair">
-    <section class="graph" id="g6">
+    <section class="graph" id="g8">
       <div class="graph-head">
-        <p class="graph-n">Graph 6</p>
+        <p class="graph-n">Graph 8</p>
         <h2>What did it cost?</h2>
-        <p class="graph-say" id="g6-say">Dollars of tokens on each date with a session.</p>
+        <p class="graph-say" id="g8-say">Dollars of tokens on each date with a session.</p>
       </div>
-      <div class="legend" id="g6-key"></div>
-      <div class="bar-plot" id="g6-plot"></div>
-      <div class="readout tall" id="g6-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g6-table"></table></div></details>
+      <div class="legend" id="g8-key"></div>
+      <div class="bar-plot" id="g8-plot"></div>
+      <div class="readout tall" id="g8-read" aria-live="polite"></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g8-table"></table></div></details>
     </section>
 
-    <section class="graph" id="g7">
+    <section class="graph" id="g9">
       <div class="graph-head">
-        <p class="graph-n">Graph 7</p>
+        <p class="graph-n">Graph 9</p>
         <h2>Where did the work go?</h2>
         <p class="graph-say">Lines changed in the merged pull requests of each day, sorted by what the file is.</p>
       </div>
-      <div class="legend" id="g7-key"></div>
-      <div class="bar-plot" id="g7-plot"></div>
-      <div class="readout tall" id="g7-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
+      <div class="legend" id="g9-key"></div>
+      <div class="bar-plot" id="g9-plot"></div>
+      <div class="readout tall" id="g9-read" aria-live="polite"></div>
+      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g9-table"></table></div></details>
     </section>
   </div>
 
-  <section class="graph" id="g8">
+  <section class="graph" id="g10">
     <div class="graph-head">
-      <p class="graph-n">Graph 8</p>
-      <h2>Is it meeting what the plan judges it on?</h2>
-      <p class="graph-say">One row per yardstick the plan names, counted at each day's close. Each row has its own scale. The dashed line is the figure the kit reached with a person driving every step.</p>
-    </div>
-    <div class="legend" id="g8-key"></div>
-    <div class="scroll-x" id="g8-plot"></div>
-    <div class="readout" id="g8-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g8-table"></table></div></details>
-  </section>
-
-  <section class="graph" id="g9">
-    <div class="graph-head">
-      <p class="graph-n">Graph 9</p>
+      <p class="graph-n">Graph 10</p>
       <h2>Where does a day's time go, and who waits for whom?</h2>
       <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing, a pull request waiting to be merged, its checks running, the maintainer merging. A day button above turns the clock to that day's last date; the dates here pick another.</p>
     </div>
-    <div class="g9-dates" id="g9-dates" role="group" aria-label="One date on the clock"></div>
-    <div class="legend" id="g9-key"></div>
-    <div class="scroll-x" id="g9-plot"></div>
-    <div class="readout tall" id="g9-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g9-table"></table></div></details>
+    <div class="g10-dates" id="g10-dates" role="group" aria-label="One date on the clock"></div>
+    <div class="legend" id="g10-key"></div>
+    <div class="scroll-x" id="g10-plot"></div>
+    <div class="readout tall" id="g10-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g10-table"></table></div></details>
   </section>
 
   <section class="graph foot" id="cannot-see">
