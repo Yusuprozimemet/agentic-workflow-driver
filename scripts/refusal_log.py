@@ -5,7 +5,7 @@
 step-guard.py, read-guard.py and auditor-guard.py call record() each time they refuse (exit 2). The
 log is .claude/state/refusals.jsonl in the project, gitignored: it holds local paths and session ids.
 token-usage.py, run at every close, writes counts() into docs/dashboard/refusals.json, which is
-committed; the dashboard's graph 6, "What did it cost?", shows it. Only what the counts need goes there:
+committed; the dashboard's graph 8, "What did it cost?", shows it. Only what the counts need goes there:
 date, guard and number. A refusal is the rule working, but many of one kind say the rule is read past
 or is in the way: the counts are there to tell which.
 
