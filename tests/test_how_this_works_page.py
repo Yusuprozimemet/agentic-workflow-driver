@@ -21,13 +21,15 @@ class PageTest(unittest.TestCase):
             r'<section class="panel" id="how-this-works">.*?</section>', self.html, re.DOTALL
         ).group(0)
 
-    def test_the_panel_sits_between_summary_and_promises(self):
+    def test_the_panel_sits_after_the_promises_in_the_background_chapter(self):
         order = [
-            self.html.index(f'id="{name}"') for name in ("summary", "how-this-works", "promises")
+            self.html.index(f'id="{name}"')
+            for name in ("summary", "promises", "ch-background", "how-this-works")
         ]
         self.assertEqual(order, sorted(order))
         links = [
-            self.html.index(f'href="#{name}"') for name in ("summary", "how-this-works", "promises")
+            self.html.index(f'href="#{name}"')
+            for name in ("summary", "promises", "ch-background", "how-this-works")
         ]
         self.assertEqual(links, sorted(links))
 

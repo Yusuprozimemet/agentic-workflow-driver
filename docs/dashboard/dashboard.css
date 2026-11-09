@@ -288,7 +288,7 @@ tr.sel td { background: var(--surface-2); }
 
 /* A panel with no data is folded into "Not measured yet"; section.panel's grid would show it. */
 [hidden] { display: none !important; }
-.wrap > [id] { scroll-margin-top: 96px; }
+.wrap > [id], .chapter > [id], .measure > section[id] { scroll-margin-top: 96px; }
 /* The contents: a menu at the top of a narrow screen, a rail beside the 1080px cards on a wide one. */
 .toc { border: 1px solid var(--ring); border-radius: 12px; padding: 10px 14px; background: var(--surface); }
 .toc ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 12px; font-size: 14px; }
@@ -344,8 +344,16 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
 .inline-detail { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; display: grid; gap: 6px; overflow-wrap: anywhere; }
 .inline-detail h3 { font-size: 14px; }
 #criteria-matrix tr[data-criterion] { cursor: pointer; }
-.measurements > h2 { margin-top: 10px; }
-.measurements > p { color: var(--ink-2); font-size: 14px; margin-bottom: 8px; }
+.chapter { display: grid; gap: 12px; }
+.chapter > * { min-width: 0; }
+.chapter > .measure { margin-top: 0; }
+.chapter-head { margin-top: 10px; padding-top: 14px; border-top: 2px solid var(--ring); }
+.chapter-what { color: var(--ink-2); font-size: 14px; margin: -8px 0 2px; }
+.stat-card.clamp .stat-v { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+#attention-list { max-height: 360px; overflow-y: auto; }
+.toc > ol > li > a { font-weight: 600; color: var(--ink); }
+.toc ol ol { display: block; margin: 0 0 6px 8px; font-size: 13px; }
+.toc a[aria-current="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
 .measure { border: 1px solid var(--ring); border-radius: 12px; padding: 0; background: var(--surface); margin-top: 10px; }
 .measure > summary { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 2px 14px; align-items: baseline; padding: 12px 16px; cursor: pointer; list-style: none; }
 .measure > summary::-webkit-details-marker { display: none; }

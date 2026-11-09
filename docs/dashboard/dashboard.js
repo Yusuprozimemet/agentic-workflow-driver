@@ -1760,6 +1760,7 @@ function drawCriteria() {
     return items.length ? `<h3>${head}</h3><p>${why}</p>${items.join("")}` : "";
   }).join("");
   list.innerHTML = DATA.attention == null ? "Not in this data" : (flagged.length ? flagged.join("") : "Nothing needs attention") + noted;
+  if (flagged.length) document.getElementById("attention-fold").open = true;
   matrix.innerHTML = DATA.criteria_index == null ? "<caption>Not in this data</caption>" : !criteria.length ? "<caption>No criteria yet</caption>" :
     `<thead><tr><th>Criterion</th><th>Day</th><th>Tag</th><th>Cites a PR</th><th>Test found</th><th>Failure recorded when built</th><th>Replay</th></tr></thead><tbody>${criteria.map((c, i) =>
       `<tr tabindex="0" role="button" aria-expanded="false" data-criterion="${i}"><td>${esc(c.id)}</td><td>${esc(c.day)}</td><td>${esc(c.tag)}</td><td>${measured(c.cited)}</td><td>${measured(c.test_found)}</td><td>${seenRed(c.seen_red)}</td><td>${replayCount(c.replay.status)}</td></tr>`).join("")}</tbody>`;
@@ -1953,6 +1954,7 @@ function drawHow() {
     spine.querySelectorAll(".how-step").forEach(b => b.setAttribute("aria-expanded", b.dataset.how === s));
     detail.innerHTML = `<div class="how-kicker">Step ${STEPS.indexOf(stepOf(s)) + 1} of ${STEPS.length}</div><h3>${stepOf(s).name}</h3>${stepOf(s).body}`;
     place();
+    if (scroll) document.getElementById("how-step-" + s).closest("details.measure").open = true;
     if (scroll) document.getElementById("how-step-" + s).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
   [[spine, false], [document.getElementById("how-cast"), true], [document.getElementById("summary-known"), true]].forEach(([box, scroll]) => box.addEventListener("click", e => {
@@ -1965,6 +1967,8 @@ function drawHow() {
 }
 
 /* ---------- the summary ---------- */
+// "Day 07 Track 0: The tests: C07.1, C07.2" is the step and the criteria it names.
+const nextParts = step => { const m = step.match(/^(.*?):\s*(C\d+\.\d+(?:\s*[,\u2013]\s*C\d+\.\d+)*)\s*$/s); return m ? [m[1], m[2]] : [step, ""]; };
 function drawSummary() {
   const reading = promiseReading(), { rp, promises, inGroup, newest } = reading, now = DATA.now, days = DATA.days;
   const planned = new Set([...ORDER, ...days.map(d => d.day)]).size, done = days.filter(finished).length;
@@ -1985,13 +1989,14 @@ function drawSummary() {
     : ["Nothing was broken at the last re-check", `${plural(promises.length, "promise", "promises")} re-checked${newest ? `, most recently ${newest}` : ""}`, "good"];
 
   const nextId = (now.next_step.match(/\bC\d+\.\d+/) || [])[0], nextRow = criteria.find(c => c.id === nextId);
+  const [nextHead, nextIds] = nextParts(now.next_step);
   const T = DATA.tokens || [], costed = T.filter(r => r.cost);
   const total = costed.reduce((a, r) => a + r.cost, 0);
   const card = (k, v, n, tone = "") => `<div class="stat-card ${tone}"><div class="stat-k">${k}</div><div class="stat-v">${v}</div><div class="stat-n">${n}</div></div>`;
   document.getElementById("summary-cards").innerHTML =
     card("Progress", `${done} of ${planned} days finished`, cur ? `Day ${dd(cur.day)} in progress: ${md(cur.title)}` : "between days")
     + card("Health", esc(health[0]), esc(health[1]), health[2])
-    + card("What is next", nextRow ? esc(nextRow.plain || nextRow.claim) : md(now.next_step), md(now.next_step))
+    + card("What is next", `<span title="${esc(nextHead)}">${md(nextHead)}</span>`, nextRow && nextRow.plain ? esc(nextRow.plain) : esc(nextIds), "clamp")
     + card("Cost so far", costed.length ? `${costed.length < T.length ? "at least " : ""}$${fmt(total, 2)}` : "Not known",
       costed.length ? "AI usage at list prices, counted on the maintainer's computer; sessions run elsewhere are not in it" : "no token counts yet");
 
@@ -2088,12 +2093,24 @@ function openTarget() {
   for (let d = target; d; d = d.parentElement) if (d.tagName === "DETAILS") d.open = true;
   target.scrollIntoView();
 }
+// The contents marks the section being read: the last one whose top has passed the top of the screen.
+function markContents() {
+  const links = [...document.querySelectorAll("#toc a")].map(a => [a, document.getElementById(a.hash.slice(1))]).filter(([, t]) => t);
+  const mark = () => {
+    let here = null;
+    for (const [a, t] of links) if (!t.closest("[hidden]") && (t.closest("details.measure") || t).getBoundingClientRect().top <= 120) here = a;
+    links.forEach(([a]) => a === here ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current"));
+  };
+  mark();
+  addEventListener("scroll", mark, { passive: true });
+}
 function contents() {
   const toc = document.getElementById("toc"), wide = matchMedia("(min-width: 1440px)"), fit = () => { toc.open = wide.matches; };
   fit(); wide.addEventListener("change", fit);
   toc.addEventListener("click", e => { if (!wide.matches && e.target.closest("a")) toc.open = false; });
   addEventListener("hashchange", openTarget);
   openTarget();
+  markContents();
 }
 
 function start() {
