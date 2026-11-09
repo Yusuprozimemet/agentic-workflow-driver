@@ -134,7 +134,7 @@ class OnceStopTest(unittest.TestCase):
         self.assertIn("halted at ", report)
         self.assertIn("step: ", report)
         records = Path(run["state"], "run.jsonl").read_text(encoding="utf-8").splitlines()
-        self.assertEqual([json.loads(line)["event"] for line in records], ["start"])
+        self.assertEqual([json.loads(line)["event"] for line in records], ["start", "pid"])
         self.assertEqual(run["driver"].returncode, 1 if os.name == "nt" else -9)
 
     def test_refuses_after_stop(self):

@@ -193,6 +193,7 @@ def run_session(command, prompt, args, project, number, record):
     proc = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=os.path.realpath(project)
     )
+    runlog.pid(args.state, record["session"], proc.pid, lock.now().strftime(lock.STAMP))
     deadline = time.monotonic() + args.session_minutes * 60
     data = prompt.encode("utf-8")
     while True:

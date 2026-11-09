@@ -1,12 +1,14 @@
 """The driver's run log, the file <state>/run.jsonl: one JSON object per line, a start line before
-each session, an end line after it, and a fix line before each resume. Each line is fsynced
-before the call returns, so a crash leaves at most a torn last line. open_session() names the last
-session started for a prefix that has no end line, and a log it cannot read parks the driver: a
-torn log is never guessed past."""
+each session, a pid line once its process has started, an end line after it, and a fix line before
+each resume. Each line is fsynced before the call returns, so a crash leaves at most a torn last
+line. open_session() names the last session started for a prefix that has no end line, and a log
+it cannot read parks the driver: a torn log is never guessed past."""
 
 import datetime
 import json
 import os
+
+from driver import lock
 
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 USED_WHEN_UNREADABLE = 2
@@ -53,6 +55,14 @@ def fix(state, session, pr, n):
     append(state, {"event": "fix", "at": stamp(), "session": session, "pr": pr, "n": n})
 
 
+def pid(state, session, pid, started):
+    # Written right after the process starts, a first session or a resume: live_session reads it
+    # after a crash, with lock.lives, so a reused pid counts as gone.
+    append(
+        state, {"event": "pid", "at": stamp(), "session": session, "pid": pid, "started": started}
+    )
+
+
 def append(state, record):
     os.makedirs(state, exist_ok=True)
     line = json.dumps(record, ensure_ascii=False) + "\n"
@@ -84,8 +94,32 @@ def _records(state):
             return None, f"the run log cannot be read at line {number}"
         if not isinstance(record, dict):
             return None, f"the run log cannot be read at line {number}"
+        if _bad(record):
+            return None, f"the run log cannot be read at line {number}"
         records.append(record)
     return records, None
+
+
+def _bad(record):
+    # A line the readers would trip over counts as unreadable, as a torn one does: a start line
+    # with no session, or a pid line that lock.read would refuse as a lock.
+    if record.get("event") == "start":
+        return not isinstance(record.get("session"), str)
+    if record.get("event") != "pid":
+        return False
+    pid = record.get("pid")
+    started = record.get("started")
+    if not isinstance(record.get("session"), str):
+        return True
+    if not isinstance(pid, int) or isinstance(pid, bool) or not 0 < pid < 2**31:
+        return True
+    if not isinstance(started, str):
+        return True
+    try:
+        lock.stamp_time(started)
+    except ValueError:
+        return True
+    return False
 
 
 def failures(state, prefix):
@@ -125,6 +159,45 @@ def open_session(state, prefix):
         if record.get("session") not in ended:
             return record.get("session"), None
     return None, None
+
+
+def live_session(state):
+    # Returns (session, pid, None) for the newest session whose last pid line has no later end line
+    # and whose process lives, of any prefix; (None, None, None) when none does or there is no log;
+    # (None, None, reason) when the log cannot be read.
+    try:
+        records, reason = _records(state)
+    except OSError as error:
+        return None, None, f"the run log cannot be read: {error.strerror}"
+    if reason:
+        return None, None, reason
+    # Read from the end: a session's first pid line met here is its last, and its later end lines
+    # have already been met. A list, since an end line's session is not checked to be hashable.
+    closed = []
+    for record in reversed(records or []):
+        session = record.get("session")
+        if record.get("event") == "end":
+            closed.append(session)
+        elif record.get("event") == "pid" and session not in closed:
+            if lock.lives(record["pid"], record["started"]):
+                return session, record["pid"], None
+            closed.append(session)
+    return None, None, None
+
+
+def last_session(state, prefix):
+    # The newest session started for prefix, or None: also when the log cannot be read, since a
+    # park's body only names it.
+    try:
+        records, reason = _records(state)
+    except OSError:
+        return None
+    if reason or records is None:
+        return None
+    for record in reversed(records):
+        if record.get("event") == "start" and record.get("prefix") == prefix:
+            return record["session"]
+    return None
 
 
 def fixes(state, session):
