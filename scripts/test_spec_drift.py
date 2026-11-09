@@ -1375,11 +1375,16 @@ class CriterionPanelsTest(unittest.TestCase):
 
 
 class PageStructureTest(unittest.TestCase):
-    """The page's layout: a contents in page order, and the gap's repeated views under one disclosure, open by default."""
+    """The page's layout: chapters, a contents in page order, and the gap's repeated views under one closed disclosure."""
 
-    ORDER = ["summary", "how-this-works", "promises", "tested", "measurements"]
-    MEASURED = ["where", "attention", "ticks", "handoffs", "stats", "services", "work", "verification", "corrections",
-                "second-reader", "infra", "deployment", "tokens", "vectors", "conclusion", "not-measured"]
+    CHAPTERS = {"ch-now": ["summary", "attention", "where"],
+                "ch-trust": ["promises", "tested", "ticks", "verification", "second-reader"],
+                "ch-spec": ["gap", "work", "corrections", "handoffs"],
+                "ch-cost": ["infra", "deployment", "tokens", "services"],
+                "ch-background": ["how-this-works", "vectors", "conclusion", "not-measured"]}
+    ORDER = [i for chapter, inside in CHAPTERS.items() for i in [chapter, *inside]]
+    MEASURED = ["attention", "where", "ticks", "verification", "second-reader", "stats", "work", "corrections", "handoffs",
+                "infra", "deployment", "tokens", "services", "vectors", "conclusion", "not-measured"]
 
     def setUp(self):
         with open(os.path.join(HERE, "..", "docs", "dashboard", "index.html"), encoding="utf-8") as f:
@@ -1390,11 +1395,27 @@ class PageStructureTest(unittest.TestCase):
         links = re.findall(r'href="#([\w-]+)"', toc.group(1) if toc else "")
         self.assertEqual([i for i in links if f'id="{i}"' not in self.page], [])
         self.assertEqual(links, self.ORDER)
-        tops = re.findall(r'<(?:section|div)\b[^>]*\bid="([\w-]+)"', self.page)
+        tops = re.findall(r'<(?:section|div|details)\b[^>]*\bid="([\w-]+)"', self.page)
         self.assertEqual([i for i in tops if i in self.ORDER], self.ORDER)
 
-    def test_every_measurement_is_still_there_in_its_order_under_measurements(self):
-        below = self.page[self.page.index('id="measurements"'):]
+    def test_each_chapter_holds_its_sections(self):
+        parts = re.split(r'<div class="chapter" id="(ch-[a-z]+)">', self.page)
+        found = dict(zip(parts[1::2], parts[2::2]))
+        self.assertEqual(list(found), list(self.CHAPTERS))
+        for chapter, inside in self.CHAPTERS.items():
+            self.assertEqual([i for i in inside if f'id="{i}"' not in found[chapter]], [], chapter)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node")
+    def test_the_next_card_leads_with_the_step_not_the_criteria(self):
+        with open(os.path.join(HERE, "..", "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
+            line = re.search(r"^const nextParts = .*?$", f.read(), re.M).group(0)
+        code = line + """
+console.log(JSON.stringify([nextParts("Day 07 Track 0: The tests that pass: C07.1, C07.14"), nextParts("Day 07 Track A: The run log: C07.3–C07.5"), nextParts("Close Day 07")]));"""
+        out = subprocess.run(["node", "-e", code], capture_output=True, encoding="utf-8", check=True).stdout
+        self.assertEqual(json.loads(out), [["Day 07 Track 0: The tests that pass", "C07.1, C07.14"], ["Day 07 Track A: The run log", "C07.3–C07.5"], ["Close Day 07", ""]])
+
+    def test_every_measurement_is_still_there_in_its_order_under_the_chapters(self):
+        below = self.page[self.page.index('id="ch-now"'):]
         at = re.findall(r'\bid="([\w-]+)"', below)
         self.assertEqual([i for i in self.MEASURED if i not in at], [])
         self.assertEqual([i for i in at if i in self.MEASURED], self.MEASURED)
@@ -1406,8 +1427,15 @@ class PageStructureTest(unittest.TestCase):
             what = re.search(r'class="measure-what">([^<]+)<', row)
             self.assertTrue(what and len(what.group(1)) <= 100, row)
 
+    def test_the_three_read_first_measurements_are_open_and_how_it_works_is_folded(self):
+        rows = re.findall(r'<details class="measure"([^>]*)>\s*<summary><span class="measure-name">([^<]+)<', self.page)
+        opened = {name: attrs for attrs, name in rows}
+        for name in ("Where we are", "The spec–code gap", "Where the work went"):
+            self.assertIn(" open", opened[name], name)
+        self.assertNotIn(" open", opened["How this works: follow one promise"])
+
     def test_the_replay_bar_stays_inside_the_gap_section(self):
-        gap = re.search(r'<details class="measure" id="gap">(.*?)</details>\s*<details class="measure"', self.page, re.S)
+        gap = re.search(r'<details class="measure" id="gap" open>(.*?)</details>\s*<details class="measure"', self.page, re.S)
         self.assertIsNotNone(gap)
         for box in ('class="scrubber"', 'id="stats"', 'id="lines"', 'id="cover"'):
             self.assertIn(box, gap.group(1))
@@ -1421,8 +1449,8 @@ class PageStructureTest(unittest.TestCase):
     def test_the_caveat_stays_at_the_top(self):
         self.assertLess(self.page.index("experimental diagnostic signals"), self.page.index('id="summary"'))
 
-    def test_the_repeated_gap_views_sit_in_one_disclosure_open_by_default(self):
-        more = re.search(r'<details id="more-gap" open>\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
+    def test_the_repeated_gap_views_sit_in_one_closed_disclosure(self):
+        more = re.search(r'<details id="more-gap">\s*<summary>More views of the gap</summary>(.*?)</details>', self.page, re.S)
         inside = re.findall(r'\bid="([\w-]+)"', more.group(1) if more else "")
         self.assertEqual([b for b in ("deltas", "spec-steps", "pull-sum", "pull-steps", "pull-scale") if b not in inside], [])
         self.assertEqual([b for b in ("lines", "pull-totals", "cover") if b in inside], [])  # left open
