@@ -337,11 +337,20 @@ def ready(args, project, read_facts, drift):
     def parked_on(line):
         return Ready("park", line, 1, sentence, open_list)
 
-    moved, line = tree.to_main(project, facts, classify(sentence))
-    if line:
-        return parked_on(line)
-    if moved:
-        facts = read_facts(project)
+    # Row 4: only the maintainer's own pull requests hold the step, and while one is open the
+    # tree is not touched. No open pull request, no read.
+    if drift["now"]["open_prs"]:
+        numbers, line = github.mine(project, args.gh)
+        if line:
+            return Ready("end", line, 2, sentence, open_list)
+        kept = [pr for pr in drift["now"]["open_prs"] if pr["number"] in numbers]
+        drift = {**drift, "now": {**drift["now"], "open_prs": kept}}
+    if not drift["now"]["open_prs"]:
+        moved, line = tree.to_main(project, facts, classify(sentence))
+        if line:
+            return parked_on(line)
+        if moved:
+            facts = read_facts(project)
     action = decide(drift, facts)
     # A phase's end is answered by a closed parked issue of its exact title (decide's `answered`).
     answered = None

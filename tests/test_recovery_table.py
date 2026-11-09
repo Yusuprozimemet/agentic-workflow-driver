@@ -1,5 +1,5 @@
 """Day 07's table of "Recovery" with a live session, a torn log or a crashed one, and halt on them
-(C07.8 to C07.11). Each case is a copy of the driver with the fake claude and gh of test_once.py."""
+(C07.8 to C07.13). Each case is a copy of the driver with the fake claude and gh of test_once.py."""
 
 import contextlib
 import importlib
@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 
 import tests.test_halt as halt_tests
 import tests.test_recovery_holds as holds
-from tests.test_dry_run import START, drift_of, git, make_project
+from tests.test_dry_run import START, clone, commit_file, drift_of, git, make_project
 from tests.test_github import fake_gh
 from tests.test_halt import STAND_IN, new_group, stop
 from tests.test_on import OnCase
@@ -35,6 +35,7 @@ WAIT_FOR_GATE = "import os,sys,time\nwhile not os.path.exists(sys.argv[1]): time
 TORN = "halt: the run log cannot be read at line 2; no session was looked for"
 STOP_LINE = "cannot start: halted: the STOP issue #3 is open; close it, then run-steps.py clear"
 KILLED = "halt: set; killed session `{}` (pid {}) and the processes it started"
+WAITING_ON_7 = drift_of("Waiting on #7 Day 01 Track A: x", open_prs=(7,))
 
 
 def waiting(pid):
@@ -116,6 +117,43 @@ class TableTest(CaseMixin, unittest.TestCase):
             folder, flags = self.case("torn-park")
             set_issues(folder, [issue(1, "park: x", ["parked"])])
             self.assertParksTorn(folder, flags)
+
+    def test_open_pr_leaves_the_tree(self):
+        folder, flags = self.case("leaves", drift=holds.WITH_7, prs=(holds.PR7,))
+        project = folder / "project"
+        git(project, "checkout", "-b", "day-07/other")
+        other = clone(project, "other")
+        commit_file(other, "next.txt")
+        git(other, "push", "origin", "main")
+        git(project, "fetch", "origin")
+        before = git(project, "rev-parse", "main").stdout.strip()
+        self.assertNotEqual(before, git(project, "rev-parse", "origin/main").stdout.strip())
+        code, out, _ = once(self.copy, *flags)
+        self.assertEqual((code, out.strip()), (0, "wait: #7"))
+        self.assertEqual(git(project, "branch", "--show-current").stdout.strip(), "day-07/other")
+        self.assertEqual(git(project, "rev-parse", "main").stdout.strip(), before)
+
+
+class AuthorTest(CaseMixin, unittest.TestCase):
+    def test_someone_elses_on_a_waiting_sentence_parks(self):
+        prs = ({**holds.PR7, "author": "someone"},)
+        folder, flags = self.case("someone", drift=WAITING_ON_7, prs=prs)
+        code, out, _ = once(self.copy, *flags)
+        self.assertEqual(
+            (code, out.strip()), (1, "park: the next step waits on no open pull request")
+        )
+        self.assertEqual(holds.start_events(folder), [])
+        listed = ["pr", "list", "--state", "open", "--author", "@me", "--limit", "100"]
+        self.assertEqual(gh_calls(folder, ["pr", "list"]), [[*listed, "--json", "number"]])
+
+    def test_gh_fails(self):
+        folder, flags = self.case("gh-fails", drift=WAITING_ON_7, prs=(holds.PR7,))
+        spec = json.loads((folder / "gh" / "fake.json").read_bytes())
+        spec["pr_code"] = 1
+        write_fake(folder, spec)
+        code, _, err = once(self.copy, *flags)
+        self.assertEqual((code, err.strip()), (2, "cannot read the project: gh pr list exited 1"))
+        self.assertEqual(holds.start_events(folder), [])
 
 
 class OnWaitsTest(OnCase, unittest.TestCase):
