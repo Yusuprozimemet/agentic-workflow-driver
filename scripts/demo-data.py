@@ -291,6 +291,8 @@ def demo():
         conclusion=dict(reads=[dict(phase=1, text="**Read at the end of Phase 1.** Products and the cart work; "
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
+        # The made-up table above has no column per day, so it gives no yardstick: nothing draws them yet.
+        yardsticks=dict(days=[], rows=[], problems=[]),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",

@@ -1432,6 +1432,85 @@ def token_usage():
         return json.load(f)
 
 
+# The yardsticks plan.md judges the driver on ("What it is judged against"), and two the notebook adds, as
+# numbers: each is a row of the lab notebook's measurement table, found by how its Question cell starts, and
+# `read` says where its figure sits in a day's cell. The notebook is the count made at each close; nothing
+# here recounts it.
+YARDSTICKS = (
+    dict(key="cost", name="Cost of each merged pull request, main sessions", question="Cost per merged PR",
+         unit="$", decimals=2, read="each"),
+    dict(key="replies", name="Replies for each merged pull request, main sessions",
+         question="Replies per merged PR", unit="", decimals=1, read="each"),
+    dict(key="escapes", name="Defects that escaped from an earlier day", question="Escapes per day",
+         unit="", decimals=0, read="first"),
+    dict(key="parks", name="Times the driver stopped for a person", question="Parks by reason",
+         unit="", decimals=0, read="first"),
+    dict(key="refusals", name="Calls the hooks refused", question="Hook refusals", unit="", decimals=0,
+         read="first"),
+    dict(key="gates", name="Cost of the gates", question="What each gate cost", unit="$", decimals=2,
+         read="sum"),
+)
+
+
+def notebook_figure(cell, read):
+    """The figure a day's cell gives a yardstick, or None when it gives none: "each" is the number before " each",
+    "first" the number the cell starts with, "sum" the dollars it names added up."""
+    if read == "each":
+        match = re.search(r"\$?([\d,]+(?:\.\d+)?) each\b", cell)
+        return float(match.group(1).replace(",", "")) if match else None
+    if read == "first":
+        match = re.match(r"([\d,]+)\b", cell)
+        return int(match.group(1).replace(",", "")) if match else None
+    dollars = re.findall(r"\$([\d,]+(?:\.\d+)?)", cell)
+    return round(sum(float(d.replace(",", "")) for d in dollars), 2) if dollars else None
+
+
+def yardsticks(concluded, tokens):
+    """The yardsticks as the lab notebook's own cells give them, one value per day column. The figures are the
+    notebook's, read and not recounted. A cell whose figure cannot be read is a problem line, never a guess; a cell
+    that says "none" is not measured yet and is no problem. The last row, the tokens read again for each written, is
+    counted from docs/dashboard/token-usage.json, not the notebook."""
+    columns = []
+    for i, cell in enumerate(concluded["measured_head"]):
+        match = re.fullmatch(r"Day (\d+)", cell)
+        if match:
+            columns.append((i, int(match.group(1))))
+    if not columns:
+        return dict(days=[], rows=[], problems=[])
+    days = [day for _, day in columns]
+    rows, problems = [], []
+    for y in YARDSTICKS:
+        found = next((r for r in concluded["measured"] if r[0].startswith(y["question"])), None)
+        if found is None:
+            # Another project's notebook may not measure it.
+            continue
+        beside = re.search(r"beside\D*?([\d,]+(?:\.\d+)?)", found[0])
+        values = []
+        for i, day in columns:
+            figure = notebook_figure(found[i], y["read"])
+            if figure is None and not found[i].strip().lower().startswith("none"):
+                problems.append(
+                    f"Day {day:02d}, {y['question']}: no figure read from the notebook's cell")
+            values.append(dict(day=day, value=figure, text=found[i]))
+        rows.append(dict(key=y["key"], name=y["name"], unit=y["unit"], decimals=y["decimals"],
+                         baseline=float(beside.group(1).replace(",", "")) if beside else None,
+                         source="docs/lab-notebook.md", values=values))
+    if any(t["day"] in days and t["output"] > 0 for t in tokens):
+        values = []
+        for day in days:
+            mine = [t for t in tokens if t["day"] == day]
+            read = sum(t["input"] + t["cache_write"] + t["cache_read"] for t in mine)
+            written = sum(t["output"] for t in mine)
+            if written > 0:
+                text = f"{read:,} tokens read for {written:,} written, in the sessions tagged Day {day}"
+                values.append(dict(day=day, value=round(read / written, 1), text=text))
+            else:
+                values.append(dict(day=day, value=None, text=""))
+        rows.append(dict(key="reread", name="Tokens read again for each token written", unit="", decimals=0,
+                         baseline=None, source="docs/dashboard/token-usage.json", values=values))
+    return dict(days=days, rows=rows, problems=problems)
+
+
 # A criterion's state at a merge is the first of these any of its checks is in (scripts/replay-history.py).
 REPLAY_WORST = ["code broken", "test weakened", "break no longer applies", "not runnable",
                 "not applicable on this platform", "live only", "holds, never broken", "holds"]
@@ -1852,6 +1931,17 @@ def user_stories(prs, path=None):
     return dict(abilities=[dict(a) for a in ABILITIES], stories=rows, problems=problems, source=source)
 
 
+def attach_abilities(index, stories):
+    """Each promise's abilities: the ones its pull requests grew, the most-grown first and a tie going to the one
+    whose pull request is cited first. A promise is kept by the pull requests that grew it, so one that cites none
+    yet, or none with an ability, gets []."""
+    ability = {s["number"]: s["ability"] for s in stories}
+    for row in index:
+        keys = [ability[n] for n in row["prs"] if ability.get(n)]
+        # sorted() is stable, so keys that are equally common keep the order they were cited in.
+        row["abilities"] = sorted(dict.fromkeys(keys), key=lambda k: -keys.count(k))
+
+
 # What runs each test file, first match wins: tests.yml runs tests/ on every push and pull request, where
 # the live modules skip without DRIVER_LIVE_CLI; spec-drift-tests.yml runs scripts/test_*.py.
 TEST_GROUPS = (
@@ -2236,6 +2326,8 @@ def main():
         checks = evidence_checks(days, snaps)
         index, attention = criterion_index(days, checks, handoffs, snaps, blobs, order)
         attach_plain(index)
+        stories = user_stories(listed)
+        attach_abilities(index, stories["stories"])
         tests = test_inventory(run("git", "ls-tree", "-r", "--name-only", head, "tests/", "scripts/").split("\n"),
                                lambda path: blobs.read(head, path))
         now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
@@ -2244,21 +2336,23 @@ def main():
                    next_step=next_step(days, open_prs, order, stop, unwritten_lines(plan)), stop_after=stop,
                    unwritten=unwritten(days, order),
                    open_prs=[dict(number=p["number"], title=p["title"], url=p["url"]) for p in open_prs])
+        concluded = conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md"))
+        tokens = token_usage()
         real = dict(now=now, rows=rows, files=files, days=days, origin_lines=lines,
                     order=[d for d in order if d not in PLACEHOLDERS],
                     out_of_order=out_of_order(order),
                     removals=removal_history(days, snaps, blobs),
                     hand_offs=handoffs, criteria_index=index, attention=attention, test_inventory=tests,
                     defect_recurrence=recurrence(days),
-                    user_stories=user_stories(listed),
+                    user_stories=stories,
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     other_groups=other_groups(rows),
-                    vocab_size=vocab, tokens=token_usage(), refusals=refusals(),
+                    vocab_size=vocab, tokens=tokens, refusals=refusals(),
                     verification=verification(prs, runs),
                     infra=infra(INFRA_WORKFLOW),
                     deployment=deployment(),
                     evidence_checks=checks, replay=replay_history(),
-                    conclusion=conclusion(blobs.read(snaps[-1]["sha"], "docs/lab-notebook.md")),
+                    conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
@@ -2279,6 +2373,8 @@ def main():
     print(f"defects: {len(rec['recurrences'])} of {rec['with_id']} with an ID repeat an earlier one")
     for p in rec["problems"]:
         print(f"defect ID not counted: {p}")
+    for p in real["yardsticks"]["problems"]:
+        print(f"yardstick not counted: {p}")
     for g in real["gate_report"]["gates"]:
         print(gate_line(g))
 
