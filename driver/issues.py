@@ -7,7 +7,7 @@ import shutil
 import signal
 import subprocess
 
-from driver import home, lock
+from driver import home, lock, runlog
 from driver.github import _gh
 
 
@@ -160,13 +160,17 @@ def park(project, gh, line, body, issues):
     return _create(project, gh, ["--title", title, "--label", "parked"], body)
 
 
-def open_run(project, gh, step, session, issues):
+def open_run(project, gh, step, session, issues, state=None):
     # One run, one issue: the run's later steps comment on the issue the run opened, so that
     # `off` finds the run by its title.
-    body = f"step: {step}\nsession: {session}\n\nClose this issue to turn the driver off after this step.\n"
     runs = [issue for issue in issues if issue["title"].startswith("Driver run")]
-    if runs:
-        number = min(issue["number"] for issue in runs)
+    number = min(issue["number"] for issue in runs) if runs else None
+    body = f"step: {step}\nsession: {session}\n"
+    # Given the state, the body shows what the run has cost so far, $0.00 on a new issue.
+    if state is not None:
+        body += f"cost so far: ${runlog.issue_cost(state, number):.2f}\n"
+    body += "\nClose this issue to turn the driver off after this step.\n"
+    if number is not None:
         code = _comment(project, gh, number, body)
         if code != 0:
             return None, f"gh issue comment exited {code}"

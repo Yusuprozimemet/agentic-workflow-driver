@@ -82,6 +82,7 @@ def park_issue(project, gh, state, line, sentence, session, open_list):
     # Every park --once prints is an issue (Day 5): the maintainer closes it to let the driver go on.
     # A park before a session names none, and loop.py's between-steps record the string "none":
     # both fall back to the newest session the log has for the step.
+    runlog.park(state, sentence, line)
     if session in (None, "none"):
         prefix = classify(sentence).prefix
         session = runlog.last_session(state, prefix) if prefix else None
@@ -403,7 +404,9 @@ def stopped(args, project, step):
 
 def open_record(args, project, sentence, session, open_list):
     # The run's issue, opened or reused, and run.json beside it: the record a halt's report reads.
-    number, reason = issues.open_run(project, args.gh, sentence, session, open_list)
+    number, reason = issues.open_run(
+        project, args.gh, sentence, session, open_list, state=args.state
+    )
     if reason:
         return None, reason
     record = {
@@ -434,7 +437,9 @@ def begin(args, home, project, config, step):
     settings_path = driver_settings.write(args.state, home)
     path = shutil.which(args.claude)
     version = livecheck.version(path)
-    runlog.start(args.state, sentence, classify(sentence).prefix, session, version)
+    runlog.start(
+        args.state, sentence, classify(sentence).prefix, session, version, issue=record["issue"]
+    )
     command = [
         path,
         "-p",
