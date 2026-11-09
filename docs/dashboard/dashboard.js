@@ -979,7 +979,7 @@ function drawNow() {
 }
 
 /* ---------- what it can do: the ladder ---------- */
-// One dot per merged pull request, on the step its user story's Ability: line names; "rail" abilities are the railing.
+// One dot per merged pull request, on the step its user story's Ability: line names; "rail" abilities are the railing. A count opens that ability's stories.
 // The night's times and sentences are an illustration: only each marker's state comes from the data.
 const NIGHT = [
   ["21:00", "rehearse", "You ask what it would do. It names the next step and starts nothing."],
@@ -1002,6 +1002,9 @@ function drawLadder() {
   const openDays = new Set(DATA.days.filter(d => !finished(d)).map(d => d.day));
   const count = list => many(list.length, "story", "stories");
   const dots = list => tileRow(list.map(s => `<i class="mini-tile story" title="${esc(`#${s.number} ${s.title}`)}"></i>`), count(list));
+  const opener = (a, list) => `<button type="button" class="story-open" data-stories="${esc(a.key)}" aria-expanded="false" aria-controls="stories-${esc(a.key)}">${count(list)}</button>`;
+  const lists = abilities.map(a => { const list = placed.filter(s => s.ability === a.key); return !list.length ? "" : `<div class="inline-detail story-list" id="stories-${esc(a.key)}" hidden><h3>${esc(a.name)} · ${count(list)}</h3><ol>`
+    + list.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">#${s.number}</a> ${esc(s.story || s.title)}<small>${s.day != null ? `Day ${s.day}` : "Between days"}${s.date ? ` · ${shortDate(s.date)}` : ""}</small></li>`).join("") + `</ol></div>`; }).join("");
   const rungs = abilities.filter(a => a.role === "rung").map(a => {
     const list = placed.filter(s => s.ability === a.key);
     const days = [...new Set(list.map(s => s.day).filter(d => d != null))].sort((x, y) => x - y);
@@ -1015,16 +1018,48 @@ function drawLadder() {
   box.innerHTML = `<p class="plot-headline"><b>${reached} of ${rungs.length}</b> steps reached${building ? `, <b>${building}</b> still being built` : ""}</p>
     <div class="legend"><span><i class="mini-tile story"></i><b>One merged pull request</b></span><span><i class="rung-key open"></i><b>Still being built: its day is not closed</b></span>${reached < rungs.length ? `<span><i class="rung-key none"></i><b>Not started</b></span>` : ""}</div>
     <div class="ladder" style="--n:${rungs.length}"><div class="railing"><b>The railing</b><span>what shows and proves that the steps hold</span>`
-    + abilities.filter(a => a.role === "rail").map(a => { const list = placed.filter(s => s.ability === a.key); return `<div class="rail-row">${dots(list)}<span>${count(list)} · ${esc(a.name)}</span></div>`; }).join("") + `</div>`
+    + abilities.filter(a => a.role === "rail").map(a => { const list = placed.filter(s => s.ability === a.key); return `<div class="rail-row">${dots(list)}<span>${list.length ? opener(a, list) : count(list)} · ${esc(a.name)}</span></div>`; }).join("") + `</div>`
     + rungs.map((r, i) => `<div class="rung ${r.state}" style="--i:${i + 1}"><div class="rung-label"><b>${esc(r.name)}</b>`
-      + (r.list.length ? `<span>${count(r.list)}</span><span>${dayList(r.days)}</span>` : `<span>Not started</span>`) + `</div><div class="rung-step">${r.list.length ? dots(r.list) : ""}`
+      + (r.list.length ? `${opener(r, r.list)}<span>${dayList(r.days)}</span>` : `<span>Not started</span>`) + `</div><div class="rung-step">${r.list.length ? dots(r.list) : ""}`
       + (r.open.length ? `<span>${dayList(r.open)} still open</span>` : "") + (i === here ? `<span class="rung-here">You are here</span>` : "") + `</div></div>`).join("") + `</div>`
+    + lists
     + (lost ? `<p class="plot-quiet">${many(lost, "pull request")} named no ability and ${lost === 1 ? "is" : "are"} not drawn.</p>` : "");
+  box.addEventListener("click", e => {
+    const button = e.target.closest("button[data-stories]");
+    if (!button) return;
+    const opening = button.getAttribute("aria-expanded") !== "true";
+    box.querySelectorAll("button[data-stories]").forEach(b => b.setAttribute("aria-expanded", String(opening && b === button)));
+    box.querySelectorAll(".story-list").forEach(l => { l.hidden = !(opening && l.id === "stories-" + button.dataset.stories); if (!l.hidden) l.scrollIntoView({ block: "nearest" }); });
+  });
   const stateOf = key => (rungs.find(r => r.key === key) || { state: "none" }).state;
   night.innerHTML = `<ol class="night">` + NIGHT.map(([time, key, text]) => {
     const state = stateOf(key);
     return `<li class="${state}"><span class="night-time">${time}</span><span>${text}${NIGHT_NOTE[state] ? `<small>${NIGHT_NOTE[state]}</small>` : ""}</span></li>`;
   }).join("") + `</ol>`;
+}
+
+/* ---------- when each ability grew ---------- */
+// One row per ability, one column per day from the first to the last a story's branch names, then the stories merged between days.
+function drawGrew() {
+  const box = document.getElementById("plot-grew");
+  const us = DATA.user_stories || {}, abilities = us.abilities || [];
+  const placed = (us.stories || []).filter(s => abilities.some(a => a.key === s.ability));
+  if (!placed.length) { box.innerHTML = notMeasured("Not counted yet: no merged pull request names an ability."); return; }
+  const dayed = placed.filter(s => s.day != null), between = placed.length - dayed.length;
+  const openDays = new Set(DATA.days.filter(d => !finished(d)).map(d => d.day));
+  const first = Math.min(...dayed.map(s => s.day)), last = Math.max(...dayed.map(s => s.day));
+  const cols = [];
+  for (let d = first; d <= last; d++) cols.push({ day: d, name: `Day ${d}`, open: openDays.has(d) });
+  if (between) cols.push({ day: null, name: "Between days", open: false });
+  const at = (a, c) => placed.filter(s => s.ability === a.key && (s.day ?? null) === c.day).length;
+  const most = Math.max(...abilities.flatMap(a => cols.map(c => at(a, c))));
+  const open = c => c.open ? ' class="open"' : "";
+  const cell = (a, c) => { const n = at(a, c); return `<td${open(c)}>` + (n ? `<i class="grew-dot" style="--d:${(8 + 18 * Math.sqrt(n / most)).toFixed(1)}px" title="${esc(`${c.name} · ${a.name}: ${many(n, "story", "stories")}`)}"></i><small>${n}</small>` : "") + `</td>`; };
+  const busy = new Set(dayed.map(s => s.day));
+  box.innerHTML = `<p class="plot-headline"><b>${dayed.length}</b> ${dayed.length === 1 ? "story" : "stories"} on <b>${busy.size}</b> ${busy.size === 1 ? "day" : "days"}${between ? `, <b>${between}</b> between days` : ""}</p>
+    <div class="legend"><span><i class="grew-dot key"></i><b>Stories merged for that day: a larger dot is more</b></span>${[...busy].some(d => openDays.has(d)) ? `<span><i class="grew-dot key open"></i><b>Its day is not closed</b></span>` : ""}</div>
+    <div class="scroll-x"><table class="grew" style="--n:${cols.length}"><thead><tr><td></td>${cols.map(c => `<th scope="col"${open(c)}>${c.name}</th>`).join("")}</tr></thead><tbody>`
+    + abilities.map(a => `<tr${a.role === "rail" ? ' class="rail"' : ""}><th scope="row">${esc(a.name)}${a.role === "rail" ? "<small>the railing</small>" : ""}</th>${cols.map(c => cell(a, c)).join("")}</tr>`).join("") + `</tbody></table></div>`;
 }
 
 /* ---------- evidence ---------- */
@@ -2104,7 +2139,7 @@ function drawTested() {
 }
 panel("attention-list", drawCriteria); panel("promise-days", drawPromises); panel("test-groups", drawTested);
 
-panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("plot-ladder", drawLadder); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
+panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("plot-ladder", drawLadder); panel("plot-grew", drawGrew); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
