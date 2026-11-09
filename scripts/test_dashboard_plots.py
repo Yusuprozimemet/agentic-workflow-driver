@@ -52,26 +52,102 @@ class PromisePlotsTest(unittest.TestCase):
         cell("C02.1", "code broken"),
     )
 
-    def test_one_bar_for_all_promises_with_the_count_and_the_lag(self):
+    def test_the_headline_says_how_many_promises_are_proven(self):
         box = draw(replay=replay(*self.CELLS))["plot-all"]
-        self.assertIn("<b>2 of 5</b> promises caught a planted bug", box)
-        self.assertEqual(widths(box), ["100"])
-        self.assertIn("Re-checked by hand, so this can be behind the latest change", box)
+        self.assertIn(
+            '<b class="num">2 of 5</b> promises are proven: their test caught a planted bug', box
+        )
 
-    def test_no_bug_tried_and_not_checked_look_different(self):
+    def test_the_bar_has_a_segment_per_state_and_labels_only_the_big_ones(self):
         box = draw(replay=replay(*self.CELLS))["plot-all"]
-        for look in ("promise proven", "promise unproven", "promise skipped", "promise broken"):
-            self.assertIn(look, box)
+        bar = re.search(r'<div class="promise-bar"[^>]*>(.*?)</div>', box, re.S).group(1)
+        parts = re.findall(r'<span class="promise (\w+)" style="flex:(\d+) 0 0"[^>]*>(.*?)</span>', bar)
+        self.assertEqual(
+            [(state, n) for state, n, _ in parts],
+            [("proven", "2"), ("unproven", "1"), ("skipped", "1"), ("broken", "1")],
+        )
+        # 2 of 5 is over a fifth of the bar and says what it is; 1 of 5 is not, and the key says it.
+        self.assertEqual([label for _, _, label in parts], ["<b>2</b><em> proven</em>", "", "", ""])
 
-    def test_a_feature_bar_is_as_long_as_its_promise_count_in_day_order(self):
-        box = draw(replay=replay(*self.CELLS))["plot-features"]
-        self.assertEqual(widths(box), ["100", "25"])
-        self.assertEqual(re.findall(r'plot-value num">([^<]+)<', box), ["2 of 4", "0 of 1"])
+    def test_the_key_counts_every_state_and_says_what_it_means(self):
+        box = draw(replay=replay(*self.CELLS))["plot-all"]
+        key = box[box.index('class="promise-states"') :]
+        for line in (
+            "<b>2</b> proven",
+            "<b>1</b> passes, not yet proven",
+            "<b>1</b> not checked here",
+            "<b>0</b> tests need repair",
+            "<b>1</b> broken",
+        ):
+            self.assertIn(line, key)
+        self.assertIn("a bug was planted on purpose and its test caught it", key)
+        self.assertEqual(re.findall(r'<i class="promise proven">([^<]*)</i>', key), ["✓"])
+        self.assertEqual(re.findall(r'<i class="promise unproven">([^<]*)</i>', key), [""])
 
     def test_no_recheck_is_not_measured_and_not_an_empty_bar(self):
         panels = draw(replay=dict(state="absent"))
         self.assertIn(NONE, panels["plot-all"])
-        self.assertIn(NONE, panels["plot-features"])
+        self.assertNotIn("promise-bar", panels["plot-all"])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class TrustHistoryPlotTest(unittest.TestCase):
+    """Is trust growing? The five states counted at each re-checked merge, a promise keeping its last state."""
+
+    MERGES = [dict(n=1, pr=7, merge="aaa"), dict(n=2, pr=8, merge="bbb"), dict(n=3, pr=None, merge="ccc")]
+
+    @staticmethod
+    def at(criterion, n, state):
+        return dict(cell(criterion, state), n=n)
+
+    def draw(self, cells, **more):
+        data = dict(state="loaded", states=[], merges=self.MERGES, cells=cells)
+        return draw(replay=data, **more)
+
+    def cells(self):
+        return [
+            self.at("C01.1", 1, "holds"),
+            self.at("C01.2", 1, "holds, never broken"),
+            self.at("C01.2", 2, "holds"),  # C01.1 is not re-checked at the second merge
+            self.at("C02.1", 2, "not yet in force"),
+            self.at("C01.1", 3, "break no longer applies"),
+            self.at("C02.1", 3, "holds"),
+        ]
+
+    @staticmethod
+    def rows(table):
+        return [re.findall(r"<td[^>]*>([^<]*)</td>", row) for row in re.findall(r"<tr>(.*?)</tr>", table)][1:]
+
+    def test_a_promise_keeps_its_last_state_until_it_is_checked_again(self):
+        table = self.draw(self.cells())["history-table"]
+        self.assertEqual(
+            self.rows(table),
+            [["#7", "1", "1", "0", "0", "0", "2"], ["#8", "2", "0", "0", "0", "0", "2"], ["ccc", "2", "0", "0", "1", "0", "3"]],
+        )
+
+    def test_a_replaced_promise_is_left_out_of_every_merge(self):
+        index = [dict(id="C01.2", day=1, tag="hold", claim="x", spec="s.md", track="A", prs=[3], tests=[], cited=True,
+                      test_found=None, seen_red=dict(state=False, lines=[]), replaces=[], replaced_by=["C09.1"],
+                      replay=dict(state="current", status=None, why=[], checks=[]))]
+        table = self.draw(self.cells(), criteria_index=index)["history-table"]
+        self.assertEqual([row[1:] for row in self.rows(table)][:2], [["1", "0", "0", "0", "0", "1"]] * 2)
+
+    def test_one_stepped_area_per_state_that_was_ever_seen(self):
+        box = self.draw(self.cells())["plot-history"]
+        self.assertEqual(re.findall(r'<path d="[^"]+" class="area ([\w-]+)"', box), ["s-proven", "s-unproven", "s-repair"])
+        proven = re.search(r'<path d="([^"]+)" class="area s-proven"', box).group(1)
+        self.assertNotIn("L", proven)  # steps, not slopes: a count holds until the next re-check
+        self.assertIn("3 re-checked changes", box)
+
+    def test_the_latest_counts_are_written_beside_the_plot(self):
+        box = self.draw(self.cells())["plot-history"]
+        labels = re.findall(r'<text[^>]*class="strong"[^>]*>([^<]+)</text>', box)
+        self.assertEqual(labels, ["2 proven", "0 pass, not yet proven", "1 test needs repair"])
+
+    def test_no_recheck_is_not_measured(self):
+        panels = draw(replay=dict(state="absent"))
+        self.assertIn(NONE, panels["plot-history"])
+        self.assertNotIn("<path", panels["plot-history"])
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
@@ -719,7 +795,7 @@ class PageLayoutTest(unittest.TestCase):
         "plot-night",
         "plot-grew",
         "plot-all",
-        "plot-features",
+        "plot-history",
         "plot-groups",
         "plot-evidence",
         "plot-ci",
@@ -733,7 +809,8 @@ class PageLayoutTest(unittest.TestCase):
         "plot-reads",
     )
     TABLES = {
-        "plot-features": "trust-table",
+        "plot-all": "trust-table",
+        "plot-history": "history-table",
         "plot-groups": "test-groups",
         "plot-evidence": "evidence",
         "plot-ci": "ci-fails",
@@ -765,6 +842,16 @@ class PageLayoutTest(unittest.TestCase):
         for plot, table in self.TABLES.items():
             self.assertEqual(self.shape.where[table][-1], ("exact", False), table)
             self.assertLess(self.shape.order.index(plot), self.shape.order.index(table), table)
+
+    def test_the_promises_are_drawn_once(self):
+        for gone in ("plot-features", "replay-legend", "Promises by feature", "Do the promises still hold?"):
+            self.assertNotIn(gone, self.page)
+        promises = self.page[self.page.index('<section class="panel" id="promises">') :]
+        promises = promises[: promises.index("</section>")]
+        boxes = ("plot-all", "replay", "promise-days", "promise-key", "trust-table", "plot-history", "history-table", "replay-table")
+        at = [promises.find(f'id="{box}"') for box in boxes]
+        self.assertNotIn(-1, at)
+        self.assertEqual(at, sorted(at))
 
     def test_what_a_plot_would_mislead_without_stays_visible(self):
         for sentence in (
