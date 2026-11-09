@@ -196,6 +196,7 @@ def wait_merge(args, project, number, record, human_only, read_facts, git=("git"
         if state == "CLOSED":
             return (f"park: #{number} was closed without a merge", 1), None
         if state == "MERGED":
+            runlog.merged(args.state, number)
             return (None, 0), None
         return None, None
 

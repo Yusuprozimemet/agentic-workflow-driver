@@ -22,18 +22,20 @@ def stamp():
     return datetime.datetime.now(datetime.UTC).strftime(STAMP)
 
 
-def start(state, step, prefix, session, claude):
-    append(
-        state,
-        {
-            "event": "start",
-            "at": stamp(),
-            "step": step,
-            "prefix": prefix,
-            "session": session,
-            "claude": claude,
-        },
-    )
+def start(state, step, prefix, session, claude, issue=None):
+    record = {
+        "event": "start",
+        "at": stamp(),
+        "step": step,
+        "prefix": prefix,
+        "session": session,
+        "claude": claude,
+    }
+    # The run's issue goes last, and only when there is one, so that a start line without it keeps
+    # its keys; issue_cost reads it to show the run's issue what the run has cost.
+    if issue is not None:
+        record["issue"] = issue
+    append(state, record)
 
 
 def end(state, session, outcome, cost_usd, denials):
@@ -48,6 +50,15 @@ def end(state, session, outcome, cost_usd, denials):
             "denials": denials,
         },
     )
+
+
+def park(state, step, line):
+    # Every park the driver prints is counted, one written before a session and one after it alike.
+    append(state, {"event": "park", "at": stamp(), "step": step, "line": line})
+
+
+def merged(state, pr):
+    append(state, {"event": "merged", "at": stamp(), "pr": pr})
 
 
 def fix(state, session, pr, n):
@@ -214,3 +225,28 @@ def fixes(state, session):
     return sum(
         1 for record in records if record.get("event") == "fix" and record.get("session") == session
     )
+
+
+def issue_cost(state, number):
+    # The cost so far of the sessions whose start line carries the run's issue number (Day 7).
+    # No number, no log or a log that cannot be read is $0.00; a start with no issue never matches,
+    # None included, and an end line with a null or non-number cost counts 0.
+    if number is None:
+        return 0.0
+    records, reason = _records(state)
+    if reason or records is None:
+        return 0.0
+    sessions = {
+        record.get("session")
+        for record in records
+        if record.get("event") == "start" and record.get("issue") == number
+    }
+    total = 0.0
+    for record in records:
+        cost = record.get("cost_usd")
+        if record.get("event") != "end" or record.get("session") not in sessions:
+            continue
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+            continue
+        total += cost
+    return total
