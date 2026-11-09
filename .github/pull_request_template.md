@@ -9,6 +9,8 @@ As a [type of user],
 I want [goal or capability],
 so that [benefit or outcome].
 
+Ability: [one of rehearse, stop, loop, park, recover, see, record]
+
 ## What I built
 
 <!-- One or two sentences. What does this change do? -->

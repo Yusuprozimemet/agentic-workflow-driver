@@ -1749,6 +1749,109 @@ def attach_plain(index, path=None):
         row["plain_source"] = "written" if ok else "first sentence"
 
 
+ABILITIES = (
+    dict(key="rehearse", name="Shows what it would do", role="rung"),
+    dict(key="stop", name="Can be stopped, from anywhere", role="rung"),
+    dict(key="loop", name="Works through the night", role="rung"),
+    dict(key="park", name="Asks only when it must", role="rung"),
+    dict(key="recover", name="Picks itself up after a crash", role="rung"),
+    dict(key="see", name="Shows the world what still works", role="rail"),
+    dict(key="record", name="Proves every claim", role="rail"),
+)
+STORY_TEMPLATE = re.compile(r"As an? \[type of user\],? I want \[goal or capability\],? so that \[benefit or outcome\]\.?")
+
+
+def story_section(body):
+    """The "## User story" section of a PR body, HTML comments gone, or "" when there is none."""
+    # The comments are the template's advice; the section ends at the next "## " heading.
+    lines = re.sub(r"<!--.*?-->", "", body or "", flags=re.S).splitlines()
+    start = next((i for i, line in enumerate(lines) if re.match(r"##\s*User story\s*$", line)), None)
+    if start is None:
+        return ""
+    rest = []
+    for line in lines[start + 1:]:
+        if line.startswith("## "):
+            break
+        rest.append(line)
+    return " ".join(" ".join(rest).split())
+
+
+def story_ability(section):
+    """The Ability: line's key, or None: `Ability: <key>` with the key one of ABILITIES, in any case and with its
+    square brackets optional. The unfilled template, "[one of ...]", names no key, so it is None."""
+    match = re.search(r"Ability:\s*\[?\s*(\w+)", section, re.I)
+    key = match.group(1).lower() if match else None
+    return key if key in [a["key"] for a in ABILITIES] else None
+
+
+def story_sentence(section):
+    """The story's own words: the section with the Ability: line removed; "" when that is only the template's
+    placeholders, so a PR that left the template as it was has no story."""
+    text = " ".join(re.sub(r"Ability:\s*(\[[^\]]*\]|\S+)", "", section, flags=re.I).split())
+    return "" if not text or STORY_TEMPLATE.fullmatch(text) else text
+
+
+def story_reader(sentence):
+    """Who the story is written for, from its "As ..." clause: "away" when they are not at a desk, "reader" when
+    they only read the dashboard, else "desk". "away" wins when both match; with no clause it is "desk"."""
+    match = re.match(r"\s*As\s+(.*?)(?:,\s*|\s+)I want\b", sentence, re.I)
+    if not match:
+        return "desk"
+    clause = match.group(1).lower()
+    if any(w in clause for w in ("phone", "away", "overnight", "asleep", "night", "leaves", "leave", "running",
+                                 "runs the driver")):
+        return "away"
+    if any(w in clause for w in ("dashboard", "page", "reading", "reads", "reader", "looking", "visiting",
+                                 "opening", "someone")):
+        return "reader"
+    return "desk"
+
+
+def user_stories(prs, path=None):
+    """Every merged pull request's user story with its ability, for the dashboard: the PR body's own section and
+    Ability: line first, docs/dashboard/user-stories.json for the ones written before the template asked, and a
+    problem line for each PR that has neither. The page must not break on a missing or unreadable file."""
+    source = path or "docs/dashboard/user-stories.json"
+    path = path or os.path.join(PAGE, "user-stories.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            written = json.load(f)
+    except (OSError, ValueError):
+        written = {}
+    if not isinstance(written, dict):
+        written = {}
+    keys = [a["key"] for a in ABILITIES]
+    rows, problems = [], []
+    for p in sorted((p for p in prs if p["state"] == "MERGED"), key=lambda p: p["number"]):
+        number = p["number"]
+        section = story_section(p.get("body"))
+        sentence = story_sentence(section)
+        ability = story_ability(section)
+        entry = written.get(str(number))
+        entry = entry if isinstance(entry, dict) else {}
+        kept = entry.get("story")
+        kept = kept.strip() if isinstance(kept, str) else ""
+        story, story_source = (sentence, "pr") if sentence else (kept, "written" if kept else "missing")
+        if ability:
+            ability_source = "pr"
+        elif entry.get("ability") in keys:
+            ability, ability_source = entry["ability"], "written"
+        else:
+            ability_source = "missing"
+        if story_source == "missing":
+            problems.append(f"#{number} has no user story")
+        if ability_source == "missing":
+            problems.append(f"#{number} names no ability: add an Ability: line or an entry in "
+                            "docs/dashboard/user-stories.json")
+        match = re.match(r"day-(\d+)/", p.get("headRefName") or "")
+        rows.append(dict(number=number, title=p["title"], url=p["url"], branch=p.get("headRefName") or "",
+                         day=int(match.group(1)) if match else None,
+                         date=(p.get("mergedAt") or "")[:10] or None, ability=ability,
+                         ability_source=ability_source, story=story, story_source=story_source,
+                         reader=story_reader(story)))
+    return dict(abilities=[dict(a) for a in ABILITIES], stories=rows, problems=problems, source=source)
+
+
 # What runs each test file, first match wins: tests.yml runs tests/ on every push and pull request, where
 # the live modules skip without DRIVER_LIVE_CLI; spec-drift-tests.yml runs scripts/test_*.py.
 TEST_GROUPS = (
@@ -2147,6 +2250,7 @@ def main():
                     removals=removal_history(days, snaps, blobs),
                     hand_offs=handoffs, criteria_index=index, attention=attention, test_inventory=tests,
                     defect_recurrence=recurrence(days),
+                    user_stories=user_stories(listed),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     other_groups=other_groups(rows),
                     vocab_size=vocab, tokens=token_usage(), refusals=refusals(),
