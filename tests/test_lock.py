@@ -1,6 +1,7 @@
-"""take() writes the lock once and refuses a second run with one line: while the process the lock
-names lives, when it is gone or was reused, and when the lock cannot be read. release() leaves a
-lock that names another pid, and asking whether a process lives does not end it."""
+"""take() writes the lock once and refuses a second run with one line while the process the lock
+names lives, and when the lock cannot be read. A lock whose process is gone or was reused is taken
+over, not refused. release() leaves a lock that names another pid, and asking whether a process
+lives does not end it."""
 
 import datetime
 import importlib
@@ -81,13 +82,9 @@ class LockTest(unittest.TestCase):
         child.wait()
         body = json.dumps({"pid": child.pid, "started": fmt(before)}).encode()
         self.write_lock(body)
-        line = self.lock.take(self.state)
-        self.assertEqual(
-            line,
-            f"cannot start: a lock names pid {child.pid}, which is gone; "
-            "run-steps.py clear removes it",
-        )
-        self.assertEqual(Path(self.lock_file).read_bytes(), body)
+        self.assertIsNone(self.lock.take(self.state))
+        self.assertEqual(self.lock.read(self.state)[0], os.getpid())
+        self.assertEqual(self.lock.took_over(self.state), child.pid)
 
     def test_reused_pid_is_gone(self):
         child = self.start_child("import time; time.sleep(60)")
@@ -95,12 +92,8 @@ class LockTest(unittest.TestCase):
             {"pid": child.pid, "started": fmt(utc_now() - datetime.timedelta(hours=1))}
         )
         self.write_lock(body.encode())
-        line = self.lock.take(self.state)
-        self.assertEqual(
-            line,
-            f"cannot start: a lock names pid {child.pid}, which is gone; "
-            "run-steps.py clear removes it",
-        )
+        self.assertIsNone(self.lock.take(self.state))
+        self.assertEqual(self.lock.took_over(self.state), child.pid)
         self.assertIsNone(child.poll())
 
     def test_unreadable_lock_refuses(self):

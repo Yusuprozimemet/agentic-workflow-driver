@@ -258,6 +258,9 @@ def run(args, home, read_facts, body=None):
     if refusal:
         return refuse([refusal])
     try:
+        old = lock.took_over(args.state)
+        if old is not None:
+            print(f"lock: taken over from pid {old}, which is gone", flush=True)
         # An earlier run's record goes, so that a halt before this run's session reads none.
         try:
             os.remove(os.path.join(args.state, "run.json"))
@@ -303,6 +306,11 @@ def ready(args, project, read_facts, drift):
         write_halt(args.state, f"STOP issue #{number}")
         text = f"cannot start: halted: the STOP issue #{number} is open;"
         return Ready("end", f"{text} close it, then run-steps.py clear", 2, None, open_list)
+    # A start that took over a lock with no log has nothing to say what the last driver left.
+    old = lock.took_over(args.state)
+    if old is not None and not os.path.exists(runlog.path(args.state)):
+        line = f"park: the run log is missing, and a lock shows a driver ran (pid {old})"
+        return Ready("park", line, 1, drift["now"]["next_step"], open_list)
     parked = [f"#{issue['number']}" for issue in open_list if "parked" in issue["labels"]]
     if parked:
         return Ready("end", f"wait: parked {', '.join(parked)}", 0, None, open_list)

@@ -1,13 +1,15 @@
 """The driver's lock, the file <state>/lock that says a run is going. take() creates it with O_EXCL,
-so two runs cannot both hold it; release() removes it only when it names this process. lives()
-asks the OS whether the pid the lock names is still a driver, and never ends that process. Plain
-stdlib: on Windows the questions go through ctypes, since signal 0 there is Ctrl+C."""
+so two runs cannot both hold it; a start that finds a lock whose process is gone takes it over, one
+start at a time. release() removes it only when it names this process. lives() asks the OS whether
+the pid the lock names is still a driver, and never ends that process. Plain stdlib: on Windows the
+questions go through ctypes, since signal 0 there is Ctrl+C."""
 
 import ctypes
 import datetime
 import json
 import os
 import subprocess
+import time
 
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 # The lock is stamped in whole seconds, after the driver starts; 2 s covers that and ps rounding.
@@ -16,6 +18,10 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 STILL_ACTIVE = 259
 ERROR_ACCESS_DENIED = 5
 EPOCH = datetime.datetime(1601, 1, 1, tzinfo=datetime.UTC)
+FLAGS = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0)
+# How often, and how far apart, a takeover tries again while another start has the lock open.
+REPLACE_TRIES = 20
+REPLACE_PAUSE = 0.05
 
 
 def path(state):
@@ -30,51 +36,108 @@ def stamp_time(text):
     return datetime.datetime.strptime(text, STAMP).replace(tzinfo=datetime.UTC)
 
 
+def guard(state):
+    return path(state) + ".takeover"
+
+
+def body(**extra):
+    record = {"pid": os.getpid(), "started": now().strftime(STAMP), **extra}
+    return json.dumps(record).encode("utf-8")
+
+
 def take(state):
     os.makedirs(state, exist_ok=True)
     try:
-        fd = os.open(path(state), os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_BINARY", 0))
-    except FileExistsError:
-        return refusal(state)
-    body = {"pid": os.getpid(), "started": now().strftime(STAMP)}
+        fd = os.open(path(state), FLAGS)
+    except (FileExistsError, PermissionError):
+        # PermissionError is what Windows says while another start is replacing the file.
+        return takeover(state)
     with os.fdopen(fd, "wb") as f:
-        f.write(json.dumps(body).encode("utf-8"))
+        f.write(body())
     return None
 
 
-def refusal(state):
-    # Nothing here writes or removes the lock: the person decides, with run-steps.py clear.
+def takeover(state):
+    # None when this start now holds the lock; otherwise the line that refuses.
     held = read(state)
+    if held is None or lives(*held):
+        return refusal(state, held)
+    try:
+        fd = os.open(guard(state), FLAGS)
+    except (FileExistsError, PermissionError):
+        return (
+            f"cannot start: {guard(state)} exists: another start is taking the lock over; "
+            "run-steps.py clear removes it"
+        )
+    # Read again now no other start can replace it: one may have done so before this guard.
+    held = read(state)
+    stale = held is not None and not lives(*held)
+    with os.fdopen(fd, "wb") as f:
+        if stale:
+            f.write(body(took_over=held[0]))
+    if not stale:
+        os.remove(guard(state))
+        return refusal(state, held)
+    return replace(state)
+
+
+def replace(state):
+    # The guard holds the new lock, so one os.replace swaps the lock and removes the guard.
+    for _ in range(REPLACE_TRIES):
+        try:
+            os.replace(guard(state), path(state))
+            return None
+        except PermissionError:
+            # Windows refuses while another start has the lock open to read it.
+            time.sleep(REPLACE_PAUSE)
+    os.remove(guard(state))
+    return f"cannot start: {path(state)} cannot be replaced; run-steps.py clear removes it"
+
+
+def refusal(state, held):
+    # Nothing here writes or removes the lock: the person decides, with run-steps.py clear.
     if held is None:
         return f"cannot start: {path(state)} cannot be read; run-steps.py clear removes it"
     pid, started = held
-    if lives(pid, started):
-        return f"cannot start: the driver is already running (pid {pid}, since {started})"
-    return f"cannot start: a lock names pid {pid}, which is gone; run-steps.py clear removes it"
+    return f"cannot start: the driver is already running (pid {pid}, since {started})"
 
 
-def read(state):
+def load(state):
+    # The lock's fields, or None: absent and unreadable both. A caller checks whether the file exists.
     try:
         with open(path(state), "rb") as f:
             lock = json.loads(f.read().decode("utf-8"))
     except (OSError, ValueError):
-        # Absent and unreadable both come back as None; a caller checks whether the file exists.
         return None
-    if not isinstance(lock, dict):
+    return lock if isinstance(lock, dict) else None
+
+
+def good_pid(pid):
+    # bool is an int in Python, but a true pid is not a bool; one past pid_t's range would crash
+    # the OS call that asks after it, so it is a lock that cannot be read.
+    return isinstance(pid, int) and not isinstance(pid, bool) and 0 < pid < 2**31
+
+
+def read(state):
+    lock = load(state)
+    if lock is None:
         return None
     pid = lock.get("pid")
     started = lock.get("started")
-    # bool is an int in Python, but a true pid is not a bool; one past pid_t's range would crash
-    # the OS call that asks after it, so it is a lock that cannot be read.
-    if not isinstance(pid, int) or isinstance(pid, bool) or not 0 < pid < 2**31:
-        return None
-    if not isinstance(started, str):
+    if not good_pid(pid) or not isinstance(started, str):
         return None
     try:
         stamp_time(started)
     except ValueError:
         return None
     return pid, started
+
+
+def took_over(state):
+    # The pid this run's lock replaced, or None when the lock was free.
+    lock = load(state)
+    pid = None if lock is None else lock.get("took_over")
+    return pid if good_pid(pid) else None
 
 
 def lives(pid, started):
