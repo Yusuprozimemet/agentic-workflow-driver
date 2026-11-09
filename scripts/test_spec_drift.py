@@ -1377,7 +1377,7 @@ class CriterionPanelsTest(unittest.TestCase):
 class PageStructureTest(unittest.TestCase):
     """The page's layout: chapters, a contents in page order, and the gap's repeated views under one closed disclosure."""
 
-    CHAPTERS = {"ch-now": ["summary", "attention", "where"],
+    CHAPTERS = {"ch-now": ["ladder", "summary", "attention", "where"],
                 "ch-trust": ["promises", "tested", "ticks", "verification", "second-reader"],
                 "ch-spec": ["gap", "work", "corrections", "handoffs"],
                 "ch-cost": ["infra", "deployment", "tokens", "services"],
@@ -1598,7 +1598,7 @@ class PageAssetsTest(unittest.TestCase):
     def test_related_charts_pair_up_only_above_1440(self):
         page, css = self.page_files("index.html", "dashboard.css")
         sides = re.findall(r'<div class="wide-pair"><div>\n(.*?)^\s*</div><div>\n(.*?)^\s*</div></div>', page, re.S | re.M)
-        pairs = [("relabel-plot", "plot-repeats"), ("pull-steps", "pull-scale"), ("test-ratio", "churn"), ("token-bars", "token-agents")]
+        pairs = [("plot-ladder", "plot-night"), ("relabel-plot", "plot-repeats"), ("pull-steps", "pull-scale"), ("test-ratio", "churn"), ("token-bars", "token-agents")]
         self.assertEqual(len(sides), len(pairs))
         for (left, right), (a, b) in zip(sides, pairs):
             self.assertIn(f'id="{a}"', left)

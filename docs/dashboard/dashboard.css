@@ -555,3 +555,40 @@ a.pr-dot:focus-visible { outline: 2px solid var(--ink); }
 }
 .ev-head { font-size: 12.5px; font-weight: 500; color: var(--muted); }
 @media (max-width: 760px) { .ev-head { display: none; } }
+
+/* The ladder: a staircase where its box is wide enough, rows that step to the right on a phone. */
+#plot-ladder { container-type: inline-size; display: grid; gap: 10px; }
+.ladder { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); align-items: end; min-height: 390px; }
+/* The handrail runs parallel to the treads: one step's rise per column, 110px above each tread, clear of the labels. */
+.ladder::before { content: ""; position: absolute; left: calc(50% / var(--n)); right: calc(50% / var(--n)); bottom: 174px; height: calc((var(--n) - 1) * 40px); pointer-events: none;
+  background: linear-gradient(to top left, transparent calc(50% - 2px), var(--axis) calc(50% - 2px), var(--axis) calc(50% + 2px), transparent calc(50% + 2px)); }
+.railing { position: absolute; top: 0; left: 0; max-width: 44%; display: grid; gap: 5px; font-size: 13px; color: var(--ink-2); }
+.railing > b { font-size: 14px; color: var(--ink); }
+.rail-row { display: grid; gap: 3px; }
+.rung { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rung-label { display: grid; gap: 1px; padding: 0 6px; font-size: 12.5px; color: var(--ink-2); text-align: center; }
+.rung-label b { font-size: 13.5px; line-height: 1.25; color: var(--ink); text-wrap: balance; }
+.rung-step { min-height: calc(24px + var(--i) * 40px); display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--surface-2); border-top: 3px solid var(--ink-2); border-left: 1px solid var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.rung.open .rung-step, .rung-key.open { background: repeating-linear-gradient(45deg, var(--surface-2) 0 5px, transparent 5px 9px); border-top-style: dashed; }
+.rung.none .rung-step, .rung-key.none { background: none; border: 1px dashed var(--axis); }
+.rung-here { margin-top: auto; font-weight: 600; color: var(--ink); }
+.mini-tile.story, .legend i.mini-tile.story { border-radius: 50%; background: var(--ink-2); }
+.legend i.rung-key { width: 16px; height: 10px; border-radius: 0; border-top: 2px solid var(--ink-2); }
+.legend i.rung-key.none { border: 1px dashed var(--axis); }
+@container (max-width: 640px) {
+  .ladder { display: flex; flex-direction: column-reverse; align-items: stretch; gap: 10px; min-height: 0; }
+  .ladder::before { display: none; }
+  .railing { position: static; max-width: none; }
+  .rung { margin-left: calc((var(--i) - 1) * 5%); }
+  .rung-label { padding: 0; text-align: left; }
+  .rung-step { min-height: 0; }
+}
+/* The night: markers on a line that wraps, so it reads left to right, then down. */
+.night { list-style: none; margin: 0; padding: 6px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px 0; }
+.night li { position: relative; display: grid; gap: 4px; align-content: start; padding: 12px 16px 0 0; border-top: 2px solid var(--axis); font-size: 13.5px; color: var(--ink-2); }
+.night li::before { content: ""; position: absolute; top: -7px; left: 0; box-sizing: border-box; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); box-shadow: 0 0 0 3px var(--surface); }
+.night li.open::before { background: var(--surface); border: 2px dashed var(--ink-2); }
+.night li.none::before { background: var(--surface); border: 2px solid var(--axis); }
+.night li.none { color: var(--muted); }
+.night-time { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+.night small { display: block; font-size: 12px; font-style: italic; color: var(--muted); }

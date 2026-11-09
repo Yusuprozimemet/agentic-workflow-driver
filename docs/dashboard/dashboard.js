@@ -978,6 +978,55 @@ function drawNow() {
   });
 }
 
+/* ---------- what it can do: the ladder ---------- */
+// One dot per merged pull request, on the step its user story's Ability: line names; "rail" abilities are the railing.
+// The night's times and sentences are an illustration: only each marker's state comes from the data.
+const NIGHT = [
+  ["21:00", "rehearse", "You ask what it would do. It names the next step and starts nothing."],
+  ["21:05", "loop", "You switch it on. It starts that step in a fresh session and watches the checks on what comes back."],
+  ["21:50", "loop", "The checks pass. It waits for you to merge, from your phone, then starts the next step."],
+  ["23:30", "park", "A step needs a decision only a person can make. It opens an issue and waits for your answer."],
+  ["any time", "stop", "Something looks wrong. An issue titled STOP, opened from your phone, halts everything at once."],
+  ["07:00", "recover", "The PC restarted in the night. The next start reads what was left behind and carries on, or asks you."],
+];
+const NIGHT_NOTE = { built: "", open: "Still being built.", none: "Not built yet." };
+function drawLadder() {
+  const box = document.getElementById("plot-ladder"), night = document.getElementById("plot-night");
+  const us = DATA.user_stories || {}, stories = us.stories || [], abilities = us.abilities || [];
+  const placed = stories.filter(s => abilities.some(a => a.key === s.ability));
+  if (!placed.length) {
+    box.innerHTML = notMeasured("Not counted yet: no merged pull request names an ability.");
+    night.innerHTML = notMeasured("Not drawn until the steps are counted.");
+    return;
+  }
+  const openDays = new Set(DATA.days.filter(d => !finished(d)).map(d => d.day));
+  const count = list => many(list.length, "story", "stories");
+  const dots = list => tileRow(list.map(s => `<i class="mini-tile story" title="${esc(`#${s.number} ${s.title}`)}"></i>`), count(list));
+  const rungs = abilities.filter(a => a.role === "rung").map(a => {
+    const list = placed.filter(s => s.ability === a.key);
+    const days = [...new Set(list.map(s => s.day).filter(d => d != null))].sort((x, y) => x - y);
+    const open = days.filter(d => openDays.has(d));
+    return { ...a, list, days, open, state: !list.length ? "none" : open.length ? "open" : "built" };
+  });
+  const here = rungs.reduce((top, r, i) => r.list.length ? i : top, -1);
+  const reached = rungs.filter(r => r.list.length).length, building = rungs.filter(r => r.state === "open").length;
+  const lost = stories.length - placed.length;
+  const dayList = days => days.length ? `${days.length === 1 ? "Day" : "Days"} ${days.join(", ")}` : "between days";
+  box.innerHTML = `<p class="plot-headline"><b>${reached} of ${rungs.length}</b> steps reached${building ? `, <b>${building}</b> still being built` : ""}</p>
+    <div class="legend"><span><i class="mini-tile story"></i><b>One merged pull request</b></span><span><i class="rung-key open"></i><b>Still being built: its day is not closed</b></span>${reached < rungs.length ? `<span><i class="rung-key none"></i><b>Not started</b></span>` : ""}</div>
+    <div class="ladder" style="--n:${rungs.length}"><div class="railing"><b>The railing</b><span>what shows and proves that the steps hold</span>`
+    + abilities.filter(a => a.role === "rail").map(a => { const list = placed.filter(s => s.ability === a.key); return `<div class="rail-row">${dots(list)}<span>${count(list)} · ${esc(a.name)}</span></div>`; }).join("") + `</div>`
+    + rungs.map((r, i) => `<div class="rung ${r.state}" style="--i:${i + 1}"><div class="rung-label"><b>${esc(r.name)}</b>`
+      + (r.list.length ? `<span>${count(r.list)}</span><span>${dayList(r.days)}</span>` : `<span>Not started</span>`) + `</div><div class="rung-step">${r.list.length ? dots(r.list) : ""}`
+      + (r.open.length ? `<span>${dayList(r.open)} still open</span>` : "") + (i === here ? `<span class="rung-here">You are here</span>` : "") + `</div></div>`).join("") + `</div>`
+    + (lost ? `<p class="plot-quiet">${many(lost, "pull request")} named no ability and ${lost === 1 ? "is" : "are"} not drawn.</p>` : "");
+  const stateOf = key => (rungs.find(r => r.key === key) || { state: "none" }).state;
+  night.innerHTML = `<ol class="night">` + NIGHT.map(([time, key, text]) => {
+    const state = stateOf(key);
+    return `<li class="${state}"><span class="night-time">${time}</span><span>${text}${NIGHT_NOTE[state] ? `<small>${NIGHT_NOTE[state]}</small>` : ""}</span></li>`;
+  }).join("") + `</ol>`;
+}
+
 /* ---------- evidence ---------- */
 // Counted from each finished day's ticked criteria; the test states are main's, from the script.
 function drawEvidence() {
@@ -2055,7 +2104,7 @@ function drawTested() {
 }
 panel("attention-list", drawCriteria); panel("promise-days", drawPromises); panel("test-groups", drawTested);
 
-panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
+panel("summary-cards", drawSummary); panel("how-flow", drawHow); panel("today", drawNow); panel("plot-ladder", drawLadder); panel("work-bar", drawWork); panel("perday", drawPerDay); panel("breaks", drawVerification); panel("merge-time", drawMergeTime);
 pullPicker("pull-steps", drawPullSteps, PULL_DAYS[PULL_DAYS.length - 1]); panel("pull-totals", drawPullTotals); pullPicker("pull-scale", drawPullScale, "all");
 panel("infra-head", drawInfra); panel("deployment-head", drawDeployment); panel("token-bars", drawTokens); panel("relabel", drawRelabel);
 panel("evidence-gaps", drawEvidence); panel("evidence-checks", drawEvidenceChecks); panel("proof-kinds", drawProofKinds); panel("replay", drawReplay); panel("hand-offs", drawHandOffs); panel("read", drawConclusion);
