@@ -502,6 +502,103 @@ class HookPlotsTest(unittest.TestCase):
         self.assertIn(NONE, panels["plot-reads"])
 
 
+ABILITIES = [
+    dict(key="rehearse", name="Shows what it would do", role="rung"),
+    dict(key="stop", name="Can be stopped", role="rung"),
+    dict(key="loop", name="Works through the night", role="rung"),
+    dict(key="see", name="Shows what still works", role="rail"),
+]
+
+
+def story(number, ability, day=None):
+    return dict(number=number, title=f"Change {number}", url="u", day=day, ability=ability)
+
+
+def ladder(*stories, days=()):
+    """The ladder's and the night's boxes for these stories; `days` are (day, status) pairs."""
+    panels = draw(
+        user_stories=dict(abilities=ABILITIES, stories=list(stories), problems=[]),
+        days=[dict(a_day(n), status=status) for n, status in days],
+    )
+    return panels["plot-ladder"], panels["plot-night"]
+
+
+def rung(box, name):
+    """One step's HTML: from its label to the next step's, or the end of the ladder."""
+    return box.split(f"<b>{name}</b>")[1].split('<div class="rung ')[0]
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class LadderPlotTest(unittest.TestCase):
+    STORIES = (
+        story(1, "rehearse", 1),
+        story(2, "rehearse", 1),
+        story(3, "rehearse"),
+        story(4, "stop", 1),
+        story(5, "stop", 2),
+        story(6, "see"),
+    )
+    DAYS = ((1, "done"), (2, "active"))
+
+    def test_a_dot_per_story_on_the_step_its_ability_names(self):
+        box, _ = ladder(*self.STORIES, days=self.DAYS)
+        built = rung(box, "Shows what it would do")
+        self.assertEqual(built.count('class="mini-tile story"'), 3)
+        self.assertIn(">3 stories</span><span>Day 1</span>", built)
+        self.assertIn('title="#3 Change 3"', built)
+        stopping = rung(box, "Can be stopped")
+        self.assertEqual(stopping.count('class="mini-tile story"'), 2)
+        self.assertIn(">2 stories</span><span>Days 1, 2</span>", stopping)
+        self.assertIn("<span>1 story · Shows what still works</span>", box)
+        self.assertEqual(box.count('class="mini-tile story"'), 7)
+
+    def test_a_step_is_still_being_built_while_a_day_that_added_to_it_is_open(self):
+        box, _ = ladder(*self.STORIES, days=self.DAYS)
+        self.assertIn('<div class="rung built" style="--i:1">', box)
+        self.assertIn('<div class="rung open" style="--i:2">', box)
+        self.assertIn("<span>Day 2 still open</span>", rung(box, "Can be stopped"))
+        self.assertNotIn("still open", rung(box, "Shows what it would do"))
+        box, _ = ladder(*self.STORIES, days=((1, "done"), (2, "done")))
+        self.assertNotIn("rung open", box)
+        self.assertIn("<b>2 of 3</b> steps reached</p>", box)
+
+    def test_you_are_here_is_the_highest_step_with_a_story(self):
+        box, _ = ladder(*self.STORIES, days=self.DAYS)
+        self.assertEqual(box.count("You are here"), 1)
+        self.assertIn("You are here", rung(box, "Can be stopped"))
+        self.assertIn('<div class="rung none" style="--i:3">', box)
+        self.assertIn("<span>Not started</span>", rung(box, "Works through the night"))
+        self.assertNotIn("mini-tile", rung(box, "Works through the night"))
+        self.assertIn("<b>2 of 3</b> steps reached, <b>1</b> still being built", box)
+        self.assertIn('<i class="rung-key none"></i><b>Not started</b>', box)
+
+    def test_a_pull_request_that_names_no_ability_is_said_not_drawn(self):
+        box, _ = ladder(*self.STORIES, story(7, None), story(8, "nonsense"), days=self.DAYS)
+        self.assertIn("2 pull requests named no ability and are not drawn.", box)
+        self.assertEqual(box.count('class="mini-tile story"'), 7)
+        box, _ = ladder(*self.STORIES, story(7, None), days=self.DAYS)
+        self.assertIn("1 pull request named no ability and is not drawn.", box)
+        box, _ = ladder(*self.STORIES, days=self.DAYS)
+        self.assertNotIn("named no ability", box)
+
+    def test_the_night_marks_each_moment_by_its_step(self):
+        _, night = ladder(*self.STORIES, days=self.DAYS)
+        self.assertEqual(night.count("<li "), 6)
+        self.assertIn('<li class="built"><span class="night-time">21:00</span>', night)
+        self.assertIn('<li class="open"><span class="night-time">any time</span>', night)
+        self.assertEqual(night.count("<small>Still being built.</small>"), 1)
+        self.assertEqual(night.count("<small>Not built yet.</small>"), 4)
+
+    def test_no_stories_is_not_measured_and_old_data_still_draws(self):
+        panels = draw()
+        self.assertIn(NONE, panels["plot-ladder"])
+        self.assertIn(NONE, panels["plot-night"])
+        self.assertNotIn("This panel failed", panels["plot-ladder"])
+        box, night = ladder(story(1, None))
+        self.assertIn(NONE, box)
+        self.assertIn(NONE, night)
+
+
 class PageShape(html.parser.HTMLParser):
     """Where each id sits: the <details> around it, innermost last."""
 
@@ -529,6 +626,8 @@ class PageLayoutTest(unittest.TestCase):
     """Every plot is visible by default; its table stays in the page, collapsed under it."""
 
     PLOTS = (
+        "plot-ladder",
+        "plot-night",
         "plot-all",
         "plot-features",
         "plot-groups",
@@ -581,6 +680,7 @@ class PageLayoutTest(unittest.TestCase):
         for sentence in (
             "does not establish complete behavioral coverage or current correctness",
             "a gate that finds nothing may still be what kept a defect from being made",
+            "An illustration, not a record",
         ):
             around = [stack for data, stack in self.shape.text if sentence in data]
             self.assertTrue(around, sentence)

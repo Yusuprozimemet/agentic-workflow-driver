@@ -21,6 +21,7 @@
     <summary>Sections</summary>
     <ol>
       <li><a href="#ch-now">Now</a><ol>
+        <li><a href="#ladder">What it can do</a></li>
         <li><a href="#summary">Summary</a></li>
         <li><a href="#attention">Needs attention</a></li>
         <li><a href="#where">Where we are</a></li>
@@ -57,6 +58,26 @@
   <div class="chapter" id="ch-now">
     <h2 class="chapter-head">Now</h2>
     <p class="chapter-what">Where the work stands, and anything that needs a person.</p>
+
+  <section class="panel" id="ladder">
+    <div class="panel-head">
+      <h2>What the driver can do now</h2>
+      <p>The steps from a person doing everything by hand to a script that picks itself up after a crash. Each dot is one merged pull request, on the step its user story adds to.</p>
+    </div>
+    <div class="wide-pair"><div>
+    <div id="plot-ladder"><p class="load-error">Loading the latest data…</p></div>
+    <details class="counted">
+      <summary>How this is counted</summary>
+      <p>Every merged pull request states a user story and names one of seven abilities in its <code>Ability:</code> line; the ones opened before the template asked are filled in from <code>docs/dashboard/user-stories.json</code>. Five abilities are the steps, in the order the plan builds them. The other two are the railing: the work that shows and proves what the steps do. A step is drawn as still being built while a day that added a story to it is not closed. A dot is a pull request, not a measure of how much it did.</p>
+    </details>
+    </div><div>
+    <div class="panel-head">
+      <h2 style="font-size:17px">A night with the driver</h2>
+      <p>An illustration, not a record: the times are made up. Each marker is something the stories on that step added. At this level a person still merges each pull request.</p>
+    </div>
+    <div id="plot-night"></div>
+    </div></div>
+  </section>
 
   <section class="panel" id="summary">
     <div class="panel-head">
