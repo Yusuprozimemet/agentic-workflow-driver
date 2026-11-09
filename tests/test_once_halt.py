@@ -141,7 +141,7 @@ class OnceHaltTest(unittest.TestCase):
         self.assertFalse(self.alive(run["child"], deadline), "the fake's child still runs")
         records = Path(run["state"], "run.jsonl").read_text(encoding="utf-8").splitlines()
         events = [json.loads(line)["event"] for line in records]
-        self.assertEqual(events, ["start"])
+        self.assertEqual(events, ["start", "pid"])
         self.assertTrue(os.path.exists(self.lock.path(str(run["state"]))), "the lock is gone")
 
     def test_once_refuses_after_halt(self):
