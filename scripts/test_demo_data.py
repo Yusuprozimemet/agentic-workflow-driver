@@ -21,7 +21,7 @@ import test_dashboard_page  # noqa: E402  (its harnesses run the page's model an
 spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
 demo_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(demo_data)
-GRAPHS = ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")
+GRAPHS = ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9")
 REAL = dict(now=dict(current_day=None), rows=[], days=[])
 
 
@@ -64,8 +64,13 @@ class DemoData(unittest.TestCase):
         self.assertEqual([g for g in GRAPHS if "error" in m[g]], [])
         marks = dict(g1=sum(c["n"] > 0 for r in m["g1"]["rows"] for c in r["cells"]), g2=sum(len(r["tiles"]) for r in m["g2"]["rows"]),
                      g3=sum(len(r["tiles"]) for r in m["g3"]["rows"]), g4=len(m["g4"]["merges"]), g5=sum(len(r["dots"]) for r in m["g5"]["rows"]),
-                     g6=len(m["g6"]["bars"]), g7=sum(b["total"] > 0 for b in m["g7"]["bars"]), g8=len(m["g8"]["rows"]))
+                     g6=len(m["g6"]["bars"]), g7=sum(b["total"] > 0 for b in m["g7"]["bars"]), g8=len(m["g8"]["rows"]),
+                     g9=sum(len(lane["bars"]) for d in m["g9"]["dates"] for lane in d["lanes"]))
         self.assertEqual([g for g in GRAPHS if not marks[g]], [], marks)
+        # Every lane of the clock has a bar on the date shown first, and the day buttons can reach every demo day.
+        shown = m["g9"]["dates"][m["g9"]["at"]]
+        self.assertEqual([lane["name"] for lane in shown["lanes"] if not lane["bars"]], [])
+        self.assertEqual(sorted({day for d in m["g9"]["dates"] for day in d["days"]}), [1, 2, 3, 4, 5, 6])
         # The board shows every state a re-check can find, and the trust strip a bar for each re-check.
         self.assertEqual(sorted({t["status"] for r in m["g2"]["rows"] for t in r["tiles"]}),
                          ["broken", "building", "open", "proven", "repair", "skipped", "unproven"])

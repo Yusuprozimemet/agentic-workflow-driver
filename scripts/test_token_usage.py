@@ -147,6 +147,64 @@ class LongPathTest(unittest.TestCase):
                          {"main": 3, "implementer": 7})
 
 
+class SessionsTest(unittest.TestCase):
+    """sessions.json: a transcript's stretches of work, split where nothing was written for over five minutes."""
+
+    @staticmethod
+    def at(text, stamp, kind=None):
+        entry = json.loads(text)
+        entry["timestamp"] = stamp
+        if kind:
+            entry = {"type": kind, "timestamp": stamp, "gitBranch": entry["gitBranch"]}
+        return json.dumps(entry)
+
+    def sessions(self, lines):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "session.jsonl")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\nnot json\n")
+            return tu.sessions([path])
+
+    def test_a_stretch_ends_at_a_gap_longer_than_five_minutes_and_counts_each_reply_once(self):
+        at, utc = self.at, datetime.timezone.utc
+        rows = self.sessions([at(line(), "2026-10-12T10:00:00Z"), at(line(), "2026-10-12T10:00:30Z"),  # one reply, two streamed lines
+                              at(line(), "2026-10-12T10:03:00Z", kind="user"),  # a tool result keeps the stretch going
+                              at(line("msg_2", "req_2"), "2026-10-12T10:08:00Z"),
+                              at(line("msg_3", "req_3"), "2026-10-12T10:13:01Z"),  # 5 min 1 s later: a new stretch
+                              at(line(), "2026-10-12T10:14:00Z", kind="user")])
+        self.assertEqual([(r["agent"], r["day"], r["replies"]) for r in rows], [("main", 43, 2), ("main", 43, 1)])
+        instants = [(datetime.datetime.fromisoformat(r["from"]).astimezone(utc).isoformat(), datetime.datetime.fromisoformat(r["to"]).astimezone(utc).isoformat()) for r in rows]
+        self.assertEqual(instants, [("2026-10-12T10:00:00+00:00", "2026-10-12T10:08:00+00:00"), ("2026-10-12T10:13:01+00:00", "2026-10-12T10:14:00+00:00")])
+        # The stamps carry this machine's offset, and the date is the local one.
+        local = datetime.datetime(2026, 10, 12, 10, 0, tzinfo=utc).astimezone()
+        self.assertEqual((rows[0]["from"], rows[0]["date"]), (local.isoformat(timespec="seconds"), local.date().isoformat()))
+
+    def test_a_subagents_stretch_carries_its_type(self):
+        with tempfile.TemporaryDirectory() as folder:
+            sub = os.path.join(folder, "subagents")
+            os.makedirs(sub)
+            with open(os.path.join(sub, "agent-1.jsonl"), "w", encoding="utf-8") as f:
+                f.write(line(branch="main") + "\n")
+            with open(os.path.join(sub, "agent-1.meta.json"), "w", encoding="utf-8") as f:
+                f.write('{"agentType": "spec-auditor"}')
+            rows = tu.sessions([os.path.join(sub, "agent-1.jsonl")])
+        self.assertEqual([(r["agent"], r["day"], r["replies"]) for r in rows], [("spec-auditor", None, 1)])
+
+    def test_stretches_are_kept_beside_the_written_ones_and_the_later_end_wins(self):
+        row = lambda agent, start, end, n: {"date": start[:10], "day": 6, "agent": agent, "from": start, "to": end, "replies": n}
+        with tempfile.TemporaryDirectory() as folder:
+            out = os.path.join(folder, "sessions.json")
+            with open(out, "w", encoding="utf-8") as f:
+                json.dump([row("main", "2026-11-08T06:26:00+01:00", "2026-11-08T07:00:00+01:00", 20),  # the session went on after this was written
+                           row("implementer", "2026-11-07T20:00:00+01:00", "2026-11-07T20:04:00+01:00", 3)], f)  # its transcript is gone
+            tu.write_sessions(out, [row("main", "2026-11-08T06:26:00+01:00", "2026-11-08T07:30:00+01:00", 26),
+                                    row("defect-rater", "2026-11-08T07:40:00+01:00", "2026-11-08T07:41:00+01:00", 1)])
+            with open(out, encoding="utf-8") as f:
+                rows = json.load(f)
+        self.assertEqual([(r["agent"], r["to"], r["replies"]) for r in rows],
+                         [("implementer", "2026-11-07T20:04:00+01:00", 3), ("main", "2026-11-08T07:30:00+01:00", 26), ("defect-rater", "2026-11-08T07:41:00+01:00", 1)])
+
+
 class MergeTest(unittest.TestCase):
     """The rows already written are kept, those from before agents were counted among them."""
 

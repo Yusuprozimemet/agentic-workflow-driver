@@ -16,7 +16,7 @@
   <header>
     <p class="eyebrow" id="eyebrow"></p>
     <h1>A script that runs AI coding work one step at a time</h1>
-    <p class="lede">The whole project in eight graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
+    <p class="lede">The whole project in nine graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
     <details class="attention" id="attention" hidden>
@@ -131,6 +131,19 @@
     <div class="scroll-x" id="g8-plot"></div>
     <div class="readout" id="g8-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g8-table"></table></div></details>
+  </section>
+
+  <section class="graph" id="g9">
+    <div class="graph-head">
+      <p class="graph-n">Graph 9</p>
+      <h2>Where does a day's time go, and who waits for whom?</h2>
+      <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing, a pull request waiting to be merged, its checks running, the maintainer merging. A day button above turns the clock to that day's last date; the dates here pick another.</p>
+    </div>
+    <div class="g9-dates" id="g9-dates" role="group" aria-label="One date on the clock"></div>
+    <div class="legend" id="g9-key"></div>
+    <div class="scroll-x" id="g9-plot"></div>
+    <div class="readout tall" id="g9-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g9-table"></table></div></details>
   </section>
 
   <section class="graph foot" id="cannot-see">

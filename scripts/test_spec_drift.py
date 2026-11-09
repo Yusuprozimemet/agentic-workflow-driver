@@ -310,6 +310,24 @@ class SpecDriftTest(unittest.TestCase):
                 run("b", "success"), run("b", "cancelled", "Backend CI/CD"), run("c", "failure", event="push")]
         self.assertEqual(sd.ci_pushes(runs), {"day-01/track-a-x": (2, 1, ["Backend CI/CD", "PR checks"])})
 
+    def test_the_clock_reads_each_merged_prs_opening_merge_and_the_span_of_its_checks(self):
+        pr = lambda n, title, branch, state="MERGED": dict(number=n, title=title, headRefName=branch, state=state, body="",
+                                                          createdAt=f"2026-01-02T09:{n}0:00Z", mergedAt=f"2026-01-02T10:{n}0:00Z" if state == "MERGED" else None)
+        prs = {1: pr(1, "Day 02 track A: x", "day-02/track-a-x"), 2: pr(2, "Day 02 track B: y", "day-02/track-b-y", "OPEN"), 3: pr(3, "Faster tests", "tooling/faster")}
+        run = lambda branch, sha, result, start, end, event="pull_request": dict(headBranch=branch, headSha=sha, conclusion=result, workflowName="PR checks",
+                                                                                event=event, createdAt=f"2026-01-02T{start}:00Z", updatedAt=f"2026-01-02T{end}:00Z")
+        runs = [run("day-02/track-a-x", "a", "failure", "09:11", "09:15"), run("day-02/track-a-x", "b", "success", "09:40", "09:44"),
+                run("day-02/track-a-x", "c", "success", "09:50", "09:52", event="push"), run("day-02/track-b-y", "d", "success", "09:21", "09:25")]
+        got = sd.clock(prs, runs, sessions=[])
+        self.assertEqual(got["sessions"], [])
+        self.assertEqual([(p["number"], p["day"], p["kind"], p["branch"], p["opened"], p["merged"]) for p in got["prs"]],
+                         [(1, 2, "code", "day-02/track-a-x", "2026-01-02T09:10:00Z", "2026-01-02T10:10:00Z"),
+                          (3, None, "other", "tooling/faster", "2026-01-02T09:30:00Z", "2026-01-02T10:30:00Z")])
+        # The checks span the first start to the last end of the pull request's own runs, a push run left out.
+        self.assertEqual([p["checks"] for p in got["prs"]], [dict(start="2026-01-02T09:11:00Z", end="2026-01-02T09:44:00Z", runs=2, failed=1), None])
+        # Without the sessions file, no sessions; nothing fails.
+        self.assertIsInstance(sd.clock({}, [])["sessions"], list)
+
     def test_a_gh_list_as_long_as_its_limit_is_refused(self):
         real = sd.run
         try:
