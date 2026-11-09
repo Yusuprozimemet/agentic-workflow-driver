@@ -1,8 +1,9 @@
 """halt, clear and off, the switches a person pulls with run-steps.py. halt writes <state>/halt and,
-when the lock names a live driver, kills that process's tree, then reports on the run's issue from
-<state>/run.json. clear removes the halt file and a stale lock, and refuses while a driver lives.
-off closes the project's open "Driver run" issues, so the run ends after its current step. Each
-prints its lines and returns its exit code; none starts anything."""
+when the lock names a live driver, kills that process's tree; it also kills a session the run log
+names as still alive. Then it reports on the run's issue from <state>/run.json. clear removes the
+halt file and a stale lock, and refuses while a driver lives. off closes the project's open "Driver
+run" issues, so the run ends after its current step. Each prints its lines and returns its exit
+code; none starts anything."""
 
 import json
 import os
@@ -10,7 +11,7 @@ import signal
 import subprocess
 import sys
 
-from driver import issues, lock
+from driver import issues, lock, once, runlog
 
 TREE = "halt: set; killed pid {} and the processes it started"
 REPORT_KEYS = ("project", "gh", "issue", "step", "session")
@@ -20,30 +21,37 @@ def halt(state):
     os.makedirs(state, exist_ok=True)
     with open(os.path.join(state, "halt"), "wb") as f:
         f.write(f"halted at {lock.now().strftime(lock.STAMP)}".encode())
+    # Read before the lock's kill, so that a session outside the driver's tree is still known.
+    session, pid, reason = runlog.live_session(state)
+    if reason:
+        print(f"halt: {reason}; no session was looked for")
+    code, reported, found = 0, False, False
     if os.path.exists(lock.path(state)):
         held = lock.read(state)
         if held is None:
             print(f"halt: set; {lock.path(state)} cannot be read, so nothing was killed")
-            return 1
-        if lock.lives(*held):
+            code, found = 1, True
+        elif lock.lives(*held):
+            found = True
             code = kill(held[0])
             if code == 0:
                 _report(state)
-            return code
-    print("halt: set; no driver is running")
-    return 0
+                reported = True
+    # Alive after the lock's kill means it was outside that tree; one the kill ended is not read.
+    tried = session is not None and runlog.live_session(state)[:2] == (session, pid)
+    if tried and kill_session(session, pid) and not reported:
+        _report(state)
+    if not found and not tried:
+        print("halt: set; no driver is running")
+    return code
 
 
 def kill(pid):
     if os.name == "nt":
-        done = subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True, check=False
-        )
-        if done.returncode == 0:
+        reason = _taskkill(pid)
+        if reason is None:
             print(TREE.format(pid))
             return 0
-        lines = [line.strip() for line in done.stderr.splitlines() + done.stdout.splitlines()]
-        reason = next((line for line in lines if line), f"taskkill exited {done.returncode}")
         print(f"halt: set; could not kill pid {pid}: {reason}")
         return 1
     # Only a process that leads its group takes its children with a group kill.
@@ -58,6 +66,41 @@ def kill(pid):
         return 1
     print(TREE.format(pid))
     return 0
+
+
+def _taskkill(pid):
+    # None when taskkill ends the tree, else the reason it did not.
+    done = subprocess.run(
+        ["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True, check=False
+    )
+    if done.returncode == 0:
+        return None
+    lines = [line.strip() for line in done.stderr.splitlines() + done.stdout.splitlines()]
+    return next((line for line in lines if line), f"taskkill exited {done.returncode}")
+
+
+def _kill_tree(pid):
+    # None when the session's tree is killed, else why not. A session leads no process group.
+    if os.name == "nt":
+        return _taskkill(pid)
+    for target in [pid, *once.descendants(pid)]:
+        try:
+            os.kill(target, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            return exc.strerror or str(exc)
+    return None
+
+
+def kill_session(session, pid):
+    # True when killed. A failure is said, and changes no exit code: the halt file stands.
+    reason = _kill_tree(pid)
+    if reason is None:
+        print(f"halt: set; killed session `{session}` (pid {pid}) and the processes it started")
+        return True
+    print(f"halt: set; could not kill session `{session}` (pid {pid}): {reason}")
+    return False
 
 
 def _report(state):

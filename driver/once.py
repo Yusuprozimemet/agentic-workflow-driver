@@ -1,6 +1,6 @@
 """--once does one step's checks in order, and the first that applies ends the run: the halt file,
 the config, the lock, the driver's own repository, the kit and the CLI (preflight), the project's
-issues (the STOP switch, the parks), the decision, the evidence run, then the run log and the
+issues (the STOP switch), the run log, the parks, the decision, the evidence run, then the
 step's failures. Steps 10 and 11 open the run's issue, write `run.json`, the settings and the run
 log's start line, then start one `claude -p` session, its prompt on stdin. Step 12 reads the
 session's outcome from its stdout, writes the run log's end line, and checks the driver's
@@ -219,7 +219,7 @@ def run_session(command, prompt, args, project, number, record):
             return None
 
 
-# kind is "start" (a session may start), "wait", "park" or "end"; ready() says which, and why.
+# kind is "start", "running" (a live session), "wait", "park" or "end"; ready() says which, and why.
 Ready = namedtuple("Ready", "kind line code sentence open_list")
 
 
@@ -237,6 +237,10 @@ def preflight(args, project):
     return drift, None
 
 
+def halted_line(halt):
+    return f"cannot start: halted: `{halt}` exists; run-steps.py clear removes it"
+
+
 def run(args, home, read_facts, body=None):
     # read_facts is passed in from run-steps.py, so the dry run's own function is used unchanged.
     if hasattr(os, "setpgid"):
@@ -248,7 +252,7 @@ def run(args, home, read_facts, body=None):
             pass
     halt = os.path.join(args.state, "halt")
     if os.path.exists(halt):
-        return refuse([f"cannot start: halted: `{halt}` exists; run-steps.py clear removes it"])
+        return refuse([halted_line(halt)])
     config, lines = load_config(args.config)
     if lines:
         return refuse(lines)
@@ -296,6 +300,9 @@ def checked(args, home, project, read_facts, config):
 def ready(args, project, read_facts, drift):
     # The step --once would reach, as a Ready. Nothing is printed and no park issue is opened here:
     # stopped() and finish() do both, so that `on` ends its run through the same lines.
+    halt = os.path.join(args.state, "halt")
+    if os.path.exists(halt):
+        return Ready("end", halted_line(halt), 2, None, [])
     open_list, reason = issues.open_issues(project, args.gh)
     if reason:
         return Ready("end", f"cannot read the project: {reason}", 2, None, [])
@@ -306,12 +313,21 @@ def ready(args, project, read_facts, drift):
         write_halt(args.state, f"STOP issue #{number}")
         text = f"cannot start: halted: the STOP issue #{number} is open;"
         return Ready("end", f"{text} close it, then run-steps.py clear", 2, None, open_list)
+    # A live session is waited on, and the rows below are not read until it ends.
+    live, pid, reason = runlog.live_session(args.state)
+    if live:
+        line = f"wait: session `{live}` is still running (pid {pid})"
+        return Ready("running", line, 0, None, open_list)
     # A start that took over a lock with no log has nothing to say what the last driver left.
     old = lock.took_over(args.state)
     if old is not None and not os.path.exists(runlog.path(args.state)):
         line = f"park: the run log is missing, and a lock shows a driver ran (pid {old})"
         return Ready("park", line, 1, drift["now"]["next_step"], open_list)
-    parked = [f"#{issue['number']}" for issue in open_list if "parked" in issue["labels"]]
+    # A torn log parks here, unless its own park is open: that one waits at row 3, with no comment.
+    parks = [issue for issue in open_list if "parked" in issue["labels"]]
+    if reason and f"park: {reason}" not in [issue["title"] for issue in parks]:
+        return Ready("park", f"park: {reason}", 1, drift["now"]["next_step"], open_list)
+    parked = [f"#{issue['number']}" for issue in parks]
     if parked:
         return Ready("end", f"wait: parked {', '.join(parked)}", 0, None, open_list)
     facts = read_facts(project)
@@ -343,21 +359,24 @@ def ready(args, project, read_facts, drift):
         if line.startswith("park:"):
             return parked_on(line)
         return Ready("end", line, 2, sentence, open_list)
-    session, reason = runlog.open_session(args.state, classify(sentence).prefix)
+    prefix = classify(sentence).prefix
+    session, reason = runlog.open_session(args.state, prefix)
+    if reason:
+        return parked_on(f"park: {reason}")
+    failed, reason = runlog.failures(args.state, prefix)
+    if reason:
+        return parked_on(f"park: {reason}")
+    # A crash's session and a step that failed twice park until a closed park of the same title.
+    lines = []
     if session:
-        return parked_on(f"park: the run log names session `{session}` for this step, with no end")
-    if reason:
-        return parked_on(f"park: {reason}")
-    failed, reason = runlog.failures(args.state, classify(sentence).prefix)
-    if reason:
-        return parked_on(f"park: {reason}")
+        lines.append(f"park: the run log names session `{session}` for this step, with no end")
     if len(failed) >= 2:
-        line = f"park: the step failed twice: sessions `{failed[-2]}` and `{failed[-1]}`"
-        # A step that failed twice parks until the maintainer closes its park issue, as a phase does.
-        if answered is None:
-            answered, reason = issues.closed_parks(project, args.gh)
-            if reason:
-                return Ready("end", f"cannot read the project: {reason}", 2, sentence, open_list)
+        lines.append(f"park: the step failed twice: sessions `{failed[-2]}` and `{failed[-1]}`")
+    if lines and answered is None:
+        answered, reason = issues.closed_parks(project, args.gh)
+        if reason:
+            return Ready("end", f"cannot read the project: {reason}", 2, sentence, open_list)
+    for line in lines:
         if line not in answered:
             return parked_on(line)
     return Ready("start", None, 0, sentence, open_list)
