@@ -5,7 +5,9 @@ repository's path>, subagents included) and writes totals only, no prompt or rep
 docs/dashboard/token-usage.json (tokens, their cost at list prices and the --tools counts per row), which scripts/spec-drift.py puts on the dashboard. The
 transcripts live on the maintainer's machine, not in CI, so this runs locally and its output is
 committed; the closing PR of each day refreshes it. Beside it, gates.json holds each gate's runs and the
-tokens of the replies that ran it or read its result (gates()), and refusals.json the guards' refusals.
+tokens of the replies that ran it or read its result (gates()), refusals.json the guards' refusals, and
+sessions.json each transcript's stretches of work on this machine's clock (sessions()), for the
+dashboard's ninth graph, one day on the clock.
 
     python scripts/token-usage.py
     python scripts/token-usage.py --simulate   # what shorter sessions, capped tool output or a Haiku operator would save
@@ -39,6 +41,7 @@ FIELDS = ("input", "cache_write", "cache_read", "output", "replies")
 TOOL_FIELDS = ("bash", "cut", "reads", "whole")
 DAY_BRANCH = re.compile(r"^day-(\d+)/")
 DATED = re.compile(r"-\d{8}$")
+GAP = datetime.timedelta(minutes=5)  # sessions(): a stretch of work ends when nothing is written for longer
 CUTS = (100_000, 200_000, 300_000)
 PEAK = 150_000  # --compare: the share of sessions whose peak passed it, and of cost in replies above it
 CAPS = (2_000, 5_000)
@@ -255,6 +258,59 @@ def gates(files):
         if auditor and order:
             rows[where(order[0], "auditors")]["runs"] += 1
     return rows
+
+
+def sessions(files):
+    """Each transcript's stretches of work, for docs/dashboard/sessions.json: a stretch runs from one
+    line's timestamp to the next while no gap is longer than GAP, and carries its agent, the day of
+    its branch and its replies, counted once each. A tool's result is a line too, so a test suite that
+    runs for four minutes keeps the stretch whole. The stamps are written on this machine's clock,
+    with its offset, so the page can show the maintainer's day and not the reader's."""
+    rows = []
+    for path in files:
+        who, stamps = agent(path), []
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    when = datetime.datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    continue
+                msg = reply(entry)
+                stamps.append((when, entry.get("gitBranch") or "", (msg.get("id"), entry.get("requestId")) if msg else None))
+        stretches = []
+        for when, branch, key in sorted(stamps, key=lambda s: s[0]):
+            if stretches and when - stretches[-1]["end"] <= GAP:
+                stretches[-1]["end"] = when
+            else:
+                stretches.append(dict(start=when, end=when, branch=branch, replies=set()))
+            if key:
+                stretches[-1]["replies"].add(key)
+        for s in stretches:
+            start, day = s["start"].astimezone(), DAY_BRANCH.match(s["branch"])
+            rows.append({"date": start.date().isoformat(), "day": int(day.group(1)) if day else None, "agent": who,
+                         "from": start.isoformat(timespec="seconds"), "to": s["end"].astimezone().isoformat(timespec="seconds"),
+                         "replies": len(s["replies"])})
+    return rows
+
+
+def write_sessions(out, rows):
+    """The stretches beside those already in out, as token-usage.json keeps its rows: a stretch is its
+    agent and start, and the later end and the larger count win, since a session can go on after it
+    was counted and Claude Code deletes old transcripts."""
+    kept = {}
+    if os.path.exists(out):
+        with open(out, encoding="utf-8") as f:
+            kept = {(r["agent"], r["from"]): r for r in json.load(f)}
+    for r in rows:
+        k = kept.setdefault((r["agent"], r["from"]), r)
+        k["to"], k["replies"] = max(k["to"], r["to"]), max(k["replies"], r["replies"])
+    if not kept:
+        return
+    out_rows = sorted(kept.values(), key=lambda r: (r["from"], r["agent"]))
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write("[\n" + ",\n".join(json.dumps(r, separators=(",", ":")) for r in out_rows) + "\n]\n")
+    print(f"{out}: {len(out_rows)} stretches of work over {len({r['date'] for r in out_rows})} dates")
 
 
 def contexts(path):
@@ -684,6 +740,7 @@ def main():
           f"${sum(r['cost'] for r in rows):,.2f} at the list prices checked {PRICES_CHECKED}")
     write_refusals(os.path.join(os.path.dirname(args.out), "refusals.json"))
     write_gates(os.path.join(os.path.dirname(args.out), "gates.json"), gates(files))
+    write_sessions(os.path.join(os.path.dirname(args.out), "sessions.json"), sessions(files))
 
 
 def write_gates(out, rows):

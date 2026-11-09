@@ -176,6 +176,8 @@ CAVEATS = [
     "names, such as ImportError, are not spec names.",
     "Production name coverage counts only files the path rules call production: a path, not proof "
     "that the file runs in the product. Test and tool names may legitimately be absent from it.",
+    "The clock graph shows the clock of the machine that last ran scripts/token-usage.py: its sessions "
+    "are stamped with its offset, and GitHub's times are moved to it. A session on another machine is not drawn.",
 ]
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
 # What git said about each merge, kept between runs: every call cached here names commits only by
@@ -461,6 +463,27 @@ def ci_pushes(runs):
             if r["conclusion"] == "failure":
                 failed[r["headBranch"]].add((r["headSha"], r["workflowName"]))
     return {b: (len(s), len({sha for sha, _ in failed[b]}), sorted({w for _, w in failed[b]})) for b, s in shas.items()}
+
+
+def clock(prs, runs, sessions=None):
+    """Graph 9's times: each merged PR's opening and merge, with the first start and last end of the
+    checks on its branch and how many ran and failed, beside this machine's stretches of work from
+    docs/dashboard/sessions.json (scripts/token-usage.py). GitHub's times are UTC, as it gives them;
+    the page moves them to the sessions' clock."""
+    on_branch = collections.defaultdict(list)
+    for r in runs:
+        if r.get("event") == "pull_request" and r.get("createdAt"):
+            on_branch[r["headBranch"]].append(r)
+    out = []
+    for p in sorted(prs.values(), key=lambda p: p["number"]):
+        if p.get("state") != "MERGED":
+            continue
+        on = on_branch.get(p["headRefName"], [])
+        checks = dict(start=min(r["createdAt"] for r in on), end=max(r.get("updatedAt") or r["createdAt"] for r in on),
+                      runs=len(on), failed=sum(r.get("conclusion") == "failure" for r in on)) if on else None
+        out.append(dict(number=p["number"], day=day_of(day_branch(p)), kind=kind(p["title"], day_branch(p)),
+                        branch=p["headRefName"], opened=p.get("createdAt"), merged=p.get("mergedAt"), checks=checks))
+    return dict(prs=out, sessions=page_json("sessions.json") if sessions is None else sessions)
 
 
 def verification(prs, runs):
@@ -1424,13 +1447,18 @@ def conclusion(notebook):
     return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == len(head)], measured_head=head)
 
 
-def token_usage():
-    """Tokens per date, migration day and model, as scripts/token-usage.py last counted them."""
-    path = os.path.join(PAGE, "token-usage.json")
+def page_json(name):
+    """One of the files scripts/token-usage.py writes beside the page, or nothing before its first run."""
+    path = os.path.join(PAGE, name)
     if not os.path.exists(path):
         return []
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def token_usage():
+    """Tokens per date, migration day and model, as scripts/token-usage.py last counted them."""
+    return page_json("token-usage.json")
 
 
 # The yardsticks plan.md judges the driver on ("What it is judged against"), and two the notebook adds, as
@@ -2289,7 +2317,7 @@ def github():
         return [], [], NO_REMOTE
     listed = owners_prs(gh_list(PR_LIMIT, "pr", "list", "--state", "all", "--json",
                                 "number,title,headRefName,state,url,body,author,createdAt,mergedAt"), owner)
-    runs = gh_list(RUN_LIMIT, "run", "list", "--json", "headBranch,headSha,conclusion,event,workflowName")
+    runs = gh_list(RUN_LIMIT, "run", "list", "--json", "headBranch,headSha,conclusion,event,workflowName,createdAt,updatedAt")
     return listed, runs, None
 
 
@@ -2354,6 +2382,7 @@ def main():
                     deployment=deployment(),
                     evidence_checks=checks, replay=replay_history(),
                     conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
+                    clock=clock(prs, runs),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))

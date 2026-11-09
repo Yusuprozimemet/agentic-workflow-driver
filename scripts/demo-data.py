@@ -233,6 +233,31 @@ def yardsticks():
         row("refusals", "Calls the hooks refused", "", 0, None, [0, 0, 2, 1, 2])])
 
 
+def clock(rows):
+    """Made-up times for graph 9: each merged PR opened and merged on its date, its checks a few
+    minutes after it opened, and three agents' stretches of work on every date with a merge, all
+    stamped +02:00 so the page shows the machine's clock and not the reader's."""
+    def stamp(date, minutes, offset="Z"):
+        return f"{date}T{minutes // 60:02d}:{minutes % 60:02d}:00{offset}"
+    open_for = dict(spec=45, code=25, close=190, other=12)
+    prs, sessions = [], []
+    for r in (r for r in rows if r["pr"]):
+        opened = 8 * 60 + (r["pr"] % 5) * 60 + (r["pr"] * 7) % 60  # 08:00 to 12:59 UTC, 10:00 to 14:59 on the clock
+        merged = opened + open_for[r["kind"]] + (r["pr"] % 3) * 5
+        failed = 1 if r["kind"] == "code" and r["pr"] % 2 else 0
+        prs.append(dict(number=r["pr"], day=r["day"], kind=r["kind"], branch=r["branch"], opened=stamp(r["date"], opened),
+                        merged=stamp(r["date"], merged), checks=dict(start=stamp(r["date"], opened + 1), end=stamp(r["date"], opened + 5 + failed * 4),
+                                                                   runs=4 + failed * 5, failed=failed)))
+    for date in sorted({r["date"] for r in rows if r["pr"]}):
+        day = next(r["day"] for r in rows if r["date"] == date)
+        for agent, stretches, replies in (("main", ((8 * 60 + 10, 9 * 60 + 40), (10 * 60 + 5, 12 * 60 + 30), (13 * 60 + 40, 16 * 60 + 55)), 38),
+                                          ("implementer", ((10 * 60 + 20, 10 * 60 + 35), (11 * 60 + 10, 11 * 60 + 30), (14 * 60, 14 * 60 + 25)), 9),
+                                          ("spec-auditor", ((8 * 60 + 15, 8 * 60 + 40),), 6)):
+            sessions.extend({"date": date, "day": day, "agent": agent, "from": stamp(date, a, "+02:00"), "to": stamp(date, b, "+02:00"), "replies": replies}
+                            for a, b in stretches)
+    return dict(prs=prs, sessions=sessions)
+
+
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
@@ -335,6 +360,7 @@ def demo():
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
         yardsticks=yardsticks(),
+        clock=clock(rows),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",

@@ -1,7 +1,6 @@
-// The dashboard in eight graphs. Each answers one question, folds what used to be several panels into
+// The dashboard in nine graphs. Each answers one question, folds what used to be several panels into
 // its marks, and says the detail in the readout under it. model() reads the data and touches no
-// document, so a test can run it; draw() puts what it returns on the page. A ninth graph, one day on
-// the clock, waits for times nothing collects yet.
+// document, so a test can run it; draw() puts what it returns on the page.
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -366,19 +365,80 @@ function model(DATA) {
     return { total: (DATA.attention || []).length, groups };
   }
 
-  function notMeasured(yard) {
+  // Graph 9: one date on the clock. The sessions (docs/dashboard/sessions.json) are stamped with the offset of the
+  // machine that recorded them, so the clock is the maintainer's and not the reader's; GitHub's times are UTC and
+  // are moved to that offset. A stretch that crosses midnight is clipped to each date it touches.
+  const LANES = [["main", "Main session"], ["implementer", "Implementer"], ["auditors", "Auditors"], ["other", "Other subagents"]];
+  const laneOf = a => a === "main" || a === "implementer" ? a : /-auditor$|^defect-rater$/.test(a) ? "auditors" : "other";
+  const offsetOf = s => { const m = /(Z|[+-]\d\d:\d\d)$/.exec(s || ""); return !m || m[1] === "Z" ? 0 : (m[1][0] === "-" ? -1 : 1) * (+m[1].slice(1, 3) * 60 + +m[1].slice(4, 6)); };
+  const hm = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`;
+  const span = m => m >= 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : plural(Math.max(1, Math.round(m)), "minute", "minutes");
+  function clockGraph() {
+    const C = DATA.clock || {}, S = (C.sessions || []).filter(s => s.from && s.to), PRS = (C.prs || []).filter(p => p.opened && p.merged);
+    const none = { head: ["Lane", "What", "From", "To", "Minutes"], rows: [] };
+    if (!S.length && !PRS.length) return { empty: "no session, pull request or check times are recorded yet. `python scripts/token-usage.py` writes the sessions to `docs/dashboard/sessions.json` from this machine's transcripts; the pull requests' and checks' times come from GitHub.",
+      dates: [], at: -1, hours: [], read: { t: "No times are recorded yet.", b: [] }, table: none };
+    const counts = new Map();
+    S.forEach(s => counts.set(offsetOf(s.from), (counts.get(offsetOf(s.from)) || 0) + 1));
+    const zone = S.length ? [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0] : 0;
+    const zoneText = zone ? `UTC${zone > 0 ? "+" : "−"}${hm(Math.abs(zone))}` : "UTC";
+    const dateOf = s => new Date(Date.parse(s) + zone * 60000).toISOString().slice(0, 10);
+    const midnight = date => Date.parse(`${date}T00:00:00Z`) - zone * 60000;
+    // An interval on one date, in minutes from its midnight, or null when it misses the date.
+    const clip = (date, a, b) => { const t0 = midnight(date), x = (Date.parse(a) - t0) / 60000, y = (Date.parse(b) - t0) / 60000; return y < 0 || x > 1440 || isNaN(x) || isNaN(y) ? null : [Math.max(0, x), Math.min(1440, Math.max(y, x))]; };
+    const dates = [...new Set([...S.map(s => dateOf(s.from)), ...PRS.flatMap(p => [dateOf(p.opened), dateOf(p.merged)])])].sort();
+    const laneKeys = LANES.filter(([k]) => k !== "other" || S.some(s => laneOf(s.agent) === "other"));
+    const bar = (cls, [a, b], t, b2, day) => ({ x: a / 14.4, w: (b - a) / 14.4, cls, t, b: b2, days: day ? [day] : [], mins: b - a, from: hm(a), to: hm(Math.min(b, 1439.99)) });
+    const prKind = p => p.kind in KINDS && p.kind !== "origin" ? p.kind : "other";
+    const out = dates.map(date => {
+      const days = new Set(), lanes = [], busy = [], rows = [];
+      const add = (name, bars, sub) => { lanes.push({ name, sub, bars }); bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([name, b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }); return bars; };
+      laneKeys.forEach(([k, name]) => {
+        const bars = S.filter(s => laneOf(s.agent) === k).map(s => { const c = clip(date, s.from, s.to); return c && bar("busy", c, `${s.agent === "main" ? "Main session" : s.agent} · busy ${hm(c[0])} to ${hm(c[1])}`,
+          [`${plural(s.replies, "reply", "replies")}, with no gap longer than 5 minutes.`], s.day); }).filter(Boolean);
+        busy.push(...bars);
+        add(name, bars, bars.length ? `busy ${span(sum(bars, b => b.mins))}` : "nothing recorded");
+      });
+      const open = PRS.map(p => { const c = clip(date, p.opened, p.merged); if (!c) return null; const all = (Date.parse(p.merged) - Date.parse(p.opened)) / 60000, ch = p.checks;
+        return bar(prKind(p), c, `Pull request #${p.number} · ${p.branch} · open ${hm(c[0])} to ${hm(c[1])}`,
+          [`Open for ${span(all)} before it merged${c[0] === 0 && Date.parse(p.opened) < midnight(date) ? ", opened on an earlier date" : ""}.`,
+            ch ? `Its checks ran ${plural(ch.runs, "time", "times")} and took ${span((Date.parse(ch.end) - Date.parse(ch.start)) / 60000)}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}` : "No check is recorded for it."], p.day); }).filter(Boolean);
+      add("Pull request open", open, open.length ? `${plural(open.length, "pull request", "pull requests")}, ${span(sum(open, b => b.mins))} in all` : "none open");
+      const checks = PRS.map(p => { const ch = p.checks, c = ch && clip(date, ch.start, ch.end); return c && bar(ch.failed ? "failed" : "ok", c, `Checks on pull request #${p.number} · ${hm(c[0])} to ${hm(c[1])}`,
+        [`${plural(ch.runs, "run", "runs")}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}`], p.day); }).filter(Boolean);
+      busy.push(...checks);
+      add("Checks running", checks, checks.length ? `${plural(checks.length, "set", "sets")}, ${checks.filter(b => b.cls === "failed").length} with a failure` : "none");
+      const merged = PRS.filter(p => dateOf(p.merged) === date).map(p => ({ p, wait: (Date.parse(p.merged) - Date.parse(p.opened)) / 60000 }));
+      const merges = merged.map(({ p, wait }) => { const at = (Date.parse(p.merged) - midnight(date)) / 60000; return bar("merge", [at, at], `Merged pull request #${p.number} · at ${hm(at)}`, [`The maintainer merged it ${span(wait)} after it opened.`], p.day); });
+      add("Maintainer merges", merges, plural(merges.length, "merge", "merges"));
+      // What the date says as a whole: the merges and the typical wait, who was busy how long, the longest stretch with nothing running, the longest waits.
+      const waits = merged.map(m => m.wait).sort((a, b) => a - b), median = waits.length ? waits[Math.floor((waits.length - 1) / 2)] : null;
+      const was = lanes.slice(0, laneKeys.length).filter(l => l.bars.length).map((l, i) => `${i ? "the " : "The "}${lower(l.name)} ${i ? "" : "was busy "}for ${l.sub.slice(5)}`);
+      const idle = busy.map(b => [b.x * 14.4, b.x * 14.4 + b.mins]).sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => { if (acc.end != null && a - acc.end > acc.gap) { acc.gap = a - acc.end; acc.from = acc.end; acc.to = a; } acc.end = acc.end == null ? b : Math.max(acc.end, b); return acc; }, { end: null, gap: 0 });
+      const longest = merged.sort((a, b) => b.wait - a.wait).slice(0, 3);
+      const read = { t: `${shortDate(date)}: ${plural(merged.length, "pull request", "pull requests")} merged${median != null ? `, half of them open for ${span(median)} or less` : ""}`,
+        b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : "No session was recorded on this date.",
+          idle.gap >= 60 ? `Nothing ran from ${hm(idle.from)} to ${hm(idle.to)}.` : "", longest.length ? `The longest ${longest.length === 1 ? "wait" : "waits"} for a merge: ${andList(longest.map(m => `#${m.p.number} (${span(m.wait)})`))}.` : "",
+          `Times are on the clock of the machine that recorded the sessions (${zoneText}).`].filter(Boolean) };
+      return { date, label: shortDate(date), days: [...days].sort((a, b) => a - b), lanes, read, table: { head: none.head, rows } };
+    });
+    const at = out.length - 1;
+    return { dates: out, at, zone: zoneText, hours: [0, 3, 6, 9, 12, 15, 18, 21].map(hh => ({ t: hm(hh * 60), x: hh * 60 / 14.4 })), read: out[at].read, table: out[at].table };
+  }
+
+  function notMeasured(yard, clock) {
     const I = DATA.infra || {};
     return [!I.latest && !(I.runs || []).length && ["Infrastructure checks", "no run is recorded, so nothing is drawn."],
       !DATA.deployment && ["The live deployment", "no run is recorded, so nothing is drawn."],
       ...((yard.waiting || []).map(w => [w.name, `${w.why}.`])),
-      ["Where a day's time goes, and who waits for whom", "the times of sessions, pull requests and checks are not collected yet. It will be the ninth graph."]].filter(Boolean);
+      clock.empty && ["Where a day's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
 
-  const P = safe(promises), g8 = safe(yardGraph);
+  const P = safe(promises), g8 = safe(yardGraph), g9 = safe(clockGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), g1: safe(abilityGraph), g2: P.error ? P : P.board, g3: P.error ? P : safe(() => reliedGraph(P)), g4: safe(mergeGraph), g5: safe(sieveGraph),
-    g6: safe(costGraph), g7: safe(workGraph), g8, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
-    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g8) };
+    g6: safe(costGraph), g7: safe(workGraph), g8, g9, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
+    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g8, g9) };
 }
 
 /* ---------- how this works: one promise, followed through its steps ---------- */
@@ -523,16 +583,19 @@ function draw(M, DATA) {
 
   // The readout under a graph: what the graph says as a whole, until a mark is pointed at, tapped or tabbed to.
   function reader(g, first) {
-    let on = null;
+    let on = null, base = first;
     const say = r => put(`${g}-read`, h("strong", null, r.t), r.b.map(line => h("span", null, rich(line))));
-    resets.push(() => { if (on) on.classList.remove("on"); on = null; say(first); });
+    const clear = () => { if (on) on.classList.remove("on"); on = null; };
+    resets.push(() => { clear(); say(base); });
     say(first);
-    return (node, r) => {
+    const mark = (node, r) => {
       node.setAttribute("aria-label", r.t);
-      const pick = () => { if (on === node) return; if (on) on.classList.remove("on"); on = node; node.classList.add("on"); say(r); };
+      const pick = () => { if (on === node) return; clear(); on = node; node.classList.add("on"); say(r); };
       ["mouseenter", "focus", "click"].forEach(ev => node.addEventListener(ev, pick));
       return node;
     };
+    mark.base = r => { base = r; clear(); say(r); };  // a graph that redraws (graph 9, per date) says its new whole
+    return mark;
   }
   const key = (id, items) => put(id, items.map(([cls, text, glyph]) => h("span", null, cls && h("i", { class: cls }, glyph || ""), text)));
   function table(id, T) {
@@ -561,11 +624,14 @@ function draw(M, DATA) {
 
   /* the day buttons: one day lit in every graph */
   let lit = null;
+  const onDay = [];  // what else happens when a day is picked: graph 9 turns to that day's last date
+  const relight = () => marks.forEach(node => node.classList.toggle("dim", lit !== null && !node.dataset.days.split(" ").includes(String(lit))));
   const chips = [null, ...M.days.map(d => d.day)].map(day => h("button", { type: "button", "aria-pressed": day === null ? "true" : "false" }, day === null ? "All days" : `Day ${day}`));
   chips.forEach((chip, i) => chip.addEventListener("click", () => {
     lit = i ? M.days[i - 1].day : null;
     chips.forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
-    marks.forEach(node => node.classList.toggle("dim", lit !== null && !node.dataset.days.split(" ").includes(String(lit))));
+    relight();
+    onDay.forEach(f => f(lit));
   }));
   put("days", h("span", null, "Highlight one day in every graph:"), chips);
 
@@ -659,6 +725,28 @@ function draw(M, DATA) {
           r.line != null && h("div", { class: "yard-line", style: `bottom:${px(r.line * 34)}` })),
         h("div", { class: "yard-note" }, r.note))),
       m.waiting.map(w => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, w.name), h("div", { class: "yard-wait" }, h("span", null, "Not measured yet: ", rich(w.why))), h("div", { class: "yard-note" }, "draws here once it is counted")))));
+  });
+
+  /* Graph 9 */
+  graph("g9", (m, mark) => {
+    if (m.empty) { put("g9-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
+    key("g9-key", [["sw busy", "Busy"], ["", "Pull requests:"], ["sw spec", "Spec"], ["sw prod", "Code"], ["sw close", "The day's close"], ["sw tooling", "Other (tooling, dashboard)"], ["sw failed", "Checks with a failure"], ["sw merge", "Merge"]]);
+    const dates = m.dates.map(d => forDays(h("button", { type: "button", "aria-pressed": "false" }, d.label), d.days));
+    put("g9-dates", h("span", null, "One date on the clock:"), dates);
+    const show = i => {
+      const d = m.dates[i];
+      dates.forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
+      put("g9-plot", h("div", { class: "clock" },
+        h("div", { class: "lane head" }, h("div", { class: "lane-name" }, m.zone), h("div", { class: "lane-bars" }, m.hours.map(x => h("span", { class: "hour", style: `left:${x.x.toFixed(2)}%` }, x.t)))),
+        d.lanes.map(l => h("div", { class: "lane" }, h("div", { class: "lane-name" }, h("strong", null, l.name), h("span", null, l.sub)),
+          h("div", { class: "lane-bars" }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%` }), b), b.days)))))));
+      table("g9-table", d.table);
+      mark.base(d.read);
+      relight();
+    };
+    dates.forEach((c, i) => c.addEventListener("click", () => show(i)));
+    onDay.push(day => { const i = m.dates.reduce((k, d, j) => d.days.includes(day) ? j : k, -1); if (i >= 0) show(i); });
+    show(m.at);
   });
 
   /* the foot of the page */

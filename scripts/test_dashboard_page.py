@@ -1,4 +1,4 @@
-"""The dashboard page: what each of its eight graphs draws and says, and what the page file must hold.
+"""The dashboard page: what each of its nine graphs draws and says, and what the page file must hold.
 
 docs/dashboard/dashboard.js keeps its reading of the data in model(), which touches no document, so
 these tests run it in node on small made-up data and compare what comes out. The page itself is
@@ -283,16 +283,60 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["Times it stopped", "none yet: only fake projects."], got["notMeasured"])
         self.assertEqual(got["notMeasured"][-1][0], "Where a day's time goes, and who waits for whom")
 
+    def test_graph_9_puts_one_date_on_the_clock_of_the_machine_that_recorded_the_sessions(self):
+        # The sessions are stamped +01:00, GitHub's times are UTC: a pull request opened at 09:30Z sits at 10:30 on
+        # the clock. A stretch across midnight is clipped to each date, and the last date is the one shown first.
+        s = lambda day, agent, start, end, n: {"date": start[:10], "day": day, "agent": agent, "from": start, "to": end, "replies": n}
+        clock = dict(sessions=[s(2, "main", "2026-01-02T08:00:00+01:00", "2026-01-02T10:00:00+01:00", 12),
+                               s(2, "implementer", "2026-01-02T09:00:00+01:00", "2026-01-02T09:30:00+01:00", 4),
+                               s(1, "spec-auditor", "2026-01-01T23:50:00+01:00", "2026-01-02T00:10:00+01:00", 2)],
+                     prs=[dict(number=7, day=2, kind="code", branch="day-02/track-a", opened="2026-01-02T09:30:00Z", merged="2026-01-02T10:00:00Z",
+                               checks=dict(start="2026-01-02T09:31:00Z", end="2026-01-02T09:40:00Z", runs=4, failed=1)),
+                          dict(number=6, day=1, kind="spec", branch="day-01/spec-x", opened="2026-01-01T22:00:00Z", merged="2026-01-02T01:00:00Z", checks=None)])
+        got = model(data(clock=clock))
+        g = got["g9"]
+        self.assertEqual(([d["date"] for d in g["dates"]], g["at"], g["zone"]), (["2026-01-01", "2026-01-02"], 1, "UTC+01:00"))
+        jan2 = g["dates"][1]
+        self.assertEqual((jan2["label"], jan2["days"]), ("2 Jan", [1, 2]))
+        lanes = {lane["name"]: lane for lane in jan2["lanes"]}
+        self.assertEqual(list(lanes), ["Main session", "Implementer", "Auditors", "Pull request open", "Checks running", "Maintainer merges"])
+        pr7 = next(b for b in lanes["Pull request open"]["bars"] if "#7" in b["t"])
+        self.assertEqual((round(pr7["x"], 3), round(pr7["w"], 3), pr7["cls"], pr7["days"]), (round(630 / 14.4, 3), round(30 / 14.4, 3), "code", [2]))
+        self.assertEqual(pr7["t"], "Pull request #7 · day-02/track-a · open 10:30 to 11:00")
+        self.assertEqual(pr7["b"], ["Open for 30 minutes before it merged.", "Its checks ran 4 times and took 9 minutes, 1 of them failed."])
+        pr6 = next(b for b in lanes["Pull request open"]["bars"] if "#6" in b["t"])
+        self.assertEqual((pr6["from"], pr6["to"], pr6["cls"]), ("00:00", "02:00", "spec"))
+        self.assertIn("opened on an earlier date", pr6["b"][0])
+        self.assertEqual([(b["from"], b["to"]) for b in lanes["Auditors"]["bars"]], [("00:00", "00:10")])
+        self.assertEqual([lane["sub"] for lane in jan2["lanes"]], ["busy 2 h 0 min", "busy 30 minutes", "busy 10 minutes", "2 pull requests, 2 h 30 min in all", "1 set, 1 with a failure", "2 merges"])
+        self.assertEqual([b["cls"] for b in lanes["Checks running"]["bars"]], ["failed"])
+        self.assertEqual(jan2["read"]["t"], "2 Jan: 2 pull requests merged, half of them open for 30 minutes or less")
+        self.assertEqual(jan2["read"]["b"], ["Work of Days 1 to 2.", "The main session was busy for 2 h 0 min, the implementer for 30 minutes and the auditors for 10 minutes.",
+                                             "Nothing ran from 00:10 to 08:00.", "The longest waits for a merge: #6 (3 h 0 min) and #7 (30 minutes).",
+                                             "Times are on the clock of the machine that recorded the sessions (UTC+01:00)."])
+        self.assertEqual(jan2["table"]["head"], ["Lane", "What", "From", "To", "Minutes"])
+        self.assertIn(["Pull request open", "Pull request #7", "10:30", "11:00", 30], jan2["table"]["rows"])
+        self.assertEqual((g["read"], g["table"]), (jan2["read"], jan2["table"]))
+        self.assertEqual([x["t"] for x in g["hours"]][:3], ["00:00", "03:00", "06:00"])
+        self.assertNotIn("Where a day's time goes, and who waits for whom", [n for n, _ in got["notMeasured"]])
+
+    def test_graph_9_without_any_time_recorded_says_so_under_not_measured(self):
+        got = model(data())
+        self.assertIn("sessions.json", got["g9"]["empty"])
+        self.assertEqual(got["g9"]["dates"], [])
+        self.assertEqual(got["notMeasured"][-1][0], "Where a day's time goes, and who waits for whom")
+        self.assertEqual(got["notMeasured"][-1][1], got["g9"]["empty"])
+
     def test_one_graph_that_cannot_read_its_data_leaves_the_others_drawn(self):
         got = model(data(criteria_index=[None]))
         self.assertIn("error", got["g2"])
         self.assertIn("error", got["g3"])
-        self.assertEqual([g for g in ("g1", "g4", "g5", "g6", "g7", "g8") if "error" in got[g]], [])
+        self.assertEqual([g for g in ("g1", "g4", "g5", "g6", "g7", "g8", "g9") if "error" in got[g]], [])
 
     def test_data_with_nothing_in_it_still_gives_every_graph_something_to_say(self):
         got = model({})
-        self.assertEqual({g: got[g].get("error") for g in ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")}, dict.fromkeys(
-            ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")))
+        self.assertEqual({g: got[g].get("error") for g in ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9")}, dict.fromkeys(
+            ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8", "g9")))
         self.assertEqual([got[g]["read"]["t"] for g in ("g1", "g2", "g4", "g5", "g6", "g8")], [
             "No merged pull request yet", "No promise yet", "No gap is measured yet", "No defect is recorded yet",
             "No token counts yet", "No yardstick is counted yet"])
@@ -326,7 +370,7 @@ class PageFilesTest(unittest.TestCase):
 
     def test_every_graph_has_its_plot_its_readout_and_its_exact_numbers_folded_under_it(self):
         html = read("index.html")
-        for n in range(1, 9):
+        for n in range(1, 10):
             section = re.search(rf'<section class="graph" id="g{n}">.*?</section>', html, re.S)
             self.assertIsNotNone(section, f"graph {n}")
             order = [section.group(0).index(f'id="g{n}-{part}"') for part in ("plot", "read", "table")]
@@ -337,7 +381,7 @@ class PageFilesTest(unittest.TestCase):
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for n in range(1, 9):
+        for n in range(1, 10):
             before = html[:html.index(f'id="g{n}-plot"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), f"graph {n}")
 
