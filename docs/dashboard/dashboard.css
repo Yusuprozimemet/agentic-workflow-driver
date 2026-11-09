@@ -464,10 +464,13 @@ details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
 /* The plots: two beside each other on a wide screen, one column on a phone. */
 /* Two related views: stacked as if the wrapper were not there, and side by side above 1440px. */
 .wide-pair, .wide-pair > div { display: contents; }
+/* section.panel > * does not reach them: without this a wide table inside widens the whole panel. */
+.wide-pair > div > * { min-width: 0; }
 @media (min-width: 1440px) {
   :root { --wrap: 1400px; }
   .wide-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; align-items: start; }
   .wide-pair > div { display: grid; gap: 14px; min-width: 0; }
+  .wide-pair .now { grid-template-columns: minmax(0, 1fr); }
   /* A chart drawn 1000 units wide shrinks to about half here, and its labels would fall to 6px. */
   .wide-pair svg[viewBox^="0 0 1000"] text { font-size: 17px; }
   .wide-pair #pull-steps svg { min-width: 0; }
@@ -592,3 +595,28 @@ a.pr-dot:focus-visible { outline: 2px solid var(--ink); }
 .night li.none { color: var(--muted); }
 .night-time { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .night small { display: block; font-size: 12px; font-style: italic; color: var(--muted); }
+
+/* A step's stories, opened from its count. */
+.story-open { justify-self: center; padding: 2px 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.story-open:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.story-open[aria-expanded="true"] { font-weight: 600; color: var(--ink); }
+@container (max-width: 640px) { .story-open { justify-self: start; } }
+.story-list ol { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 8px; }
+.story-list li { color: var(--ink-2); }
+.story-list a { color: var(--spec); font-variant-numeric: tabular-nums; }
+.story-list small { display: block; font-size: 12px; color: var(--muted); }
+/* When each ability grew: a dot's area follows its count, and the count is printed under it. */
+.grew { table-layout: fixed; min-width: calc(9rem + var(--n) * 38px); margin-top: 4px; }
+.grew thead td { width: 11rem; }
+.grew th, .grew td { white-space: normal; vertical-align: middle; }
+.grew thead th, .grew td { padding: 4px 2px; text-align: center; }
+.grew thead th { font-size: 12px; font-weight: 500; color: var(--muted); }
+/* The names stay in view while the days scroll under them on a phone. */
+.grew thead td, .grew th[scope="row"] { position: sticky; left: 0; background: var(--surface); }
+.grew th[scope="row"] { padding-left: 0; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.grew th small, .grew td small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.grew td { height: 48px; }
+.grew tr:not(.rail) + tr.rail > * { border-top: 2px solid var(--axis); }
+.grew-dot, .legend i.grew-dot { display: block; box-sizing: border-box; width: var(--d, 12px); height: var(--d, 12px); margin: 0 auto; border-radius: 50%; background: var(--ink-2); }
+.grew .open .grew-dot, .legend i.grew-dot.open { background: none; border: 2px dashed var(--ink-2); }
+@media (max-width: 620px) { .grew thead td { width: 7rem; } }

@@ -525,7 +525,7 @@ def ladder(*stories, days=()):
 
 def rung(box, name):
     """One step's HTML: from its label to the next step's, or the end of the ladder."""
-    return box.split(f"<b>{name}</b>")[1].split('<div class="rung ')[0]
+    return box.split(f"<b>{name}</b>")[1].split('<div class="rung ')[0].split('<div class="inline-detail')[0]
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
@@ -544,12 +544,12 @@ class LadderPlotTest(unittest.TestCase):
         box, _ = ladder(*self.STORIES, days=self.DAYS)
         built = rung(box, "Shows what it would do")
         self.assertEqual(built.count('class="mini-tile story"'), 3)
-        self.assertIn(">3 stories</span><span>Day 1</span>", built)
+        self.assertIn(">3 stories</button><span>Day 1</span>", built)
         self.assertIn('title="#3 Change 3"', built)
         stopping = rung(box, "Can be stopped")
         self.assertEqual(stopping.count('class="mini-tile story"'), 2)
-        self.assertIn(">2 stories</span><span>Days 1, 2</span>", stopping)
-        self.assertIn("<span>1 story · Shows what still works</span>", box)
+        self.assertIn(">2 stories</button><span>Days 1, 2</span>", stopping)
+        self.assertIn('aria-controls="stories-see">1 story</button> · Shows what still works</span>', box)
         self.assertEqual(box.count('class="mini-tile story"'), 7)
 
     def test_a_step_is_still_being_built_while_a_day_that_added_to_it_is_open(self):
@@ -581,6 +581,27 @@ class LadderPlotTest(unittest.TestCase):
         box, _ = ladder(*self.STORIES, days=self.DAYS)
         self.assertNotIn("named no ability", box)
 
+    def test_a_count_opens_the_list_of_that_abilitys_stories(self):
+        told = dict(story(4, "stop", 1), story="As a <b>reader</b>, I want x.", date="2026-01-05")
+        box, _ = ladder(*self.STORIES[:3], told, *self.STORIES[4:], days=self.DAYS)
+        button = '<button type="button" class="story-open" data-stories="stop" aria-expanded="false" aria-controls="stories-stop">2 stories</button>'
+        self.assertIn(button, rung(box, "Can be stopped"))
+        self.assertEqual(box.count('class="story-open"'), 3)
+        self.assertNotIn("story-open", rung(box, "Works through the night"))
+        self.assertEqual(box.count('class="inline-detail story-list"'), 3)
+        self.assertNotIn('id="stories-loop"', box)
+        listed = box.split('id="stories-stop" hidden>')[1].split("</div>")[0]
+        self.assertTrue(listed.startswith("<h3>Can be stopped · 2 stories</h3><ol>"), listed)
+        self.assertIn(
+            '<li><a href="u" target="_blank" rel="noopener">#4</a> As a &lt;b&gt;reader&lt;/b&gt;, I want x.<small>Day 1 · Jan 5</small></li>',
+            listed,
+        )
+        self.assertIn('rel="noopener">#5</a> Change 5<small>Day 2</small></li>', listed)
+        self.assertEqual(listed.count("<li>"), 2)
+        railed = box.split('id="stories-see" hidden>')[1].split("</div>")[0]
+        self.assertIn('rel="noopener">#6</a> Change 6<small>Between days</small></li>', railed)
+        self.assertLess(box.index('class="rung-here"'), box.index('id="stories-rehearse"'))
+
     def test_the_night_marks_each_moment_by_its_step(self):
         _, night = ladder(*self.STORIES, days=self.DAYS)
         self.assertEqual(night.count("<li "), 6)
@@ -597,6 +618,74 @@ class LadderPlotTest(unittest.TestCase):
         box, night = ladder(story(1, None))
         self.assertIn(NONE, box)
         self.assertIn(NONE, night)
+
+
+def grew(*stories, days=()):
+    """The grew-by-day box for these stories; `days` are (day, status) pairs."""
+    return draw(
+        user_stories=dict(abilities=ABILITIES, stories=list(stories), problems=[]),
+        days=[dict(a_day(n), status=status) for n, status in days],
+    )["plot-grew"]
+
+
+def grew_row(box, name):
+    """One ability's cells: from the end of its row header to the end of its row."""
+    return box.split(f'<th scope="row">{name}')[1].split("</th>", 1)[1].split("</tr>")[0]
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node")
+class GrewPlotTest(unittest.TestCase):
+    STORIES = LadderPlotTest.STORIES
+    DAYS = LadderPlotTest.DAYS
+
+    def test_a_dot_for_each_ability_and_day_sized_by_its_stories(self):
+        box = grew(*self.STORIES, days=self.DAYS)
+        self.assertIn(
+            '<tr><td></td><th scope="col">Day 1</th><th scope="col" class="open">Day 2</th><th scope="col">Between days</th></tr>',
+            box,
+        )
+        self.assertEqual(
+            grew_row(box, "Shows what it would do"),
+            '<td><i class="grew-dot" style="--d:26.0px" title="Day 1 · Shows what it would do: 2 stories"></i><small>2</small></td>'
+            '<td class="open"></td>'
+            '<td><i class="grew-dot" style="--d:20.7px" title="Between days · Shows what it would do: 1 story"></i><small>1</small></td>',
+        )
+        self.assertEqual(grew_row(box, "Works through the night"), '<td></td><td class="open"></td><td></td>')
+        self.assertEqual(box.count('class="grew-dot"'), 5)
+        self.assertIn("<b>4</b> stories on <b>2</b> days, <b>2</b> between days</p>", box)
+        self.assertIn('<table class="grew" style="--n:3">', box)
+
+    def test_an_open_day_is_drawn_open_and_the_key_says_so(self):
+        box = grew(*self.STORIES, days=self.DAYS)
+        self.assertIn('<td class="open"><i class="grew-dot" style="--d:20.7px"', grew_row(box, "Can be stopped"))
+        self.assertIn('<i class="grew-dot key open"></i><b>Its day is not closed</b>', box)
+        box = grew(*self.STORIES, days=((1, "done"), (2, "done")))
+        self.assertNotIn('class="open"', box)
+        self.assertNotIn("Its day is not closed", box)
+
+    def test_a_day_that_added_no_story_keeps_its_column(self):
+        box = grew(story(1, "rehearse", 1), story(2, "stop", 3))
+        self.assertIn('<th scope="col">Day 1</th><th scope="col">Day 2</th><th scope="col">Day 3</th></tr>', box)
+        self.assertNotIn("Between days", box)
+        self.assertEqual(
+            grew_row(box, "Can be stopped"),
+            '<td></td><td></td><td><i class="grew-dot" style="--d:26.0px" title="Day 3 · Can be stopped: 1 story"></i><small>1</small></td>',
+        )
+        self.assertIn("<b>2</b> stories on <b>2</b> days</p>", box)
+
+    def test_the_railing_rows_are_named_and_a_story_with_no_ability_is_not_counted(self):
+        box = grew(*self.STORIES, story(7, None, 1), story(8, "nonsense"), days=self.DAYS)
+        self.assertIn('<tr class="rail"><th scope="row">Shows what still works<small>the railing</small></th>', box)
+        self.assertEqual(box.count('<tr class="rail">'), 1)
+        self.assertIn("<b>4</b> stories on <b>2</b> days, <b>2</b> between days</p>", box)
+        box = grew(story(1, "see"))
+        self.assertIn('<tr><td></td><th scope="col">Between days</th></tr>', box)
+        self.assertIn("<b>0</b> stories on <b>0</b> days, <b>1</b> between days</p>", box)
+
+    def test_no_stories_is_not_measured_and_old_data_still_draws(self):
+        self.assertIn(NONE, draw()["plot-grew"])
+        self.assertNotIn("This panel failed", draw()["plot-grew"])
+        self.assertIn(NONE, grew(story(1, None)))
 
 
 class PageShape(html.parser.HTMLParser):
@@ -628,6 +717,7 @@ class PageLayoutTest(unittest.TestCase):
     PLOTS = (
         "plot-ladder",
         "plot-night",
+        "plot-grew",
         "plot-all",
         "plot-features",
         "plot-groups",

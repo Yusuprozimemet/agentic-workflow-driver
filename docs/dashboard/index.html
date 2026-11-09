@@ -68,7 +68,7 @@
     <div id="plot-ladder"><p class="load-error">Loading the latest data…</p></div>
     <details class="counted">
       <summary>How this is counted</summary>
-      <p>Every merged pull request states a user story and names one of seven abilities in its <code>Ability:</code> line; the ones opened before the template asked are filled in from <code>docs/dashboard/user-stories.json</code>. Five abilities are the steps, in the order the plan builds them. The other two are the railing: the work that shows and proves what the steps do. A step is drawn as still being built while a day that added a story to it is not closed. A dot is a pull request, not a measure of how much it did.</p>
+      <p>Every merged pull request states a user story and names one of seven abilities in its <code>Ability:</code> line; the ones opened before the template asked are filled in from <code>docs/dashboard/user-stories.json</code>. Five abilities are the steps, in the order the plan builds them. The other two are the railing: the work that shows and proves what the steps do. A step is drawn as still being built while a day that added a story to it is not closed. A dot is a pull request, not a measure of how much it did. Select a count to read that step's stories; each links to its pull request.</p>
     </details>
     </div><div>
     <div class="panel-head">
@@ -104,10 +104,22 @@
       <h2>Where we are</h2>
       <p>Refreshed after every merge from the repository itself: the day in progress, its tracks and criteria, what comes next, and the road ahead.</p>
     </div>
+    <div class="wide-pair"><div>
     <div class="now">
       <div class="today" id="today"><p class="load-error">Loading the latest data…</p></div>
       <div class="roadmap" id="roadmap"></div>
     </div>
+    </div><div>
+    <div class="panel-head">
+      <h2 style="font-size:17px">When each ability grew</h2>
+      <p>One row for each thing the driver can do, one column for each day of work. A dot is the pull requests merged for that day whose user story adds to that ability.</p>
+    </div>
+    <div id="plot-grew"></div>
+    <details class="counted">
+      <summary>How this is counted</summary>
+      <p>A pull request counts for the day its branch names (<code>day-07/…</code>) and for the ability its <code>Ability:</code> line names. One merged on any other branch, such as work on this page or on the tooling, is counted under “Between days”. The columns run from the first day with a story to the last, so a day that added none keeps an empty column. A dot's area follows the number of pull requests, with a smallest size so that one is still visible; the number under it is the count. A pull request is not a measure of how much it did.</p>
+    </details>
+    </div></div>
   </section>
   </details>
   </div>
