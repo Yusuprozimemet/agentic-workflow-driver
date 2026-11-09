@@ -91,6 +91,8 @@ def clear(state):
             print(f"clear: pid {held[0]} still runs; halt again, or stop it by hand")
             return 1
         os.remove(lock.path(state))
+    if os.path.exists(lock.guard(state)):
+        os.remove(lock.guard(state))
     halt_file = os.path.join(state, "halt")
     if not os.path.exists(halt_file):
         print("clear: no halt is set")
