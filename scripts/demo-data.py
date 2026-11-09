@@ -185,6 +185,18 @@ def build_days(rows):
     return days, index, attention, checks, removals
 
 
+# The seven abilities, as spec-drift.py's ABILITIES has them: the demo imports nothing from that script.
+ABILITIES = (
+    dict(key="rehearse", name="Shows what it would do", role="rung"),
+    dict(key="stop", name="Can be stopped, from anywhere", role="rung"),
+    dict(key="loop", name="Works through the night", role="rung"),
+    dict(key="park", name="Asks only when it must", role="rung"),
+    dict(key="recover", name="Picks itself up after a crash", role="rung"),
+    dict(key="see", name="Shows the world what still works", role="rail"),
+    dict(key="record", name="Proves every claim", role="rail"),
+)
+
+
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
@@ -270,6 +282,12 @@ def demo():
                                                   ("C3", 20, "live only", False), ("C1", 21, "holds", False),
                                                   ("C1", 23, "test weakened", True), ("C2", 23, "holds, never broken", False),
                                                   ("C3", 23, "live only", False), ("C4", 23, "not yet in force", False))]),
+        user_stories=dict(
+            abilities=[dict(a) for a in ABILITIES], problems=[], source="docs/dashboard/user-stories.json",
+            stories=[dict(number=r["pr"], title=r["title"], url=f"https://github.com/example/{PROJECT}/pull/{r['pr']}",
+                          branch=r["branch"], day=r["day"], date=r["date"], ability=a, ability_source="pr",
+                          story=f"Made-up story for pull request {r['pr']}.", story_source="pr", reader="desk")
+                     for r, a in zip(merged[:3], ("rehearse", "loop", "see"))]),
         conclusion=dict(reads=[dict(phase=1, text="**Read at the end of Phase 1.** Products and the cart work; "
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),

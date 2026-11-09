@@ -2868,5 +2868,101 @@ class HowThisWorksPageTest(unittest.TestCase):
         self.assertIn("What was recorded for this promise", detail)
 
 
+class UserStoriesTest(unittest.TestCase):
+    KEYS = [a["key"] for a in sd.ABILITIES]
+    TEMPLATE = ("As a [type of user], I want [goal or capability], so that [benefit or outcome]. "
+                "Ability: [one of rehearse, stop, loop, park, recover, see, record]")
+
+    def pr(self, number, body=None, branch="day-05/track-a", state="MERGED"):
+        return dict(number=number, title=f"PR {number}", url=f"https://example.test/pull/{number}",
+                    headRefName=branch, state=state, body=body, mergedAt="2026-11-01T10:00:00Z")
+
+    def written(self, data):
+        folder = tempfile.mkdtemp(prefix="user-stories-")
+        self.addCleanup(shutil.rmtree, folder, True)
+        path = os.path.join(folder, "user-stories.json")
+        with open(path, "wb") as f:
+            f.write(json.dumps(data).encode("utf-8"))
+        return path
+
+    def test_story_section_keeps_the_story_and_the_ability_line_and_drops_the_comment(self):
+        body = ("## User story\n\n<!-- plain words only -->\nAs the maintainer, I want x,\nso that y.\n"
+                "Ability: loop\n\n## What I built\n\nSomething else.\n")
+        self.assertEqual(sd.story_section(body), "As the maintainer, I want x, so that y. Ability: loop")
+
+    def test_story_section_is_empty_without_the_section(self):
+        self.assertEqual(sd.story_section(""), "")
+        self.assertEqual(sd.story_section("## What I built\n\nx\n"), "")
+
+    def test_story_ability_reads_the_key_and_refuses_the_template_and_other_words(self):
+        self.assertEqual(sd.story_ability("Ability: loop"), "loop")
+        self.assertEqual(sd.story_ability("Ability: [stop]"), "stop")
+        self.assertEqual(sd.story_ability("Ability: LOOP"), "loop")
+        self.assertIsNone(sd.story_ability(self.TEMPLATE))
+        self.assertIsNone(sd.story_ability("As the maintainer, I want x"))
+        self.assertIsNone(sd.story_ability("Ability: flying"))
+
+    def test_story_sentence_drops_the_ability_line_and_the_untouched_template(self):
+        self.assertEqual(sd.story_sentence("As the maintainer, I want x, so that y. Ability: loop"),
+                         "As the maintainer, I want x, so that y.")
+        self.assertEqual(sd.story_sentence(self.TEMPLATE), "")
+
+    def test_story_reader_says_who_the_story_is_written_for(self):
+        self.assertEqual(sd.story_reader("As the maintainer, I want x"), "desk")
+        self.assertEqual(sd.story_reader("As the maintainer away from my desk, I want x"), "away")
+        self.assertEqual(sd.story_reader("As someone reading the project's dashboard, I want x"), "reader")
+        self.assertEqual(sd.story_reader("As the maintainer reading the dashboard on my phone, I want x"), "away")
+        self.assertEqual(sd.story_reader("no clause here"), "desk")
+
+    def test_user_stories_takes_the_body_then_the_file_and_names_what_is_missing(self):
+        prs = [
+            self.pr(1, "## User story\n\nAs the maintainer, I want x, so that y.\nAbility: loop\n\n## What I built\n"),
+            self.pr(2, "## What I built\n"),
+            self.pr(3, "## What I built\n"),
+            self.pr(4, "## User story\n\nAs the maintainer, I want z.\nAbility: see\n", state="OPEN"),
+        ]
+        path = self.written({"2": dict(ability="see", story="As the maintainer, I want w, so that v.")})
+        data = sd.user_stories(prs, path)
+        self.assertEqual([r["number"] for r in data["stories"]], [1, 2, 3])
+        first, second, third = data["stories"]
+        self.assertEqual((first["story_source"], first["ability_source"]), ("pr", "pr"))
+        self.assertEqual((second["story_source"], second["ability_source"]), ("written", "written"))
+        self.assertEqual((second["story"], second["ability"]), ("As the maintainer, I want w, so that v.", "see"))
+        self.assertEqual((third["story"], third["ability"]), ("", None))
+        self.assertEqual((first["day"], first["date"]), (5, "2026-11-01"))
+        self.assertEqual([a["key"] for a in data["abilities"]], self.KEYS)
+        self.assertEqual(len(data["problems"]), 2)
+        self.assertTrue(all(p.startswith("#3 ") for p in data["problems"]))
+
+    def test_user_stories_falls_back_as_if_empty_on_a_missing_or_unreadable_file(self):
+        prs = [self.pr(1, "## User story\n\nAs the maintainer, I want x, so that y.\nAbility: loop\n")]
+        folder = tempfile.mkdtemp(prefix="user-stories-")
+        self.addCleanup(shutil.rmtree, folder, True)
+        bad = os.path.join(folder, "bad.json")
+        with open(bad, "wb") as f:
+            f.write(b"not json")
+        for path in (os.path.join(folder, "missing.json"), bad):
+            data = sd.user_stories(prs, path)
+            self.assertEqual([(r["number"], r["ability"]) for r in data["stories"]], [(1, "loop")])
+
+    def test_the_template_lists_the_abilities_in_the_same_order(self):
+        with open(os.path.join(HERE, "..", ".github", "pull_request_template.md"), encoding="utf-8") as f:
+            line = re.search(r"^Ability: \[one of ([^\]]*)\]$", f.read(), re.M)
+        self.assertIsNotNone(line)
+        self.assertEqual(line.group(1).split(", "), self.KEYS)
+
+    def test_the_backfill_names_known_abilities_and_a_story_for_each_of_1_to_29(self):
+        with open(os.path.join(HERE, "..", "docs", "dashboard", "user-stories.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        numbers = [k for k in data if k != "_about"]
+        for k in numbers:
+            self.assertRegex(k, r"^[1-9][0-9]*$")
+            self.assertIn(data[k]["ability"], self.KEYS)
+        for n in range(1, 30):
+            if str(n) in data:
+                self.assertTrue(data[str(n)].get("story", "").strip(), n)
+        self.assertEqual(sum(1 for k in numbers if data[k].get("story")), 29)
+
+
 if __name__ == "__main__":
     unittest.main()
