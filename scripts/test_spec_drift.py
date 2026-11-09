@@ -3004,5 +3004,115 @@ class UserStoriesTest(unittest.TestCase):
         self.assertEqual(sum(1 for k in numbers if data[k].get("story")), 29)
 
 
+class PromiseAbilitiesTest(unittest.TestCase):
+    STORIES = [dict(number=13, ability="stop"), dict(number=16, ability="stop"),
+               dict(number=18, ability="rehearse"), dict(number=5, ability="rehearse"),
+               dict(number=28, ability="loop"), dict(number=22, ability="loop"),
+               dict(number=29, ability="stop"), dict(number=40, ability=None)]
+
+    def abilities(self, prs):
+        index = [dict(id="C1", prs=prs)]
+        sd.attach_abilities(index, self.STORIES)
+        return index[0]["abilities"]
+
+    def test_a_promise_takes_the_ability_most_of_its_pull_requests_grew(self):
+        self.assertEqual(self.abilities([13, 16, 18]), ["stop", "rehearse"])
+        self.assertEqual(self.abilities([5, 13, 16]), ["stop", "rehearse"])
+
+    def test_a_tie_goes_to_the_pull_request_cited_first(self):
+        self.assertEqual(self.abilities([5, 28]), ["rehearse", "loop"])
+        self.assertEqual(self.abilities([22, 29]), ["loop", "stop"])
+
+    def test_a_promise_citing_no_pull_request_with_an_ability_has_none(self):
+        self.assertEqual(self.abilities([]), [])
+        self.assertEqual(self.abilities([40]), [])
+        self.assertEqual(self.abilities([999]), [])
+        self.assertEqual(self.abilities([40, 28]), ["loop"])
+
+
+class YardsticksTest(unittest.TestCase):
+    HEAD = "| Question | Evidence it will be judged on | Day 01 | Day 02 |\n| --- | --- | --- | --- |\n"
+    COST = ("| Cost per merged PR, main sessions, beside the kit's baseline of $1.86 (`plan.md`, "
+            "\"What it is judged against\") | `docs/dashboard/token-usage.json` | $5.51 over 5 merged PRs on "
+            "2026-11-06, $1.10 each ($2.45 attributed to Day 1 by branch, $3.06 on `main`) | $7.97 over 3 merged "
+            "PRs since Day 01's count, $2.66 each |\n")
+    REPLIES = ("| Replies per merged PR, main sessions, beside 34.4 | `docs/dashboard/token-usage.json` | "
+               "118 replies over 5 PRs, 23.6 each | 1,311 replies over 32 PRs, 41.0 each |\n")
+    ESCAPES = ("| Escapes per day | the Notes' Defect lines | 0 from a day; 1 from the repository's start (D01.15) | "
+               "3 from Day 01 (D02.2, D02.3, D02.11) |\n")
+    PARKS = "| Parks by reason | the driver's run log | none yet: the driver does not run steps until Phase 1 | none yet |\n"
+    REFUSALS = ("| Hook refusals | `docs/dashboard/refusals.json` | 1, read-guard, 2026-11-06 | "
+                "13 more, 2026-11-07 to 2026-11-08: 11 read-guard, 1 auditor-guard, 1 step-guard (33 in all) |\n")
+    GATES = ("| What each gate cost | `docs/dashboard/gates.json` | Day 1: seen red, 5 runs for $0.36; break on purpose, "
+             "8 runs for $0.39 | Day 2: seen red, 5 runs for $0.36; break on purpose, 1 run for $0.12 |\n")
+    NOTEBOOK = "# Notebook\n\n## What is being measured\n\n" + HEAD + COST + REPLIES + ESCAPES + PARKS + REFUSALS + GATES
+    NOTEBOOK += "\n## Retrospective\n"
+    TOKENS = [dict(day=1, input=10, cache_write=90, cache_read=6100, output=100),
+              dict(day=1, input=0, cache_write=0, cache_read=200, output=0),
+              dict(day=None, input=5, cache_write=5, cache_read=5, output=5)]
+
+    @staticmethod
+    def figures(got):
+        return {r["key"]: [v["value"] for v in r["values"]] for r in got["rows"]}
+
+    def test_each_yardstick_is_read_as_a_number_for_each_day(self):
+        got = sd.yardsticks(sd.conclusion(self.NOTEBOOK), self.TOKENS)
+        self.assertEqual(got["days"], [1, 2])
+        self.assertEqual([r["key"] for r in got["rows"]],
+                         ["cost", "replies", "escapes", "parks", "refusals", "gates", "reread"])
+        self.assertEqual(self.figures(got), dict(cost=[1.1, 2.66], replies=[23.6, 41.0], escapes=[0, 3],
+                                                 parks=[None, None], refusals=[1, 13], gates=[0.75, 0.48],
+                                                 reread=[64.0, None]))
+        self.assertEqual(got["problems"], [])
+        cost = got["rows"][0]
+        self.assertEqual(cost["values"][0]["text"], "$5.51 over 5 merged PRs on 2026-11-06, $1.10 each "
+                                                    "($2.45 attributed to Day 1 by branch, $3.06 on `main`)")
+        self.assertEqual(got["rows"][-1]["values"][0]["text"],
+                         "6,400 tokens read for 100 written, in the sessions tagged Day 1")
+
+    def test_the_baseline_comes_from_the_question(self):
+        got = sd.yardsticks(sd.conclusion(self.NOTEBOOK), self.TOKENS)
+        baselines = {r["key"]: r["baseline"] for r in got["rows"]}
+        self.assertEqual(baselines, dict(cost=1.86, replies=34.4, escapes=None, parks=None, refusals=None,
+                                         gates=None, reread=None))
+
+    def test_a_cell_with_no_figure_is_a_problem_line_and_never_a_guess(self):
+        old = ["$7.97 over 3 merged PRs since Day 01's count, $2.66 each", "1, read-guard, 2026-11-06"]
+        for text in old:
+            self.assertIn(text, self.NOTEBOOK)
+        notebook = self.NOTEBOOK.replace(old[0], "about three dollars a pull request")
+        notebook = notebook.replace(old[1], "read-guard, once")
+        self.assertNotIn(old[0], notebook)
+        self.assertNotIn(old[1], notebook)
+        got = sd.yardsticks(sd.conclusion(notebook), self.TOKENS)
+        figures = self.figures(got)
+        self.assertIsNone(figures["cost"][1])
+        self.assertIsNone(figures["refusals"][0])
+        self.assertEqual(got["problems"], ["Day 02, Cost per merged PR: no figure read from the notebook's cell",
+                                           "Day 01, Hook refusals: no figure read from the notebook's cell"])
+
+    def test_a_yardstick_the_notebook_does_not_measure_is_left_out(self):
+        got = sd.yardsticks(sd.conclusion(ConclusionTest.NOTEBOOK), self.TOKENS)
+        self.assertEqual([r["key"] for r in got["rows"]], ["reread"])
+        self.assertEqual(got["problems"], [])
+        empty = dict(reads=[], measured=[], measured_head=[])
+        self.assertEqual(sd.yardsticks(empty, self.TOKENS), dict(days=[], rows=[], problems=[]))
+
+    def test_the_notebook_on_main_reads_with_no_problem(self):
+        with open(os.path.join(HERE, "..", "docs", "lab-notebook.md"), encoding="utf-8") as f:
+            text = f.read()
+        got = sd.yardsticks(sd.conclusion(text), [])
+        self.assertEqual(got["problems"], [])
+        self.assertEqual(got["days"][:6], [1, 2, 3, 4, 5, 6])
+        self.assertEqual([r["key"] for r in got["rows"]],
+                         ["cost", "replies", "escapes", "parks", "refusals", "gates"])
+        figures = self.figures(got)
+        expected = dict(cost=[1.1, 2.66, 1.67, 2.16, 1.96, 2.61], replies=[23.6, 46.7, 31.2, 36.3, 33.2, 41.0],
+                        escapes=[0, 3, 0, 0, 0, 2], refusals=[1, 2, 1, 8, 8, 13],
+                        gates=[0.75, 0.48, 1.7, 4.93, 6.04, 4.01])
+        for key, values in expected.items():
+            self.assertEqual(figures[key][:6], values, key)
+
+
 if __name__ == "__main__":
     unittest.main()
