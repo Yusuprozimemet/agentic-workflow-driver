@@ -408,6 +408,7 @@ def defect_lines(text, day):
             fields[f.group(1)] = f.group(2)
         ok = DEFECT_ID.fullmatch(m.group(1) or "")
         out.append(dict(id=m.group(1), same_as=fields.get("same-as"), found=fields.get("found"), cause=fields.get("cause"),
+                        made=fields.get("made"),  # as written: "Day 04", or "none" for one made outside any day
                         problem=None if m.group(1) is None or ok and int(ok.group(1)) == day
                         else f"Day {day}: Defect ID {m.group(1)} is not D{day}.<n>"))
     return out
@@ -500,7 +501,7 @@ def kind(title, branch, files=None):
         if files is None or any(f == "plan.md" or day_of(f) for f in files):
             return "spec"
         return "other"
-    if "tick" in t or "close" in b:
+    if re.search(r"\btick", t) or "close" in b:  # the word: #96's "yardsticks" made a dashboard PR a close
         return "close"
     if "track" in b or "track" in t:
         return "code"

@@ -1,0 +1,395 @@
+"""The dashboard page: what each of its eight graphs draws and says, and what the page file must hold.
+
+docs/dashboard/dashboard.js keeps its reading of the data in model(), which touches no document, so
+these tests run it in node on small made-up data and compare what comes out. The page itself is
+booted on a document that accepts anything, to see that drawing does not throw. Needs node.
+
+    python scripts/test_dashboard_page.py
+"""
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import unittest
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PAGE = os.path.join(HERE, "..", "docs", "dashboard")
+SCRIPT = os.path.join(PAGE, "dashboard.js")
+spec = importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
+sd = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(sd)
+
+# model() on the data from stdin, printed as JSON.
+MODEL = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nmodel(DATA)", ctx)));
+"""
+
+# boot() on the data from stdin, with a document that accepts anything: the error that stopped it, what
+# went to console.error (a graph that could not be drawn says so there), and the banner and eyebrow it wrote.
+BOOT = r"""
+const fs = require("fs"), vm = require("vm"), els = {}, logged = [];
+const stub = () => new Proxy(function () {}, {
+  get: (t, k) => k === Symbol.toPrimitive ? () => "" : k === Symbol.iterator ? [][Symbol.iterator] : k in t ? t[k] : (t[k] = stub()),
+  apply: () => stub(), construct: () => stub() });
+const document = new Proxy({}, { get: (t, k) => k === "getElementById" ? id => els[id] || (els[id] = stub()) : stub() });
+const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }),
+  console: { error: e => logged.push(String(e)) }, DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+let error = null;
+try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
+const banner = els["demo-banner"];
+console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.textContent : null,
+  banner: banner ? { hidden: banner.hidden, text: banner.textContent } : null }));
+"""
+
+
+def node(harness, data):
+    return json.loads(subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True,
+                                     encoding="utf-8", check=True).stdout)
+
+
+def model(data):
+    """What the page would draw and say for this data."""
+    return node(MODEL, data)
+
+
+def boot(data):
+    """What booting the page on this data reported."""
+    return node(BOOT, data)
+
+
+def read(name):
+    with open(os.path.join(PAGE, name), encoding="utf-8") as f:
+        return f.read()
+
+
+def a_day(n, status="done", **more):
+    return dict(dict(day=n, title=f"Day {n}: `thing`", status=status, defects=[], relabel=None, worked=None), **more)
+
+
+def data(**more):
+    """Three days, the third in progress, and nothing else; `more` adds or replaces fields."""
+    return dict(dict(now=dict(generated="2026-01-03T09:30+00:00", head="abcdef1234", last_pr=9, current_day=3,
+                              next_step="Day 03 Track A: `run`", stop_after=3, open_prs=[]),
+                     days=[a_day(1), a_day(2), a_day(3, "active")], meta=dict(project="toy", caveats=["Names, not meaning."])), **more)
+
+
+def promise(cid, ticked=True, **more):
+    return dict(dict(id=cid, day=int(cid[1]), tag="new", claim=f"`{cid}` holds.", ticked=ticked, cited=True, test_found=True,
+                     seen_red=dict(state=True, lines=[], none=[]), replaced_by=[], abilities=[]), **more)
+
+
+def cell(cid, n, state):
+    return dict(criterion=cid, day=f"0{cid[1]}", n=n, state=state, mixed=False, checks=[])
+
+
+ABILITIES = dict(abilities=[dict(key="a", name="Runs", role="rung"), dict(key="b", name="Stops", role="rung")])
+# One promise in each state a tile can be in: C1.1's newest re-check found the code broken, and C1.3 was
+# re-checked before C2.1 replaced it.
+PROMISES = dict(
+    criteria_index=[promise("C1.1", abilities=["a"]), promise("C1.2", abilities=["b", "a"]), promise("C1.3", replaced_by=["C2.1"]),
+                    promise("C1.4", ticked=False), promise("C1.5"), promise("C2.1", abilities=["a"]), promise("C2.2", tag="hold"),
+                    promise("C2.3"), promise("C3.1", ticked=False)],
+    replay=dict(state="loaded", merges=[dict(n=1, pr=5), dict(n=2, pr=8)], cells=[
+        cell("C1.1", 1, "holds"), cell("C1.3", 1, "holds"), cell("C1.1", 2, "code broken"), cell("C1.2", 2, "holds"), cell("C2.1", 2, "holds, never broken"),
+        cell("C2.2", 2, "break no longer applies"), cell("C2.3", 2, "live only")]))
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+class ModelTest(unittest.TestCase):
+    def test_the_header_says_when_the_data_was_read_and_what_is_next(self):
+        head = model(data())["head"]
+        self.assertEqual((head["project"], head["when"], head["commit"], head["demo"]), ("toy", "3 Jan 2026 at 09:30", "abcdef1", False))
+        self.assertEqual(head["now"], "Days 1 to 2 are closed and Day 3 is in progress.")
+        self.assertEqual(head["next"], "Day 03 Track A: `run`")
+
+    def test_what_needs_attention_is_grouped_by_reason_and_detail(self):
+        got = model(data(attention=[dict(id="C1.1", reason="evidence_missing", detail="Replay report: absent"),
+                                    dict(id="C1.2", reason="evidence_missing", detail="Replay report: absent"),
+                                    dict(id="Day 2", reason="a_new_reason", detail="x")]))["attention"]
+        self.assertEqual(got, dict(total=3, groups=[
+            dict(label="Evidence missing", detail="Replay report: absent", ids=["C1.1", "C1.2"]),
+            dict(label="a_new_reason", detail="x", ids=["Day 2"])]))
+
+    def test_graph_1_counts_each_abilitys_pull_requests_by_day_and_outside_any_day(self):
+        story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
+        g = model(data(user_stories=dict(ABILITIES, stories=[story(2, 1, "a"), story(1, 1, "a"), story(3, 2, "b"), story(4, None, "a"),
+                                                             story(5, 1, "gone")]),
+                       hand_offs=[dict(to=3, picked=True), dict(to=3, picked=False), dict(to=4, picked=False)]))["g1"]
+        self.assertEqual([(c["label"], c["mark"]) for c in g["cols"]], [("1", "✓"), ("2", "✓"), ("3", "now"), ("No day", "")])
+        self.assertEqual([(r["name"], [c["n"] for c in r["cells"]]) for r in g["rows"]],
+                         [("Runs", [2, 0, 0, 1]), ("Stops", [0, 1, 0, 0]), ("No ability named", [1, 0, 0, 0])])
+        first = g["rows"][0]["cells"][0]
+        self.assertEqual((first["t"], first["b"], first["level"]),
+                         ("Runs · Day 1", ["2 merged pull requests grew this ability on Day 1: #1, #2."], 1))
+        self.assertEqual(g["rows"][1]["cells"][0]["b"], ["No pull request grew this ability on Day 1."])
+        self.assertEqual(g["read"]["t"], "5 merged pull requests, each tagged with the ability it grew")
+        self.assertEqual(g["read"]["b"], ["Days 1 to 2 are closed and Day 3 is in progress. 1 of the 2 notes earlier days left for Day 3 "
+                                          "were picked up; 1 more wait for Day 4. The plan stops for the maintainer after Day 3."])
+        self.assertEqual(g["table"]["rows"][0], ["Runs", 2, 0, 0, 1, 3])
+
+    def test_graph_2_gives_each_promise_the_state_of_its_newest_recheck(self):
+        g = model(data(**PROMISES))["g2"]
+        self.assertEqual({t["id"]: t["status"] for r in g["rows"] for t in r["tiles"]}, {
+            "C1.1": "broken", "C1.2": "proven", "C1.3": "replaced", "C1.4": "open", "C1.5": "unchecked",
+            "C2.1": "unproven", "C2.2": "repair", "C2.3": "skipped", "C3.1": "building"})
+        self.assertEqual([r["count"] for r in g["rows"]], ["1 of 2 proven", "0 of 3 proven", "not yet in force"])
+        self.assertEqual([k["text"] for k in g["key"]], [
+            "Proven 1", "Passes, not yet proven 1", "Needs repair 1", "Broken 1", "Not checked here 1", "Replaced 1",
+            "Not yet in force 1", "Left unticked 1", "Not re-checked yet 1"])
+        self.assertEqual(g["read"]["t"], "1 of the 5 promises re-checked are proven; 1 is broken")
+        self.assertIn("1 passes but is not yet proven, 1 needs repair and 1 cannot be checked on this computer.", g["read"]["b"][0])
+        self.assertIn("Last re-check: pull request #8, 1 change ago.", g["read"]["b"][0])
+
+    def test_a_tile_says_its_promise_its_evidence_and_its_last_recheck(self):
+        tiles = {t["id"]: t for r in model(data(**PROMISES, user_stories=ABILITIES))["g2"]["rows"] for t in r["tiles"]}
+        self.assertEqual(tiles["C2.2"]["t"], "C2.2 · must keep holding · Needs repair: the code moved, so the planted bug could not be put back")
+        self.assertEqual(tiles["C1.3"]["t"], "C1.3 · new behaviour · Replaced: by C2.1")
+        self.assertEqual(tiles["C1.2"]["b"], [
+            "`C1.2` holds.",
+            "✓ ticked at the close · ✓ cites its pull request · ✓ names a test that exists · ✓ a failure was recorded when it was built",
+            "Last re-checked after pull request #8, 1 change ago. It grew “Stops”, and also “Runs”."])
+        self.assertEqual(tiles["C3.1"]["b"], ["`C3.1` holds.", "No evidence yet: the day is not closed."])
+
+    def test_the_trust_strip_counts_the_promises_at_every_recheck(self):
+        # C1.3 held at the first re-check, and is in neither count: a replaced promise is no longer one.
+        g = model(data(**PROMISES))["g2"]
+        self.assertEqual([(h["pr"], h["total"], h["counts"]) for h in g["hist"]], [
+            (5, 1, dict(proven=1, unproven=0, repair=0, broken=0, skipped=0)),
+            (8, 5, dict(proven=1, unproven=1, repair=1, broken=1, skipped=1))])
+        self.assertEqual(g["hist"][1]["t"], "Re-check after pull request #8: 1 of 5 proven")
+        self.assertIn("1 proven of 1 at first, 1 of 5 now.", g["histSay"])
+
+    def test_with_no_recheck_on_record_graph_2_says_so(self):
+        g = model(data(criteria_index=PROMISES["criteria_index"]))["g2"]
+        self.assertEqual(g["read"]["t"], "No re-check of the promises is on record")
+        self.assertEqual(g["hist"], [])
+
+    def test_graph_3_draws_a_promise_under_its_first_ability_and_the_untied_ones_last(self):
+        story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
+        g = model(data(**PROMISES, user_stories=dict(ABILITIES, stories=[story(1, 1, "a"), story(2, 1, "b"), story(3, 2, "a")])))["g3"]
+        self.assertEqual([(r["name"], [(x["day"], [t["id"] for t in x["tiles"]]) for x in r["groups"]], r["count"]) for r in g["rows"]], [
+            ("Runs", [(1, ["C1.1"]), (2, ["C2.1"])], "0 of 2 proven · 2 pull requests"),
+            ("Stops", [(1, ["C1.2"])], "1 of 1 proven · 1 pull request"),
+            ("Not tied to an ability yet", [(1, ["C1.3", "C1.4", "C1.5"]), (2, ["C2.2", "C2.3"]), (3, ["C3.1"])],
+             "6 promises, not yet tied to a pull request")])
+        self.assertEqual(g["read"]["t"], "“Stops” is the best proven: 1 of its 1 re-checked promise")
+        self.assertEqual(g["read"]["b"], ["“Runs” has none proven yet. 1 promise touches more than one ability and is drawn under the one "
+                                          "most of its pull requests grew."])
+
+    def test_an_ability_with_no_promise_says_whether_its_work_was_outside_the_days(self):
+        story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
+        rows = model(data(criteria_index=[], user_stories=dict(ABILITIES, stories=[story(1, None, "a"), story(2, 1, "b")])))["g3"]["rows"]
+        self.assertEqual([r["note"] for r in rows], ["No promise covers this ability. Its pull requests are work outside the day specs.",
+                                                     "No promise covers this ability yet."])
+
+    def test_graph_4_keeps_each_merges_gap_its_time_open_and_its_failed_check(self):
+        row = lambda pr, kind, day, gap, **more: dict(dict(pr=pr, kind=kind, day=day, gap_full=gap, title=f"`{kind}`", date="2026-01-01"), **more)
+        check = lambda n, hours, failed=0: dict(number=n, hours=hours, failed=failed, failed_in=["PR checks"] * bool(failed))
+        g = model(data(rows=[row(None, "origin", 0, 50.0), row(1, "spec", 1, 54.0), row(2, "code", 1, 48.0), row(3, "close", 1, 48.0),
+                             row(4, "other", 2, 47.0, gap_chance=52.0, gap_chance_band=[50.0, 54.0])],
+                       verification=[check(1, 0.05), check(2, 2.0, 2), check(3, 0.1), check(4, 0.1)]))["g4"]
+        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A day's close 1", "Other (tooling, dashboard) 2",
+                                                   "A check failed before the merge 1"])
+        self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=1, n=3), dict(day=2, n=1)])
+        self.assertEqual([m["y"] for m in g["merges"]], [0.5, 0.1, 0.7, 0.7, 0.8])  # the scale runs from 55° down to 45°
+        self.assertEqual(g["merges"][0]["t"], "The first commit · the first commit · before Day 1")
+        code = g["merges"][2]
+        self.assertEqual((code["t"], code["b"]), ("Pull request #2 · code · Day 1", [
+            "`code`", "Spec and code 48.0° apart, down 6.0° from the merge before. Open for 2.0 h before it merged. "
+                      "A check failed on it first (PR checks)."]))
+        self.assertEqual(g["merges"][3]["b"][1], "Spec and code 48.0° apart, unchanged. Open for 6 minutes before it merged. No check failed on it.")
+        self.assertGreater(code["h"], g["merges"][1]["h"])  # two hours open draws a taller bar than three minutes
+        self.assertEqual(g["read"]["t"], "Now 47.0° apart, where chance alone would give 52.0°")
+        self.assertEqual(g["read"]["b"], ["The specs and the code share more names than chance would: nineteen times in twenty, chance gives "
+                                          "50.0° to 54.0°. On average a spec merge moved the dot up by 4.0° and a code merge down by 6.0°. "
+                                          "1 of 4 pull requests had a check fail before they merged."])
+        self.assertEqual(g["table"]["rows"][2], ["#2", "code", 1, "2026-01-01", "48.0", 120, "yes"])
+
+    def test_graph_5_puts_each_defect_at_the_gate_that_caught_it(self):
+        defect = lambda i, found, cause, made, same=None: dict(id=i, found=found, cause=cause, made=made, same_as=same, problem=None)
+        days = [a_day(1, defects=[defect("D1.1", "auditor", "spec", "Day 01"), defect("D1.2", "Track A", "implementation", "none")],
+                      relabel=dict(stage=[3, 4], cause=[4, 4], made=[2, 4])),
+                a_day(2, defects=[defect("D2.1", "close", "process", "Day 01", "D1.1"), defect("D2.2", "seen red", "a typo", None)]),
+                a_day(3, "active")]
+        g = model(data(days=days, defect_recurrence=dict(recurrences=[dict(id="D2.1", same_as="D1.1")]),
+                       gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=1, runs=2, cost=1.0),
+                                               dict(gate="hooks", found=None, defects=0, runs=1, cost=0.1)])))["g5"]
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 1, 0, 0], [0, 1, 0, 0, 1, 0], [0] * 6])
+        self.assertEqual([r["note"] for r in g["rows"]], ["3 of 12", "not read yet", "read at its close"])
+        dots = {o["id"]: o for r in g["rows"] for o in r["dots"]}
+        self.assertEqual([(o["id"], o["cause"], o["escaped"], o["back"]) for o in dots.values()], [
+            ("D1.1", "spec", False, False), ("D1.2", "implementation", False, False), ("D2.1", "process", True, True),
+            ("D2.2", "other", False, False)])
+        self.assertEqual((dots["D2.1"]["t"], dots["D2.1"]["b"]), (
+            "D2.1 · process · caught by: the close",
+            ["Made on Day 1 and caught on Day 2: it escaped for 1 day. The same problem as D1.1, back again."]))
+        self.assertEqual(dots["D1.2"]["b"], ["Made outside any day: in the plan, a tool or a machine. Noticed by: Track A."])
+        self.assertEqual(dots["D2.2"]["b"], ["Caught on Day 2; its line does not say which day made it."])
+        self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "1 caught", "0 caught",
+                                                         "1 caught · tracks, reviews, the session", "1 caught", "0 caught"])
+        self.assertEqual(g["read"]["t"], "4 defects; the auditors caught 1 of them before any code was written")
+        self.assertEqual(g["read"]["b"], ["1 was in a spec. 1 escaped from an earlier day and 1 came back. A second reader gave 3 of 12 "
+                                          "tags differently. Each catch cost about $1.00 at the auditors."])
+
+    def test_graph_6_adds_up_each_dates_sessions_and_what_the_hooks_stopped(self):
+        token = lambda date, agent, cost, cut=0: dict(date=date, agent=agent, cost=cost, replies=10, cut=cut)
+        g = model(data(days=[a_day(1, worked=["2026-01-02", "2026-01-02"]), a_day(2, "active")],
+                       tokens=[token("2026-01-01", "main", 2.0, 1), token("2026-01-01", "spec-auditor", 0.5),
+                               token("2026-01-02", "main", 3.0, 2), token("2026-01-02", "implementer", 0.5)],
+                       refusals=[dict(date="2026-01-02", guard="read-guard", refused=3)],
+                       rows=[dict(pr=1, date="2026-01-02", day=1), dict(pr=2, date="2026-01-02", day=1), dict(pr=3, date="2026-01-04", day=1)]))["g6"]
+        self.assertEqual([(b["t"], b["setup"], b["days"]) for b in g["bars"]], [
+            ("1 Jan · before Day 1 · $2.50", True, []), ("2 Jan · Day 1 · $3.50", False, [1])])
+        self.assertEqual(g["bars"][1]["b"], ["Main session $3.00, auditors $0.00, implementer and others $0.50. 20 replies. The hooks refused "
+                                             "3 calls (3 by the read-guard) and cut 2 long outputs. 2 pull requests merged that date: $1.75 "
+                                             "each, all sessions."])
+        self.assertEqual([k[1] for k in g["key"]], ["Main session $5.00", "Auditors and the implementer $1.00"])
+        self.assertEqual(g["read"]["t"], "$6.00 of tokens; 83% of it in the main session")
+        self.assertEqual(g["read"]["b"], ["1 date of set-up cost $2.50 before Day 1. The days cost $3.50 over 1 date and 2 merged pull requests. "
+                                          "The hooks refused 3 calls and cut 3 long outputs. Counted at each close on the maintainer's computer, "
+                                          "so nothing after 2 Jan is in yet."])
+
+    def test_graph_7_adds_each_days_changed_lines_by_what_the_file_is(self):
+        g = model(data(rows=[dict(pr=None, day=0, work=dict(spec=7)), dict(pr=1, day=1, work=dict(spec=10, context=5, prod=20, test=40, tooling=0)),
+                             dict(pr=2, day=1, work=dict(prod=10, test=20))]))["g7"]
+        first = g["bars"][0]
+        self.assertEqual((first["w"], first["total"], first["prs"], first["ratio"]), (dict(spec=15, prod=30, test=60, tooling=0), 105, 2, "2.0"))
+        self.assertEqual(first["b"], ["Spec and agent context 15, production code 30, tests 60, tooling 0. 2 pull requests merged. "
+                                      "2.0 test lines for each production line."])
+        self.assertEqual(g["bars"][2]["t"], "Day 3 (in progress) · 0 lines changed")
+        self.assertEqual(g["read"]["t"], "105 lines changed in Days 1 to 3; the largest share is tests")
+        self.assertIn("Another 7 lines came before Day 1.", g["read"]["b"][0])
+
+    def test_graph_8_marks_a_day_over_the_baseline_and_keeps_a_yardstick_never_counted_apart(self):
+        value = lambda day, v, text: dict(day=day, value=v, text=text)
+        got = model(data(yardsticks=dict(days=[1, 2], problems=[], rows=[
+            dict(key="cost", name="Cost of each merged pull request", unit="$", decimals=2, baseline=1.5,
+                 values=[value(1, 1.2, "`$6` over 5"), value(2, 1.8, "$9 over 5")]),
+            dict(key="parks", name="Times it stopped", unit="", decimals=0, baseline=None,
+                 values=[value(1, None, "none yet"), value(2, None, "none yet: only fake projects")])])))
+        g, cost = got["g8"], got["g8"]["rows"][0]
+        self.assertEqual(g["cols"], [1, 2, 3])
+        self.assertEqual([(c["text"], c["over"]) for c in cost["cells"]], [("$1.20", False), ("$1.80", True), ("·", False)])
+        self.assertEqual((cost["cells"][1]["t"], cost["cells"][1]["b"]),
+                         ("Cost of each merged pull request · Day 2: $1.80, above the baseline of $1.50", ["$9 over 5"]))
+        self.assertEqual(cost["cells"][2]["b"], ["Day 3 is in progress: it is counted at its close."])
+        self.assertEqual((cost["note"], round(cost["line"], 3)), ("kit's baseline: $1.50", 0.833))
+        self.assertEqual(g["waiting"], [dict(name="Times it stopped", why="none yet: only fake projects")])
+        self.assertEqual(g["read"]["t"], "Above the kit's baseline on 1 of 2 days for cost")
+        self.assertIn(["Times it stopped", "none yet: only fake projects."], got["notMeasured"])
+        self.assertEqual(got["notMeasured"][-1][0], "Where a day's time goes, and who waits for whom")
+
+    def test_one_graph_that_cannot_read_its_data_leaves_the_others_drawn(self):
+        got = model(data(criteria_index=[None]))
+        self.assertIn("error", got["g2"])
+        self.assertIn("error", got["g3"])
+        self.assertEqual([g for g in ("g1", "g4", "g5", "g6", "g7", "g8") if "error" in got[g]], [])
+
+    def test_data_with_nothing_in_it_still_gives_every_graph_something_to_say(self):
+        got = model({})
+        self.assertEqual({g: got[g].get("error") for g in ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")}, dict.fromkeys(
+            ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")))
+        self.assertEqual([got[g]["read"]["t"] for g in ("g1", "g2", "g4", "g5", "g6", "g8")], [
+            "No merged pull request yet", "No promise yet", "No gap is measured yet", "No defect is recorded yet",
+            "No token counts yet", "No yardstick is counted yet"])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node to boot the page")
+class BootTest(unittest.TestCase):
+    def test_the_page_draws_without_an_error_on_data_with_every_graph_in_it(self):
+        out = boot(data(**PROMISES, user_stories=dict(ABILITIES, stories=[dict(number=1, day=1, ability="a", title="t")]),
+                        rows=[dict(pr=1, kind="code", day=1, gap_full=40.0, title="t", date="2026-01-01", work=dict(prod=3))],
+                        tokens=[dict(date="2026-01-01", agent="main", cost=1.0, replies=1, cut=0)],
+                        yardsticks=dict(days=[1], problems=[], rows=[dict(key="cost", name="Cost", unit="$", decimals=2, baseline=1.0,
+                                                                         values=[dict(day=1, value=2.0, text="t")])])))
+        self.assertEqual((out["error"], out["logged"]), (None, []))
+        self.assertEqual(out["eyebrow"], "toy · read from git and GitHub on 3 Jan 2026 at 09:30 · commit abcdef1")
+        self.assertTrue(out["banner"]["hidden"])
+
+    def test_the_page_draws_without_an_error_on_data_with_nothing_in_it(self):
+        out = boot({})
+        self.assertEqual((out["error"], out["logged"]), (None, []))
+
+    def test_a_graph_that_cannot_be_drawn_is_logged_and_does_not_stop_the_page(self):
+        out = boot(data(criteria_index=[None]))
+        self.assertIsNone(out["error"])
+        # The walk-through reads the same list of promises, so it says so too; the other six graphs drew.
+        self.assertEqual([line.split(":")[0] for line in out["logged"]], ["g2", "g3", "how this works"])
+
+
+class PageFilesTest(unittest.TestCase):
+    """What index.html, dashboard.css and dashboard.js must hold, read as text."""
+
+    def test_every_graph_has_its_plot_its_readout_and_its_exact_numbers_folded_under_it(self):
+        html = read("index.html")
+        for n in range(1, 9):
+            section = re.search(rf'<section class="graph" id="g{n}">.*?</section>', html, re.S)
+            self.assertIsNotNone(section, f"graph {n}")
+            order = [section.group(0).index(f'id="g{n}-{part}"') for part in ("plot", "read", "table")]
+            self.assertEqual(order, sorted(order), f"graph {n}")
+            self.assertRegex(section.group(0), rf'<details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g{n}-table">')
+            self.assertIn(f'id="g{n}-read" aria-live="polite"', section.group(0))
+        self.assertNotIn("<details open", html)
+
+    def test_no_graph_sits_inside_anything_collapsed(self):
+        html = read("index.html")
+        for n in range(1, 9):
+            before = html[:html.index(f'id="g{n}-plot"')]
+            self.assertEqual(before.count("<details"), before.count("</details>"), f"graph {n}")
+
+    def test_what_graph_4_would_mislead_without_stays_visible_beside_it(self):
+        section = re.search(r'<section class="graph" id="g4">.*?</section>', read("index.html"), re.S).group(0)
+        visible = re.sub(r"<details.*?</details>", "", section, flags=re.S)
+        self.assertIn("The angle matches names, not meaning", visible)
+        self.assertIn('href="#cannot-see"', visible)
+        self.assertIn('id="cannot-see"', read("index.html"))
+
+    def test_the_build_inlines_one_stylesheet_and_one_script_and_fills_one_data_line(self):
+        page = sd.build(json.dumps(dict(now=dict(next_step="x"))))
+        self.assertNotIn('href="dashboard.css"', page)
+        self.assertNotIn('src="dashboard.js"', page)
+        self.assertIn("function boot(DATA)", page)
+        self.assertIn("--proven:", page)
+        self.assertEqual(re.findall(r"^window\.SPEC_DRIFT = (.*);$", page, re.M), ['{"now": {"next_step": "x"}}'])
+
+    def test_no_text_in_the_data_can_keep_its_script_open(self):
+        # Day 12's spec quoted "<!--" and "<script>": in a browser the data script then ran to the end
+        # of the page, and the live dashboard showed nothing. With no "<" on the line, no tag or comment
+        # can start there, whatever the text.
+        text = "<!-- PROJECT: x --> <!-- a second `<script>` </script> <SCRIPT src=x>"
+        payload = dict(now=dict(next_step=text), specs=[dict(title=text)])
+        line = re.search(r"^window\.SPEC_DRIFT = (.*);$", sd.build(json.dumps(payload)), re.M).group(1)
+        self.assertNotIn("<", line)
+        self.assertEqual(json.loads(line), payload)
+
+    def test_the_graphs_put_data_on_the_page_as_text_never_as_html(self):
+        script = read("dashboard.js")
+        how, page = script.index("/* ---------- how this works"), script.index("/* ---------- the page")
+        self.assertLess(how, page)
+        # Only the walk-through builds HTML, from excerpts it passes through esc().
+        self.assertNotIn("innerHTML", script[:how] + script[page:])
+        self.assertIn("innerHTML", script[how:page])
+
+    def test_every_colour_has_a_dark_value_and_both_dark_scopes_agree(self):
+        css = read("dashboard.css")
+        light = re.search(r":root \{(.*?)\n\}", css, re.S).group(1)
+        by_os = re.search(r':root:not\(\[data-theme="light"\]\) \{(.*?)\n  \}', css, re.S).group(1)
+        by_choice = re.search(r':root\[data-theme="dark"\] \{(.*?)\n\}', css, re.S).group(1)
+        colours = lambda block: dict(re.findall(r"(--[\w-]+): (#[0-9a-f]{6})", block))
+        self.assertGreaterEqual(len(colours(light)), 30)
+        self.assertEqual(sorted(colours(by_os)), sorted(colours(light)))
+        self.assertEqual(colours(by_os), colours(by_choice))
+
+    def test_the_page_needs_no_script_or_style_from_anywhere_but_its_own_two_files(self):
+        html = read("index.html")
+        self.assertEqual(re.findall(r'<script src="([^"]+)"', html), ["dashboard.js"])
+        self.assertEqual([h for h in re.findall(r'<link rel="stylesheet" href="([^"]+)"', html) if not h.startswith("https://fonts.googleapis.com/")],
+                         ["dashboard.css"])
+
+
+if __name__ == "__main__":
+    unittest.main()

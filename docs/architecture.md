@@ -374,16 +374,17 @@ flowchart LR
     SDP[spec-drift.py]
     GL & GHAPI & SPECS & CFG & TOK & EVJ --> SDP
     SDP --> PAGE["docs/dashboard/"]
-    subgraph Panels
-        P1["Where we are"]
-        P2["Spec-code name gap,<br/>merge by merge"]
-        P3["Where the work went,<br/>pull requests per day"]
-        P4["Where the corrections landed,<br/>second-reader agreement"]
-        P5["Tokens spent,<br/>who spent them"]
-        P6["Evidence behind the ticks,<br/>evidence replayed"]
-        P7["Hand-offs to days not yet run"]
+    subgraph Graphs
+        P1["1 What the driver can do,<br/>and when it learned it"]
+        P2["2 Can we trust it:<br/>the promise board"]
+        P3["3 Which abilities<br/>can be relied on"]
+        P4["4 Spec and code,<br/>merge by merge"]
+        P5["5 The defects, at the gate<br/>that caught each"]
+        P6["6 What it cost,<br/>what the hooks stopped"]
+        P7["7 Where the work went"]
+        P8["8 The plan's yardsticks<br/>against the kit's baselines"]
     end
-    PAGE --> P1 & P2 & P3 & P4 & P5 & P6 & P7
+    PAGE --> P1 & P2 & P3 & P4 & P5 & P6 & P7 & P8
 ```
 
 ## One session per step

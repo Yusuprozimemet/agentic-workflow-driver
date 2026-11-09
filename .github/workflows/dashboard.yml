@@ -49,7 +49,7 @@ jobs:
 
       - run: pip install numpy
 
-      # The replay report the page's evidence panel and "Needs attention" read: every closed day's
+      # The replay report the page's "Needs attention" list reads: every closed day's
       # checks, replayed on main as evidence.yml replays one close. A closing PR cannot commit it
       # (it needs the merged closing commit), and evidence.yml's artifacts hold one day each and expire;
       # so it is written here, into the workspace only, and never committed. A failed check is shown
