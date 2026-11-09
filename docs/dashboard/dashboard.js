@@ -2085,7 +2085,7 @@ function drawNotMeasured() {
 }
 }
 
-// The contents is open as a rail beside a wide screen's cards, and a menu on a narrow one that a picked link closes.
+// The contents is open as a rail beside the cards from 1100px, and a menu on a narrower screen that a picked link closes.
 // A link to something inside a closed measurement opens that measurement first.
 function openTarget() {
   const target = location.hash && document.getElementById(location.hash.slice(1));
@@ -2096,18 +2096,19 @@ function openTarget() {
 // The contents marks the section being read: the last one whose top has passed the top of the screen.
 function markContents() {
   const links = [...document.querySelectorAll("#toc a")].map(a => [a, document.getElementById(a.hash.slice(1))]).filter(([, t]) => t);
+  const rail = matchMedia("(min-width: 1100px)");
   const mark = () => {
     let here = null;
-    for (const [a, t] of links) if (!t.closest("[hidden]") && (t.closest("details.measure") || t).getBoundingClientRect().top <= 120) here = a;
+    for (const [a, t] of links) if (!t.closest("[hidden]") && (t.closest("details.measure") || t).getBoundingClientRect().top <= (rail.matches ? 120 : 174)) here = a;
     links.forEach(([a]) => a === here ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current"));
   };
   mark();
   addEventListener("scroll", mark, { passive: true });
 }
 function contents() {
-  const toc = document.getElementById("toc"), wide = matchMedia("(min-width: 1440px)"), fit = () => { toc.open = wide.matches; };
-  fit(); wide.addEventListener("change", fit);
-  toc.addEventListener("click", e => { if (!wide.matches && e.target.closest("a")) toc.open = false; });
+  const toc = document.getElementById("toc"), rail = matchMedia("(min-width: 1100px)"), fit = () => { toc.open = rail.matches; };
+  fit(); rail.addEventListener("change", fit);
+  toc.addEventListener("click", e => { if (!rail.matches && e.target.closest("a")) toc.open = false; });
   addEventListener("hashchange", openTarget);
   openTarget();
   markContents();

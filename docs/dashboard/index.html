@@ -242,6 +242,7 @@
       <h2>Does a second reader agree with the defect tags?</h2>
       <p>An AI reader that did none of the day's work labels each problem found that day from its description alone; each square is one label, filled where it matched the label the day gave.</p>
     </div>
+    <div class="wide-pair"><div>
     <div id="relabel-plot"></div>
     <details class="exact">
       <summary>Exact numbers</summary>
@@ -252,11 +253,13 @@
       <summary>How this is counted</summary>
       <p>At each close, <code>scripts/relabel.py</code> strips the <code>found:</code>, <code>cause:</code> and <code>made:</code> tags from the day's Defect lines, and the defect-rater agent, which wrote none of the day's work, tags the text again. This is how many of the day's tags it gave the same way, from the last run of <code>relabel.py compare</code> pasted in the day's closing PR. Where they agree the tags measure the defects; where they do not, the tags may only measure what the session that wrote them believed. A day with no whole run pasted is not counted, and is not counted as agreeing; neither are lines that do not make whole runs, or two closing PRs that differ. <i>Repeats</i> counts the day's Defect lines whose <code>same-as:</code> names an earlier defect's ID: a problem that came back.</p>
     </details>
+    </div><div>
     <div class="plot">
       <h3>Problems that came back</h3>
       <p class="plot-say">Each line is one problem, followed through the days it was recorded again.</p>
       <div id="plot-repeats"></div>
     </div>
+    </div></div>
   </section>
   </details>
   </div>
@@ -335,18 +338,21 @@
       <p>The running sum of every step, on the same merge axis as the gap above, so the line falls as the gap closes. Hover for the merge; select it to follow it through the page.</p>
     </div>
     <div id="pull-sum"></div>
+    <div class="wide-pair"><div>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">Each merge's contribution</h2>
       <p>A waterfall: each bar starts where the one before it ended, and the dark bar is the net. All the merges at once are dense; pick a day to read one at a time.</p>
     </div>
     <div class="pick" id="pull-steps-pick" role="group" aria-label="Merges in the waterfall"></div>
     <div id="pull-steps"></div>
+    </div><div>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">The balance</h2>
       <p>The same two totals on a scale: the heavier pan sinks, and the tilt is the net as a share of all the pull.</p>
     </div>
     <div class="pick" id="pull-scale-pick" role="group" aria-label="Merges on the balance"></div>
     <div id="pull-scale"></div>
+    </div></div>
     </details>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">The sawtooth, up close</h2>
@@ -372,17 +378,20 @@
     </div>
     <div class="legend" id="work-legend"></div>
     <div id="work-bar"></div>
+    <div class="wide-pair"><div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Tests per line of code, so far</h2>
       <p>Test lines changed so far divided by production lines changed so far, at each merge. Fixtures (<code>tests/fixtures/</code>: golden files and sample data) count in the Tests box above but not here: they are data the tests read, not tests. The line starts once production passes 1,000 lines, so tests written before any code do not read as a spike; above the dashed line, more test than code has been written.</p>
     </div>
     <div id="test-ratio"></div>
+    </div><div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Spec and code, each against its own total</h2>
       <p>Lines changed so far in the specs (<code>plan.md</code> and <code>specs/</code>) and in everything else except Markdown, each as a share of its own total: code lines outnumber spec lines several times over, so on one scale the spec line would hug the axis. When the spec line rises ahead of the code line, the plan is being written before it is built.</p>
     </div>
     <div class="legend" id="churn-legend"></div>
     <div id="churn"></div>
+    </div></div>
     <div class="panel-head" style="margin-top:6px">
       <h2 style="font-size:17px">Pull requests per day</h2>
       <p>Each day's merged pull requests by kind, in run order, counted from the <code>day-NN/</code> branches; tooling and docs PRs belong to no day, so they are only in the bar above, which counts every merge. Other is one segment in the bar; its legend splits it by the part of the branch name before the slash. A tall bar is a day that took more tracks, or more spec changes, than it was written for: hover for the estimate.</p>
@@ -473,11 +482,13 @@
         <summary>How this is counted</summary>
         <p>Output tokens Claude Code wrote each day on this repository, stacked by model, subagents included. Counted from the session transcripts on the maintainer's machine by <code>scripts/token-usage.py</code>, which only records totals; sessions run elsewhere are not in it. The table splits the same replies by the day whose branch they ran on. Under each bar, and in the table, is the context per reply: how much of the conversation each reply re-read. It falls when sessions are kept short, and it drives most of the cost.</p>
       </details>
+    <div class="wide-pair"><div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Output by date</h2>
       <p>The same output tokens by calendar date, including the work between days; on a wide screen, the context per reply is under each bar.</p>
     </div>
     <div id="token-bars"></div>
+    </div><div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Who spent them</h2>
       <p>The same output tokens by agent, coloured by the model it ran on.</p>
@@ -488,6 +499,7 @@
         <summary>How this is counted</summary>
         <p>The same output tokens by agent: the main sessions, and each subagent by its type, from the <code>.meta.json</code> Claude Code writes beside a subagent's transcript. The auditors and the defect-rater check work they did not write; the implementer writes the track code from a brief. Hover a bar for the context it read.</p>
       </details>
+    </div></div>
     <div class="panel-head" style="margin-top:14px">
       <h2 style="font-size:17px">Hooks at work</h2>
       <p>Whether the hooks that keep output short were needed, and followed.</p>
