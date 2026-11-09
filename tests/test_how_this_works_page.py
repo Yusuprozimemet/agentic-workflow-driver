@@ -21,17 +21,12 @@ class PageTest(unittest.TestCase):
             r'<section class="panel" id="how-this-works">.*?</section>', self.html, re.DOTALL
         ).group(0)
 
-    def test_the_panel_sits_after_the_promises_in_the_background_chapter(self):
+    def test_the_panel_sits_folded_under_the_graphs(self):
         order = [
-            self.html.index(f'id="{name}"')
-            for name in ("summary", "promises", "ch-background", "how-this-works")
+            self.html.index(f'id="{name}"') for name in ("g2", "g8", "how-fold", "how-this-works")
         ]
         self.assertEqual(order, sorted(order))
-        links = [
-            self.html.index(f'href="#{name}"')
-            for name in ("summary", "promises", "ch-background", "how-this-works")
-        ]
-        self.assertEqual(links, sorted(links))
+        self.assertRegex(self.html, r'<details class="fold" id="how-fold">\s*<summary>')
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's function")
     def test_step_seven_says_when_there_is_no_recheck(self):
@@ -74,14 +69,17 @@ console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "
             self.panel(), r"<details class=\"technical\">\s*<summary>Who does what</summary>"
         )
 
-    def test_each_known_line_links_to_its_step(self):
-        summary = re.search(
-            r"^function drawSummary\(\).*?^}$", self.script, re.MULTILINE | re.DOTALL
+    def test_the_promise_board_links_to_the_steps_that_prove_a_promise(self):
+        board = re.search(
+            r'<section class="graph" id="g2">.*?</section>', self.html, re.DOTALL
         ).group(0)
         self.assertEqual(
-            sorted(re.findall(r'howLink\([^\n]*"(\w+)"\)', summary)),
-            ["bug", "close", "recheck", "red"],
+            re.findall(r'<a href="#how-step-(\w+)" data-how="(\w+)">', board),
+            [("red", "red"), ("bug", "bug"), ("close", "close"), ("recheck", "recheck")],
         )
+        # Each link names a step the walk-through draws.
+        for step in ("red", "bug", "close", "recheck"):
+            self.assertIn(f'{{ id: "{step}", kind:', self.script)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's function")
     def test_a_missing_excerpt_shows_as_missing_on_the_page(self):

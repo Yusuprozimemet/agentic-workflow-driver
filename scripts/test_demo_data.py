@@ -1,7 +1,7 @@
-"""The demo data draws every panel of the dashboard and has every key the real data has.
+"""The demo data draws every graph of the dashboard and has every key the real data has.
 
-The page test boots docs/dashboard/dashboard.js on demo() with test_spec_drift.py's BOOT harness; the
-key test reads the keys spec-drift.py's main() writes. Needs node for the page test.
+The page tests run docs/dashboard/dashboard.js on demo() with test_dashboard_page.py's harnesses; the
+key test reads the keys spec-drift.py's main() writes. Needs node for the page tests.
 
     python scripts/test_demo_data.py
 """
@@ -16,19 +16,13 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import test_spec_drift  # noqa: E402  (its BOOT boots the page on the data it reads from stdin)
+import test_dashboard_page  # noqa: E402  (its harnesses run the page's model and boot on the data they are given)
 
 spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
 demo_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(demo_data)
-DASHBOARD = os.path.join(HERE, "..", "docs", "dashboard", "dashboard.js")
+GRAPHS = ("g1", "g2", "g3", "g4", "g5", "g6", "g7", "g8")
 REAL = dict(now=dict(current_day=None), rows=[], days=[])
-
-
-def boot(data):
-    """The page's boot on this data, as test_spec_drift.py's BOOT reports it."""
-    return json.loads(subprocess.run(["node", "-e", test_spec_drift.BOOT, DASHBOARD], input=json.dumps(data),
-                                     capture_output=True, encoding="utf-8", check=True).stdout)
 
 
 def keys_at_top(text):
@@ -59,51 +53,52 @@ def written_keys():
 
 class DemoData(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_page_draws_every_panel_on_the_demo_data(self):
-        out = json.loads(subprocess.run(["node", "-e", test_spec_drift.BOOT, DASHBOARD],
-                                        input=json.dumps(demo_data.demo()), capture_output=True,
-                                        encoding="utf-8", check=True).stdout)
-        self.assertIsNone(out["error"], "a panel threw on the demo data")
-        self.assertIsNotNone(out["eyebrow"])
+    def test_the_page_draws_every_graph_on_the_demo_data(self):
+        out = test_dashboard_page.boot(demo_data.demo())
+        self.assertEqual((out["error"], out["logged"]), (None, []), "a graph could not be drawn on the demo data")
+        self.assertIn("sample-shop", out["eyebrow"])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_no_panel_on_the_demo_data_shows_a_failure_or_a_bad_number(self):
-        # The same test kit/starter-check.py applies to the page it builds (its step 4).
-        error, panels, logged = test_spec_drift.drawn(**demo_data.demo())
-        self.assertIsNone(error, "a panel threw on the demo data")
-        self.assertEqual(logged, [], "the demo data logged an error while drawing")
-        failed = [box for box, html in panels.items() if re.search(r"This panel failed|NaN|Infinity|undefined", html)]
-        self.assertEqual(failed, [], "boxes that drew a failed panel, NaN, Infinity or undefined")
+    def test_every_graph_has_marks_to_show_on_the_demo_data(self):
+        m = test_dashboard_page.model(demo_data.demo())
+        self.assertEqual([g for g in GRAPHS if "error" in m[g]], [])
+        marks = dict(g1=sum(c["n"] > 0 for r in m["g1"]["rows"] for c in r["cells"]), g2=sum(len(r["tiles"]) for r in m["g2"]["rows"]),
+                     g3=sum(len(r["tiles"]) for r in m["g3"]["rows"]), g4=len(m["g4"]["merges"]), g5=sum(len(r["dots"]) for r in m["g5"]["rows"]),
+                     g6=len(m["g6"]["bars"]), g7=sum(b["total"] > 0 for b in m["g7"]["bars"]), g8=len(m["g8"]["rows"]))
+        self.assertEqual([g for g in GRAPHS if not marks[g]], [], marks)
+        # The board shows every state a re-check can find, and the trust strip a bar for each re-check.
+        self.assertEqual(sorted({t["status"] for r in m["g2"]["rows"] for t in r["tiles"]}),
+                         ["broken", "building", "open", "proven", "repair", "skipped", "unproven"])
+        self.assertEqual(len(m["g2"]["hist"]), 3)
+        # A defect at every gate, and a yardstick still waiting to be counted.
+        self.assertEqual([sum(len(r["cells"][i]) for r in m["g5"]["rows"]) for i in range(6)], [1] * 6)
+        self.assertEqual([w["name"] for w in m["g8"]["waiting"]], ["Times the driver stopped for a person"])
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_every_chart_box_draws_a_data_line_on_the_demo_data(self):
-        # lineChart draws each series as a polyline; a box with none shows only its axes, unless its
-        # empty: message is what it shows (load-error), which is the box saying there is no data yet.
-        with open(DASHBOARD, encoding="utf-8") as f:
-            boxes = re.findall(r'lineChart\(document\.getElementById\("([^"]+)"\)', f.read())
-        error, panels, logged = test_spec_drift.drawn(**demo_data.demo())
-        self.assertIsNone(error, "a panel threw on the demo data")
-        bare = [box for box in boxes if "<polyline" not in panels.get(box, "") and "load-error" not in panels.get(box, "")]
-        self.assertEqual(bare, [], "chart boxes that drew no data line on the demo data")
+    def test_no_graph_on_the_demo_data_says_a_bad_number(self):
+        said = json.dumps(test_dashboard_page.model(demo_data.demo()))
+        self.assertEqual(re.findall(r"NaN|Infinity|undefined|\$-|null (?:of|pull|days)", said), [])
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_the_banner_shows_on_the_demo_data(self):
-        out = boot(dict(demo_data.demo(), demo=True))
-        self.assertIsNone(out["error"], "a panel threw on the demo data")
+        out = test_dashboard_page.boot(dict(demo_data.demo(), demo=True))
+        self.assertIsNone(out["error"], "the page threw on the demo data")
         self.assertFalse(out["banner"]["hidden"])
         self.assertIn("Example data", out["banner"]["text"])
 
+    @unittest.skipUnless(shutil.which("node"), "needs node")
     def test_no_banner_without_the_demo_key(self):
-        out = boot(demo_data.demo())
-        self.assertIsNone(out["error"], "a panel threw on the data without demo")
+        out = test_dashboard_page.boot(demo_data.demo())
+        self.assertIsNone(out["error"], "the page threw on the data without demo")
         self.assertTrue(out["banner"]["hidden"])
 
     def test_no_day_specs_puts_the_demo_in_the_page(self):
-        page = test_spec_drift.sd.page_data(REAL, [])
+        page = test_dashboard_page.sd.page_data(REAL, [])
         self.assertIs(page.get("demo"), True)
         self.assertEqual({k: v for k, v in page.items() if k != "demo"}, demo_data.demo())
 
     def test_day_specs_put_the_real_data_in_unchanged(self):
-        page = test_spec_drift.sd.page_data(REAL, ["01"])
+        page = test_dashboard_page.sd.page_data(REAL, ["01"])
         self.assertEqual(page, REAL)
         self.assertNotIn("demo", page)
 
@@ -113,15 +108,6 @@ class DemoData(unittest.TestCase):
                 self.assertIn(k, row)
             self.assertGreaterEqual(row["reads"], row["whole"])
             self.assertGreaterEqual(row["bash"], row["cut"])
-
-    @unittest.skipUnless(shutil.which("node"), "needs node")
-    def test_the_hooks_table_on_the_demo_data_shows_cut_from_day_four_and_whole_until_it(self):
-        error, panels, _ = test_spec_drift.drawn(**demo_data.demo())
-        self.assertIsNone(error, "a panel threw on the demo data")
-        cells = [re.findall(r'<td class="num">([^<]*)</td>', r) for r in re.findall(r"<tr><td>(.*?)</tr>", panels["token-hooks"])]
-        self.assertEqual(len(cells), 6)
-        self.assertEqual([c[1].endswith("(0.0%)") for c in cells[:3]], [True] * 3)
-        self.assertEqual([c[3] for c in cells[3:]], ["0 (0.0%)"] * 3)
 
     def test_the_same_dict_comes_out_on_every_call(self):
         self.assertEqual(demo_data.demo(), demo_data.demo())

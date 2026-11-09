@@ -111,7 +111,7 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     `broken:` lines the close itself ran was a check no track had shown can fail: record it as a
     `Defect` (`found: close`). In jobmatch-microservices, four of the paper's six spec escapes
     were these. After the merge,
-    the dashboard lists them under "Criteria first broken at the close".
+    the dashboard says so on each one's tile, in "Can we trust it?".
 - **A contract test's timing is part of what it expects.** A contract test (`ContractTest`, from Day 1) is frozen in its expected values and in when it expects them. One that asserted
   an effect at once and now waits for it, or waits longer than it did, expects something else,
   even with every value unedited. In jobmatch-microservices, Day 25 did this to
@@ -146,7 +146,7 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     day). When it is not this day, the defect is an escape from that day, whatever `found:` says.
   - `same-as:`, only when the defect repeats one an earlier Defect line records: that line's ID
     (`same-as: D21.2`), after `made:` and before the text. `scripts/spec-drift.py` counts it as
-    a recurrence, in the dashboard's defect-tag table, and reports an ID it cannot place
+    a recurrence, ringed in the dashboard's graph of defects, and reports an ID it cannot place
     (malformed, unknown, used twice, or not earlier); `scripts/relabel.py` strips it with the
     tags, so the blind rater does not read the earlier defect's.
 

@@ -88,22 +88,6 @@ class NameStepsTest(unittest.TestCase):
         self.assertEqual(added, {"prod": 0, "test": 0, "flags": 0})
 
 
-class SpecStepsPanelTest(unittest.TestCase):
-    """The page has the spec-change panel, and the script draws it on every redraw."""
-
-    def test_panel_on_the_page_and_drawn(self):
-        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
-        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
-        self.assertTrue('<div id="spec-steps"></div>' in page, "no spec-steps panel on the page")
-        self.assertTrue(
-            'panel("spec-steps", drawSpecSteps)' in script, "setSel does not draw spec-steps"
-        )
-        # A pure removal is drawn apart from a PR that added names.
-        self.assertTrue(
-            "removal = p.x === 0 && p.out > 0" in script, "a pure removal is not marked"
-        )
-
-
 def load_evidence():
     spec = importlib.util.spec_from_file_location("evidence", ROOT / "scripts" / "evidence.py")
     module = importlib.util.module_from_spec(spec)
@@ -338,30 +322,6 @@ class ProofKindsTest(unittest.TestCase):
         )
 
 
-class ProofKindsColumnTest(unittest.TestCase):
-    """The proof kinds are a column of the evidence checklist, not a chart of their own: every kind
-    is named, strongest first, and not recorded stays apart from unproved."""
-
-    def test_the_checklist_names_every_kind_and_the_chart_is_gone(self):
-        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
-        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
-        self.assertNotIn("proof-kinds", page + script)
-        self.assertNotIn("drawProofKinds", script)
-        kinds = script[script.index("const PROOF_WORDS = ") :]
-        kinds = kinds[: kinds.index(";\n")]
-        self.assertEqual(
-            [
-                k
-                for k in ("test", "command", "break", "reader", "unproved", "not_recorded")
-                if f'["{k}", ' in kinds
-            ],
-            ["test", "command", "break", "reader", "unproved", "not_recorded"],
-        )
-        self.assertLess(kinds.index('["unproved", '), kinds.index('["not_recorded", '))
-        self.assertIn("<th>Strongest evidence<small>on record</small></th>", script)
-        self.assertIn("“Strongest evidence” is the same report, by day", page)
-
-
 RELABEL_FULL = {"stage": [7, 15], "cause": [13, 15], "made": [14, 15]}
 
 
@@ -443,24 +403,6 @@ class RelabelCountsTest(unittest.TestCase):
         self.assertEqual(
             spec_drift.verification({9: pr}, [])[0]["url"], "https://example.test/pull/9"
         )
-
-
-class ReaderPlotTest(unittest.TestCase):
-    """The second reader's plot is visible by default, its table stays in the page, collapsed."""
-
-    def test_plot_visible_and_table_collapsed_under_it(self):
-        page = (ROOT / "docs" / "dashboard" / "index.html").read_text(encoding="utf-8")
-        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
-        section = page[page.rindex("<details", 0, page.index('id="second-reader"')) :]
-        self.assertTrue(section.startswith('<details class="measure" open>'))
-        plot, exact = (
-            section.index('<div id="relabel-plot"></div>'),
-            section.index('<details class="exact">'),
-        )
-        self.assertLess(plot, exact)
-        self.assertLess(exact, section.index('<table id="relabel">'))
-        self.assertIn("drawReaderPlot(days);", script)
-        self.assertIn('notMeasured("not counted")', script)
 
 
 if __name__ == "__main__":

@@ -153,7 +153,7 @@ def build_days(rows):
                               replay=dict(state=state, status=["passed"] if finished else None,
                                           why=why, checks=[dict(criterion=cid, kind="test", status="passed",
                                                                 label=test, diagnostic=None)] if finished else []),
-                              replaces=[], replaced_by=[]))
+                              replaces=[], replaced_by=[], abilities=list(DAY_ABILITIES.get(d, ())) if ticked else []))
             if d == 5:
                 attention.append(dict(id=cid, reason="replay_stale", detail="; ".join(why)))
         ticks = sum(c["ticked"] for c in evidence)
@@ -169,7 +169,8 @@ def build_days(rows):
                       evidence_format=True, break_format=True, evidence=evidence,
                       removal_checks=[f'grep -rn "TODO day {d:02d}" src/'],
                       relabel=dict(stage=[3, 4], cause=[3, 4], made=[4, 4]) if d in (1, 2) else None,
-                      defects=[dict(id=f"D{d}.1", same_as="D1.1" if d == 2 else None, problem=None)] if d in (1, 2) else [],
+                      defects=[dict(id=i, same_as=same, found=found, cause=cause, made=made, problem=None)
+                               for day, i, found, cause, made, same in DEFECTS if day == d],
                       broken_at_close=[])
         if finished:
             record["ended_at"] = by_pr[close]["i"]
@@ -197,6 +198,41 @@ ABILITIES = (
 )
 
 
+# What each finished day's promises grew, the first being where graph 3 draws them.
+DAY_ABILITIES = {1: ("rehearse",), 2: ("rehearse", "stop"), 3: ("stop",), 4: ("loop",), 5: ("park", "loop")}
+# One made-up defect at each gate: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
+DEFECTS = (
+    (1, "D1.1", "auditor", "spec", "Day 01", None),
+    (2, "D2.1", "Track A", "implementation", "Day 01", "D1.1"),
+    (3, "D3.1", "seen red", "implementation", "Day 03", None),
+    (4, "D4.1", "break on purpose", "process", "none", None),
+    (5, "D5.1", "close", "spec", "Day 05", None),
+    (5, "D5.2", "evidence replay", "environment", "none", None),
+)
+# The newest re-check of each finished promise, so the board shows every state a tile can be in.
+RECHECKED = {
+    "C1.1": "holds", "C1.2": "holds", "C1.3": "live only",
+    "C2.1": "holds", "C2.2": "holds, never broken", "C2.3": "holds",
+    "C3.1": "test weakened", "C3.2": "holds", "C3.3": "holds, never broken",
+    "C4.1": "holds", "C4.2": "code broken", "C4.3": "not applicable on this platform",
+    "C5.1": "holds", "C5.2": "holds, never broken",
+}
+
+
+def yardsticks():
+    """Made-up figures for the plan's yardsticks, one per finished day; the parks are never counted."""
+    def row(key, name, unit, decimals, baseline, values):
+        return dict(key=key, name=name, unit=unit, decimals=decimals, baseline=baseline, source="docs/lab-notebook.md",
+                    values=[dict(day=d, value=v, text="none yet" if v is None else f"Made-up figure for Day {d}.")
+                            for d, v in enumerate(values, 1)])
+    return dict(days=[1, 2, 3, 4, 5], problems=[], rows=[
+        row("cost", "Cost of each merged pull request, main sessions", "$", 2, 1.5, [1.2, 1.8, 1.4, 1.65, 1.3]),
+        row("replies", "Replies for each merged pull request, main sessions", "", 1, 30.0, [24.5, 33.0, 28.0, 31.5, 26.0]),
+        row("escapes", "Defects that escaped from an earlier day", "", 0, None, [0, 1, 0, 0, 0]),
+        row("parks", "Times the driver stopped for a person", "", 0, None, [None] * 5),
+        row("refusals", "Calls the hooks refused", "", 0, None, [0, 0, 2, 1, 2])])
+
+
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
@@ -220,7 +256,8 @@ def demo():
         return dict(bash=6 * n, cut=n - 2, reads=n, whole=0)
     tokens = [dict(date=f"2026-10-{n + 2:02d}", day=n, model=model, agent=agent,
                    input=900 * n + 400, cache_write=12000 * n, cache_read=310000 * n + 2000,
-                   output=5200 * n + 300 if agent == "main" else 2100 * n, replies=40 * n + 7, **hooks(n))
+                   output=5200 * n + 300 if agent == "main" else 2100 * n, replies=40 * n + 7,
+                   cost=round(1.9 * n + 0.4 if agent == "main" else 0.2 * n, 2), **hooks(n))
               for n in range(1, 7)
               for agent, model in (("main", "claude-sonnet-5-5"), ("implementer", "claude-haiku-5-5"))]
     refusals = [dict(date=f"2026-10-{n + 2:02d}", guard=g, refused=k) for n, g, k in
@@ -252,13 +289,16 @@ def demo():
             dict(key="live", label="Live runs", when="By hand only", files=1, tests=1),
             dict(key="gap", label="The dashboard's gap numbers", when="Every push and pull request", files=1, tests=3),
             dict(key="tooling", label="Project tooling", when="On pull requests that touch a script", files=2, tests=12)]),
-        defect_recurrence=dict(defects=2, with_id=2, recurrences=[dict(id="D2.1", same_as="D1.1")], problems=[]),
-        gate_report=dict(defects=2, elsewhere=1, gates=[
-            dict(gate=g, found=f, defects=n, refused=r, runs=k, replies=3 * k, context=90000 * k, output=1500 * k,
-                 cost=round(0.4 * k, 2), causes=dict(spec=n, implementation=0, process=0, environment=0, other=0))
-            for g, f, n, r, k in (("auditors", "auditor", 1, None, 6), ("seen red", "seen red", 0, None, 9),
-                                  ("break on purpose", "break on purpose", 0, None, 14),
-                                  ("evidence replay", "evidence replay", 0, None, 5), ("hooks", None, 0, 5, 5))]),
+        defect_recurrence=dict(defects=len(DEFECTS), with_id=len(DEFECTS),
+                               recurrences=[dict(id="D2.1", same_as="D1.1")], problems=[]),
+        gate_report=dict(defects=len(DEFECTS), elsewhere=2, gates=[
+            dict(gate=g, found=f, defects=sum(x[2] == f for x in DEFECTS), refused=r, runs=k, replies=3 * k,
+                 context=90000 * k, output=1500 * k, cost=round(0.4 * k, 2),
+                 causes={c: sum(x[2] == f and x[3] == c for x in DEFECTS)
+                         for c in ("spec", "implementation", "process", "environment", "other")})
+            for g, f, r, k in (("auditors", "auditor", None, 6), ("seen red", "seen red", None, 9),
+                               ("break on purpose", "break on purpose", None, 14),
+                               ("evidence replay", "evidence replay", None, 5), ("hooks", None, 5, 5))]),
         other_groups=[dict(name="tooling", count=4), dict(name="docs", count=3), dict(name="dashboard", count=2)],
         vocab_size=136, tokens=tokens, refusals=refusals, verification=verification,
         infra=dict(runs=runs, latest=dict(runs[0], summary=summary)), deployment=dict(
@@ -274,25 +314,27 @@ def demo():
         replay=dict(state="loaded", states=["holds", "holds, never broken", "code broken", "test weakened", "break no longer applies",
                                             "not applicable on this platform", "not runnable", "live only",
                                             "not yet in force"],
-                    merges=[dict(n=n, merge=f"demo{n}", pr=n + 10, sample=s, run=r, copied=c)
+                    merges=[dict(n=n, merge=f"demo{n}", pr=merged[-1]["pr"] - 2 * (23 - n), sample=s, run=r, copied=c)
                             for n, s, r, c in ((20, "all", 5, 0), (21, "day", 1, 2), (23, "all", 2, 3))],
-                    cells=[dict(criterion=cid, day="01", n=n, state=st, mixed=mx,
+                    # The first two re-checks ran on Days 1 to 3, before a bug was planted in Day 3; the third on all five.
+                    cells=[dict(criterion=cid, day=f"{int(cid[1]):02d}", n=n, state=st, mixed=cid == "C3.1" and n == 23,
                                 checks=[dict(check="tests", state=st, platform="linux")])
-                           for cid, n, st, mx in (("C1", 20, "holds", False), ("C2", 20, "holds", False),
-                                                  ("C3", 20, "live only", False), ("C1", 21, "holds", False),
-                                                  ("C1", 23, "test weakened", True), ("C2", 23, "holds, never broken", False),
-                                                  ("C3", 23, "live only", False), ("C4", 23, "not yet in force", False))]),
+                           for n in (20, 21, 23) for cid, last in RECHECKED.items() if n == 23 or cid[1] in "123"
+                           for st in ["holds, never broken" if n < 23 and cid[1] == "3" else last]]
+                    + [dict(criterion="C6.1", day="06", n=23, state="not yet in force", mixed=False,
+                            checks=[dict(check="tests", state="not yet in force", platform="linux")])]),
         user_stories=dict(
             abilities=[dict(a) for a in ABILITIES], problems=[], source="docs/dashboard/user-stories.json",
             stories=[dict(number=r["pr"], title=r["title"], url=f"https://github.com/example/{PROJECT}/pull/{r['pr']}",
                           branch=r["branch"], day=r["day"], date=r["date"], ability=a, ability_source="pr",
                           story=f"Made-up story for pull request {r['pr']}.", story_source="pr", reader="desk")
-                     for r, a in zip(merged[:3], ("rehearse", "loop", "see"))]),
+                     for r in merged
+                     for a in [DAY_ABILITIES[r["day"]][0] if r["kind"] != "other" and r["day"] in DAY_ABILITIES
+                               else ("see", "record")[r["pr"] % 2]]]),
         conclusion=dict(reads=[dict(phase=1, text="**Read at the end of Phase 1.** Products and the cart work; "
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
-        # The made-up table above has no column per day, so it gives no yardstick: nothing draws them yet.
-        yardsticks=dict(days=[], rows=[], problems=[]),
+        yardsticks=yardsticks(),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",
