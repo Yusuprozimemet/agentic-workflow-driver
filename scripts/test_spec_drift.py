@@ -2023,6 +2023,84 @@ class YardsticksTest(unittest.TestCase):
         for key, values in expected.items():
             self.assertEqual(figures[key][:6], values, key)
 
+    def test_each_yardstick_has_its_average_so_far(self):
+        got = sd.yardsticks(sd.conclusion(self.NOTEBOOK), self.TOKENS)
+        average = {r["key"]: (r["average_over"], r["average"]) for r in got["rows"]}
+        self.assertEqual(average, dict(
+            cost=("pull requests", [1.1, 1.69]),          # $5.51 over 5, then $13.48 over 8, not the mean of 1.10 and 2.66
+            replies=("pull requests", [23.6, 38.62]),     # 118 over 5, then 1,429 over 37
+            escapes=("days", [0.0, 1.5]), parks=("days", [None, None]), refusals=("days", [1.0, 7.0]),
+            gates=("days", [0.75, 0.61]),
+            reread=("tokens written", [64.0, 64.0])))     # Day 02 wrote nothing: it is left out, not a zero
+        self.assertEqual(got["problems"], [])
+
+    def test_an_average_stops_at_a_cell_with_no_total(self):
+        notebook = self.NOTEBOOK.replace("$7.97 over 3 merged PRs since Day 01's count, $2.66 each", "$2.66 each")
+        got = sd.yardsticks(sd.conclusion(notebook), [])
+        self.assertEqual(got["rows"][0]["average"], [1.1, None])
+        self.assertEqual(got["problems"], ["Day 02, Cost per merged PR: no total and count read from the notebook's cell"])
+
+
+class LookAheadTest(unittest.TestCase):
+    """What the graph that looks ahead reads: at each merge, the promises built and written and the hand-offs open."""
+
+    NOTES = ("## Notes\n- **Hand-off** H01.1 → Day 02: the key.\n- **Hand-off** H01.2 → Day 03: the queue, after H01.1.\n"
+             "- For Day 02: the rest.\n")
+
+    def test_a_hand_off_has_the_merge_that_opened_it_and_the_merge_that_closed_it(self):
+        repo = Repo().merge({"specs/day-01-a.md": "# Day 01\n", "specs/day-02-b.md": "# Day 02\n",
+                             "src/Foo.py": "# Day 02 moves this.\n"})
+        repo.merge({"specs/day-01-a.md": "# Day 01\n\n" + self.NOTES + "- For Day 03: later.\n"})
+        repo.merge({"specs/day-02-b.md": "# Day 02\n\nPicks up H01.1. It reads `Foo`.\n",
+                    "src/Bar.py": "# Day 02 keeps this.\n"})
+        repo.merge({"specs/day-01-a.md": "# Day 01\n\n" + self.NOTES})
+        repo.snaps[2]["branch"] = "day-02/spec-x"
+        days = [dict(day=1, file="specs/day-01-a.md", status="done", prs=[dict(number=1, kind="close")]),
+                dict(day=2, file="specs/day-02-b.md", status="done",
+                     prs=[dict(number=2, kind="spec"), dict(number=3, kind="close")])]
+        try:
+            got = repo.inside(lambda blobs: sd.look_ahead(repo.snaps, days, [], [1, 2, 3], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(h["id"] or h["source"], h["to"], h["opened_pr"], h["closed_pr"], h["how"])
+                          for h in got["hand_offs"]], [
+            ("src/Foo.py", [2], None, 2, "picked"),         # there from the start; Day 02's spec names the file
+            ("Day 01 Notes", [2], 1, 3, "lapsed"),          # Day 02 closed and its spec never named Day 01
+            ("Day 01 Notes", [3], 1, 3, "withdrawn"),       # the line was taken out of the Notes
+            ("H01.1", [2], 1, 2, "picked"),
+            ("H01.2", [3], 1, None, None)])                 # it cites H01.1, and Day 02 citing that picks up only H01.1
+        # src/Bar.py's comment names Day 02 and Day 02's own merge wrote it: never a hand-off.
+        self.assertEqual([(c["open"], c["open_numbered"], c["opened"], c["closed"]) for c in got["columns"]],
+                         [(1, 0, 1, 0), (5, 2, 4, 0), (3, 1, 0, 2), (1, 1, 0, 2)])
+
+    def test_a_promise_is_built_at_the_last_merge_its_evidence_cites_and_written_when_its_spec_merged(self):
+        one = "## Acceptance criteria\n- [{0}] C01.1 **new** — a.\n- [{0}] C01.2 **new** — b.\n- [{0}] C01.3 **hold** — c.\n"
+        two = "## Acceptance criteria\n- [ ] C02.1 **new** — a.\n- [ ] C02.2 **new** — b.\n- [ ] C02.3 **hold** — c.\n"
+        repo = Repo().merge({"specs/day-01-a.md": one.format(" ")})
+        repo.merge({"src/a.py": "a = 1\n"}).merge({"src/b.py": "b = 1\n"})
+        repo.merge({"specs/day-01-a.md": one.format("x")}).merge({"specs/day-02-b.md": two}).merge({"src/c.py": "c = 1\n"})
+        repo.snaps[5]["branch"] = "day-02/track-a-x"
+        days = [dict(day=1, status="done", tracks=["A", "B"],
+                     prs=[dict(number=1, kind="code"), dict(number=2, kind="code"), dict(number=3, kind="close")]),
+                dict(day=2, status="active", tracks=["A", "B"], tracks_merged=["A"],
+                     track_work=dict(A="The first: C02.1", B="The second: C02.2"),
+                     prs=[dict(number=4, kind="spec"), dict(number=5, kind="code")])]
+        index = [dict(id="C01.1", day=1, ticked=True, prs=[1], track="A"),
+                 dict(id="C01.2", day=1, ticked=True, prs=[1, 2], track="B"),
+                 dict(id="C01.3", day=1, ticked=True, prs=[], track=None),     # cites no PR: built at its day's close
+                 dict(id="C02.1", day=2, ticked=False, prs=[], track="A"),     # the open day: built when its track merged
+                 dict(id="C02.2", day=2, ticked=False, prs=[], track="B"),
+                 dict(id="C02.3", day=2, ticked=False, prs=[], track=None)]
+        try:
+            got = repo.inside(lambda blobs: sd.look_ahead(repo.snaps, days, index, [1, 2], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(c["pr"], c["built"], c["written"], c["got"]) for c in got["columns"]], [
+            (None, 0, 3, []), (1, 1, 3, ["C01.1"]), (2, 2, 3, ["C01.2"]), (3, 3, 3, ["C01.3"]),
+            (4, 3, 6, []), (5, 4, 6, ["C02.1"])])
+        self.assertEqual((got["built"], got["written"]), (4, 6))
+        self.assertEqual(got["pending"], dict(day=2, tracks=[dict(track="B", ids=["C02.2"])], at_close=["C02.3"]))
+
 
 if __name__ == "__main__":
     unittest.main()
