@@ -1460,7 +1460,7 @@ console.log(JSON.stringify([nextParts("Day 07 Track 0: The tests that pass: C07.
 
 @unittest.skipUnless(shutil.which("node"), "needs node")
 class PromisesKeptTest(unittest.TestCase):
-    """The replay panel says, in plain words, whether what was built still works."""
+    """The top of the promise board says, in plain words, whether what was built still works."""
 
     MERGES = [dict(n=5, merge="aaa", pr=43, sample="all", run=1, copied=0),
               dict(n=15, merge="bbb", pr=53, sample="day", run=1, copied=0)]
@@ -1479,36 +1479,39 @@ class PromisesKeptTest(unittest.TestCase):
         error, panels, _ = drawn([dict(page_row(0, None, "origin", 40), code_churn=0)], now=now, criteria_index=index, attention=[],
                                  replay=dict(state="loaded", states=[], merges=self.MERGES, cells=cells))
         self.assertIsNone(error)
-        return panels["replay"], panels["replay-legend"]
+        return panels["replay"], panels["plot-all"]
 
     def test_the_reader_sees_feature_names_and_no_internal_codes(self):
-        box, legend = self.draw([self.cell("C01.1", 5, "holds"), self.cell("C05.2", 15, "holds")])
-        self.assertIn("Working out the next step", box)
-        self.assertIn("Pausing for a person", box)
+        box, key = self.draw([self.cell("C01.1", 5, "holds"), self.cell("C05.2", 15, "break no longer applies")])
+        self.assertIn("<b>Test needs repair</b> in Pausing for a person", box)
         self.assertIn("Promise 2 about code.", box)
-        visible = re.sub(r' title="[^"]*"', "", box + legend)
+        visible = re.sub(r' title="[^"]*"', "", box + key)
         self.assertNotRegex(visible, r"\bC0\d\.\d|\bD0\d\b|#\d")
 
     def test_the_verdict_counts_each_promise_by_its_newest_check(self):
-        box, legend = self.draw([self.cell("C01.1", 5, "code broken"), self.cell("C01.1", 15, "holds"),
-                                 self.cell("C01.2", 15, "holds, never broken"), self.cell("C01.3", 15, "live only")])
-        self.assertIn("Nothing was broken at the last re-check", box)
-        self.assertIn("We re-checked 3 promises the software makes, most recently 9 changes ago. 0 failed. 1 passes with no planted bug tried.", box)
-        self.assertIn("1 of 3 caught a planted bug · checked 9 changes ago", box)
-        for line in ("Planted bug caught (1)", "Passes, no planted bug tried (1)", "Not checked here (1)", "Broken (0)"):
-            self.assertIn(line, legend)
+        box, key = self.draw([self.cell("C01.1", 5, "code broken"), self.cell("C01.1", 15, "holds"),
+                              self.cell("C01.2", 15, "holds, never broken"), self.cell("C01.3", 15, "live only")])
+        self.assertIn('<p class="promise-verdict">Nothing was broken at the last re-check</p>', box)
+        self.assertIn("We re-checked 3 promises by hand, most recently 9 changes ago, so this can be behind the latest change. 0 failed.", box)
+        for line in ("<b>1</b> proven", "<b>1</b> passes, not yet proven", "<b>1</b> not checked here", "<b>0</b> broken"):
+            self.assertIn(line, key)
 
     def test_a_broken_promise_leads_and_is_named(self):
         box, _ = self.draw([self.cell("C01.1", 15, "code broken"), self.cell("C01.2", 15, "test weakened"), self.cell("C01.3", 5, "holds")])
         self.assertIn('<p class="promise-verdict">1 promise is broken</p>', box)
         self.assertNotIn("Nothing was broken", box)
         self.assertIn("1 test needs repair.", box)
-        self.assertLess(box.index("<b>Broken</b>: Promise 1"), box.index('class="promise-row"'))
+        self.assertLess(box.index("<b>Broken</b> in Working out the next step: Promise 1"), box.index("<b>Test needs repair</b>"))
+
+    def test_the_promises_are_not_drawn_a_second_time_under_the_verdict(self):
+        box, _ = self.draw([self.cell("C01.1", 15, "holds"), self.cell("C01.2", 15, "holds, never broken")])
+        self.assertNotIn("promise-row", box)
+        self.assertNotIn('class="promise ', box)  # no tile: nothing needs repair, and the board below draws them
 
     def test_a_replaced_promise_and_one_not_yet_in_force_are_not_counted(self):
         box, _ = self.draw([self.cell("C01.1", 15, "code broken"), self.cell("C01.2", 15, "not yet in force"), self.cell("C01.3", 15, "holds")],
                            replaced=("C01.1",))
-        self.assertIn("We re-checked 1 promise the software makes", box)
+        self.assertIn("We re-checked 1 promise by hand", box)
         self.assertIn("Nothing was broken", box)
 
 
@@ -2737,12 +2740,43 @@ class PlainPageTest(unittest.TestCase):
         self.assertIsNone(error)
         return panels
 
-    def test_a_day_has_one_result_line_counted_from_the_replay(self):
+    @staticmethod
+    def board(box):
+        """Each row of the board: its name, the looks of its tiles in order, and the note beside them."""
+        rows = re.findall(r'<summary><span class="promise-name">(.*?)</span><span class="promise-tiles"[^>]*>(.*?)</span>'
+                          r'<span class="promise-age">(.*?)</span></summary>', box, re.S)
+        return [(re.sub(r"<[^>]+>", " ", name).split(), re.findall(r'class="promise (\w+)"', tiles), re.sub(r"<[^>]+>", "", note))
+                for name, tiles, note in rows]
+
+    def test_a_day_has_one_count_beside_its_tiles(self):
+        (_, tiles, note), (name, building, later) = self.board(self.draw()["promise-days"])
+        self.assertEqual(note, "1 of 3 proven1 not checked here")
+        self.assertEqual(tiles, ["proven", "unproven", "skipped"])
+        self.assertEqual(name[:2], ["Day", "06"])
+        self.assertEqual((building, later), (["pending"], "being built1 promise, none finished yet"))
+
+    def test_the_tiles_are_sorted_by_state_so_a_row_reads_like_a_bar(self):
+        cells = [self.cell("C01.1", "live only"), self.cell("C01.2", "code broken"), self.cell("C01.3", "holds")]
+        box = self.draw(replay=dict(state="loaded", states=[], merges=self.MERGES, cells=cells))["promise-days"]
+        _, tiles, note = self.board(box)[0]
+        self.assertEqual(tiles, ["proven", "skipped", "broken"])
+        self.assertEqual(note, "1 of 3 proven1 broken · 1 not checked here")
+        said = [box.index(f"<span>Plain sentence C01.{i}.") for i in (1, 2, 3, 4)]
+        self.assertEqual(said, sorted(said))  # opened, the promises stay in the spec's order
+
+    def test_a_replaced_promise_leaves_the_board_for_the_opened_list(self):
         box = self.draw()["promise-days"]
-        self.assertIn("2 of 3 promises kept", box)
-        self.assertIn("1 replaced by a later promise", box)
-        self.assertIn("1 not checked here", box)
-        self.assertIn("0 of 1 promise finished so far", box)
+        _, tiles, note = self.board(box)[0]
+        self.assertEqual(len(tiles), 3)
+        self.assertNotIn("replaced", note)
+        opened = box[box.index("Plain sentence C01.4."):box.index("Plain sentence C06.1.")]
+        self.assertIn('<em class="promise-replaced">Replaced by a later promise</em>', opened)
+        self.assertIn("No longer checked: replaced by a later promise", opened)
+
+    def test_a_tile_names_its_promise_and_opens_it(self):
+        box = self.draw()["promise-days"]
+        self.assertIn('<i class="promise proven" data-promise="C01.1" title="Proven: Plain sentence C01.1.">✓</i>', box)
+        self.assertIn('<details class="promise-item" data-promise="C01.1">', box)
 
     def test_a_promise_reads_as_its_plain_sentence_and_three_facts(self):
         box = self.draw()["promise-days"]
@@ -2752,16 +2786,21 @@ class PlainPageTest(unittest.TestCase):
 
     def test_the_facts_tell_the_measurements_apart(self):
         box = self.draw()["promise-days"]
-        never = box[box.index("Plain sentence C01.2."):box.index("Plain sentence C01.3.")]
+        never = box[box.index("<span>Plain sentence C01.2."):box.index("<span>Plain sentence C01.3.")]  # the opened list, not a tile's title
         self.assertIn("Yes, noted in the spec", never)
         self.assertIn("Not tried", never)
-        caught = box[box.index("Plain sentence C01.1."):box.index("Plain sentence C01.2.")]
+        caught = box[box.index("<span>Plain sentence C01.1."):box.index("<span>Plain sentence C01.2.")]
         self.assertIn("Yes, 9 changes ago", caught)
 
-    def test_nothing_on_the_page_calls_a_promise_proven(self):
+    def test_proven_means_one_thing_a_planted_bug_was_caught(self):
         panels = self.draw()
-        for name in ("summary-cards", "summary-known", "promise-days", "promise-key", "trust-table", "replay", "replay-legend"):
+        self.assertIn("<b>1</b> proven<small>a bug was planted on purpose and its test caught it</small>", panels["plot-all"])
+        for name in ("summary-cards", "summary-known"):
             self.assertNotRegex(re.sub(r"<[^>]+>", " ", panels[name]), r"(?i)\bproven\b|\bproved\b", name)
+        # The other two measurements keep their own names: neither a passing test nor a recorded failure is called proven.
+        facts = re.findall(r'<span class="fact-name">([^<]+)</span><span class="fact-value">([^<]*)</span>', panels["promise-days"])
+        self.assertEqual(len(facts), 15)
+        self.assertEqual([f for f in facts if re.search(r"(?i)proven|proved", " ".join(f))], [])
 
     def test_the_c_number_sits_under_technical_detail_only(self):
         box = self.draw()["promise-days"]
@@ -2799,8 +2838,8 @@ class PlainPageTest(unittest.TestCase):
         panels = self.draw(replay=dict(state="absent"))
         self.assertNotIn("Nothing was broken", panels["summary-cards"])
         self.assertIn("Not known", panels["summary-cards"])
-        self.assertNotIn("promises kept", panels["promise-days"])
-        self.assertIn("no re-check on record", panels["promise-days"])
+        self.assertNotIn("proven", panels["promise-days"])
+        self.assertIn("3 promises: no re-check on record", panels["promise-days"])
 
     def test_the_test_table_comes_from_the_data_and_explains_the_chart(self):
         panels = self.draw()
@@ -2818,8 +2857,9 @@ class PlainPageTest(unittest.TestCase):
     def test_the_trust_table_is_per_feature_and_totals_the_promises(self):
         panels = self.draw()
         table = panels["trust-table"]
-        self.assertIn("Working out the next step", table)
-        self.assertIn("1 of 3", table)
+        self.assertEqual(re.findall(r"<th[^>]*>([^<]+)</th>", table),
+                         ["Feature", "Proven", "Passes, not yet proven", "Not checked here", "Test needs repair", "Broken"])
+        self.assertIn('<td>Working out the next step</td><td class="r">1 of 3</td><td class="r">1</td><td class="r">1</td><td class="r">0</td><td class="r">0</td>', table)
         self.assertIn("run by hand", panels["trust-note"])
         self.assertIn("9 changes ago", panels["trust-note"])
 

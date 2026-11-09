@@ -21,6 +21,10 @@
   --c-spec: #1baf7a; --c-implementation: #6250d6; --c-process: #e87ba4; --c-environment: #2a78d6; --c-other: #858c98;
   /* Replay states: one set, validated all-pairs on both surfaces (dataviz validate_palette.js). */
   --r-holds: #3a74d0; --r-broken: #c22f2f; --r-weak: #cf7d12; --r-gone: #b03fa6;
+  /* Promise states: these four colours mean the state of a promise and nothing else; not checked here stays hatched grey.
+     Validated all-pairs on both surfaces (dataviz validate_palette.js). Red against green is in the warn band in dark,
+     so proven also carries a tick and broken a cross. */
+  --s-proven: #1baf7a; --s-passes: #2a78d6; --s-repair: #cf7d12; --s-broken: #c22f2f; --on-proven: #0b0b0b; --on-repair: #0b0b0b;
   --m-opus: #2a78d6; --m-opus-prev: #93b9ea; --m-sonnet: #1baf7a; --m-haiku: #eb6834; --m-haiku-prev: #f4b394; --w-context: #b07d12; --fail: #d23f3a;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
@@ -37,6 +41,7 @@
     --away: #b98a34; --closer: #6a82dc;
     --c-spec: #199e70; --c-implementation: #9085e9; --c-process: #d55181; --c-environment: #3987e5; --c-other: #6c7380;
     --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
+    --s-proven: #199e70; --s-passes: #3987e5; --s-repair: #c98500; --s-broken: #d03b3b;
   }
 }
 :root[data-theme="dark"] {
@@ -49,6 +54,7 @@
   --away: #b98a34; --closer: #6a82dc;
   --c-spec: #199e70; --c-implementation: #9085e9; --c-process: #d55181; --c-environment: #3987e5; --c-other: #6c7380;
   --p-test: #b7d3f6; --p-command: #6da7ec; --p-break: #2a78d6; --p-reader: #184f95;
+  --s-proven: #199e70; --s-passes: #3987e5; --s-repair: #c98500; --s-broken: #d03b3b;
 }
 * { box-sizing: border-box; }
 body {
@@ -196,26 +202,49 @@ td.none { color: var(--code); font-weight: 600; }
 td.pre { color: var(--muted); font-style: italic; }
 #evidence-checks .off { color: var(--muted); font-style: italic; }
 #replay .off { color: var(--muted); font-style: italic; }
-.promise { display: inline-block; flex: none; box-sizing: border-box; width: 14px; height: 14px; border-radius: 3px; font-size: 10px; font-weight: 700; font-style: normal; line-height: 14px; text-align: center; }
-.legend i.promise { width: 14px; height: 14px; border-radius: 3px; }
-.promise.proven { background: var(--r-holds); }
-.promise.unproven { box-shadow: inset 0 0 0 2px var(--r-holds); }
+.promise { display: inline-grid; place-items: center; flex: none; box-sizing: border-box; width: 17px; height: 17px; border-radius: 4px; font-size: 11px; font-weight: 700; font-style: normal; line-height: 1; }
+.legend i.promise { width: 17px; height: 17px; border-radius: 4px; }
+.legend i.promise.pending { border-radius: 50%; }
+.promise.proven { background: var(--s-proven); color: var(--on-proven); }
+.promise.unproven { background: var(--s-passes); color: #fff; }
 .promise.skipped { background: repeating-linear-gradient(45deg, var(--muted) 0 1.5px, transparent 1.5px 4px); box-shadow: inset 0 0 0 1px var(--muted); }
-.promise.broken { background: var(--r-broken); color: #fff; }
-.promise.repair { background: var(--r-weak); color: #0b0b0b; }
-.promise-verdict { font-size: 22px; font-weight: 600; color: var(--ink); margin: 10px 0 2px; }
-.promise-covered { color: var(--ink-2); font-size: 14px; margin-bottom: 12px; }
+.promise.broken { background: var(--s-broken); color: #fff; }
+.promise.repair { background: var(--s-repair); color: var(--on-repair); }
+/* The top of the promise board: the count, one bar of every promise, the key, and what the last re-check found. */
+.promise-headline b.num { font-family: var(--display); font-size: 30px; line-height: 1.1; margin-right: 4px; }
+.promise-bar { display: flex; gap: 2px; height: 26px; }
+.promise-bar .promise { display: flex; align-items: center; justify-content: flex-start; gap: 4px; width: auto; height: auto; min-width: 6px; padding: 0 8px; border-radius: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.promise-bar .promise:empty { padding: 0; }
+.promise-bar .promise:first-child { border-radius: 4px 0 0 4px; }
+.promise-bar .promise:last-child { border-radius: 0 4px 4px 0; }
+.promise-bar .promise:only-child { border-radius: 4px; }
+.promise-bar em { font-style: normal; }
+.promise-states { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.promise-states li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; max-width: 250px; font-size: 14px; color: var(--ink-2); }
+.promise-states b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.promise-states small { display: block; font-size: 13px; line-height: 1.35; }
+.promise-states .promise { margin-top: 2px; }
+.promise-states li.zero { opacity: .6; }
+.promise-alert { display: grid; gap: 4px; margin: 6px 0; }
+.promise-alert.bad { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.promise-verdict { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0; }
+.promise-covered { color: var(--ink-2); font-size: 14px; margin: 0; }
+.promise-alert .promise-list { padding: 4px 0 0; }
 .promise-row { border-top: 1px solid var(--grid); }
 .promise-row summary { display: grid; grid-template-columns: 14px minmax(0, 250px) minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 9px 0; cursor: pointer; list-style: none; font-size: 14px; }
 .promise-row summary::-webkit-details-marker { display: none; }
 .promise-row summary::before { content: "▸"; color: var(--muted); }
 .promise-row[open] summary::before { content: "▾"; }
 .promise-name { font-weight: 600; color: var(--ink); }
+.promise-name small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.promise-tiles [data-promise] { cursor: pointer; }
+.promise-tiles [data-promise]:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+#promise-key > span { align-items: flex-start; }
+.promise-replaced { font-style: normal; font-size: 12px; color: var(--muted); border: 1px solid var(--axis); border-radius: 99px; padding: 0 7px; white-space: nowrap; }
 .promise-tiles { display: flex; flex-wrap: wrap; gap: 3px; }
 .promise-age { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .promise-list { list-style: none; margin: 0; padding: 0 0 10px 24px; display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .promise-list li { display: flex; gap: 8px; align-items: flex-start; }
-#replay-legend { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--grid); }
 @media (max-width: 620px) {
   .promise-row summary { grid-template-columns: 14px minmax(0, 1fr); }
   .promise-tiles, .promise-age { grid-column: 2; }
@@ -327,14 +356,15 @@ tr.sel td { background: var(--surface-2); }
 .known h3 { font-size: 16px; margin-bottom: 6px; }
 .known ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--ink); }
 .promise.pending { box-shadow: inset 0 0 0 1px var(--muted); border-radius: 50%; }
-.promise-day > summary { grid-template-columns: 14px minmax(0, 300px) minmax(0, 1fr) minmax(0, auto); }
-.promise-day .promise-age { white-space: normal; text-align: right; max-width: 420px; }
-.promise-day .promise-age b { color: var(--ink); }
+.promise-day > summary { grid-template-columns: 14px minmax(0, 15rem) minmax(0, 1fr) minmax(0, auto); }
+.promise-day .promise-age { white-space: normal; text-align: right; max-width: 420px; font-size: 13px; color: var(--ink-2); }
+.promise-day .promise-age b { color: var(--ink); font-weight: 600; }
+.promise-day .promise-age em { display: block; font-style: normal; color: var(--muted); }
 .promise-items { list-style: none; margin: 0; padding: 0 0 10px 24px; display: grid; gap: 2px; }
 /* .promise-row's summary rules reach the rows nested in it: without its own columns and arrow, a sentence is squeezed into 14px. */
-.promise-item > summary { display: grid; grid-template-columns: 14px 14px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 0; cursor: pointer; font-size: 14px; list-style: none; color: var(--ink); }
+.promise-item > summary { display: grid; grid-template-columns: 14px 17px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 0; cursor: pointer; font-size: 14px; list-style: none; color: var(--ink); }
 .promise-item > summary::-webkit-details-marker { display: none; }
-.promise-item > summary .promise { margin-top: 3px; }
+.promise-item > summary .promise { margin-top: 2px; }
 .promise-item:not([open]) > summary::before, .tech:not([open]) > summary::before { content: "▸"; }
 .promise-item[open] > summary::before, .tech[open] > summary::before { content: "▾"; }
 .tech > summary { display: block; padding: 2px 0; }
@@ -342,9 +372,10 @@ tr.sel td { background: var(--surface-2); }
 .promise-item, .promise-item details, details.technical { border-top: 0; padding-top: 0; }
 .facts { list-style: none; margin: 2px 0 8px 22px; padding: 0; display: grid; gap: 4px; font-size: 13.5px; }
 .fact { display: grid; grid-template-columns: minmax(0, 260px) minmax(0, 1fr); gap: 2px 12px; padding-left: 8px; border-left: 3px solid var(--grid); }
-.fact.yes { border-left-color: var(--r-holds); }
-.fact.no { border-left-color: var(--r-broken); }
-.fact.unknown { border-left-color: var(--r-weak); }
+/* Neutral on purpose: beside the tiles, blue, amber and red mean a promise's state, not yes, unknown and no. */
+.fact.yes { border-left-color: var(--ink-2); }
+.fact.no { border-left-color: var(--ink); }
+.fact.unknown { border-left: 3px dashed var(--muted); }
 .fact-name { color: var(--ink-2); }
 .fact-value { color: var(--ink); overflow-wrap: anywhere; }
 .tech { margin: 0 0 10px 22px; font-size: 13px; }
@@ -377,6 +408,11 @@ details.technical { margin-top: 14px; border-top: 1px solid var(--grid); padding
 @media (max-width: 620px) {
   .promise-day > summary { grid-template-columns: 14px minmax(0, 1fr); }
   .promise-day .promise-age { text-align: left; max-width: none; }
+  .promise-day .promise-age em { display: inline; }
+  .promise-day .promise-age em::before { content: " · "; }
+  .promise-bar em { display: none; }
+  .trust-history { min-width: 800px; }
+  .trust-history text { font-size: 14px; }
   .fact { grid-template-columns: minmax(0, 1fr); }
   .measure > summary { grid-template-columns: minmax(0, 1fr); }
   .promise-items, .facts, .tech { margin-left: 0; padding-left: 0; }
@@ -490,7 +526,19 @@ details.counted p { margin-top: 8px; font-size: 14px; color: var(--ink-2); }
 .plot-quiet { font-size: 13px; color: var(--muted); }
 .plot-bad { font-size: 13px; font-weight: 600; color: var(--r-broken); }
 .plot .stack, .plot-row .stack { height: 16px; }
-.stack i.promise { width: auto; height: auto; }
+/* Is trust growing? The promise states as stepped areas; the hatch is the one the "not checked here" tile wears. */
+.trust-history { min-width: 600px; }
+.trust-history .area { stroke: var(--surface); stroke-width: 2; }
+.trust-history .s-proven { fill: var(--s-proven); }
+.trust-history .s-unproven { fill: var(--s-passes); }
+.trust-history .s-skipped { fill: url(#promise-hatch); }
+.trust-history rect.s-skipped { stroke: var(--muted); }
+.trust-history .s-repair { fill: var(--s-repair); }
+.trust-history .s-broken { fill: var(--s-broken); }
+.trust-history .hatch-ground { fill: var(--surface); }
+.trust-history .hatch-line { fill: var(--muted); }
+.trust-history text { font-size: 12px; fill: var(--ink-2); }
+.trust-history text.strong { fill: var(--ink); font-weight: 600; }
 .plot-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) minmax(3.2rem, max-content); gap: 10px; align-items: center; margin: 4px 0; }
 .plot-name { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
 .plot-bar { min-width: 0; display: block; }
