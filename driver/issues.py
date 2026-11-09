@@ -192,6 +192,39 @@ def close(project, gh, number, comment, timeout=None):
     return None
 
 
+def park_body(project, line, sentence, session):
+    # What a park's issue holds (Day 7, H05.4): the session, the branch and last commit, and the
+    # paths the tree holds uncommitted, so the maintainer sees what the park left. A git that fails
+    # reads as none.
+    branch = (home.git(project, "symbolic-ref", "-q", "--short", "HEAD") or "").strip()
+    head = (home.git(project, "rev-parse", "--verify", "-q", "HEAD") or "").strip()
+    status = home.git(project, "status", "--porcelain") or ""
+    # Not stripped on the left: a porcelain line starts with the index column, a space when the
+    # file is unstaged.
+    paths = [path for path in status.splitlines() if path.strip()]
+    lines = [
+        line,
+        "",
+        f"step: {sentence}",
+        f"session: {session or 'none'}",
+        f"branch: {branch or 'detached HEAD'}",
+        f"last commit: {head[:7] if head else 'none'}",
+    ]
+    if paths:
+        lines.append("uncommitted paths:")
+        lines.extend(paths[:50])
+        if len(paths) > 50:
+            lines.append(f"and {len(paths) - 50} more")
+    else:
+        lines.append("uncommitted paths: none")
+    lines += [
+        f"at: {lock.now().strftime(lock.STAMP)}",
+        "",
+        "Close this issue to let the driver go on.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def report(project, record):
     # What a halt writes, read from the run's issue: when, which step and session, and what the
     # project's repository held then (plan.md, "Recovery", rule 7). A git that fails reads as none.

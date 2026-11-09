@@ -78,12 +78,14 @@ def outcome(out, returncode, session, project, gh, sentence):
     return f"park: the step has more than one pull request: {numbers}", 1
 
 
-def park_issue(project, gh, line, sentence, session, open_list):
+def park_issue(project, gh, state, line, sentence, session, open_list):
     # Every park --once prints is an issue (Day 5): the maintainer closes it to let the driver go on.
-    body = (
-        f"{line}\n\nstep: {sentence}\nsession: {session or 'none'}\n"
-        f"at: {lock.now().strftime(lock.STAMP)}\n\nClose this issue to let the driver go on.\n"
-    )
+    # A park before a session names none, and loop.py's between-steps record the string "none":
+    # both fall back to the newest session the log has for the step.
+    if session in (None, "none"):
+        prefix = classify(sentence).prefix
+        session = runlog.last_session(state, prefix) if prefix else None
+    body = issues.park_body(project, line, sentence, session)
     number, reason = issues.park(project, gh, line, body, open_list)
     if reason:
         print(f"cannot open the park's issue: {reason}", file=sys.stderr)
@@ -395,7 +397,7 @@ def stopped(args, project, step):
     # A step that starts no session ends here: its line, and a park's issue, as Day 5's.
     say(step.line, step.code)
     if step.kind == "park":
-        park_issue(project, args.gh, step.line, step.sentence, None, step.open_list)
+        park_issue(project, args.gh, args.state, step.line, step.sentence, None, step.open_list)
     return step.code
 
 
@@ -484,7 +486,9 @@ def finish(args, home, project, started, record, line, code, open_list):
     number = record["issue"]
     parked = None
     if line.startswith("park:"):
-        parked = park_issue(project, args.gh, line, record["step"], record["session"], open_list)
+        parked = park_issue(
+            project, args.gh, args.state, line, record["step"], record["session"], open_list
+        )
     _, reason = driver_home.check(home, started)
     if reason:
         # Written as bytes, as the rest of the state is; the next --once refuses with this file.
