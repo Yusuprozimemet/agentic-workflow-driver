@@ -224,6 +224,7 @@ class OnceTest(unittest.TestCase):
         ended = f"park: the run log names session `{SESSION}` for this step, with no end"
         done = drift_of("Every day is done.")
         waiting = drift_of(open_prs=(7,))
+        seven = {"number": 7, "headRefName": "day-01/other", "url": "u", "author": "me"}
         failed = [{"status": "completed", "conclusion": "failure"}]
         # The table: case, run_case arguments, exit code, the stream that holds the line, its test.
         table = [
@@ -234,7 +235,7 @@ class OnceTest(unittest.TestCase):
             ("no_pr_names", {"setup": no_pr_names}, 2, "stderr", equals(pr_names)),
             ("no_session_id", {"help": without_session_id()}, 2, "stderr", equals(session)),
             ("every_day_done", {"drift": done}, 1, "stdout", equals("park: every day is done")),
-            ("waits", {"drift": waiting}, 0, "stdout", equals("wait: #7")),
+            ("waits", {"drift": waiting, "prs": (seven,)}, 0, "stdout", equals("wait: #7")),
             ("evidence_failed", {"runs": failed}, 1, "stdout", evidence_failed),
             ("open_run_log", {"setup": open_run}, 1, "stdout", equals(ended)),
             ("passes", {"drift": drift_of(DASHED)}, 0, "stdout", equals(OPENED)),

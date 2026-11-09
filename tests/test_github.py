@@ -28,7 +28,7 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # lists `checks`, `views`, `logs` and `run_steps` in fake.json, each entry `{"code": n, "out": ...}`
 # (a string printed as it is, anything else as JSON), one per call, the last repeated. An answer's
 # `closes` lists the issue numbers it closes when it is given, so that a test can close the run's
-# issue at an exact call.
+# issue at an exact call. `pr_code` fails every `pr list` call, as `issue_code` does its calls.
 FAKE = """import json
 import sys
 import time
@@ -72,6 +72,8 @@ if args[:2] == ["run", "list"]:
     print(json.dumps(spec["runs"]))
     sys.exit(0)
 if args[:2] == ["pr", "list"]:
+    if spec.get("pr_code", 0) != 0:
+        sys.exit(spec["pr_code"])
     prs = spec["prs"]
     if "--author" in args and args[args.index("--author") + 1] == "@me":
         prs = [pr for pr in prs if pr.get("author") == "me"]

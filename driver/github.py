@@ -104,6 +104,19 @@ def step_prs(project, gh, step):
     return sorted(mine, key=lambda pr: pr["number"]), None
 
 
+def mine(project, gh):
+    # The numbers of the open pull requests this gh login opened: the kit lists the repository
+    # owner's, which are not @me's when the login is another account.
+    code, prs = _gh(
+        project,
+        gh,
+        ["pr", "list", "--state", "open", "--author", "@me", "--limit", "100", "--json", "number"],
+    )
+    if code != 0 or prs is None:
+        return set(), f"cannot read the project: gh pr list exited {code}"
+    return {pr["number"] for pr in prs}, None
+
+
 def checks(project, gh, number):
     # gh exits 8 while checks are pending, so the state is read from the JSON, not treated as a
     # failed call.
