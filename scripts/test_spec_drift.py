@@ -1578,6 +1578,34 @@ class PageAssetsTest(unittest.TestCase):
         for name in colours:
             self.assertEqual(len(re.findall(re.escape(name) + r":", css)), 3, name)
 
+    def page_files(self, *names):
+        out = []
+        for name in names:
+            with open(os.path.join(self.DASH, name), encoding="utf-8") as f:
+                out.append(f.read())
+        return out
+
+    def test_the_contents_stays_on_screen_at_every_width(self):
+        css, js = self.page_files("dashboard.css", "dashboard.js")
+        self.assertRegex(css, r"(?m)^\.toc \{[^}]*position: sticky")
+        # A sticky item cannot leave its grid row, so the cards must not be a grid.
+        wrap = re.search(r"(?m)^\.wrap \{([^}]*)\}", css).group(1)
+        self.assertIn("flex-direction: column", wrap)
+        rail = re.search(r"@media \(min-width: (\d+)px\) \{\s*body \{ padding-left[^}]*\}\s*\.toc \{ position: fixed", css)
+        self.assertIsNotNone(rail, "the rail's media query")
+        self.assertEqual(set(re.findall(r'matchMedia\("\(min-width: (\d+)px\)"\)', js)), {rail.group(1)})
+
+    def test_related_charts_pair_up_only_above_1440(self):
+        page, css = self.page_files("index.html", "dashboard.css")
+        sides = re.findall(r'<div class="wide-pair"><div>\n(.*?)^\s*</div><div>\n(.*?)^\s*</div></div>', page, re.S | re.M)
+        pairs = [("relabel-plot", "plot-repeats"), ("pull-steps", "pull-scale"), ("test-ratio", "churn"), ("token-bars", "token-agents")]
+        self.assertEqual(len(sides), len(pairs))
+        for (left, right), (a, b) in zip(sides, pairs):
+            self.assertIn(f'id="{a}"', left)
+            self.assertIn(f'id="{b}"', right)
+        self.assertEqual(re.findall(r"\.wide-pair, \.wide-pair > div \{ display: (\w+); \}", css), ["contents"])
+        self.assertRegex(css, r"@media \(min-width: 1440px\) \{[^@]*\.wide-pair \{ display: grid;")
+
     def test_the_page_names_its_icon(self):
         with open(os.path.join(self.DASH, "index.html"), encoding="utf-8") as f:
             self.assertRegex(f.read(), r'<link rel="icon" href="data:image/svg\+xml,')
