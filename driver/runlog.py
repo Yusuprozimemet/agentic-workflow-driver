@@ -38,18 +38,20 @@ def start(state, step, prefix, session, claude, issue=None):
     append(state, record)
 
 
-def end(state, session, outcome, cost_usd, denials):
-    append(
-        state,
-        {
-            "event": "end",
-            "at": stamp(),
-            "session": session,
-            "outcome": outcome,
-            "cost_usd": cost_usd,
-            "denials": denials,
-        },
-    )
+def end(state, session, outcome, cost_usd, denials, refused=None):
+    record = {
+        "event": "end",
+        "at": stamp(),
+        "session": session,
+        "outcome": outcome,
+        "cost_usd": cost_usd,
+        "denials": denials,
+    }
+    # The refused tools go last, and only when the session was refused any, so that an end line
+    # without them keeps its keys, as start does with its issue.
+    if refused is not None:
+        record["refused"] = refused
+    append(state, record)
 
 
 def park(state, step, line):
@@ -120,11 +122,36 @@ def read(state):
         return None, f"the run log cannot be read: {error.strerror}"
 
 
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _bad(record):
-    # A line the readers would trip over counts as unreadable, as a torn one does: a start line
-    # with no session, or a pid line that lock.read would refuse as a lock.
+    # A line the readers would trip over counts as unreadable, as a torn one does: a start or end
+    # line with no str session, a pr that is not an int, a head that is not a str, a refused list
+    # that is not a list of tool and input strings, or a pid line that lock.read would refuse.
     if record.get("event") == "start":
         return not isinstance(record.get("session"), str)
+    if record.get("event") == "end":
+        if not isinstance(record.get("session"), str):
+            return True
+        if "refused" in record:
+            refused = record["refused"]
+            return not isinstance(refused, list) or not all(
+                isinstance(item, dict)
+                and isinstance(item.get("tool"), str)
+                and isinstance(item.get("input"), str)
+                for item in refused
+            )
+        return False
+    if record.get("event") in ("merged", "closed", "wait") and not _is_int(record.get("pr")):
+        return True
+    # A park or merged line may lack head, and a park line may lack pr: a default that passes stands
+    # in for the missing key.
+    if record.get("event") in ("park", "merged") and not isinstance(record.get("head", ""), str):
+        return True
+    if record.get("event") == "park" and not _is_int(record.get("pr", 0)):
+        return True
     if record.get("event") != "pid":
         return False
     pid = record.get("pid")
