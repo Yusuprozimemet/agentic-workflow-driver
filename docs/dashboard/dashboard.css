@@ -97,6 +97,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .sw.main, .seg.main { background: var(--bar); } .sw.rest, .seg.rest { background: var(--bar-2); } .sw.over { background: var(--repair); }
 .sw.spec, .seg.spec { background: var(--spec); } .sw.prod, .seg.prod { background: var(--code); }
 .sw.test, .seg.test { background: var(--test); } .sw.tooling, .seg.tooling { background: var(--other); }
+.sw.aside { background: var(--other); opacity: .45; }
 .dash { width: 18px; border-top: 1.5px dashed var(--ink); }
 
 /* ---------- the four groups of graphs, each under a heading ---------- */
@@ -250,6 +251,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .bars { display: flex; gap: 5px; height: 190px; }
 .bar { flex: 1 1 0; min-width: 0; height: 190px; padding: 0; border: 0; border-radius: 4px; background: transparent; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
 .bar.on { background: var(--hot); outline: 0; }
+.bar.aside .seg { opacity: .45; }
 .bar b { font-size: 11px; font-weight: 600; }
 .seg { display: block; width: 64%; max-width: 34px; }
 .seg.cap { border-radius: 4px 4px 0 0; }
