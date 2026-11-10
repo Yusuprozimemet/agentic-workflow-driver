@@ -1,6 +1,7 @@
 """Whether each in-force criterion still holds at each merge on main: its breaks re-run on that merge's code.
 
     python scripts/replay-history.py [--out docs/dashboard/replay-history.json] [--since <sha>] [--ref main]
+                                     [--jobs N]
 
 evidence.py replays a day at its own close commit; this replays the criteria on later code. For each
 merge on --ref's first-parent line from --since on (read from --out after the first run) that has no
@@ -31,18 +32,27 @@ A check is keyed by a hash of what it reads at the merge: the trees of tests/, d
 rules/, run-steps.py, the file a break edits and the files the named test modules name under scripts/
 or the root, the entry, break.py, the platform and Python. A key already measured is copied, with
 `reused_from`, not run again. Rows are written in a fixed order, one a line, with no times.
+
+A merge's checks run --jobs at a time (default: the machine's processors less two), each worker in a
+scratch worktree and under a break.py lock of its own, since a break edits the tree it runs in. A
+check that did not hold beside the others is measured again alone, and that result is the one kept:
+two checks can share a port or a file. --out is written after every merge, so a run that is stopped
+keeps what it measured and the next run goes on from there.
 """
 import argparse
+import functools
 import hashlib
 import importlib.util
 import json
 import os
 import platform
+import queue
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -148,15 +158,27 @@ def key(sha, entry, tests, pre):
     paths += [f"{mod.replace('.', '/')}.py" for cls, _ in tests if (mod := test_module(sha, cls))]
     for path in list(paths):
         if path.startswith("tests/") and path.endswith(".py"):
-            source = git("show", f"{sha}:{path}", check=False)
-            paths += ["/".join(p for p in m.groups()[:2]) if m.group(1) else m.group(3) for m in NAMED.finditer(source)]
+            paths += named(sha, path)
     for path in sorted(set(paths)):
-        h.update(f"\0{path}\0{git('rev-parse', '-q', '--verify', f'{sha}:{path}', check=False).strip()}".encode())
+        h.update(f"\0{path}\0{object_at(sha, path)}".encode())
     with open(ev.BREAK, "rb") as f:
         h.update(f.read())
     return h.hexdigest()[:16]
 
 
+# What a commit holds does not change, and a merge's checks ask for the same paths: each is asked once.
+@functools.lru_cache(maxsize=None)
+def named(sha, path):
+    source = git("show", f"{sha}:{path}", check=False)
+    return ["/".join(p for p in m.groups()[:2]) if m.group(1) else m.group(3) for m in NAMED.finditer(source)]
+
+
+@functools.lru_cache(maxsize=None)
+def object_at(sha, path):
+    return git("rev-parse", "-q", "--verify", f"{sha}:{path}", check=False).strip()
+
+
+@functools.lru_cache(maxsize=None)
 def test_module(sha, cls):
     hit = git("grep", "-l", "-E", rf"^class {cls}\b", sha, "--", "tests", check=False).split()
     return hit[0].split(":", 1)[1][:-3].replace("/", ".") if hit else None
@@ -209,38 +231,63 @@ def classify(entry, tests, report, worktree, sha, pre, env):
     return "not runnable", said
 
 
-def sample(n, sha, subject, mode, items, known, pre_of):
-    """The rows of one merge: each check classified, or copied from a row with the same key."""
-    rows, env = [], dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
-    worktree = None
+def measure(todo, sha, env, jobs):
+    """(state, detail) of each (entry, tests, report, pre) at sha, in todo's order, up to `jobs` at a time."""
+    if not todo:
+        return []
+    root, slots, trees = tempfile.mkdtemp(prefix="replay-"), queue.Queue(), []
+
+    def one(check, slot=None):
+        entry, tests, report, pre = check
+        tree, own = slot or slots.get()
+        try:
+            return classify(entry, tests, report, tree, sha, pre, own)
+        finally:
+            if slot is None:
+                slots.put((tree, own))
+
     try:
-        for day, cid, what, entry, tests, report, live in items:
-            pre = n < pre_of[day]
-            row = {"n": n, "merge": sha[:12], "pr": int(m.group(1)) if (m := PR.search(subject)) else None,
-                   "sample": mode, "day": day, "criterion": cid, "check": what, "platform": PLATFORM}
-            if entry is None and what == "none" and live:
-                row.update(state="live only", detail="broken: none; the criterion names DRIVER_LIVE_CLI")
-                rows.append(row)
-                continue
-            if entry is None and what != "tests":
-                row.update(state="not runnable", detail="broken: none" if what == "none" else "no recorded arguments")
-                rows.append(row)
-                continue
-            row["key"] = key(sha, entry, tests, pre)
-            if row["key"] in known:
-                old = known[row["key"]]
-                row.update(state=old["state"], detail=old.get("detail"), reused_from=old["merge"])
-            else:
-                if worktree is None:
-                    worktree = tempfile.mkdtemp(prefix="replay-")
-                    git("worktree", "add", "--detach", worktree, sha)
-                row["state"], row["detail"] = classify(entry, tests, report, worktree, sha, pre, env)
-                known[row["key"]] = row
-            rows.append(row)
+        for i in range(max(1, min(jobs, len(todo)))):
+            trees.append(os.path.join(root, str(i)))
+            git("worktree", "add", "--detach", trees[-1], sha)
+            slots.put((trees[-1], dict(env, BREAK_LOCK=os.path.join(root, f"{i}.break-active"))))
+        with ThreadPoolExecutor(len(trees)) as pool:
+            got = list(pool.map(one, todo))
+        if len(trees) > 1:  # what did not hold beside the others is measured again alone, and that is kept
+            alone = slots.get()
+            got = [g if g == ("holds", None) or g[0] == NEVER_BROKEN else one(check, alone)
+                   for g, check in zip(got, todo)]
+        return got
     finally:
-        if worktree:
-            git("worktree", "remove", "--force", worktree, check=False)
-            shutil.rmtree(worktree, ignore_errors=True)
+        for tree in trees:
+            git("worktree", "remove", "--force", tree, check=False)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def sample(n, sha, subject, mode, items, known, pre_of, jobs=1):
+    """The rows of one merge: each check classified, or copied from a row with the same key."""
+    rows, todo, env = [], {}, dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+    for day, cid, what, entry, tests, report, live in items:
+        pre = n < pre_of[day]
+        row = {"n": n, "merge": sha[:12], "pr": int(m.group(1)) if (m := PR.search(subject)) else None,
+               "sample": mode, "day": day, "criterion": cid, "check": what, "platform": PLATFORM}
+        rows.append(row)
+        if entry is None and what == "none" and live:
+            row.update(state="live only", detail="broken: none; the criterion names DRIVER_LIVE_CLI")
+        elif entry is None and what != "tests":
+            row.update(state="not runnable", detail="broken: none" if what == "none" else "no recorded arguments")
+        else:
+            row["key"] = key(sha, entry, tests, pre)
+            if row["key"] not in known:
+                todo.setdefault(row["key"], (row, (entry, tests, report, pre)))
+    measured = measure([check for _, check in todo.values()], sha, env, jobs)
+    for (row, _), (state, detail) in zip(todo.values(), measured):
+        row.update(state=state, detail=detail)
+        known[row["key"]] = row
+    for row in rows:
+        if "state" not in row:
+            old = known[row["key"]]
+            row.update(state=old["state"], detail=old.get("detail"), reused_from=old["merge"])
     return [{k: v for k, v in r.items() if v is not None} for r in rows]
 
 
@@ -261,6 +308,8 @@ def main(argv=None):
     p.add_argument("--since", help="the first merge to sample; read from --out once it exists")
     p.add_argument("--ref", default="main")
     p.add_argument("--specs", default="specs")
+    p.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 1) - 2),
+                   help="checks of one merge run at a time, each in a worktree of its own")
     a = p.parse_args(argv)
     old = {"rows": []}
     if os.path.isfile(a.out):
@@ -278,10 +327,11 @@ def main(argv=None):
         days = sampled_days(n, subject, closed)
         if (n, PLATFORM) in done or not days or not days[0]:
             continue
-        new = sample(n, sha, subject, days[1], checks(a.specs, days[0]), known, closed)
+        new = sample(n, sha, subject, days[1], checks(a.specs, days[0]), known, closed, a.jobs)
         print(f"{sha[:7]} {days[1]} {len(new)} checks: " + ", ".join(
             f"{s} {c}" for s in STATES if (c := sum(r["state"] == s for r in new))), flush=True)
         rows += new
+        write(a.out, since, rows)
     write(a.out, since, rows)
     return 0
 
