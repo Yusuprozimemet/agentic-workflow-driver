@@ -474,9 +474,30 @@ def ci_pushes(runs):
     return {b: (len(s), len({sha for sha, _ in failed[b]}), sorted({w for _, w in failed[b]})) for b, s in shas.items()}
 
 
+def run_spans(on):
+    """The stretches in which a branch's workflow runs were running, as [start, end, failed] in
+    order: runs that overlap or touch are one stretch, and the time between two pushes is in none."""
+    out = []
+    for r in sorted(on, key=lambda r: r["createdAt"]):
+        start, end, failed = r["createdAt"], r.get("updatedAt") or r["createdAt"], int(r.get("conclusion") == "failure")
+        if out and start <= out[-1][1]:
+            out[-1][1], out[-1][2] = max(out[-1][1], end), out[-1][2] + failed
+        else:
+            out.append([start, end, failed])
+    return out
+
+
+def counted():
+    """When scripts/token-usage.py last counted this machine's transcripts and refusal log
+    (docs/dashboard/counted.json), or None before it wrote one: the page's dollars, refusals,
+    gate runs and sessions end there, while its pull requests come from GitHub and go on."""
+    return page_json("counted.json") or None
+
+
 def clock(prs, runs, sessions=None):
-    """Graph 9's times: each merged PR's opening and merge, with the first start and last end of the
-    checks on its branch and how many ran and failed, beside this machine's stretches of work from
+    """Graph 10's times: each merged PR's opening and merge, with the checks on its branch (their
+    first start and last end, the stretches they were running in, how many workflow runs over how
+    many pushes, and how many failed), beside this machine's stretches of work from
     docs/dashboard/sessions.json (scripts/token-usage.py). GitHub's times are UTC, as it gives them;
     the page moves them to the sessions' clock."""
     on_branch = collections.defaultdict(list)
@@ -489,7 +510,8 @@ def clock(prs, runs, sessions=None):
             continue
         on = on_branch.get(p["headRefName"], [])
         checks = dict(start=min(r["createdAt"] for r in on), end=max(r.get("updatedAt") or r["createdAt"] for r in on),
-                      runs=len(on), failed=sum(r.get("conclusion") == "failure" for r in on)) if on else None
+                      runs=len(on), failed=sum(r.get("conclusion") == "failure" for r in on),
+                      pushes=len({r.get("headSha") for r in on}), spans=run_spans(on)) if on else None
         out.append(dict(number=p["number"], day=day_of(day_branch(p)), kind=kind(p["title"], day_branch(p)),
                         branch=p["headRefName"], opened=p.get("createdAt"), merged=p.get("mergedAt"), checks=checks))
     return dict(prs=out, sessions=page_json("sessions.json") if sessions is None else sessions)
@@ -1813,12 +1835,17 @@ GATES = (("auditors", "auditor"), ("seen red", "seen red"), ("break on purpose",
 CAUSES = ("spec", "implementation", "process", "environment")
 
 
+def found_tag(value):
+    """A Defect line's found: or cause: value as relabel.py reads it: older Notes qualify the value,
+    "auditor (spec-auditor)". The page's graph 7 reads it the same way (tagOf, dashboard.js)."""
+    return re.sub(r" \(.*\)$", "", re.sub(r"^the ", "", (value or "").strip().lower()))
+
+
 def gate_report(days, gates, refused):
     """Per gate: the Defect lines whose found: names it, by cause (other: a cause not in CAUSES), the
     hooks' refusals, and its runs, replies, context, output and cost from gates.json; and how many
     Defect lines no gate found."""
-    # As relabel.py reads them: older Notes qualify the value, "auditor (spec-auditor)".
-    tag = lambda v: re.sub(r" \(.*\)$", "", re.sub(r"^the ", "", (v or "").strip().lower()))
+    tag = found_tag
     lines = [x for d in days for x in d.get("defects", [])]
     rows = []
     for gate, found in GATES:
@@ -2586,7 +2613,7 @@ def main():
                     deployment=deployment(),
                     evidence_checks=checks, replay=replay_history(),
                     conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
-                    clock=clock(prs, runs),
+                    clock=clock(prs, runs), counted=counted(),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))

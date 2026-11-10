@@ -259,6 +259,18 @@ class SessionsTest(unittest.TestCase):
                          [("main", "06:00", "06:30", 12), ("implementer", "06:16", "06:20", 2), ("main", "09:00", "09:05", 1)])
         self.assertEqual((rows[0]["ran"], rows[0]["runs"]), ({"tests": 360}, runs))
 
+    def test_the_count_writes_its_own_moment_with_this_machines_offset(self):
+        # The page reads it as what the four files beside it are counted up to (spec-drift.py's counted()).
+        now = datetime.datetime(2026, 11, 8, 19, 0, 0, tzinfo=datetime.timezone.utc)
+        with tempfile.TemporaryDirectory() as folder:
+            out = os.path.join(folder, "counted.json")
+            with contextlib.redirect_stdout(io.StringIO()):
+                tu.write_counted(out, now)
+            with open(out, encoding="utf-8") as f:
+                at = json.load(f)["at"]
+        self.assertEqual(datetime.datetime.fromisoformat(at), now)
+        self.assertRegex(at, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
+
 
 class MergeTest(unittest.TestCase):
     """The rows already written are kept, those from before agents were counted among them."""

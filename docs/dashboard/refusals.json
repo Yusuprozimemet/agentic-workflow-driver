@@ -4,5 +4,9 @@
 {"date":"2026-11-07","guard":"read-guard","refused":14},
 {"date":"2026-11-07","guard":"step-guard","refused":1},
 {"date":"2026-11-08","guard":"auditor-guard","refused":1},
-{"date":"2026-11-08","guard":"read-guard","refused":9}
+{"date":"2026-11-08","guard":"read-guard","refused":14},
+{"date":"2026-11-08","guard":"step-guard","refused":2},
+{"date":"2026-11-09","guard":"read-guard","refused":15},
+{"date":"2026-11-09","guard":"step-guard","refused":2},
+{"date":"2026-11-10","guard":"read-guard","refused":3}
 ]

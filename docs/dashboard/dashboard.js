@@ -14,6 +14,11 @@ const finished = d => d.status === "done" || d.status === "closed" || d.status =
 const openFor = m => m >= 60 ? `${(m / 60).toFixed(1)} h` : plural(Math.max(1, Math.round(m)), "minute", "minutes");
 const plain = s => String(s == null ? "" : s).replace(/`/g, "");
 const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
+// A Defect line's found: or cause: value as scripts/spec-drift.py's gate_report reads it: older Notes write
+// "The auditor (spec-auditor)". scripts/test_dashboard_page.py holds the two to the same values.
+const tagOf = v => String(v == null ? "" : v).trim().toLowerCase().replace(/^the /, "").replace(/ \(.*\)$/, "");
+// Minutes covered by a list of [from, to] intervals, a minute two of them share counted once.
+const covered = list => [...list].sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => ({ n: acc.n + Math.max(0, b - Math.max(a, acc.end)), end: Math.max(acc.end, b) }), { n: 0, end: -Infinity }).n;
 // "Days 1 to 6" for a run of days, "Days 1, 2 and 4" for one with a hole in it.
 const daySpan = ds => !ds.length ? "" : ds.length === 1 ? `Day ${ds[0]}`
   : ds[ds.length - 1] - ds[0] === ds.length - 1 ? `Days ${ds[0]} to ${ds[ds.length - 1]}` : `Days ${andList(ds.map(String))}`;
@@ -76,6 +81,15 @@ function model(DATA) {
   const done = days.filter(finished).map(d => d.day);
   const daysSay = (done.length ? `${daySpan(done)} ${done.length === 1 ? "is" : "are"} closed` : "No Day is closed yet")
     + (current != null ? ` and Day ${current} is in progress.` : ".");
+  // The dollars, refusals, gate runs and sessions are counted on the maintainer's computer and end at that count
+  // (docs/dashboard/counted.json); the pull requests come from GitHub and go on. What sets one against the other
+  // takes only the pull requests merged by then. With no count on record, nothing is left out and nothing is claimed.
+  const countedAt = (DATA.counted || {}).at || null, countedMs = countedAt ? Date.parse(countedAt) : null;
+  const countedSay = countedAt ? `${countedAt.slice(11, 16)} on ${shortDate(countedAt)}` : "";
+  const TIMES = ((DATA.clock || {}).prs || []).filter(p => p.opened && p.merged);
+  const mergedAt = new Map(TIMES.map(p => [p.number, Date.parse(p.merged)]));
+  const inCount = pr => countedMs == null || !mergedAt.has(pr) || mergedAt.get(pr) <= countedMs;
+  const dayInCount = day => countedMs == null || !TIMES.some(p => p.day === day && Date.parse(p.merged) > countedMs);
 
   function head() {
     const g = now.generated || "", when = g.length >= 16 ? `${shortDate(g)} ${g.slice(0, 4)} at ${g.slice(11, 16)}` : g;
@@ -207,7 +221,9 @@ function model(DATA) {
     const R = DATA.rows || [], V = new Map((DATA.verification || []).map(v => [v.number, v]));
     const gaps = R.map(r => r.gap_full).filter(g => g != null);
     const lo = gaps.length ? Math.floor((Math.min(...gaps) - 1) / 5) * 5 : 0, hi = gaps.length ? Math.ceil((Math.max(...gaps) + 1) / 5) * 5 : 90;
-    const mins = R.map(r => { const v = V.get(r.pr); return v && v.hours != null ? v.hours * 60 : null; });
+    // From the two timestamps, as graph 10 reads them: the hours beside them are rounded, and gave another minute.
+    const open = new Map(TIMES.map(p => [p.number, (Date.parse(p.merged) - Date.parse(p.opened)) / 60000]));
+    const mins = R.map(r => { const v = V.get(r.pr); return open.has(r.pr) ? open.get(r.pr) : v && v.hours != null ? v.hours * 60 : null; });
     const top = Math.max(120, ...mins.filter(m => m != null)), barAt = m => (6 + Math.log2(Math.max(m, 1)) / Math.log2(top) * 54) / 60;
     let before = null;
     const merges = R.map((r, i) => {
@@ -247,7 +263,7 @@ function model(DATA) {
     const back = new Map((((DATA.defect_recurrence || {}).recurrences) || []).map(r => [r.id, r.same_as]));
     const rows = days.map(d => {
       const dots = (d.defects || []).map((x, i) => {
-        const gate = GATES.find(g => g.key === x.found) || GATES[3], cause = CAUSES.includes(x.cause) ? x.cause : "other";
+        const gate = GATES.find(g => g.key === tagOf(x.found)) || GATES[3], cause = CAUSES.includes(tagOf(x.cause)) ? tagOf(x.cause) : "other";
         const m = /^Day 0*(\d+)$/i.exec(x.made || ""), made = m ? +m[1] : null, escaped = made != null && made !== d.day;
         const where = escaped ? `Made on Day ${made} and caught on Day ${d.day}` + (made < d.day ? `: it escaped for ${plural(d.day - made, "Day", "Days")}.` : ".")
           : made != null ? `Made and caught on Day ${d.day}.` : /^none$/i.test(x.made || "") ? "Made outside any Day: in the plan, a tool or a machine."
@@ -263,12 +279,15 @@ function model(DATA) {
     const all = rows.flatMap(r => r.dots), at = k => all.filter(o => o.gate === k).length, by = c => all.filter(o => o.cause === c).length;
     const gates = GATES.map(g => { const s = spent.get(g.key);
       return { name: g.name, sub: `${at(g.key)} caught` + (s ? ` · ${plural(s.runs, "run", "runs")} · ${money(s.cost)}` : g.key === "work" ? " · tracks, reviews, the session" : "") }; });
-    const each = GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && at(g.key)).map(([g, s]) => [s.cost / at(g.key), g.at]).sort((a, b) => a[0] - b[0]);
+    // A gate's dollars end at the count, so they are shared over the catches of the Days whose pull requests were all merged by then.
+    const late = rows.filter(r => r.dots.length && !dayInCount(r.day)).map(r => r.day), inAt = k => rows.filter(r => !late.includes(r.day)).flatMap(r => r.dots).filter(o => o.gate === k).length;
+    const each = GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && inAt(g.key)).map(([g, s]) => [s.cost / inAt(g.key), g.at]).sort((a, b) => a[0] - b[0]);
     const read = rows.filter(r => r.tags), nEsc = all.filter(o => o.escaped).length, nBack = all.filter(o => o.back).length;
     const b = [by("spec") ? `${by("spec")} ${by("spec") === 1 ? "was" : "were"} in a spec.` : "",
       `${nEsc} escaped from an earlier Day and ${nBack} came back.`,
       read.length ? `A second reader gave ${sum(read, r => r.differ)} of ${sum(read, r => r.tags)} tags differently.` : "",
-      each.length ? `Each catch cost about ${andList(each.map(([c, name]) => `${money(c)} at ${name}`))}.` : ""].filter(Boolean);
+      each.length ? `Each catch cost about ${andList(each.map(([c, name]) => `${money(c)} at ${name}`))}${late.length ? `, over the catches of the Days in the count: ${daySpan(late)} had a pull request merge after it` : ""}.` : "",
+      countedAt && spent.size ? `The gates' runs and dollars are counted up to ${countedSay}.` : ""].filter(Boolean);
     return { gates, rows,
       key: [...CAUSES.filter(c => c !== "other" || by(c)).map(c => ({ cls: `dot ${c}`, text: `${c.charAt(0).toUpperCase() + c.slice(1)} ${by(c)}` })),
         { cls: "dot ring", text: `Ringed: the same problem came back ${nBack}` }, { cls: "dot square", text: `Square: made on an earlier Day ${nEsc}` }],
@@ -289,26 +308,31 @@ function model(DATA) {
       const main = cost(t => t.agent === "main"), aud = cost(t => /auditor|rater/.test(t.agent || "")), other = cost(() => true) - main - aud, total = main + aud + other;
       const on = days.filter(d => d.worked && d.worked[0] <= date && date <= d.worked[1]).map(d => d.day);
       const refused = F.filter(r => r.date === date && r.refused), nRefused = sum(refused, r => r.refused), cut = sum(rows, t => t.cut), replies = sum(rows, t => t.replies);
-      const merged = (DATA.rows || []).filter(r => r.pr && r.date === date).length;
-      return { date, label: shortDate(date), days: on, main, aud, other, total, replies, refused: nRefused, cut, merged, setup: !start || date < start,
+      // The date's dollars end at the count: only the pull requests merged by then share them.
+      const prs = (DATA.rows || []).filter(r => r.pr && r.date === date), merged = prs.length, shared = prs.filter(r => inCount(r.pr)).length;
+      return { date, label: shortDate(date), days: on, main, aud, other, total, replies, refused: nRefused, cut, merged, shared, setup: !start || date < start,
         t: `${shortDate(date)} · ${on.length ? daySpan(on) : !start || date < start ? "before Day 1" : "between Days"} · ${money(total)}`,
         b: [`Main session ${money(main)}, auditors ${money(aud)}, implementer and others ${money(other)}. ${comma(replies)} replies.`
           + ` The hooks refused ${plural(nRefused, "call", "calls")}${refused.length ? ` (${refused.map(r => `${r.refused} by the ${r.guard}`).join(", ")})` : ""} and cut ${plural(cut, "long output", "long outputs")}.`
-          + (merged ? ` ${plural(merged, "pull request", "pull requests")} merged that date: ${money(total / merged)} each, all sessions.` : "")] };
+          + (!merged ? "" : ` ${plural(merged, "pull request", "pull requests")} merged that date`
+            + (shared === merged ? `: ${money(total / merged)} each, all sessions.` : shared ? `, ${shared} of them before the count at ${countedSay}: ${money(total / shared)} each, all sessions.`
+              : `, none of them before the count at ${countedSay}.`))] };
     });
     const all = sum(bars, b => b.total), main = sum(bars, b => b.main), setup = bars.filter(b => b.setup), work = bars.filter(b => !b.setup);
+    const later = (DATA.rows || []).filter(r => r.pr && !inCount(r.pr)).length, shared = sum(work, x => x.shared);
     const newest = ((DATA.rows || [])[(DATA.rows || []).length - 1] || {}).date, lastDate = dates[dates.length - 1];
     const b = [setup.length && work.length ? `${plural(setup.length, "date", "dates")} of set-up cost ${money(sum(setup, x => x.total))} before Day 1.` : "",
-      work.length ? `The Days cost ${money(sum(work, x => x.total))} over ${plural(work.length, "date", "dates")}, on which ${plural(sum(work, x => x.merged), "pull request", "pull requests")} merged.` : "",
+      work.length ? `The Days cost ${money(sum(work, x => x.total))} over ${plural(work.length, "date", "dates")}, on which ${plural(shared, "pull request", "pull requests")} merged${shared < sum(work, x => x.merged) ? " before the count" : ""}.` : "",
       `The hooks refused ${plural(sum(bars, x => x.refused), "call", "calls")} and cut ${plural(sum(bars, x => x.cut), "long output", "long outputs")}.`,
-      // The last date is counted up to the close run on it: what merged later that date is in the pull requests and not in the dollars.
-      newest && lastDate && newest >= lastDate ? `Counted at each Day's close on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the close run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
+      countedAt ? `Counted on the maintainer's computer up to ${countedSay}${later ? `: ${plural(later, "pull request has", "pull requests have")} merged since, and what ${later === 1 ? "it" : "they"} cost is not in yet` : ""}.`
+      // With no count on record, the last date is counted up to the close run on it: what merged later that date is in the pull requests and not in the dollars.
+      : newest && lastDate && newest >= lastDate ? `Counted at each Day's close on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the close run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
     return { bars, max: Math.max(0.01, ...bars.map(x => x.total)),
       key: [["main", `Main session ${money(main)}`], ["rest", `Auditors and the implementer ${money(all - main)}`]],
       say: "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.",
       read: { t: bars.length ? `${money(all)} of tokens at list prices; ${Math.round(100 * main / (all || 1))}% of it in the main session` : "No token counts yet", b: bars.length ? [b.join(" ")] : ["They are counted at a Day's close, on the maintainer's computer."] },
-      table: { head: ["Date", "Days", "Main session, $", "Auditors, $", "Implementer and others, $", "Replies", "Calls refused", "Outputs cut", "Pull requests merged"],
-        rows: bars.map(x => [x.label, x.days.join(", "), x.main.toFixed(2), x.aud.toFixed(2), x.other.toFixed(2), x.replies, x.refused, x.cut, x.merged]) } };
+      table: { head: ["Date", "Days", "Main session, $", "Auditors, $", "Implementer and others, $", "Replies", "Calls refused", "Outputs cut", "Pull requests merged", "Merged before the count"],
+        rows: bars.map(x => [x.label, x.days.join(", "), x.main.toFixed(2), x.aud.toFixed(2), x.other.toFixed(2), x.replies, x.refused, x.cut, x.merged, x.shared]) } };
   }
 
   /* Graph 9: the lines each day changed, by what the file is */
@@ -448,7 +472,7 @@ function model(DATA) {
   const laneOf = a => a === "main" || a === "implementer" ? a : /-auditor$|^defect-rater$/.test(a) ? "auditors" : "other";
   const offsetOf = s => { const m = /(Z|[+-]\d\d:\d\d)$/.exec(s || ""); return !m || m[1] === "Z" ? 0 : (m[1][0] === "-" ? -1 : 1) * (+m[1].slice(1, 3) * 60 + +m[1].slice(4, 6)); };
   const hm = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`;
-  const span = m => m >= 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} min` : plural(Math.max(1, Math.round(m)), "minute", "minutes");
+  const span = m => { const r = Math.round(m); return r >= 60 ? `${Math.floor(r / 60)} h ${r % 60} min` : plural(Math.max(1, r), "minute", "minutes"); };
   // What a session waited on inside a busy stretch (scripts/token-usage.py's RUN_KINDS): its key, its legend and its words in a sentence.
   const RUNS = [["tests", "waiting on tests", "tests"], ["checks", "waiting on GitHub's checks", "GitHub's checks"], ["other", "waiting on another command", "other commands"]];
   function clockGraph() {
@@ -468,8 +492,16 @@ function model(DATA) {
     const laneKeys = LANES.filter(([k]) => k !== "other" || S.some(s => laneOf(s.agent) === "other"));
     const bar = (cls, [a, b], t, b2, day) => ({ x: a / 14.4, w: (b - a) / 14.4, cls, t, b: b2, days: day ? [day] : [], mins: b - a, from: hm(a), to: hm(Math.min(b, 1439.99)) });
     const prKind = p => p.kind in KINDS && p.kind !== "origin" ? p.kind : "other";
+    // A pull request's checks: the stretches its workflow runs were running in, so the time between two pushes is in none
+    // of them. Data written before the stretches were kept has only the first start and the last end.
+    const spansOf = ch => ch.spans && ch.spans.length ? ch.spans : [[ch.start, ch.end, ch.failed]];
+    const whole = ([a, b]) => (Date.parse(b) - Date.parse(a)) / 60000, kindOf = r => (RUNS.find(k => k[0] === r[2]) || RUNS[2])[0];
+    const runsSay = ch => `${plural(ch.runs, "workflow run", "workflow runs")}${ch.pushes ? ` over ${plural(ch.pushes, "push", "pushes")}` : ""}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}`;
     const out = dates.map(date => {
       const days = new Set(), lanes = [], busy = [], rows = [];
+      // The minute of this date the sessions are counted up to: all of it, none of it, or part of it.
+      const upTo = countedMs == null ? 1440 : Math.max(0, Math.min(1440, (countedMs - midnight(date)) / 60000));
+      const unseen = upTo <= 0 ? "not counted yet" : upTo < 1440 ? `nothing recorded up to ${hm(upTo)}` : "nothing recorded";
       const add = (name, bars, sub, busyFor) => { lanes.push({ name, sub, bars, busyFor }); bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([name, b.what || b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }); return bars; };
       const ran = RUNS.map(() => 0), who = s => s.agent === "main" ? "Main session" : s.agent;
       let counted = false;  // a stretch written before the waits were counted has no `ran`: the date then says nothing about them
@@ -477,7 +509,9 @@ function model(DATA) {
         const mine = S.filter(s => laneOf(s.agent) === k).map(s => ({ s, c: clip(date, s.from, s.to) })).filter(x => x.c);
         // What a stretch waited on, for the part of it on this date.
         const part = (s, c) => { const all = (Date.parse(s.to) - Date.parse(s.from)) / 60000; return all > 0 ? (c[1] - c[0]) / all : 1; };
-        const bars = mine.map(({ s, c }) => { const mins = RUNS.map(([kind]) => ((s.ran || {})[kind] || 0) / 60 * part(s, c)), all = sum(mins);
+        // A wait of a minute or more has its own times and is cut to the date; only the rest of `ran`, the shorter waits, is shared by the part of the stretch on it.
+        const bars = mine.map(({ s, c }) => { const mins = RUNS.map(([kind]) => { const long = (s.runs || []).filter(r => kindOf(r) === kind);
+            return sum(long, r => { const x = clip(date, r[0], r[1]); return x ? x[1] - x[0] : 0; }) + Math.max(0, ((s.ran || {})[kind] || 0) / 60 - sum(long, whole)) * part(s, c); }), all = sum(mins);
           return { ...bar("busy", c, `${who(s)} · busy ${hm(c[0])} to ${hm(c[1])}`, [`${plural(s.replies, "reply", "replies")}, with no gap longer than 5 minutes.`
             + (all >= 1 ? ` ${span(all)} of it waiting on commands it ran: ${andList(RUNS.map(([, , word], i) => mins[i] >= 1 ? `${span(mins[i])} on ${word}` : "").filter(Boolean))}.` : "")], s.day), ran: mins, counted: Boolean(s.ran || s.runs) }; });
         const waits = mine.flatMap(({ s }) => (s.runs || []).map(([a, b, kind]) => { const c = clip(date, a, b), run = RUNS.find(r => r[0] === kind) || RUNS[2];
@@ -485,18 +519,20 @@ function model(DATA) {
         busy.push(...bars);
         RUNS.forEach((_, i) => { ran[i] += sum(bars, b => b.ran[i]); });
         counted = counted || bars.some(b => b.counted);
-        const mins = sum(bars, b => b.mins), wait = sum(bars, b => sum(b.ran));
-        add(name, [...bars, ...waits], bars.length ? `busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}` : "nothing recorded", bars.length ? span(mins) : "");
+        // Two sessions of a lane busy at once are one stretch of the clock, not two.
+        const mins = covered(mine.map(x => x.c)), wait = Math.min(mins, sum(bars, b => sum(b.ran)));
+        add(name, [...bars, ...waits], bars.length ? `busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}` : unseen, bars.length ? span(mins) : "");
       });
-      const open = PRS.map(p => { const c = clip(date, p.opened, p.merged); if (!c) return null; const all = (Date.parse(p.merged) - Date.parse(p.opened)) / 60000, ch = p.checks;
+      const open = PRS.map(p => { const c = clip(date, p.opened, p.merged); if (!c) return null; const ch = p.checks;
         return bar(prKind(p), c, `Pull request #${p.number} · ${p.branch} · open ${hm(c[0])} to ${hm(c[1])}`,
-          [`Open for ${span(all)} before it merged${c[0] === 0 && Date.parse(p.opened) < midnight(date) ? ", opened on an earlier date" : ""}.`,
-            ch ? `Its checks ran ${plural(ch.runs, "time", "times")} and took ${span((Date.parse(ch.end) - Date.parse(ch.start)) / 60000)}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}` : "No check is recorded for it."], p.day); }).filter(Boolean);
+          [`Open for ${span(whole([p.opened, p.merged]))} before it merged${c[0] === 0 && Date.parse(p.opened) < midnight(date) ? ", opened on an earlier date" : ""}.`,
+            ch ? `Its checks were running for ${span(sum(spansOf(ch), whole))}: ${runsSay(ch)}` : "No check is recorded for it."], p.day); }).filter(Boolean);
       add("Pull request open", open, open.length ? `${plural(open.length, "pull request", "pull requests")}, ${span(sum(open, b => b.mins))} in all` : "none open");
-      const checks = PRS.map(p => { const ch = p.checks, c = ch && clip(date, ch.start, ch.end); return c && bar(ch.failed ? "failed" : "ok", c, `Checks on pull request #${p.number} · ${hm(c[0])} to ${hm(c[1])}`,
-        [`${plural(ch.runs, "run", "runs")}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}`], p.day); }).filter(Boolean);
+      const checks = PRS.flatMap(p => !p.checks ? [] : spansOf(p.checks).map(([a, b, failed]) => { const c = clip(date, a, b);
+        return c && { ...bar(failed ? "failed" : "ok", c, `Checks on pull request #${p.number} · ${hm(c[0])} to ${hm(c[1])}`, [`On this pull request in all: ${runsSay(p.checks)}`], p.day), pr: p.number }; }).filter(Boolean));
       busy.push(...checks);
-      add("Checks running", checks, checks.length ? `${plural(checks.length, "set", "sets")}, ${checks.filter(b => b.cls === "failed").length} with a failure` : "none");
+      const checked = new Set(checks.map(b => b.pr)), red = new Set(checks.filter(b => b.cls === "failed").map(b => b.pr));
+      add("Checks running", checks, checks.length ? `on ${plural(checked.size, "pull request", "pull requests")}, running for ${span(covered(checks.map(b => [b.x * 14.4, b.x * 14.4 + b.mins])))}, ${red.size} with a failure` : "none");
       const merged = PRS.filter(p => dateOf(p.merged) === date).map(p => ({ p, wait: (Date.parse(p.merged) - Date.parse(p.opened)) / 60000 }));
       const merges = merged.map(({ p, wait }) => { const at = (Date.parse(p.merged) - midnight(date)) / 60000; return bar("merge", [at, at], `Merged pull request #${p.number} · at ${hm(at)}`, [`The maintainer merged it ${span(wait)} after it opened.`], p.day); });
       add("Maintainer merges", merges, plural(merges.length, "merge", "merges"));
@@ -505,10 +541,11 @@ function model(DATA) {
       const was = lanes.slice(0, laneKeys.length).filter(l => l.busyFor).map((l, i) => `${i ? "the " : "The "}${lower(l.name)} ${i ? "" : "was busy "}for ${l.busyFor}`);
       const waited = !counted ? "" : sum(ran) < 1 ? "None of that was a wait on a command of a minute or more."
         : `Of that, the sessions waited ${span(sum(ran))} on commands they had run: ${andList(RUNS.map(([, , word], i) => ran[i] >= 1 ? `${span(ran[i])} on ${word}` : "").filter(Boolean))}.${ran[1] >= 1 ? " The wait on GitHub's checks is drawn again under Checks running." : ""}`;
-      const idle = busy.map(b => [b.x * 14.4, b.x * 14.4 + b.mins]).sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => { if (acc.end != null && a - acc.end > acc.gap) { acc.gap = a - acc.end; acc.from = acc.end; acc.to = a; } acc.end = acc.end == null ? b : Math.max(acc.end, b); return acc; }, { end: null, gap: 0 });
+      const idle = busy.map(b => [b.x * 14.4, b.x * 14.4 + b.mins]).sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => { if (acc.end != null && a - acc.end > acc.gap && a <= upTo) { acc.gap = a - acc.end; acc.from = acc.end; acc.to = a; } acc.end = acc.end == null ? b : Math.max(acc.end, b); return acc; }, { end: null, gap: 0 });
       const longest = merged.sort((a, b) => b.wait - a.wait).slice(0, 3);
       const read = { t: `${shortDate(date)}: ${plural(merged.length, "pull request", "pull requests")} merged${median != null ? `, half of them open for ${span(median)} or less` : ""}`,
-        b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : "No session was recorded on this date.", was.length ? waited : "",
+        b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : upTo <= 0 ? `The sessions of this date are not counted yet: the count ends at ${countedSay}.` : "No session was recorded on this date.", was.length ? waited : "",
+          upTo > 0 && upTo < 1440 ? `The sessions are counted up to ${hm(upTo)}: after that, only GitHub's pull requests and checks are in.` : "",
           idle.gap >= 60 ? `Nothing ran from ${hm(idle.from)} to ${hm(idle.to)}.` : "", longest.length ? `The longest ${longest.length === 1 ? "wait" : "waits"} for a merge: ${andList(longest.map(m => `#${m.p.number} (${span(m.wait)})`))}.` : "",
           `Times are on the clock of the machine that recorded the sessions (${zoneText}).`].filter(Boolean) };
       return { date, label: shortDate(date), days: [...days].sort((a, b) => a - b), lanes, read, table: { head: none.head, rows } };
