@@ -182,7 +182,9 @@ class WriteTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn(b"\r", raw)
         doc = json.loads(raw)
-        self.assertEqual(doc["counted"], "2026-11-12T18:00:00+01:00")
+        # The same moment, on the clock of the machine that counts: its offset is the machine's, not NOW's.
+        self.assertEqual(doc["counted"], self.NOW.astimezone().isoformat(timespec="seconds"))
+        self.assertEqual(datetime.datetime.fromisoformat(doc["counted"]), self.NOW)
         self.assertEqual(doc["steps"], dr.count([start("s1", 0), end("s1", 20), merged(30), park(31, step=TRACK_B)]))
         self.assertIn("2 steps: 1 merged with no person, 0 after fixing themselves, 1 parked (0 by a fault), 0 open", said)
 
