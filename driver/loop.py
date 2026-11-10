@@ -242,6 +242,9 @@ def steps(args, home, project, read_facts, config):
     line = livecheck.refusal(args.state, args.claude)
     if line:
         return once.refuse([line])
+    reason = once.settle(args, project)
+    if reason:
+        return once.refuse([f"cannot read the project: {reason}"])
     record, count, open_list, shown = None, 0, [], None
 
     def end(line, code, **keys):

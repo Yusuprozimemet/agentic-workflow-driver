@@ -79,6 +79,10 @@ def merged(state, pr, head=None, changed=None):
     append(state, record)
 
 
+def closed(state, pr):
+    append(state, {"event": "closed", "at": stamp(), "pr": pr})
+
+
 def fix(state, session, pr, n):
     # Written before the resume it records, so a crash during the resume still counts it.
     append(state, {"event": "fix", "at": stamp(), "session": session, "pr": pr, "n": n})
@@ -136,6 +140,25 @@ def read(state):
         return _records(state)
     except OSError as error:
         return None, f"the run log cannot be read: {error.strerror}"
+
+
+def unsettled(state):
+    # The (pr, head) of each pull request a wait or park named, in the order first named, that has
+    # no merged or closed line yet. head is the newest park's, None when that park has none. A log
+    # that cannot be read gives [], and the recovery table decides what that start does.
+    records, reason = read(state)
+    if reason or records is None:
+        return []
+    settled = {record["pr"] for record in records if record.get("event") in ("merged", "closed")}
+    named, heads = [], {}
+    for record in records:
+        event = record.get("event")
+        if event == "wait" or (event == "park" and "pr" in record):
+            if record["pr"] not in named:
+                named.append(record["pr"])
+            if event == "park":
+                heads[record["pr"]] = record.get("head")
+    return [(pr, heads.get(pr)) for pr in named if pr not in settled]
 
 
 def _is_int(value):
