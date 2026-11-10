@@ -1,6 +1,6 @@
 # Day 08 — The trial's record: one day at level 1 in a project, what parked, what was refused, what it cost
 
-**Phase:** 1 · **Depends on:** Day 7 · **Expected PRs:** 8 (9 with Track F)
+**Phase:** 1 · **Depends on:** Day 7 · **Expected PRs:** 8 (9 with Track F, one more if Track C2 splits)
 
 ## Goal
 The driver runs one whole day of another project at level 1, the maintainer only merging and
@@ -71,15 +71,17 @@ stderr; answers without it write none.
 `driver/loop.py`, `driver/once.py`, `driver/github.py`, `driver/runlog.py`).
 - `pr_state` asks `--json state,mergeCommit,files,body,headRefOid` and returns the head as a sixth
   value, `None` when `gh` gives none; one call, as today.
-- `loop.wait_pr` appends `{"event": "wait", "at", "pr"}` before its first read. Every wait on a pull
-  request, found at a start or opened by the step's session, goes through it, so the log names that
-  pull request however the wait ends: a park, a halt, a `STOP`, Ctrl-C, a crash.
+- `loop.wait_pr` appends `{"event": "wait", "at", "pr"}` before its first read, and again each time
+  a resumed fix opens a new pull request and the wait moves to it (`loop.py`'s `number = ...` after
+  `resume`). Every wait on a pull request, found at a start or opened by the step's session, goes
+  through it, so the log names that pull request however the wait ends: a park, a halt, a `STOP`,
+  Ctrl-C, a crash.
 - The three parks of `gated` are written with `"pr": <n>`, and `"head"` when `pr_state` gave one:
   `wait_merge` returns that head with its park line, and `once.finish` and `once.park_issue` take
   `pr` and `head` as keyword arguments with defaults (`tests/test_park_body.py` calls it with seven
   positional ones). No other park line carries `pr`; its pull request's `wait` line names it.
-- Every start that takes the lock (`--once`, `on`), after `driver_home.check`, the preflight and the
-  lock and before the table, reads the run log. A log that is missing or cannot be read is passed
+- Every start that takes the lock (`--once`, `on`), after `driver_home.check`, the preflight, the
+  lock and, in `on`, `livecheck.refusal`, and before the table, reads the run log. A log that is missing or cannot be read is passed
   over and left to the table (rows 2 and 3, C07.7, C07.21). Otherwise, for each `pr` named by a
   `wait` or `park` line with no `merged` or `closed` line for it, once per `pr`: `pr_state` "MERGED"
   appends `{"event": "merged", "at", "pr", "head": <the head now, when known>, "changed": <bool, or
@@ -180,35 +182,53 @@ If the trial did not meet it, Track F does not open.
 | F | | The usage limit, only if the trial met it: C08.15 |
 
 C08.1 is proved in the spec-change PR. Day 7's comparable tracks measured 245 to 398 lines, so
-Track C is split before it starts. C1 edits `tests/test_merge_wait.py`, `tests/test_github.py` and
-`tests/test_runlog_report.py`; C2 `tests/test_on.py` and the `--once` cases, which rewrite
-`fake.json` after the frozen `tests/test_once_park_issues.py` `build()`, as it takes no `views`.
-C2 is near 400 lines (seven start-time cases); if it passes, its `on` case goes to a C3.
+Track C is split before it starts. The test files, new ones and the earlier ones each track edits:
+- A: `tests/test_runlog_end.py` (`RunlogEndTest`), `tests/test_refused.py` (`RefusedTest`), and the
+  fake `claude` in `tests/test_once.py` if it needs `permission_denials`.
+- B: `tests/test_checks_none.py` (`ChecksNoneTest`); `FAKE`'s `err` key in `tests/test_github.py`.
+- C1: `MergeWaitHeadTest` in `tests/test_runlog_report.py`, with its `test_merged_line`;
+  `tests/test_merge_wait.py`'s `view` and `wait()` for the head; `tests/test_github.py`'s
+  `test_pr_state`; `OnTest.test_wait_line_after_fix` in `tests/test_on.py`.
+- C2: `tests/test_gated_merge.py` (`GatedMergeTest`); its `--once` cases rewrite `fake.json` after the
+  frozen `tests/test_once_park_issues.py` `build()`, as it takes no `views`.
+- D: `tests/test_status_trial.py` (`StatusTrialTest`); `tests/test_status.py`'s four cases (C08.2).
+- E: `tests/test_trial_record.py`. F: `tests/test_usage_limit.py`.
+C2 is near 400 lines (eight cases: C08.7's seven, C08.9's one); if it passes, its `on` case goes to a
+C3.
 
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 
 - [ ] C08.1 **hold** — The files Day 8 does not change are unchanged since `f9f43fd`: Verify's diff
-      prints nothing.
+      prints nothing. Its list is C07.2's and C06.12's with `tests/test_merge_wait.py` and
+      `tests/test_on.py` taken out (Tracks C1 and C2 edit them), and Day 8's own frozen files added.
       broken: a byte added to driver/decide.py → import re (#111)
+      Replaces: C07.2 — was: earlier days' tests pass and Verify's diff is empty against `4a2c53f`, over a list that holds `tests/test_merge_wait.py` and `tests/test_on.py`.
+      Replaces: C06.12 — was: earlier days' tests pass with their files unedited against `6f9e72c`, over a list that holds `tests/test_lock.py`, `tests/test_once_halt.py` and `tests/test_once_stop.py`, which Day 7 edited.
 - [ ] C08.2 **hold** — Day 7's `status` block still prints exactly for a log with no `refused`, no
       `changed` and no `closed` line: the nine `StatusTest` cases pass, `test_full_report`,
       `test_no_parks` and `test_gh_down` only gaining the `level 2` line, and `test_no_merged`
-      reading its `cost` line as the last but one (C08.10).
+      reading its `cost` line as the last but one (C08.10). C07.18 holds as written: `status`
+      changes nothing, a torn log, a `gh` failing and a config with a problem print and exit as it
+      says; Track D re-records its breaks, whose reports the `level 2` line changes.
       Test: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`,
       `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`,
       `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config`.
       broken: <`status` drops the `refusals` line> → <what it reported>
+      broken: <status skipping the config> → <what it reported>
+      broken: <a log that cannot be read passing as empty> → <what it reported>
+      Replaces: C07.18 — was: the same, with break reports that ended at the `cost` line.
 - [ ] C08.3 **new** — An `end` line whose `session` is `["s1"]` or whose `refused` is `"x"`, a
-      `merged` line whose `pr` is `true` or `"3"`, a `wait` line whose `pr` is `"3"`, a `park` line
-      whose `pr` is `true`, or a `park` line whose `head` is `5`, makes `runlog.read`, `failures`
+      `refused` is `[{"tool": 5, "input": "{}"}]`, a `merged` line whose `pr` is `true` or `"3"`, a
+      `closed` or `wait` line whose `pr` is `"3"`, a `park` line whose `pr` is `true`, or a `park` or
+      `merged` line whose `head` is `5`, makes `runlog.read`, `failures`
       and `open_session` give "the run log cannot be read at line <n>", `last_session` give `None`,
       and `status` print "run log: the run log cannot be read at line <n>", exit 2.
       Red today: `failures` and `issue_cost` raise `TypeError: unhashable type: 'list'`;
       `open_session` gives `('s1', None)`; the other lines are read as fine.
       Test: `RunlogEndTest.test_end_session_not_string`, `RunlogEndTest.test_merged_pr_not_int`,
-      `RunlogEndTest.test_wait_pr_not_int`, `RunlogEndTest.test_park_pr_not_int`,
+      `RunlogEndTest.test_wait_pr_not_int`, `RunlogEndTest.test_closed_pr_not_int`, `RunlogEndTest.test_park_pr_not_int`,
       `RunlogEndTest.test_head_not_string`, `RunlogEndTest.test_refused_not_list`.
 - [ ] C08.4 **new** — A session whose result holds three `permission_denials`
       (`{"tool_name": "Bash", "tool_input": {"command": "git push --force"}}`, one with neither key,
@@ -237,8 +257,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       broken: failed_lines keeps 41 lines of a log → AssertionError: 'line 9\nline 10\nline 11\nline 12\nline 13\nli[367 chars]om/x' != 'line 10\nline 11\nline 12\nline 13\nline 14\nl[359 chars]om/x' (#111)
       broken: <`checks` takes every exit 1 as "none"> → <what it reported>
 - [ ] C08.7 **new** — After a gated park of #7 with head "aaa", at the next `--once`, and at the
-      next `on`, with the fake saying "MERGED" and the same head, the log gains a `merged` line
-      with `"pr": 7`, `"head": "aaa"`, `"changed": false` before the table is read, and a second
+      next `on`, with the fake saying "MERGED" and the same head and listing no open pull request,
+      the log gains a `merged` line with `"pr": 7`, `"head": "aaa"`, `"changed": false` before the
+      run's first new `start` line, and a second
       start adds no second line. Two park lines for #7 give one `merged` line, compared with the
       newer's head. A new head at the merge gives `"changed": true`; a `wait` line for #7 and no
       park, then "MERGED", gives `"changed": null`; "CLOSED" gives a `closed` line with `"pr": 7`;
@@ -252,7 +273,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `GatedMergeTest.test_gh_fails`.
       Replaces: C07.16 — was: a `park` line is `{"event", "at", "step", "line"}` and a `merged` line `{"event", "at", "pr"}`.
 - [ ] C08.8 **new** — `wait_pr` on #7 writes a `wait` line with `"pr": 7` before its first read. A
-      gated park of #7 writes `"pr": 7` and `"head": "aaa"`. In `wait_merge`, a head of "aaa" at its
+      resumed fix that opens #13 in that wait writes a `wait` line with `"pr": 13`. A gated park of
+      #7 writes `"pr": 7` and `"head": "aaa"`. In `wait_merge`, a head of "aaa" at its
       first successful read after the green and "bbb" when it merges writes a `merged` line with
       `"head": "bbb"`, `"changed": true`; the same head writes `"changed": false`; no head at
       either read writes no `head` key and `"changed": null`. `pr_state` makes one `gh pr view`
@@ -262,7 +284,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       them fail on today's code.
       Test: `MergeWaitHeadTest.test_wait_line`, `MergeWaitHeadTest.test_gated_park_carries_pr_head`,
       `MergeWaitHeadTest.test_changed`, `MergeWaitHeadTest.test_unchanged`,
-      `MergeWaitHeadTest.test_no_head`, `RunLogReportTest.test_merged_line`,
+      `MergeWaitHeadTest.test_no_head`, `OnTest.test_wait_line_after_fix`,
+      `RunLogReportTest.test_merged_line`,
       `GitHubTest.test_pr_state`.
 - [ ] C08.9 **hold** — An open pull request a `wait` or `park` line named adds no line at a start.
       Test: `GatedMergeTest.test_open_adds_nothing`.
@@ -311,16 +334,17 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       issue=12)` carries `"issue": 12`, and without it the line's keys are C04.4's.
       Test: `RunLogReportTest.test_park_lines`, `RunLogReportTest.test_issue_on_start`.
       broken: park_issue writing no park line → AssertionError: Tuples differ: (1, True, 0) != (1, True, 1) (#111)
-      broken: start dropping the issue it is given → AssertionError: Tuples differ: ('issue', None, ['event', 'at', 'step', 'prefix', 'session', 'claude']) != ('issue', 12, ['event', 'at', 'step', 'prefix', 'session', 'claude']) (#111)
-- [ ] C08.17 **hold** — A park other than the three of `gated` carries no `pr` key, even one after a
-      wait on #7 in the same run ("the session ended in an error", say).
+      broken: start writing a null issue → AssertionError: Tuples differ: ('issue', None, ['event', 'at', 'step', 'prefix', 'session', 'claude']) != ('issue', 12, ['event', 'at', 'step', 'prefix', 'session', 'claude']) (#111)
+- [ ] C08.17 **hold** — A park other than the three of `gated` carries no `pr` key, even one that
+      ends a wait on #7 in the same step ("park: #7 was closed without a merge", "park: the checks
+      on #7 are red"), where `record["pr"]` is set.
       Test: `MergeWaitHeadTest.test_park_without_pr`.
       broken: <a park line takes the wait's `pr`> → <what it reported>
 
 ## Verify
 ```bash
 python -m unittest discover -s tests
-git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_tree.py tests/test_config.py tests/test_encoding.py tests/test_halt.py tests/test_halt_report.py tests/test_home.py tests/test_hooks.py tests/test_issues.py tests/test_off.py tests/test_once_park_issues.py tests/test_once_parks.py tests/test_preflight.py tests/test_recovery_table.py tests/test_lock_takeover.py driver/decide.py driver/steps.py driver/settings.py driver/home.py driver/preflight.py driver/config.py hooks rules/session.md
+git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_tree.py tests/test_config.py tests/test_encoding.py tests/test_halt.py tests/test_halt_report.py tests/test_home.py tests/test_hooks.py tests/test_issues.py tests/test_off.py tests/test_once_park_issues.py tests/test_once_parks.py tests/test_preflight.py tests/test_recovery_table.py tests/test_lock_takeover.py driver/decide.py driver/steps.py driver/settings.py driver/home.py driver/preflight.py driver/config.py hooks rules/session.md tests/test_failures.py tests/test_once_outcome.py tests/test_once_run.py tests/test_runlog.py tests/test_runlog_fix.py tests/test_session_bound.py tests/test_wait.py tests/test_kit_copy.py tests/test_lock.py tests/test_live_cli.py tests/test_once_halt.py tests/test_live_once.py tests/test_once_stop.py
 ```
 
 ## Notes
@@ -356,6 +380,11 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
   in: 24 findings (D08.17 to D08.40), all taken up. The Red today claims held.
 - Spec-auditor a third time, 2026-11-10, on 86c7b66: 17 findings (D08.41 to D08.57), all taken up;
   four came from the second round's fixes. The Red today claims held, but for C08.7's at C2's start.
+- Spec-auditor a fourth time, 2026-11-10, on 4478125: 9 findings (D08.58 to D08.66), all taken up.
+  The Red today claims held. Found on the way, not Day 8's: three of Day 6's recorded breaks no
+  longer replay on today's `main` ("the fix line is not written" reports otherwise; "on does not
+  re-read the next step after a merge" finds its text twice in `driver/loop.py`; "the resume keeps
+  --session-id" holds a uuid, which break.py now refuses). The maintainer's, as H07.1 is.
 - **Assumed** — `gh pr checks --required` on a pull request with no checks, and with checks none of
   them required, exits 1, empty stdout, and writes "no checks reported on the '<b>' branch" /
   "no required checks reported on the '<b>' branch": `gh pr checks 1 --repo octocat/Hello-World
@@ -384,7 +413,7 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
 - **Assumed** — `gh issue create` prints the URL last; a second `gh issue close` exits 0 | not run
   (writes): the maintainer, before Track B (H05.5).
 - **Assumed** — `token-usage.py` counts the driver's headless transcripts: they exist, named by the
-  `--session-id`, with `entrypoint` "claude-vscode" | not run: the count, the trial.
+  `--session-id` (`"entrypoint":"sdk-cli"`, which `token-usage.py` does not read) | not run: the count, the trial.
 - **Assumed** — `--resume <id>` resumes a session after a usage limit | not run: Track F, if it opens.
 - **Defect** D08.1 — found: auditor · cause: spec · made: Day 08 · three `new` criteria sat in a maintainer row of the Tracks table that "Track tests seen red" does not read, two had no `Test:` field and one named a class, not a test; moved to Track E with `TrialRecordTest` cases.
 - **Defect** D08.2 — found: auditor · cause: spec · made: Day 08 · C08.11's evidence was a `gh` command the replay does not run, and C08.9 named a command the replay would count but never run; both now proved by tests.
@@ -443,3 +472,12 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
 - **Defect** D08.55 — found: auditor · cause: spec · made: Day 08 · a gated closing PR parks the next start before the driver reads its evidence run, so "the driver has checked its evidence run" could never happen; the maintainer checks it then.
 - **Defect** D08.56 — found: auditor · cause: spec · made: Day 08 · the cost per merged pull request is not printed by `token-usage.py` and the interactive sessions had no rule; both now said.
 - **Defect** D08.57 — found: auditor · cause: spec · made: Day 08 · the kit's guards logging in a headless session, Day 6's two reads left for H05.5, and `plan.md`'s "counts both ways" were carried by nothing; Assumed lines and the record's Unverified section now carry them.
+- **Defect** D08.58 — found: auditor · cause: spec · made: Day 08 · Tracks C1 and C2 edit `tests/test_merge_wait.py` and `tests/test_on.py`, which C07.2 holds unedited, with no `Replaces:`, and C06.12 was already false after Day 7; C08.1 now replaces both over their merged list, and each track's test files are named.
+- **Defect** D08.59 — found: auditor · cause: spec · made: Day 08 · a resumed fix moves `wait_pr` to a new pull request with no `wait` line, so its merge was named by nothing and C08.11 would fail a real trial; a `wait` line is now written for the new number, with a C08.8 case.
+- **Defect** D08.60 — found: auditor · cause: spec · made: Day 08 · C08.16's second break had Day 7's name for a different mutation, so its report did not replay with Day 7's; renamed "start writing a null issue".
+- **Defect** D08.61 — found: auditor · cause: spec · made: Day 08 · the `level 2` line changes two of C07.18's recorded break reports; C08.2 now replaces C07.18 and Track D re-records them.
+- **Defect** D08.62 — found: auditor · cause: spec · made: Day 08 · C08.17's example park could not catch the leak its break names (a new step's record has no `pr`); now a park that ends a wait in the same step.
+- **Defect** D08.63 — found: auditor · cause: spec · made: Day 08 · `_bad`'s `closed` line, `merged` head and malformed `refused` entries had no C08.3 case, though D08.48 said they did; added.
+- **Defect** D08.64 — found: auditor · cause: spec · made: Day 08 · C08.7's `on` case could pass at C2's start, `wait_merge` writing the line itself; the fake now lists #7 as not open, and the line must come before the run's first new `start`.
+- **Defect** D08.65 — found: auditor · cause: spec · made: Day 08 · an Assumed line said headless transcripts carry `entrypoint` "claude-vscode"; they carry "sdk-cli".
+- **Defect** D08.66 — found: auditor · cause: spec · made: Day 08 · C2's case count, Expected PRs with a C3, and the start-time read's place beside `livecheck.refusal` were unstated or wrong; said.
