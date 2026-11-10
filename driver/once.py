@@ -126,16 +126,31 @@ def stop_session(proc, args, project, number, record, stop_number):
             os.killpg(os.getpgid(0), signal.SIGKILL)
 
 
+def refusal(entry):
+    # The input is cut to 200 characters, so a long Write does not put a file into the log.
+    if not isinstance(entry, dict):
+        return {"tool": "unknown", "input": "{}"}
+    tool = entry.get("tool_name")
+    return {
+        "tool": tool if isinstance(tool, str) else "unknown",
+        "input": json.dumps(entry.get("tool_input", {}))[:200],
+    }
+
+
 def write_end(state, session, line, out):
     # The cost and the refusals are the session's own counts; a reply that is not JSON has neither.
     data = parsed(out) or {}
     denials = data.get("permission_denials")
+    refused = None
+    if isinstance(denials, list) and denials:
+        refused = [refusal(entry) for entry in denials]
     runlog.end(
         state,
         session,
         line,
         data.get("total_cost_usd"),
         len(denials) if isinstance(denials, list) else 0,
+        refused=refused,
     )
 
 
