@@ -111,6 +111,15 @@ def _records(state):
     return records, None
 
 
+def read(state):
+    # Returns (records, reason), as _records does, and an OSError is a reason too, for a reader
+    # outside this module.
+    try:
+        return _records(state)
+    except OSError as error:
+        return None, f"the run log cannot be read: {error.strerror}"
+
+
 def _bad(record):
     # A line the readers would trip over counts as unreadable, as a torn one does: a start line
     # with no session, or a pid line that lock.read would refuse as a lock.
@@ -176,10 +185,7 @@ def live_session(state):
     # Returns (session, pid, None) for the newest session whose last pid line has no later end line
     # and whose process lives, of any prefix; (None, None, None) when none does or there is no log;
     # (None, None, reason) when the log cannot be read.
-    try:
-        records, reason = _records(state)
-    except OSError as error:
-        return None, None, f"the run log cannot be read: {error.strerror}"
+    records, reason = read(state)
     if reason:
         return None, None, reason
     # Read from the end: a session's first pid line met here is its last, and its later end lines

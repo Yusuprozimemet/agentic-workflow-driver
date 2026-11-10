@@ -11,7 +11,7 @@ process tree when its lock names a live process, then reports on the run's issue
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
 file. live-check [--state] [--claude] [--python] runs the driver's own tests on the installed Claude
 Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
-refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. --once
+refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; it takes no lock and writes nothing. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] does one step's checks in order:
 halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
 evidence run, then the run log;
@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from driver import livecheck, loop, once, switches
+from driver import livecheck, loop, once, status, switches
 from driver.config import load as load_config
 from driver.decide import Facts, decide
 from driver.preflight import cli_lines, git, kit_lines
@@ -64,8 +64,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["preflight", "halt", "clear", "off", "on", "live-check"],
-        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, run on, or run the live check",
+        choices=["preflight", "halt", "clear", "off", "status", "on", "live-check"],
+        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, print its status, run on, or run the live check",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
@@ -146,6 +146,8 @@ def main(argv=None) -> int:
         args.project = config["project"]
     if args.command == "off":
         return switches.off(args.project, args.gh)
+    if args.command == "status":
+        return status.run(args.project, args.gh, args.state)
     if args.command == "preflight":
         lines, _ = kit_lines(args.project)
         lines += cli_lines(args.claude)
