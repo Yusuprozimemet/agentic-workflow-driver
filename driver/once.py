@@ -294,6 +294,22 @@ def run(args, home, read_facts, body=None):
         lock.release(args.state)
 
 
+def settle(args, project):
+    # Each pull request the log names and has not settled is asked once, so that its merged or
+    # closed line is written at this start, before the run's own steps. A reason means GitHub
+    # could not say, and nothing is written for it.
+    for number, parked in runlog.unsettled(args.state):
+        state, _, _, _, reason, head = github.pr_state(project, args.gh, number)
+        if reason:
+            return reason
+        if state == "MERGED":
+            changed = None if head is None or parked is None else head != parked
+            runlog.merged(args.state, number, head, changed)
+        elif state == "CLOSED":
+            runlog.closed(args.state, number)
+    return None
+
+
 def checked(args, home, project, read_facts, config):
     started, reason = driver_home.check(home)
     if reason:
@@ -301,6 +317,9 @@ def checked(args, home, project, read_facts, config):
     drift, code = preflight(args, project)
     if drift is None:
         return code
+    reason = settle(args, project)
+    if reason:
+        return refuse([f"cannot read the project: {reason}"])
     step = ready(args, project, read_facts, drift)
     if step.kind != "start":
         return stopped(args, project, step)
