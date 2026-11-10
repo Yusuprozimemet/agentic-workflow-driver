@@ -23,7 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from driver import livecheck, loop, once, status, switches
+from driver import issues, livecheck, loop, once, status, switches
 from driver.config import load as load_config
 from driver.decide import Facts, decide
 from driver.preflight import cli_lines, git, kit_lines
@@ -167,6 +167,13 @@ def main(argv=None) -> int:
         return 2
     facts = read_facts(args.project)
     action = decide(drift, facts)
+    # As --once: a closed parked issue of a phase's end's exact title answers it. Nothing else reads one.
+    if action.kind == "park" and action.line.startswith("park: the end of Phase "):
+        answered, reason = issues.closed_parks(args.project, args.gh)
+        if reason:
+            print(f"cannot read the project: {reason}", file=sys.stderr)
+            return 2
+        action = decide(drift, facts, answered)
     print(action.line)
     return 1 if action.kind == "park" else 0
 
