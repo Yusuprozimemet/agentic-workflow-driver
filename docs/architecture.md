@@ -328,7 +328,7 @@ sequenceDiagram
     participant PR as Closing PR
 
     S->>S: tick criteria, write Notes, lab notebook
-    S->>S: token-usage.py, commit token-usage.json, sessions.json
+    S->>S: token-usage.py, commit token-usage.json, sessions.json, counted.json
     S->>R: blind specs/day-NN-*.md --out dir
     R-->>S: blind.md, tags stripped
     S->>DR: blind.md

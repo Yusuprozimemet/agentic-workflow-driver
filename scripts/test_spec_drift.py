@@ -316,7 +316,8 @@ class SpecDriftTest(unittest.TestCase):
         prs = {1: pr(1, "Day 02 track A: x", "day-02/track-a-x"), 2: pr(2, "Day 02 track B: y", "day-02/track-b-y", "OPEN"), 3: pr(3, "Faster tests", "tooling/faster")}
         run = lambda branch, sha, result, start, end, event="pull_request": dict(headBranch=branch, headSha=sha, conclusion=result, workflowName="PR checks",
                                                                                 event=event, createdAt=f"2026-01-02T{start}:00Z", updatedAt=f"2026-01-02T{end}:00Z")
-        runs = [run("day-02/track-a-x", "a", "failure", "09:11", "09:15"), run("day-02/track-a-x", "b", "success", "09:40", "09:44"),
+        runs = [run("day-02/track-a-x", "a", "failure", "09:11", "09:15"), run("day-02/track-a-x", "a", "success", "09:12", "09:16"),
+                run("day-02/track-a-x", "b", "success", "09:40", "09:44"),
                 run("day-02/track-a-x", "c", "success", "09:50", "09:52", event="push"), run("day-02/track-b-y", "d", "success", "09:21", "09:25")]
         got = sd.clock(prs, runs, sessions=[])
         self.assertEqual(got["sessions"], [])
@@ -324,9 +325,25 @@ class SpecDriftTest(unittest.TestCase):
                          [(1, 2, "code", "day-02/track-a-x", "2026-01-02T09:10:00Z", "2026-01-02T10:10:00Z"),
                           (3, None, "other", "tooling/faster", "2026-01-02T09:30:00Z", "2026-01-02T10:30:00Z")])
         # The checks span the first start to the last end of the pull request's own runs, a push run left out.
-        self.assertEqual([p["checks"] for p in got["prs"]], [dict(start="2026-01-02T09:11:00Z", end="2026-01-02T09:44:00Z", runs=2, failed=1), None])
+        # And the stretches they were running in: two runs of one push that overlap are one stretch, and the 24
+        # minutes between the two pushes are in neither. Three workflow runs, two pushes.
+        self.assertEqual([p["checks"] for p in got["prs"]], [dict(
+            start="2026-01-02T09:11:00Z", end="2026-01-02T09:44:00Z", runs=3, failed=1, pushes=2,
+            spans=[["2026-01-02T09:11:00Z", "2026-01-02T09:16:00Z", 1], ["2026-01-02T09:40:00Z", "2026-01-02T09:44:00Z", 0]]), None])
         # Without the sessions file, no sessions; nothing fails.
         self.assertIsInstance(sd.clock({}, [])["sessions"], list)
+
+    def test_the_page_is_given_when_the_transcripts_were_last_counted_or_nothing(self):
+        real = sd.PAGE
+        sd.PAGE = tempfile.mkdtemp()
+        try:
+            self.assertIsNone(sd.counted())  # before token-usage.py's first run
+            with open(os.path.join(sd.PAGE, "counted.json"), "w", encoding="utf-8") as f:
+                f.write('{"at": "2026-11-08T20:00:00+01:00"}\n')
+            self.assertEqual(sd.counted(), dict(at="2026-11-08T20:00:00+01:00"))
+        finally:
+            shutil.rmtree(sd.PAGE)
+            sd.PAGE = real
 
     def test_a_gh_list_as_long_as_its_limit_is_refused(self):
         real = sd.run

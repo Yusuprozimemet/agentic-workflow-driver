@@ -39,8 +39,10 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
    table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). Run `python scripts/token-usage.py` and commit the refreshed
    `docs/dashboard/token-usage.json`, `docs/dashboard/refusals.json`, `docs/dashboard/gates.json`
-   (each gate's runs and cost, beside what its `found:` lines caught) and `docs/dashboard/sessions.json`
-   (each session's stretches of work on this machine's clock, graph 10): CI cannot read the
+   (each gate's runs and cost, beside what its `found:` lines caught), `docs/dashboard/sessions.json`
+   (each session's stretches of work on this machine's clock, graph 10) and `docs/dashboard/counted.json`
+   (the moment of the count, which the page gives as what the other four are counted up to; commit all
+   five together, or the page names a count its numbers do not match): CI cannot read the
    transcripts or the guards' refusal log they count. Then relabel the
    day's defects blind: `python scripts/relabel.py blind specs/day-NN-*.md --out <dir>`, give
    `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run

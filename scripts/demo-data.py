@@ -394,7 +394,7 @@ def demo():
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
         yardsticks=yardsticks(),
-        clock=clock(rows),
+        clock=clock(rows), counted=dict(at=f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",

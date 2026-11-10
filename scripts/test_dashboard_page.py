@@ -45,6 +45,13 @@ console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.t
   banner: banner ? { hidden: banner.hidden, text: banner.textContent } : null }));
 """
 
+# tagOf() on each value of the list from stdin.
+TAGS = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(tagOf)", ctx)));
+"""
+
 
 def node(harness, data):
     return json.loads(subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True,
@@ -375,12 +382,13 @@ class ModelTest(unittest.TestCase):
         pr7 = next(b for b in lanes["Pull request open"]["bars"] if "#7" in b["t"])
         self.assertEqual((round(pr7["x"], 3), round(pr7["w"], 3), pr7["cls"], pr7["days"]), (round(630 / 14.4, 3), round(30 / 14.4, 3), "code", [2]))
         self.assertEqual(pr7["t"], "Pull request #7 · day-02/track-a · open 10:30 to 11:00")
-        self.assertEqual(pr7["b"], ["Open for 30 minutes before it merged.", "Its checks ran 4 times and took 9 minutes, 1 of them failed."])
+        self.assertEqual(pr7["b"], ["Open for 30 minutes before it merged.", "Its checks were running for 9 minutes: 4 workflow runs, 1 of them failed."])
         pr6 = next(b for b in lanes["Pull request open"]["bars"] if "#6" in b["t"])
         self.assertEqual((pr6["from"], pr6["to"], pr6["cls"]), ("00:00", "02:00", "spec"))
         self.assertIn("opened on an earlier date", pr6["b"][0])
         self.assertEqual([(b["from"], b["to"]) for b in lanes["Auditors"]["bars"]], [("00:00", "00:10")])
-        self.assertEqual([lane["sub"] for lane in jan2["lanes"]], ["busy 2 h 0 min", "busy 30 minutes", "busy 10 minutes", "2 pull requests, 2 h 30 min in all", "1 set, 1 with a failure", "2 merges"])
+        self.assertEqual([lane["sub"] for lane in jan2["lanes"]], ["busy 2 h 0 min", "busy 30 minutes", "busy 10 minutes", "2 pull requests, 2 h 30 min in all",
+                                                             "on 1 pull request, running for 9 minutes, 1 with a failure", "2 merges"])
         self.assertEqual([b["cls"] for b in lanes["Checks running"]["bars"]], ["failed"])
         self.assertEqual(jan2["read"]["t"], "2 Jan: 2 pull requests merged, half of them open for 30 minutes or less")
         self.assertEqual(jan2["read"]["b"], ["Work of Days 1 to 2.", "The main session was busy for 2 h 0 min, the implementer for 30 minutes and the auditors for 10 minutes.",
@@ -416,6 +424,97 @@ class ModelTest(unittest.TestCase):
             "1 minute on other commands. The wait on GitHub's checks is drawn again under Checks running."])
         self.assertIn(["Main session", "Main session, waiting on tests", "08:10", "08:40", 30], date["table"]["rows"])
         self.assertIn(["Main session", "Main session", "08:00", "10:00", 120], date["table"]["rows"])
+
+    def test_graph_10_keeps_a_wait_on_its_own_date_and_counts_a_minute_two_sessions_share_once(self):
+        # A stretch from 23:00 to 01:00 waited half an hour on tests before midnight: none of that wait is the next
+        # date's, which gets only half of the two minutes of shorter waits. Two main sessions busy from 08:00 to 10:00
+        # and from 09:00 to 11:00 are three hours of the clock, not four: four with the hour after midnight, not five.
+        s = lambda start, end, **more: {"date": start[:10], "day": 2, "agent": "main", "from": start, "to": end, "replies": 5, **more}
+        clock = dict(prs=[], sessions=[
+            s("2026-01-01T23:00:00+01:00", "2026-01-02T01:00:00+01:00", ran=dict(tests=1800, other=120),
+              runs=[["2026-01-01T23:10:00+01:00", "2026-01-01T23:40:00+01:00", "tests"]]),
+            s("2026-01-02T08:00:00+01:00", "2026-01-02T10:00:00+01:00"), s("2026-01-02T09:00:00+01:00", "2026-01-02T11:00:00+01:00")])
+        jan1, jan2 = model(data(clock=clock))["g10"]["dates"]
+        self.assertEqual(jan1["lanes"][0]["sub"], "busy 1 h 0 min, 31 minutes of it waiting on commands")
+        self.assertEqual(jan1["read"]["b"][2], "Of that, the sessions waited 31 minutes on commands they had run: 30 minutes on tests and 1 minute on other commands.")
+        self.assertEqual(jan2["lanes"][0]["sub"], "busy 4 h 0 min, 1 minute of it waiting on commands")
+        self.assertEqual(jan2["read"]["b"][1:3], ["The main session was busy for 4 h 0 min.",
+                                                  "Of that, the sessions waited 1 minute on commands they had run: 1 minute on other commands."])
+        self.assertEqual(jan2["lanes"][0]["bars"][0]["b"], ["5 replies, with no gap longer than 5 minutes. 1 minute of it waiting on commands it ran: 1 minute on other commands."])
+
+    def test_graph_10_draws_the_checks_while_they_ran_and_not_the_time_between_two_pushes(self):
+        # Nine workflow runs over two pushes half an hour apart: seven minutes of running, in two bars, the first with the failure.
+        at = lambda hm: f"2026-01-02T{hm}Z"
+        checks = dict(start=at("09:01:00"), end=at("09:38:00"), runs=9, failed=1, pushes=2,
+                      spans=[[at("09:01:00"), at("09:05:00"), 1], [at("09:35:00"), at("09:38:00"), 0]])
+        clock = dict(sessions=[], prs=[dict(number=7, day=2, kind="code", branch="day-02/track-a", opened=at("09:00:00"), merged=at("10:59:40"), checks=checks)])
+        lanes = {lane["name"]: lane for lane in model(data(clock=clock))["g10"]["dates"][0]["lanes"]}
+        # 119 minutes and 40 seconds are two hours, never "1 h 60 min".
+        self.assertEqual(lanes["Pull request open"]["bars"][0]["b"], ["Open for 2 h 0 min before it merged.",
+                                                                    "Its checks were running for 7 minutes: 9 workflow runs over 2 pushes, 1 of them failed."])
+        self.assertEqual([(b["cls"], b["from"], b["to"]) for b in lanes["Checks running"]["bars"]], [("failed", "09:01", "09:05"), ("ok", "09:35", "09:38")])
+        self.assertEqual(lanes["Checks running"]["bars"][1]["b"], ["On this pull request in all: 9 workflow runs over 2 pushes, 1 of them failed."])
+        self.assertEqual(lanes["Checks running"]["sub"], "on 1 pull request, running for 7 minutes, 1 with a failure")
+
+    def test_graph_10_says_what_the_sessions_are_counted_up_to_and_claims_nothing_after_it(self):
+        # The sessions were counted at 12:00 on 2 Jan; GitHub's pull requests go on. A lane empty after the count is not
+        # counted yet, and the hours from the last session to a later check are not "nothing ran".
+        at = lambda day, hm: f"2026-01-0{day}T{hm}:00Z"
+        clock = dict(sessions=[{"date": "2026-01-02", "day": 2, "agent": "main", "from": "2026-01-02T08:00:00+01:00", "to": "2026-01-02T11:00:00+01:00", "replies": 9}],
+                     prs=[dict(number=7, day=2, kind="code", branch="day-02/track-a", opened=at(2, "13:00"), merged=at(2, "13:10"),
+                               checks=dict(start=at(2, "13:01"), end=at(2, "13:05"), runs=4, failed=0, pushes=1, spans=[[at(2, "13:01"), at(2, "13:05"), 0]])),
+                          dict(number=8, day=2, kind="code", branch="day-02/track-b", opened=at(3, "09:00"), merged=at(3, "09:10"), checks=None)])
+        jan2, jan3 = model(data(clock=clock, counted=dict(at="2026-01-02T12:00:00+01:00")))["g10"]["dates"]
+        self.assertEqual([lane["sub"] for lane in jan2["lanes"]][:3], ["busy 3 h 0 min", "nothing recorded up to 12:00", "nothing recorded up to 12:00"])
+        self.assertEqual(jan2["read"]["b"], ["Work of Day 2.", "The main session was busy for 3 h 0 min.",
+                                             "The sessions are counted up to 12:00: after that, only GitHub's pull requests and checks are in.",
+                                             "The longest wait for a merge: #7 (10 minutes).", "Times are on the clock of the machine that recorded the sessions (UTC+01:00)."])
+        self.assertEqual([lane["sub"] for lane in jan3["lanes"]][:3], ["not counted yet"] * 3)
+        self.assertEqual(jan3["read"]["b"][1], "The sessions of this date are not counted yet: the count ends at 12:00 on 2 Jan.")
+        # With no count on record the page claims no horizon: it says what it has.
+        jan2, jan3 = model(data(clock=clock))["g10"]["dates"]
+        self.assertEqual(([lane["sub"] for lane in jan3["lanes"]][:3], jan3["read"]["b"][1]), (["nothing recorded"] * 3, "No session was recorded on this date."))
+        self.assertIn("Nothing ran from 11:00 to 14:01.", jan2["read"]["b"])
+
+    def test_graphs_6_and_10_give_a_pull_request_the_same_minutes_open(self):
+        # Open for 3 minutes 20 seconds. The hours beside it are rounded to 0.06, which is 3.6 minutes: graph 6 said 4.
+        clock = dict(sessions=[], prs=[dict(number=1, day=1, kind="code", branch="day-01/track-a", opened="2026-01-01T09:00:00Z", merged="2026-01-01T09:03:20Z", checks=None)])
+        got = model(data(rows=[dict(pr=1, kind="code", day=1, gap_full=48.0, title="`code`", date="2026-01-01")],
+                         verification=[dict(number=1, hours=0.06, failed=0, failed_in=[])], clock=clock))
+        self.assertIn("Open for 3 minutes before it merged.", got["g6"]["merges"][0]["b"][1])
+        self.assertEqual(got["g6"]["table"]["rows"][0][5], 3)
+        self.assertEqual(got["g10"]["dates"][0]["lanes"][3]["bars"][0]["b"][0], "Open for 3 minutes before it merged.")
+
+    def test_graph_7_reads_a_found_value_as_the_gate_report_does_and_shares_a_gates_dollars_over_the_days_counted(self):
+        values = ["The auditor (spec-auditor)", " Seen red ", "break on purpose (D03.2)", "the close", "Track A", "Spec", None, ""]
+        self.assertEqual(node(TAGS, values), [sd.found_tag(v) for v in values])
+        # Day 2 had a pull request merge after the count, so the auditors' dollar is not shared with its catch.
+        defect = lambda i, found, cause, made: dict(id=i, found=found, cause=cause, made=made, same_as=None, problem=None)
+        pr = lambda n, day, merged: dict(number=n, day=day, kind="code", branch=f"day-0{day}/track-a", opened="2026-01-01T09:00:00Z", merged=merged, checks=None)
+        g = model(data(days=[a_day(1, defects=[defect("D1.1", "The auditor (spec-auditor)", "Spec", "Day 01")]),
+                             a_day(2, "active", defects=[defect("D2.1", "auditor", "spec", "Day 02")])],
+                       gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=2, runs=2, cost=1.0)]),
+                       clock=dict(sessions=[], prs=[pr(1, 1, "2026-01-01T10:00:00Z"), pr(2, 2, "2026-01-03T10:00:00Z")]),
+                       counted=dict(at="2026-01-02T12:00:00+01:00")))["g7"]
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
+        self.assertEqual(g["rows"][0]["dots"][0]["cause"], "spec")
+        self.assertEqual(g["read"]["b"], ["2 were in a spec. 0 escaped from an earlier Day and 0 came back. Each catch cost about $1.00 at the auditors, "
+                                          "over the catches of the Days in the count: Day 2 had a pull request merge after it. "
+                                          "The gates' runs and dollars are counted up to 12:00 on 2 Jan."])
+
+    def test_graph_8_shares_a_dates_dollars_over_the_pull_requests_merged_before_the_count(self):
+        # Counted at 12:00 on 2 Jan (11:00 UTC): #1 had merged, #2 merged an hour later that date and #3 two dates on.
+        token = lambda agent, cost: dict(date="2026-01-02", agent=agent, cost=cost, replies=10, cut=0)
+        pr = lambda n, merged: dict(number=n, day=1, kind="code", branch="day-01/track-a", opened="2026-01-02T08:00:00Z", merged=merged, checks=None)
+        g = model(data(days=[a_day(1, worked=["2026-01-02", "2026-01-02"]), a_day(2, "active")], tokens=[token("main", 3.0), token("implementer", 0.5)],
+                       rows=[dict(pr=1, date="2026-01-02", day=1), dict(pr=2, date="2026-01-02", day=1), dict(pr=3, date="2026-01-04", day=1)],
+                       clock=dict(sessions=[], prs=[pr(1, "2026-01-02T10:00:00Z"), pr(2, "2026-01-02T12:00:00Z"), pr(3, "2026-01-04T10:00:00Z")]),
+                       counted=dict(at="2026-01-02T12:00:00+01:00")))["g8"]
+        self.assertTrue(g["bars"][0]["b"][0].endswith("2 pull requests merged that date, 1 of them before the count at 12:00 on 2 Jan: $3.50 each, all sessions."))
+        self.assertEqual(g["read"]["b"], ["The Days cost $3.50 over 1 date, on which 1 pull request merged before the count. The hooks refused 0 calls and "
+                                          "cut 0 long outputs. Counted on the maintainer's computer up to 12:00 on 2 Jan: 2 pull requests have merged since, "
+                                          "and what they cost is not in yet."])
+        self.assertEqual((g["table"]["head"][-2:], g["table"]["rows"][0][-2:]), (["Pull requests merged", "Merged before the count"], [2, 1]))
 
     def test_graph_10_without_any_time_recorded_says_so_under_not_measured(self):
         got = model(data())

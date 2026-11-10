@@ -5,9 +5,10 @@ repository's path>, subagents included) and writes totals only, no prompt or rep
 docs/dashboard/token-usage.json (tokens, their cost at list prices and the --tools counts per row), which scripts/spec-drift.py puts on the dashboard. The
 transcripts live on the maintainer's machine, not in CI, so this runs locally and its output is
 committed; the closing PR of each day refreshes it. Beside it, gates.json holds each gate's runs and the
-tokens of the replies that ran it or read its result (gates()), refusals.json the guards' refusals, and
+tokens of the replies that ran it or read its result (gates()), refusals.json the guards' refusals,
 sessions.json each transcript's stretches of work on this machine's clock (sessions()), for the
-dashboard's ninth graph, one day on the clock.
+dashboard's tenth graph, one date on the clock, and counted.json the moment of this count, which
+the page gives as what the other four are counted up to.
 
     python scripts/token-usage.py
     python scripts/token-usage.py --simulate   # what shorter sessions, capped tool output or a Haiku operator would save
@@ -802,6 +803,16 @@ def main():
     write_refusals(os.path.join(os.path.dirname(args.out), "refusals.json"))
     write_gates(os.path.join(os.path.dirname(args.out), "gates.json"), gates(files))
     write_sessions(os.path.join(os.path.dirname(args.out), "sessions.json"), sessions(files))
+    write_counted(os.path.join(os.path.dirname(args.out), "counted.json"))
+
+
+def write_counted(out, now=None):
+    """When this count was made, on this machine's clock with its offset: the four files beside it
+    hold nothing later, and the page says so where it sets them against GitHub's pull requests."""
+    at = (now or datetime.datetime.now()).astimezone().isoformat(timespec="seconds")
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps({"at": at}) + "\n")
+    print(f"{out}: counted up to {at}")
 
 
 def write_gates(out, rows):
