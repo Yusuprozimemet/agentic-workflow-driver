@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -119,6 +120,61 @@ class Classify(unittest.TestCase):
         self.assertEqual((row["state"], row["reused_from"], row["pr"]), ("code broken", "abc", 9))
         other = self.commit({"driver/x.py": "x = 1\n"})
         self.assertNotIn(rh.key(other, BREAK, [], False), known)
+
+    def sample(self, count, jobs):
+        """The rows of one merge of `count` checks, each a break of its own name."""
+        items = [("01", f"C01.{i}", f"keep broken {i}", dict(BREAK, what=f"keep broken {i}"), [],
+                  "AssertionError: broken", False) for i in range(count)]
+        sha = rh.git("rev-parse", "HEAD").strip()
+        return rh.sample(5, sha, "Merge pull request #9 from me/x", "day", items, {}, {"01": 1}, jobs=jobs)
+
+    def test_a_merge_s_checks_run_side_by_side_each_in_a_worktree_and_under_a_lock_of_its_own(self):
+        together, seen = threading.Barrier(3, timeout=10), []
+
+        def classify(entry, tests, report, worktree, sha, pre, env):
+            seen.append((worktree, env["BREAK_LOCK"], os.path.isfile(os.path.join(worktree, "app.txt"))))
+            together.wait()  # passes only with three checks running at once
+            return "holds", None
+
+        with mock.patch.object(rh, "classify", classify):
+            rows = self.sample(3, jobs=3)
+        self.assertEqual([r["state"] for r in rows], ["holds"] * 3)
+        self.assertEqual((len({s[0] for s in seen}), len({s[1] for s in seen}), [s[2] for s in seen]), (3, 3, [True] * 3))
+        self.assertEqual([os.path.exists(s[0]) for s in seen], [False] * 3)
+
+    def test_two_breaks_run_at_once_both_hold_as_they_do_one_after_the_other(self):
+        self.assertEqual([(r["state"], r.get("detail")) for r in self.sample(2, jobs=2)], [("holds", None)] * 2)
+
+    def test_a_check_that_did_not_hold_beside_the_others_is_measured_again_alone_and_that_is_kept(self):
+        calls = []
+
+        def classify(entry, *rest):
+            calls.append(entry["what"])
+            first = calls.count(entry["what"]) == 1
+            return ("code broken", "port in use") if entry["what"] == "keep broken 1" and first else ("holds", None)
+
+        with mock.patch.object(rh, "classify", classify):
+            rows = self.sample(2, jobs=2)
+        self.assertEqual([(r["state"], r.get("detail")) for r in rows], [("holds", None)] * 2)
+        self.assertEqual(sorted(calls), ["keep broken 0", "keep broken 1", "keep broken 1"])
+
+    def test_the_file_is_written_after_every_merge_so_a_stopped_run_keeps_what_it_measured(self):
+        out = os.path.join(self.repo, "replay.json")
+        row = {"n": 5, "platform": rh.PLATFORM, "day": "01", "criterion": "C01.1", "check": "b", "state": "holds",
+               "merge": "aaa"}
+
+        def sample(n, *rest):
+            if n == 6:
+                raise KeyboardInterrupt
+            return [row]
+
+        with mock.patch.object(rh, "merges", return_value=[(5, "a" * 40, "s"), (6, "b" * 40, "s")]), \
+                mock.patch.object(rh, "closes", return_value={"01": 1}), mock.patch.object(rh, "checks", return_value=[]), \
+                mock.patch.object(rh, "sample", sample), mock.patch("builtins.print"):
+            with self.assertRaises(KeyboardInterrupt):
+                rh.main(["--out", out, "--since", "HEAD"])
+        with open(out, encoding="utf-8") as f:
+            self.assertEqual([r["n"] for r in json.load(f)["rows"]], [5])
 
 
 class LiveOnly(unittest.TestCase):
