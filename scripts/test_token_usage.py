@@ -519,6 +519,14 @@ class CostTest(unittest.TestCase):
         totals = CountTest.count(self, [json.dumps(entry)])
         self.assertAlmostEqual(list(totals.values())[0]["cost"], 0.037, places=9)
 
+    def test_fable_5_2_is_priced(self):
+        # Fable 5.2: 1,000 input at $8, 1,000 5-minute writes at $10, 2,000 1-hour writes at $16,
+        # 10,000 reads at $0.20 and 500 output at $40 per million: $0.072. A model with no row costs $0.00.
+        usage = {"input_tokens": 1_000, "cache_creation_input_tokens": 3_000,
+                 "cache_creation": {"ephemeral_5m_input_tokens": 1_000, "ephemeral_1h_input_tokens": 2_000},
+                 "cache_read_input_tokens": 10_000, "output_tokens": 500}
+        self.assertAlmostEqual(tu.cost("claude-fable-5-2", usage), 0.072, places=9)
+
     def test_a_write_with_no_split_is_a_one_hour_write(self):
         self.assertAlmostEqual(tu.cost("claude-opus-5-5", {"cache_creation_input_tokens": 1_000}), 0.008, places=9)
 
