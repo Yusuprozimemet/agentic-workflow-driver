@@ -14,14 +14,17 @@ from driver.steps import classify
 
 # A check's link to its GitHub Actions job, and how much of a failed job's log a prompt gets.
 _ACTIONS_JOB = re.compile(r"/actions/runs/\d+/job/(\d+)")
+# gh's stderr for a pull request with no checks, or none required: exit 1, nothing on stdout.
+_NO_CHECKS = re.compile(r"^no (required )?checks reported on the '.*' branch")
 _LOG_LINES = 40
 _LOG_CHARS = 6000
 
 
-def _gh(project, gh, args, want=list):
+def _gh(project, gh, args, want=list, stderr=False):
     # Returns (exit code, parsed output or None). A program that cannot be started exits 127, the
     # shell's code for a missing program, so the caller reports it the same way as a failed run.
-    # want=str returns the output as it is: a job's log is text, not JSON.
+    # want=str returns the output as it is: a job's log is text, not JSON. stderr=True adds the
+    # process's stderr text as a third value, "" when the program could not be started.
     program = shutil.which(gh) or gh
     try:
         result = subprocess.run(
@@ -35,14 +38,19 @@ def _gh(project, gh, args, want=list):
             check=False,
         )
     except OSError:
-        return 127, None
+        return (127, None, "") if stderr else (127, None)
     if want is str:
-        return result.returncode, result.stdout
-    try:
-        parsed = json.loads(result.stdout)
-    except ValueError:
-        return result.returncode, None
-    return result.returncode, parsed if isinstance(parsed, want) else None
+        parsed = result.stdout
+    else:
+        try:
+            parsed = json.loads(result.stdout)
+        except ValueError:
+            parsed = None
+        else:
+            parsed = parsed if isinstance(parsed, want) else None
+    if stderr:
+        return result.returncode, parsed, result.stderr
+    return result.returncode, parsed
 
 
 def evidence_line(project, gh, sha):
@@ -119,12 +127,16 @@ def mine(project, gh):
 
 def checks(project, gh, number):
     # gh exits 8 while checks are pending, so the state is read from the JSON, not treated as a
-    # failed call.
-    code, rows = _gh(
+    # failed call. gh exits 1 with a "no checks" line on stderr when a pull request has no checks,
+    # or none required: that is "none", not a failed read.
+    code, rows, err = _gh(
         project,
         gh,
         ["pr", "checks", str(number), "--required", "--json", "name,bucket,link"],
+        stderr=True,
     )
+    if code == 1 and _NO_CHECKS.match(err):
+        return "none", [], None
     if code not in (0, 8) or rows is None:
         return None, [], f"gh pr checks exited {code}"
     # Each failed check keeps its link: failed_lines() needs it to find the job's log.

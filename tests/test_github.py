@@ -28,7 +28,8 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # lists `checks`, `views`, `logs` and `run_steps` in fake.json, each entry `{"code": n, "out": ...}`
 # (a string printed as it is, anything else as JSON), one per call, the last repeated. An answer's
 # `closes` lists the issue numbers it closes when it is given, so that a test can close the run's
-# issue at an exact call. `pr_code` fails every `pr list` call, as `issue_code` does its calls.
+# issue at an exact call. `pr_code` fails every `pr list` call, as `issue_code` does its calls. An
+# answer's `err` is written to stderr when it has one.
 FAKE = """import json
 import sys
 import time
@@ -49,6 +50,7 @@ def step(name):
         if issue["number"] in answer.get("closes", ()):
             issue["state"] = "closed"
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
+    sys.stderr.buffer.write(answer.get("err", "").encode("utf-8"))
     out = answer["out"]
     text = out if isinstance(out, str) else json.dumps(out)
     sys.stdout.buffer.write(text.encode("utf-8"))
