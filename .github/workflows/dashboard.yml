@@ -85,6 +85,12 @@ jobs:
           key: spec-drift-${{ github.run_id }}
           restore-keys: spec-drift-
 
+      # The sessions' counts come from the maintainer's machine, which pushes them to a branch of their
+      # own between closes (scripts/publish-counts.py); a close commits them to main as before. The
+      # later of the two is the one the page shows.
+      - name: Take the newer count of the sessions
+        run: python scripts/publish-counts.py --take
+
       - name: Measure and build
         env:
           GH_TOKEN: ${{ github.token }}
