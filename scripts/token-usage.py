@@ -2,7 +2,8 @@
 
 Reads the session transcripts Claude Code keeps on this machine (~/.claude/projects/<this
 repository's path>, subagents included) and writes totals only, no prompt or reply text, to
-docs/dashboard/token-usage.json (tokens, their cost at list prices and the --tools counts per row), which scripts/spec-drift.py puts on the dashboard. The
+docs/dashboard/token-usage.json (tokens, their cost at list prices, the part of it spent in replies that read
+over 150k tokens, and the --tools counts per row), which scripts/spec-drift.py puts on the dashboard. The
 transcripts live on the maintainer's machine, not in CI, so this runs locally and its output is
 committed; the closing PR of each day refreshes it. Beside it, gates.json holds each gate's runs and the
 tokens of the replies that ran it or read its result (gates()), refusals.json the guards' refusals,
@@ -45,6 +46,9 @@ DATED = re.compile(r"-\d{8}$")
 GAP = datetime.timedelta(minutes=5)  # sessions(): a stretch of work ends when nothing is written for longer
 CUTS = (100_000, 200_000, 300_000)
 PEAK = 150_000  # --compare: the share of sessions whose peak passed it, and of cost in replies above it
+# A row's dollars spent in replies that read a context over PEAK, the part one session per step is meant to
+# save (graph 8). A row counted before this field, whose transcripts are gone, has none: unknown, not zero.
+PAST = f"cost_past_{PEAK // 1000}k"
 CAPS = (2_000, 5_000)
 RUN_MIN = datetime.timedelta(minutes=1)  # sessions(): a wait on a shell command this long or longer is drawn on the page
 SHELLS = ("Bash", "PowerShell")
@@ -199,7 +203,10 @@ def count(files):
         t["cache_read"] += usage.get("cache_read_input_tokens", 0)
         t["output"] += usage.get("output_tokens", 0)
         t["replies"] += 1
-        t["cost"] += cost(entry["message"].get("model"), usage)
+        spent = cost(entry["message"].get("model"), usage)
+        context = usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + usage.get("cache_read_input_tokens", 0)
+        t["cost"] += spent
+        t[PAST] = t.get(PAST, 0) + (spent if context > PEAK else 0)
     return totals
 
 
@@ -787,6 +794,8 @@ def main():
                 t[k] = max(t[k], r[k])
             for k in TOOL_FIELDS + ("cost",):
                 t[k] = max(t[k], r.get(k, 0))
+            if PAST in t or PAST in r:
+                t[PAST] = max(t.get(PAST, 0), r.get(PAST, 0))
         # A row written before agents were counted holds every agent's tokens: what it has beyond
         # the agents counted for its date, day and model is kept as unknown, not given to one of them.
         for r in (r for r in kept if "agent" not in r):
@@ -794,7 +803,8 @@ def main():
             t = totals[(r["date"], r["day"], r["model"], "unknown")]
             for k in FIELDS:
                 t[k] += max(0, r[k] - sum(c[k] for c in counted))
-    rows = [dict(date=d, day=n, model=m, agent=a, **dict(t, cost=round(t["cost"], 4))) for (d, n, m, a), t in totals.items()]
+    rows = [dict(date=d, day=n, model=m, agent=a, **{k: round(v, 4) if k in ("cost", PAST) else v for k, v in t.items()})
+            for (d, n, m, a), t in totals.items()]
     rows.sort(key=lambda r: (r["date"], r["day"] or 0, r["model"], r["agent"]))
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
         f.write("[\n" + ",\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n]\n")

@@ -2136,5 +2136,74 @@ class LookAheadTest(unittest.TestCase):
         self.assertEqual(got["pending"], dict(day=2, tracks=[dict(track="B", ids=["C02.2"])], at_close=["C02.3"]))
 
 
+def parked(number, title, opened, closed=None):
+    return dict(number=number, title=title, url=f"https://github.com/example/shop/issues/{number}", opened=opened, closed=closed)
+
+
+class DriverRunsTest(unittest.TestCase):
+    """The driver's steps come from the file driver-runs.py wrote, its parks' waits from GitHub."""
+    LINE = "park: the session parked: a criterion cannot be met as written (session `s1`)"
+
+    def test_the_parked_issues_are_read_open_and_closed_and_come_out_by_number(self):
+        listed = [dict(number=9, title="park: b", url="u9", createdAt="2026-11-12T13:00:05Z", closedAt=None),
+                  dict(number=4, title="park: a", url="u4", createdAt="2026-11-12T09:00:05Z", closedAt="2026-11-12T10:10:00Z")]
+        with mock.patch.object(sd, "run", return_value=json.dumps(listed)) as run:
+            got = sd.parked_issues()
+        self.assertEqual(got, [dict(number=4, title="park: a", url="u4", opened="2026-11-12T09:00:05Z", closed="2026-11-12T10:10:00Z"),
+                               dict(number=9, title="park: b", url="u9", opened="2026-11-12T13:00:05Z", closed=None)])
+        asked = run.call_args.args
+        self.assertEqual(asked[:7], ("gh", "issue", "list", "--label", "parked", "--state", "all"))
+
+    def test_with_no_remote_or_a_gh_that_refuses_the_parks_are_unread_not_none_found(self):
+        with mock.patch.object(sd, "run") as run:
+            self.assertIsNone(sd.parked_issues(sd.NO_REMOTE))
+            run.assert_not_called()
+        refused = subprocess.CalledProcessError(1, "gh", stderr="issues are disabled")
+        with mock.patch.object(sd, "run", side_effect=refused), mock.patch("sys.stderr"):
+            self.assertIsNone(sd.parked_issues())
+
+    def test_a_park_is_given_the_issue_of_its_line_that_was_open_for_it(self):
+        park = dict(at="2026-11-12T13:00:00Z", line=self.LINE)
+        answered = parked(3, self.LINE, "2026-11-11T09:00:05Z", "2026-11-11T09:30:00Z")
+        opened = parked(5, self.LINE, "2026-11-12T13:00:04Z", "2026-11-12T14:10:00Z")
+        later = parked(8, self.LINE, "2026-11-12T16:00:00Z")
+        other = parked(6, "park: #12 carries Oversized:", "2026-11-12T13:00:04Z")
+        self.assertEqual(sd.park_issue(park, [answered, opened, later, other]), 5)
+        # Parked again while its issue was open: the driver comments on that issue and opens no other.
+        self.assertEqual(sd.park_issue(dict(park, at="2026-11-12T13:40:00Z"), [answered, opened, later, other]), 5)
+        # No issue was opened for it (gh failed): one closed before it, or opened long after, is not its.
+        self.assertIsNone(sd.park_issue(park, [answered, later, other]))
+        self.assertIsNone(sd.park_issue(dict(at="not a time", line=self.LINE), [opened]))
+        self.assertIsNone(sd.park_issue(dict(at="2026-11-12T13:00:00", line=self.LINE), [opened]))
+
+    def test_an_issue_is_titled_with_the_first_200_characters_of_the_line(self):
+        line = "park: " + "x" * 300
+        issue = parked(5, line[:200], "2026-11-12T13:00:04Z")
+        self.assertEqual(sd.park_issue(dict(at="2026-11-12T13:00:00Z", line=line), [issue]), 5)
+
+    def test_before_the_first_count_there_are_no_steps_and_the_parks_are_still_githubs(self):
+        issues = [parked(5, self.LINE, "2026-11-12T13:00:04Z")]
+        with tempfile.TemporaryDirectory() as page, mock.patch.object(sd, "PAGE", page):
+            got = sd.driver_runs(issues)
+        self.assertEqual(got, dict(source="docs/dashboard/driver-runs.json", counted=None, steps=None, parks=issues))
+        self.assertEqual(sd.driver_runs(None, {})["parks"], None)
+
+    def test_the_counted_file_is_read_from_the_page_folder_and_each_park_names_its_issue(self):
+        step = dict(step="Day 08 Track A: the first track", day=8, prefix="day-08/track-a", sessions=[], fixes=0, crashes=0,
+                    pr=None, merged=None, ended="parked",
+                    parks=[dict(at="2026-11-12T13:00:00Z", line=self.LINE, by="maintainer"),
+                           dict(at="2026-11-12T15:00:00Z", line="park: #12 carries Oversized:", by="maintainer")])
+        issues = [parked(5, self.LINE, "2026-11-12T13:00:04Z", "2026-11-12T14:10:00Z")]
+        with tempfile.TemporaryDirectory() as page, mock.patch.object(sd, "PAGE", page):
+            with open(os.path.join(page, "driver-runs.json"), "w", encoding="utf-8") as f:
+                json.dump(dict(counted="2026-11-12T18:00:00+01:00", steps=[step]), f)
+            got = sd.driver_runs(issues)
+        self.assertEqual(got["counted"], "2026-11-12T18:00:00+01:00")
+        self.assertEqual([p["issue"] for p in got["steps"][0]["parks"]], [5, None])
+        self.assertEqual({k: v for k, v in got["steps"][0].items() if k != "parks"}, {k: v for k, v in step.items() if k != "parks"})
+        # With the parks unread, the steps are still the file's, and no park names an issue.
+        self.assertEqual([p["issue"] for p in sd.driver_runs(None, dict(steps=[step]))["steps"][0]["parks"]], [None, None])
+
+
 if __name__ == "__main__":
     unittest.main()

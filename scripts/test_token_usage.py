@@ -103,6 +103,26 @@ class CountTest(unittest.TestCase):
                                      call("t2", "Bash", when="2026-11-06T10:00:00Z"), result("t2", "short")]))
         self.assertEqual(sorted((key[0], t["bash"]) for key, t in rows), [("2026-11-05", 1), ("2026-11-06", 1)])
 
+    def read(self, message_id, context):
+        """A reply that read `context` tokens from the cache, and its usage."""
+        entry = json.loads(line(message_id=message_id, request_id=message_id))
+        entry["message"]["usage"]["cache_read_input_tokens"] = context - 10
+        return json.dumps(entry), entry["message"]["usage"]
+
+    def test_the_dollars_of_replies_that_read_over_150k_are_counted_beside_the_cost(self):
+        self.assertEqual((tu.PEAK, tu.PAST), (150_000, "cost_past_150k"))
+        (at, at_usage), (over, over_usage), (far, far_usage) = self.read("a", 150_000), self.read("b", 150_001), self.read("c", 400_000)
+        model = "claude-haiku-5-5-20260101"
+        rows = self.rows(self.count([at, over, far]))
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0][1]["cost_past_150k"], tu.cost(model, over_usage) + tu.cost(model, far_usage))
+        self.assertAlmostEqual(rows[0][1]["cost"] - rows[0][1]["cost_past_150k"], tu.cost(model, at_usage))
+        self.assertGreater(tu.cost(model, at_usage), 0)
+
+    def test_a_row_with_no_reply_over_150k_says_zero(self):
+        rows = self.rows(self.count([line()]))
+        self.assertEqual(rows[0][1]["cost_past_150k"], 0)
+
 
 class TranscriptsTest(unittest.TestCase):
     """Only this repository's transcript folders are read: its own and its worktrees'."""
@@ -313,6 +333,28 @@ class MergeTest(unittest.TestCase):
             with open(out, encoding="utf-8") as f:
                 rows = {(r["date"], r["agent"]): tuple(r[k] for k in ("bash", "cut", "reads", "whole", "output")) for r in json.load(f)}
         self.assertEqual(rows, {("2026-11-05", "main"): (1, 0, 0, 0, 100)})
+
+    def test_the_dollars_over_150k_are_never_lowered_and_a_row_whose_transcripts_are_gone_has_none(self):
+        with tempfile.TemporaryDirectory() as root:
+            out = os.path.join(root, "token-usage.json")
+            # Three kept rows: one counted before the field with its transcripts gone, one counted with
+            # it and gone, and one whose transcripts now hold a single small reply.
+            gone = dict(date="2026-10-10", day=43, model="claude-haiku-5-5", agent="main", input=10, cache_write=0,
+                        cache_read=0, output=100, replies=4, cost=3.0)
+            kept = dict(gone, date="2026-10-11", cost_past_150k=1.25)
+            here = dict(gone, date="2026-10-12", cost=10.0, cost_past_150k=9.5)
+            with open(out, "w", encoding="utf-8") as f:
+                json.dump([gone, kept, here], f)
+            project = os.path.join(root, "projects", re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(os.path.join(HERE, os.pardir))))
+            os.makedirs(project)
+            with open(os.path.join(project, "s.jsonl"), "w", encoding="utf-8") as f:
+                f.write(line(output=30) + "\n")
+            run = subprocess.run([sys.executable, os.path.join(HERE, "token-usage.py"), "--transcripts",
+                                  os.path.join(root, "projects"), "--out", out], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            with open(out, encoding="utf-8") as f:
+                rows = {r["date"]: (r["cost"], r.get("cost_past_150k", "none")) for r in json.load(f)}
+        self.assertEqual(rows, {"2026-10-10": (3.0, "none"), "2026-10-11": (3.0, 1.25), "2026-10-12": (10.0, 9.5)})
 
 
 def reply(message_id, context, sidechain=False, model=None, when=None):
