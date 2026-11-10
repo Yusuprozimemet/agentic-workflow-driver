@@ -21,6 +21,7 @@ from tests.test_github import fake_gh, read_calls
 T1 = "2026-11-08T10:00:00Z"
 T2 = "2026-11-08T11:00:00Z"
 T3 = "2026-11-08T12:00:00Z"
+LEVEL_2_NONE = "level 2: 0 of 15 pull requests in a row merged without a change asked"
 
 ISSUES = [
     {
@@ -185,6 +186,7 @@ class StatusTest(unittest.TestCase):
                 "  1 park: a one-off",
                 "refusals: 3",
                 "cost: $1.20, merged pull requests 2, $0.60 each (baseline $1.86)",
+                LEVEL_2_NONE,
             ],
         )
         self.assertEqual(done.returncode, 0)
@@ -228,7 +230,7 @@ class StatusTest(unittest.TestCase):
         )
         done = self.status()
         self.assertEqual(
-            done.stdout.splitlines()[-1],
+            done.stdout.splitlines()[-2],
             "cost: $0.70, merged pull requests 0 (baseline $1.86)",
         )
 
@@ -244,6 +246,7 @@ class StatusTest(unittest.TestCase):
             "parks by reason: none",
             "refusals: 0",
             "cost: $0.00, merged pull requests 0 (baseline $1.86)",
+            LEVEL_2_NONE,
         ]
         done = self.status(issues=[])
         self.assertEqual(done.stdout.splitlines(), expected)
@@ -344,6 +347,7 @@ class StatusTest(unittest.TestCase):
                 "parks by reason: none",
                 "refusals: 0",
                 "cost: $1.20, merged pull requests 0 (baseline $1.86)",
+                LEVEL_2_NONE,
             ],
         )
         self.assertEqual(done.stderr.strip(), "cannot read the project: gh issue list exited 1")

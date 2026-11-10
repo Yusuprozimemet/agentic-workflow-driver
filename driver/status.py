@@ -1,7 +1,7 @@
 """status prints where the driver is: its mode and halt, the run's issue and the open parks, the
 step in progress, one line per step, the parks by reason, the refusals and the cost per merged
-pull request. It reads the state folder and the project's open issues, takes no lock and writes
-nothing."""
+pull request, and the tools the driver refused and the Level 2 count. It reads the state folder and
+the project's open issues, takes no lock and writes nothing."""
 
 import collections
 import json
@@ -13,6 +13,8 @@ from driver import issues, lock, runlog
 
 # plan.md, "What it is judged against": the cost per merged pull request the driver is held to.
 BASELINE = 1.86
+# plan.md, "Levels": the pull requests merged in a row without a change asked, for Level 2.
+LEVEL_2_RUN = 15
 
 
 def run(project, gh, state) -> int:
@@ -34,7 +36,9 @@ def run(project, gh, state) -> int:
         lines += _steps(records)
         lines += _parks(records)
         lines.append(f"refusals: {_refusals(records)}")
+        lines += _refused(records)
         lines.append(_cost(records))
+        lines.append(_level_2(records))
     for line in lines:
         print(line)
     if gh_reason:
@@ -164,6 +168,18 @@ def _refusals(records):
     return sum(_number(record.get("denials")) for record in records if record.get("event") == "end")
 
 
+def _refused(records):
+    # One line per tool and input the driver refused, the most often refused first.
+    counts = collections.Counter(
+        f"{item['tool']}: {item['input']}"
+        for record in records
+        if record.get("event") == "end"
+        for item in record.get("refused") or []
+    )
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return [f"  {count} {text}" for text, count in ranked]
+
+
 def _cost(records):
     total = sum(
         _number(record.get("cost_usd")) for record in records if record.get("event") == "end"
@@ -175,6 +191,26 @@ def _cost(records):
         f"cost: ${total:.2f}, merged pull requests {merged}, ${total / merged:.2f} each "
         f"(baseline ${BASELINE:.2f})"
     )
+
+
+def _level_2(records):
+    # Counts back from the newest line until a merge asked for a change, a close, or a park that
+    # says a check is still red; any other line is passed over.
+    k = 0
+    for record in reversed(records):
+        event = record.get("event")
+        line = _text(record.get("line"))
+        if event == "merged":
+            if record.get("changed") is not False:
+                break
+            k += 1
+        elif event == "closed" or (event == "park" and "still red after two fixes" in line):
+            break
+    return f"level 2: {k} of {LEVEL_2_RUN} pull requests in a row merged without a change asked"
+
+
+def _text(value):
+    return value if isinstance(value, str) else ""
 
 
 def _number(value):
