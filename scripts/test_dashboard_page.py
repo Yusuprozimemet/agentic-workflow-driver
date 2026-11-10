@@ -1,4 +1,4 @@
-"""The dashboard page: what each of its ten graphs draws and says, and what the page file must hold.
+"""The dashboard page: what each of its eleven graphs draws and says, and what the page file must hold.
 
 docs/dashboard/dashboard.js keeps its reading of the data in model(), which touches no document, so
 these tests run it in node on small made-up data and compare what comes out. The page itself is
@@ -91,6 +91,20 @@ def promise(cid, ticked=True, **more):
 
 def cell(cid, n, state):
     return dict(criterion=cid, day=f"0{cid[1]}", n=n, state=state, mixed=False, checks=[])
+
+
+def run_step(n, day, ended, fixes=0, crashes=0, parks=()):
+    """One step the driver started, as driver_runs.json holds it: `ended` is how it ended, `parks` its parks."""
+    return dict(step=f"Step {n}.", day=day, prefix=n, sessions=[], fixes=fixes, crashes=crashes, pr=None, merged=None,
+                parks=list(parks), ended=ended)
+
+
+def park(issue, by, line="Waiting for a decision."):
+    return dict(at="2026-01-02T09:00:00Z", line=line, by=by, issue=issue)
+
+
+def an_issue(number, opened, closed=None):
+    return dict(number=number, title=f"Park {number}", url=f"https://example.com/issues/{number}", opened=opened, closed=closed)
 
 
 ABILITIES = dict(abilities=[dict(key="a", name="Runs", role="rung"), dict(key="b", name="Stops", role="rung")])
@@ -576,6 +590,114 @@ class ModelTest(unittest.TestCase):
             "No merged pull request yet", "No promise yet", "No gap is measured yet", "No defect is recorded yet",
             "No token counts yet", "No yardstick is counted yet"])
 
+    def test_graph_11_places_each_step_by_how_it_ended(self):
+        # Steps of every kind: a merge, a merge after two fix rounds, a park the maintainer closed after 70 minutes, a park
+        # by a fault whose issue is still open, a parked step whose session crashed, a step still open, and a step with no Day.
+        steps = [run_step("A", 1, "merged"), run_step("B", 1, "fixed", fixes=2),
+                 run_step("C", 2, "parked", parks=[park(21, "maintainer")]), run_step("D", 2, "parked", parks=[park(22, "fault")]),
+                 run_step("E", 2, "parked", crashes=1, parks=[park(23, "maintainer")]), run_step("F", 3, "open"), run_step("G", None, "merged")]
+        driver = dict(source="run log", counted=None, steps=steps, parks=[an_issue(21, "2026-01-02T09:00:00Z", "2026-01-02T10:10:00Z"),
+                      an_issue(22, "2026-01-02T09:00:00Z"), an_issue(23, "2026-01-02T11:00:00Z", "2026-01-02T11:30:00Z")])
+        g = model(data(driver_runs=driver)).get("g11", {})
+        rows = g.get("rows", [])
+        self.assertEqual([r.get("label") for r in rows], ["Day 1", "Day 2", "Day 3", "No Day"])
+        self.assertEqual([[len(c) for c in r.get("cells", [])] for r in rows], [[1, 1, 0, 0], [0, 0, 2, 1], [0, 0, 0, 0], [1, 0, 0, 0]])
+        self.assertEqual([(r.get("alone"), r.get("n"), r.get("open")) for r in rows], [(2, 2, 0), (0, 3, 0), (0, 0, 1), (1, 1, 0)])
+        dots = [[[(o.get("col"), o.get("fixes"), o.get("crashed"), o.get("wait")) for o in c] for c in r.get("cells", [])] for r in rows]
+        self.assertEqual(dots[0], [[("merged", 0, False, None)], [("fixed", 2, False, None)], [], []])
+        self.assertEqual(dots[1], [[], [], [("maintainer", 0, False, 70), ("maintainer", 0, True, 30)], [("fault", 0, False, None)]])
+        self.assertEqual([c.get("sub") for c in g.get("cols", [])],
+                         ["2 steps", "1 step · 2 fix rounds", "2 steps · waited 1 h 40 min", "1 step · the waits are not known"])
+        self.assertEqual(g.get("read", {}).get("t"), "6 steps, 3 of them with no person")
+        self.assertEqual(g.get("read", {}).get("b", [""])[0], "2 parks for the maintainer and 1 park by a fault. 1 crashed session in 1 step. "
+                         "1 step still open. A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; "
+                         "the fix rounds, the crashes and how a step ended come from the driver's run log.")
+
+    def test_graph_11_without_a_count_says_so_under_not_measured(self):
+        g = model(data()).get("g11", {})
+        self.assertIn("python scripts/driver-runs.py", g.get("empty", ""))
+        self.assertEqual((g.get("rows"), g.get("read", {}).get("t")), ([], "No step of the driver is counted yet"))
+        self.assertIn(["Whether it runs without a person", g.get("empty")], model(data()).get("notMeasured", []))
+
+    def test_graph_11_with_no_step_started_says_so_and_is_not_an_empty_count(self):
+        got = model(data(driver_runs=dict(source="run log", counted=None, steps=[], parks=[])))
+        g = got.get("g11", {})
+        self.assertEqual((g.get("empty"), g.get("rows"), g.get("read", {}).get("t")), (None, [], "The driver has started no step yet"))
+        self.assertNotIn("Whether it runs without a person", [n for n, _ in got.get("notMeasured", [])])
+
+    def test_graph_11_says_the_waits_could_not_be_read_when_the_parks_are_unknown(self):
+        steps = [run_step("C", 2, "parked", parks=[park(21, "maintainer")])]
+        g = model(data(driver_runs=dict(source="run log", counted=None, steps=steps, parks=None))).get("g11", {})
+        self.assertEqual([c.get("sub") for c in g.get("cols", [])],
+                         ["0 steps", "0 steps · 0 fix rounds", "1 step · the waits could not be read", "0 steps · the waits could not be read"])
+
+    def test_graph_10_draws_the_driver_and_its_parks_on_the_sessions_clock(self):
+        # The session is stamped +01:00 and the driver's times are UTC: 09:30Z is 10:30 on the clock. The open park runs to
+        # the driver's count, and the driver's lanes are not busy time.
+        clock = dict(prs=[], sessions=[{"date": "2026-01-02", "day": 2, "agent": "main", "from": "2026-01-02T08:00:00+01:00",
+                                        "to": "2026-01-02T11:00:00+01:00", "replies": 3}])
+        step_c = run_step("C", 2, "parked", parks=[park(21, "maintainer")])
+        step_c["sessions"] = [dict(session="s1", start="2026-01-02T09:30:00Z", end="2026-01-02T09:45:00Z", cost=0.5, denials=0, fixes=0, crashed=False),
+                              dict(session="s2", start="2026-01-02T10:00:00Z", end=None, cost=0.1, denials=0, fixes=0, crashed=True)]
+        step_m = run_step("M", 2, "merged")
+        step_m.update(pr=7, merged="2026-01-02T10:20:00Z")
+        driver = dict(source="run log", counted="2026-01-02T13:00:00Z", steps=[step_c, step_m],
+                      parks=[an_issue(21, "2026-01-02T09:00:00Z", "2026-01-02T10:10:00Z"), an_issue(22, "2026-01-02T12:00:00Z")])
+        got = model(data(clock=clock, driver_runs=driver)).get("g10", {})
+        dates = got.get("dates", [])
+        self.assertEqual(len(dates), 1)
+        self.assertEqual([lane.get("name") for lane in dates[0].get("lanes", [])][:2], ["Driver", "Parked for the maintainer"])
+        driver_lane, parked = dates[0]["lanes"][0], dates[0]["lanes"][1]
+        self.assertEqual(sorted((b.get("cls"), b.get("from")) for b in driver_lane.get("bars", [])),
+                         [("act", "10:30"), ("act", "11:00"), ("act", "11:20"), ("crash", "11:00")])
+        self.assertEqual(sorted(b.get("t") for b in driver_lane.get("bars", [])), sorted([
+            "The driver started a session · 10:30", "The driver started a session · 11:00", "The driver saw pull request #7 merged · 11:20",
+            "A session crashed · started 11:00"]))
+        self.assertEqual(driver_lane.get("sub"), "3 acts, 1 crashed session")
+        self.assertEqual([(b.get("cls"), b.get("t"), b.get("from"), b.get("to"), b.get("days")) for b in parked.get("bars", [])],
+                         [("park", "Parked · 10:00 to 11:10", "10:00", "11:10", [2]), ("park", "Parked · 13:00 to 14:00", "13:00", "14:00", [])])
+        self.assertEqual([b.get("b") for b in parked.get("bars", [])], [["Waited 1 h 10 min: Park 21"], ["Still waiting at the count: Park 22"]])
+        self.assertEqual(parked.get("sub"), "2 parks, 2 h 10 min in all")
+        self.assertIn("The driver started 2 sessions and waited 2 h 10 min on 2 parks.", dates[0].get("read", {}).get("b", []))
+        self.assertEqual(got.get("driver"), True)
+        # Without steps the lanes are the session lanes, as they were before the driver's data was drawn.
+        plain = model(data(clock=clock, driver_runs=dict(source="run log", counted=None, steps=None, parks=None))).get("g10", {})
+        plain_dates = plain.get("dates", [])
+        self.assertEqual(len(plain_dates), 1)
+        self.assertEqual([lane.get("name") for lane in plain_dates[0].get("lanes", [])],
+                         ["Main session", "Implementer", "Auditors", "Pull request open", "Checks running", "Maintainer merges"])
+        self.assertEqual(plain.get("driver"), False)
+
+    def test_graph_8_hatches_the_main_session_dollars_after_150k_and_sums_only_the_rows_that_say_so(self):
+        # 2 Jan: two main rows, one with the dollars past 150k and one without the key, and an implementer row that is not the main session.
+        # 3 Jan: no row says it, so it is not known.
+        tokens = [dict(date="2026-01-02", agent="main", cost=3.0, replies=1, cut=0, cost_past_150k=1.0),
+                  dict(date="2026-01-02", agent="main", cost=1.0, replies=1, cut=0),
+                  dict(date="2026-01-02", agent="implementer", cost=0.5, replies=1, cut=0, cost_past_150k=9.0),
+                  dict(date="2026-01-03", agent="main", cost=2.0, replies=1, cut=0)]
+        g = model(data(tokens=tokens)).get("g8", {})
+        self.assertEqual([x.get("past") for x in g.get("bars", [])], [1.0, None])
+        self.assertIn("$1.00 of the main session's $4.00 came after a session passed 150k tokens.", g.get("bars", [{}])[0].get("b", [""])[0])
+        self.assertIn("Over 1 date where it is known, $1.00 of the main session's $4.00 came after a session passed 150k tokens.",
+                      g.get("read", {}).get("b", [""])[0])
+        self.assertIn(["past", "Of the main session, after a session passed 150k tokens $1.00"], g.get("key", []))
+        self.assertEqual((g.get("table", {}).get("head", [])[2:4], [r[2:4] for r in g.get("table", {}).get("rows", [])]),
+                         (["Main session, $", "Main session after 150k, $"], [["4.00", "1.00"], ["2.00", ""]]))
+        plain = model(data(tokens=[dict(date="2026-01-02", agent="main", cost=3.0, replies=1, cut=0)])).get("g8", {})
+        self.assertNotIn("past", [k for k, _ in plain.get("key", [])])
+
+    def test_graph_2_counts_the_parks_row_from_the_driver_steps_where_the_notebook_has_no_figure(self):
+        steps = [run_step("A", 1, "merged"), run_step("B", 2, "parked", parks=[park(21, "maintainer"), park(22, "fault")]),
+                 run_step("C", 2, "merged")]
+        yardsticks = dict(days=[1, 2], problems=[], rows=[dict(key="parks", name="Times it stopped", unit="", decimals=0, baseline=None,
+                          values=[dict(day=1, value=None, text="none yet"), dict(day=2, value=5, text="5 in the notebook")])])
+        g = model(data(yardsticks=yardsticks, driver_runs=dict(source="run log", counted=None, steps=steps, parks=[]))).get("g2", {})
+        row = next((r for r in g.get("rows", []) if r.get("key") == "parks"), {})
+        self.assertEqual([(c.get("text"), c.get("b")) for c in row.get("cells", [])[:2]],
+                         [("0", ["0 parks, counted from the driver's run log; the lab notebook has no figure for this Day yet."]),
+                          ("5", ["5 in the notebook"])])
+        self.assertEqual((row.get("avg"), [w.get("name") for w in g.get("waiting", [])]), ([], []))
+
 
 @unittest.skipUnless(shutil.which("node"), "needs node to boot the page")
 class BootTest(unittest.TestCase):
@@ -599,13 +721,21 @@ class BootTest(unittest.TestCase):
         # The walk-through reads the same list of promises, so it says so too; the other six graphs drew.
         self.assertEqual([line.split(":")[0] for line in out["logged"]], ["g4", "g5", "how this works"])
 
+    def test_the_page_draws_the_driver_runs_without_an_error(self):
+        clock = dict(prs=[], sessions=[{"date": "2026-01-02", "day": 2, "agent": "main", "from": "2026-01-02T08:00:00+01:00",
+                                        "to": "2026-01-02T11:00:00+01:00", "replies": 3}])
+        steps = [run_step("C", 2, "parked", crashes=1, parks=[park(21, "maintainer")]), run_step("D", 2, "fixed", fixes=1)]
+        out = boot(data(clock=clock, driver_runs=dict(source="run log", counted="2026-01-02T13:00:00Z", steps=steps,
+                                                       parks=[an_issue(21, "2026-01-02T09:00:00Z")])))
+        self.assertEqual((out["error"], out["logged"]), (None, []))
+
 
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
     def test_every_graph_has_its_plot_its_readout_and_its_exact_numbers_folded_under_it(self):
         html = read("index.html")
-        for n in range(1, 10):
+        for n in range(1, 12):
             section = re.search(rf'<section class="graph" id="g{n}">.*?</section>', html, re.S)
             self.assertIsNotNone(section, f"graph {n}")
             order = [section.group(0).index(f'id="g{n}-{part}"') for part in ("plot", "read", "table")]
@@ -616,7 +746,8 @@ class PageFilesTest(unittest.TestCase):
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for n in range(1, 10):
+        for n in range(1, 12):
+            self.assertIn(f'id="g{n}-plot"', html, f"graph {n}")
             before = html[:html.index(f'id="g{n}-plot"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), f"graph {n}")
 
@@ -638,13 +769,14 @@ class PageFilesTest(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", page)
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
-    def test_the_ten_graphs_sit_in_order_under_four_group_headings(self):
+    def test_the_eleven_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in range(1, 11)])
-        heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?"]
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in range(1, 12)])
+        heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
+                 "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3}
+        group = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
         for n, g in group.items():
             at = html.index(f'<section class="graph" id="g{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, f"graph {n}")
