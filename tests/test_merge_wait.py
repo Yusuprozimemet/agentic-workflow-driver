@@ -27,10 +27,12 @@ from tests.test_wait import RUN_ISSUE, SESSION, STEP, STOP_ISSUE
 BRANCH = "day-01/track-a-x"
 
 
-def view(state, paths=("driver/once.py",), body=""):
+def view(state, paths=("driver/once.py",), body="", head=None):
     merge = {"oid": "a" * 40} if state == "MERGED" else None
     files = [{"path": p} for p in paths]
     out = {"state": state, "mergeCommit": merge, "files": files, "body": body}
+    if head is not None:
+        out["headRefOid"] = head
     return {"code": 0, "out": out}
 
 
@@ -127,7 +129,7 @@ class MergeWaitTest(unittest.TestCase):
         self.git = recorder(self.root)
 
     def wait(self, human_only=()):
-        line, code = self.loop.wait_merge(
+        line, code, self.keys = self.loop.wait_merge(
             self.args, self.project, 12, self.record, list(human_only), self.read_facts, self.git
         )
         # The scratch commit's sha differs each run; a break's report must not (the close replays it).
@@ -234,7 +236,9 @@ class MergeWaitTest(unittest.TestCase):
         result = self.loop.wait_merge(
             self.args, self.project, 12, self.record, [], without_origin, self.git
         )
-        self.assertEqual(result, ("cannot read the project: no origin/main after #12 merged", 2))
+        self.assertEqual(
+            result, ("cannot read the project: no origin/main after #12 merged", 2, {})
+        )
 
     def test_halt_during_merge_wait(self):
         self.build([view("OPEN")])

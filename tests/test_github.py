@@ -415,16 +415,17 @@ class GitHubTest(unittest.TestCase):
                     "mergeCommit": {"oid": sha},
                     "files": [{"path": "plan.md", "additions": 1}, {"path": "driver/loop.py"}],
                     "body": "Oversized: yes\n",
+                    "headRefOid": "aaa",
                 },
                 0,
-                ("MERGED", sha, ["plan.md", "driver/loop.py"], "Oversized: yes\n", None),
+                ("MERGED", sha, ["plan.md", "driver/loop.py"], "Oversized: yes\n", None, "aaa"),
             ),
             (
                 {"state": "OPEN", "mergeCommit": None, "files": [], "body": None},
                 0,
-                ("OPEN", None, [], "", None),
+                ("OPEN", None, [], "", None, None),
             ),
-            ("", 1, (None, None, [], "", "gh pr view exited 1")),
+            ("", 1, (None, None, [], "", "gh pr view exited 1", None)),
         ]
         for out, code, expected in cases:
             with self.subTest(out=out, code=code):
@@ -433,5 +434,5 @@ class GitHubTest(unittest.TestCase):
                 self.assertEqual(self.github.pr_state(str(folder), gh, 12), expected)
                 self.assertEqual(
                     read_calls(folder),
-                    [["pr", "view", "12", "--json", "state,mergeCommit,files,body"]],
+                    [["pr", "view", "12", "--json", "state,mergeCommit,files,body,headRefOid"]],
                 )

@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tests import test_merge_wait
+from tests import test_merge_wait, test_wait
 from tests.test_dry_run import drift_of
 from tests.test_github import fake_gh, read_bodies
 from tests.test_merge_wait import view
-from tests.test_on import OnCase
+from tests.test_on import GREEN, RED, OnCase
 from tests.test_once import DASHED, driver_copy, fake_claude, once
 from tests.test_once_park_issues import build, dirty_tree
 from tests.test_preflight import HELP
@@ -29,20 +29,8 @@ from tests.test_preflight import HELP
 PAID = {"type": "result", "is_error": False, "result": "done", "total_cost_usd": 1.5}
 
 
-class RunLogReportTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.root = tempfile.mkdtemp()
-        cls.copy = driver_copy(cls.root)
-
-    @classmethod
-    def tearDownClass(cls):
-        shutil.rmtree(cls.root, ignore_errors=True)
-
-    def setUp(self):
-        # Imported here, as in tests/test_runlog.py: where driver/ is missing, each test fails.
-        self.runlog = importlib.import_module("driver.runlog")
-
+class RunLogLines:
+    # The helpers the run-log cases share; not a TestCase, so that importing it collects no tests.
     def log_of(self, state):
         # The run log's lines as objects, read from the bytes the driver wrote; none before a write.
         path = Path(state) / "run.jsonl"
@@ -58,6 +46,21 @@ class RunLogReportTest(unittest.TestCase):
         self.addCleanup(case.doCleanups)
         case.build(views)
         return case.wait(), self.log_of(case.root / "state")
+
+
+class RunLogReportTest(RunLogLines, unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.root = tempfile.mkdtemp()
+        cls.copy = driver_copy(cls.root)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.root, ignore_errors=True)
+
+    def setUp(self):
+        # Imported here, as in tests/test_runlog.py: where driver/ is missing, each test fails.
+        self.runlog = importlib.import_module("driver.runlog")
 
     def test_park_lines(self):
         # One park before a session (the tree is dirty, so decide parks first) and one after it (the
@@ -81,8 +84,10 @@ class RunLogReportTest(unittest.TestCase):
 
     def test_merged_line(self):
         result, lines = self.merge_wait([view("MERGED")])
-        merged = [(list(r), r["pr"]) for r in lines if r["event"] == "merged"]
-        self.assertEqual((result, merged), ((None, 0), [(["event", "at", "pr"], 12)]))
+        merged = [(list(r), r["pr"], r.get("changed")) for r in lines if r["event"] == "merged"]
+        self.assertEqual(
+            (result, merged), ((None, 0), [(["event", "at", "pr", "changed"], 12, None)])
+        )
         # A wait that parks because the pull request was closed writes no merged line.
         result, lines = self.merge_wait([view("CLOSED")])
         merged = [r for r in lines if r["event"] == "merged"]
@@ -159,3 +164,82 @@ class RunIssueCostTest(OnCase, unittest.TestCase):
         # A new issue has no number yet: the start line with no issue, and its $4.00, is not its own.
         self.issues.open_run(str(folder), gh, "Step", "s5", [], state=state)
         self.assertIn("cost so far: $0.00", read_bodies(folder)[1]["body"])
+
+
+class MergeWaitHeadTest(RunLogLines, OnCase, unittest.TestCase):
+    # The pr and head that the wait, the merged and the gated park lines carry (Day 8). The
+    # assertions compare each line's event, pr, head and changed only: no time or sha in a report.
+
+    def test_wait_line(self):
+        # The wait line is written before the first read: a wait that ends at its first read still
+        # names #7, and no check is read for it.
+        case = test_wait.WaitTest("test_red_without_session_parks")
+        case.setUp()
+        self.addCleanup(case.doCleanups)
+        case.build([GREEN])
+        result = case.loop.wait_pr(case.args, case.project, 7, case.record)
+        waits = [r for r in self.log_of(case.args.state) if r["event"] == "wait"]
+        self.assertEqual((result, [r["pr"] for r in waits]), ((None, 0), [7]))
+        case.build([GREEN], issues=[])
+        result = case.loop.wait_pr(case.args, case.project, 7, case.record)
+        waits = [r for r in self.log_of(case.args.state) if r["event"] == "wait"]
+        self.assertEqual(
+            (result, [r["pr"] for r in waits], case.gh_of("pr", "checks")),
+            (("off: the run's issue #7 is closed; nothing new starts", 0), [7], []),
+        )
+
+    def build_pr7(self, name, **kwargs):
+        # OnCase.build opens #5 in fake gh; the drift and the fake gh must both have #7 open, so
+        # that the run waits on it at the start, as a pull request found there.
+        self.build(name, drift=drift_of(DASHED, open_prs=(7,)), **kwargs)
+        path = self.folder / "gh" / "fake.json"
+        spec = json.loads(path.read_bytes())
+        spec["prs"] = [{**pr, "number": 7} for pr in spec["prs"]]
+        path.write_bytes(json.dumps(spec).encode("utf-8"))
+
+    def test_gated_park_carries_pr_head(self):
+        self.build_pr7("gated", views=[view("OPEN", paths=["plan.md"], head="aaa")])
+        code, out, _ = self.on()
+        parks = [r for r in self.log_of(self.state) if r["event"] == "park"]
+        self.assertEqual(
+            (code, out.splitlines()[-1], [(r.get("pr"), r.get("head")) for r in parks]),
+            (1, "park: #7 touches plan.md", [(7, "aaa")]),
+        )
+
+    def test_park_without_pr(self):
+        # C08.17: the park that ends a wait on #7 carries no pr, though record["pr"] is set; its
+        # keys are C04.4's.
+        cases = [
+            ("red", {"checks": [RED]}, "park: the checks on #7 are red: tests"),
+            ("closed", {"views": [view("CLOSED")]}, "park: #7 was closed without a merge"),
+        ]
+        for name, kwargs, line in cases:
+            with self.subTest(name):
+                self.build_pr7(name, **kwargs)
+                code, out, _ = self.on()
+                parks = [r for r in self.log_of(self.state) if r["event"] == "park"]
+                self.assertEqual(
+                    (code, out.splitlines()[-1], [list(r) for r in parks]),
+                    (1, line, [["event", "at", "step", "line"]]),
+                )
+
+    def test_changed(self):
+        _, lines = self.merge_wait([view("OPEN", head="aaa"), view("MERGED", head="bbb")])
+        merged = [r for r in lines if r["event"] == "merged"]
+        self.assertEqual(
+            [(r["pr"], r.get("head"), r["changed"]) for r in merged], [(12, "bbb", True)]
+        )
+
+    def test_unchanged(self):
+        _, lines = self.merge_wait([view("OPEN", head="aaa"), view("MERGED", head="aaa")])
+        merged = [r for r in lines if r["event"] == "merged"]
+        self.assertEqual(
+            [(r["pr"], r.get("head"), r["changed"]) for r in merged], [(12, "aaa", False)]
+        )
+
+    def test_no_head(self):
+        _, lines = self.merge_wait([view("OPEN"), view("MERGED")])
+        merged = [r for r in lines if r["event"] == "merged"]
+        self.assertEqual(
+            [("head" in r, "changed" in r, r.get("changed")) for r in merged], [(False, True, None)]
+        )

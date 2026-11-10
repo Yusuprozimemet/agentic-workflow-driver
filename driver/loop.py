@@ -82,6 +82,7 @@ def resume(args, project, number, record, command, failed, used):
 def wait_pr(args, project, number, record, command=None):
     # `command` is the session's claude command, or None for a pull request with no session of this
     # run. Returns (line, code); (None, 0) means the checks are green.
+    runlog.wait(args.state, number)
     blind_since = None  # since when nothing could be read, or no check exists
     while True:
         line, code, reason = read_switches(args, project, record)
@@ -119,6 +120,7 @@ def wait_pr(args, project, number, record, command=None):
             print(line, flush=True)
             number = int(re.match(r"opened: #(\d+)", line).group(1))
             record["pr"] = number
+            runlog.wait(args.state, number)
         sleep(args.poll)
 
 
@@ -184,32 +186,43 @@ def wait_evidence(args, project, record, sha):
 
 def wait_merge(args, project, number, record, human_only, read_facts, git=("git",)):
     # After wait_pr's green: the path check, the maintainer's merge (no bound on it), main pulled,
-    # and the evidence run on the new origin/main head. Returns (line, code); (None, 0) means the
-    # next step can start.
+    # and the evidence run on the new origin/main head. Returns (line, code, keys); (None, 0, {})
+    # means the next step can start. keys is a gated park's pr and head, for once.finish; {} in
+    # every other return.
+    heads, keys = [], {}
+
     def read():
-        state, _, paths, body, reason = github.pr_state(project, args.gh, number)
+        state, _, paths, body, reason, head = github.pr_state(project, args.gh, number)
         if reason:
             return None, reason
+        # The head of the first successful read is kept: a commit pushed after the green changes it.
+        if not heads:
+            heads.append(head)
         line = gated(paths, body, human_only, number)
         if line:
+            keys.update(pr=number)
+            if head is not None:
+                keys["head"] = head
             return (line, 1), None
         if state == "CLOSED":
             return (f"park: #{number} was closed without a merge", 1), None
         if state == "MERGED":
-            runlog.merged(args.state, number)
+            changed = None if head is None or heads[0] is None else head != heads[0]
+            runlog.merged(args.state, number, head, changed)
             return (None, 0), None
         return None, None
 
     line, code = poll(args, project, record, read)
     if line is not None:
-        return line, code
+        return line, code, keys
     _, line = tree.to_main(project, read_facts(project), MERGED, git)
     if line:
-        return line, 1
+        return line, 1, {}
     sha = read_facts(project).origin_main
     if sha is None:
-        return f"cannot read the project: no origin/main after #{number} merged", 2
-    return wait_evidence(args, project, record, sha)
+        return f"cannot read the project: no origin/main after #{number} merged", 2, {}
+    line, code = wait_evidence(args, project, record, sha)
+    return line, code, {}
 
 
 def run(args, home, read_facts):
@@ -231,9 +244,9 @@ def steps(args, home, project, read_facts, config):
         return once.refuse([line])
     record, count, open_list, shown = None, 0, [], None
 
-    def end(line, code):
+    def end(line, code, **keys):
         once.say(line, code)
-        return once.finish(args, home, project, started, record, line, code, open_list)
+        return once.finish(args, home, project, started, record, line, code, open_list, **keys)
 
     while True:
         if record is not None:
@@ -285,8 +298,9 @@ def steps(args, home, project, read_facts, config):
                 return once.finish(args, home, project, started, record, line, code, open_list)
             record["pr"] = int(re.match(r"opened: #(\d+)", line).group(1))
             line, code = wait_pr(args, project, record["pr"], record, command)
+        keys = {}
         if line is None:
-            line, code = wait_merge(
+            line, code, keys = wait_merge(
                 args, project, record["pr"], record, config["human_only"], read_facts
             )
         if line is None:
@@ -296,4 +310,4 @@ def steps(args, home, project, read_facts, config):
                 # A resume can change the driver's files too: finish() halts on it.
                 line, code = f"merged: #{record['pr']}", 0
         if line is not None:
-            return end(line, code)
+            return end(line, code, **keys)

@@ -78,11 +78,11 @@ def outcome(out, returncode, session, project, gh, sentence):
     return f"park: the step has more than one pull request: {numbers}", 1
 
 
-def park_issue(project, gh, state, line, sentence, session, open_list):
+def park_issue(project, gh, state, line, sentence, session, open_list, pr=None, head=None):
     # Every park --once prints is an issue (Day 5): the maintainer closes it to let the driver go on.
     # A park before a session names none, and loop.py's between-steps record the string "none":
     # both fall back to the newest session the log has for the step.
-    runlog.park(state, sentence, line)
+    runlog.park(state, sentence, line, pr, head)
     if session in (None, "none"):
         prefix = classify(sentence).prefix
         session = runlog.last_session(state, prefix) if prefix else None
@@ -499,15 +499,23 @@ def one_session(command, prompt, args, project, record):
     return line, code
 
 
-def finish(args, home, project, started, record, line, code, open_list):
+def finish(args, home, project, started, record, line, code, open_list, pr=None, head=None):
     # The step's end, once its outcome is printed: the park's issue, a halt set during the step, and
     # the run's issue closed with the outcome as its comment. A gh that failed (exit 2) is what the
-    # step cannot use, so no further gh call is made.
+    # step cannot use, so no further gh call is made. pr and head come from a gated park only.
     number = record["issue"]
     parked = None
     if line.startswith("park:"):
         parked = park_issue(
-            project, args.gh, args.state, line, record["step"], record["session"], open_list
+            project,
+            args.gh,
+            args.state,
+            line,
+            record["step"],
+            record["session"],
+            open_list,
+            pr,
+            head,
         )
     _, reason = driver_home.check(home, started)
     if reason:
