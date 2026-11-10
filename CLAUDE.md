@@ -186,7 +186,9 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   Record it in one line, `broken: <what> → <what it reported>` (`specs/README.md`): the
   dashboard reads no other wording. `scripts/break.py` does one break this way and prints the
   line: one exact replacement, the file's bytes put back, the command run without a shell, a build
-  only with `clean`. Hand-run breaks have half-applied, skipped the compile, never started the
+  only with `clean`, the check run twice with the break in. It refuses a report that differs
+  between the two runs or holds a pid, a uuid, a commit hash or an absolute path: have the test
+  print a fixed word there (`<uuid>`, `<head>`), in a fixture too. Hand-run breaks have half-applied, skipped the compile, never started the
   build, and lost unstaged work. Above the `broken:` line it prints `manifest: {...}`, the
   break's entry for the close's break manifest: put it in the PR beside its `broken:` line.
   Paste it as printed into the body file and check it with `gh pr view <n> --json body`: retyped

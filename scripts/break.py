@@ -1,7 +1,7 @@
 """Break the code on purpose once, run the check, put the code back, and print the `broken:` line.
 
     python scripts/break.py --file <path> --find <text> --replace <text> --what "<what was broken>" \
-        [--cwd <dir>] [--expect-stdout <regex>] [--] <command> [args...]
+        [--cwd <dir>] [--expect-stdout <regex>] [--replay] [--] <command> [args...]
 
 for example `... --what "the guard removed" python -m unittest tests.test_cli`: everything from the
 command on is the command's, options included.
@@ -25,6 +25,12 @@ the break itself. A command that started but did not run the check (on
 Windows, `bash` can be WSL's: "execvpe(/bin/bash) failed") is refused, not recorded. <what> holds
 no arrow: spec-drift.py reads the line up to its first one. A temporary directory in the report is
 written <tmp>, so no local path, a user name in it, reaches the PR.
+
+It runs the check twice with the break in, and refuses a report that differs between the two runs, or
+a check that failed in one and passed in the other. It refuses a report that holds a pid, a uuid, a
+commit hash or an absolute path: the close replays the line on another machine, and 12 of this
+project's 23 recurring defects up to Day 7 were such reports (D03.17 to D07.40). --replay, which
+evidence.py passes, runs the check once and leaves the comparison with the recorded line to the caller.
 
 Each rule here is a defect the paper's record holds (docs/paper, Appendix F): an incremental compile
 that skipped a break (D23-027), breaks run through cmd.exe into WSL's bash that never started Maven
@@ -68,6 +74,15 @@ def untemp(line):
     return line
 
 
+# What another run or another machine prints differently, looked for in the report after untemp().
+UNSTABLE = [(name, re.compile(p)) for name, p in (
+    ("a uuid", r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"),
+    ("a pid", r"(?i)\b(?:pid|process id)\b\W{0,3}\d+"),
+    ("a commit hash", r"\b(?=[0-9a-f]*\d)(?=\d*[a-f])[0-9a-f]{7,40}\b"),
+    ("an absolute path", r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|(?<![\w/:.<>~-])/[\w.-]+(?:/[\w.-]+)+"),
+)]
+
+
 def reported(output):
     """The line a failed check's output is summed up by, or its last non-empty line. git's warnings
     ("LF will be replaced by CRLF") are not the check's report."""
@@ -77,6 +92,17 @@ def reported(output):
         if hits:
             return hits[-1]
     return lines[-1] if lines else "no output"
+
+
+def unstable(report):
+    """(what, the text) for the first thing in a report that another run or machine prints
+    differently, or None. A hash is 7 to 40 hex characters with a digit and a letter among them: a
+    count or a word is not one. <tmp> is not a path: untemp() wrote it."""
+    for name, pattern in UNSTABLE:
+        hit = pattern.search(report)
+        if hit:
+            return name, hit.group(0)
+    return None
 
 
 def not_run(returncode, output):
@@ -156,6 +182,9 @@ def main(args=None):
     p.add_argument("--cwd", help="where the check runs; --file must then sit in its tree")
     p.add_argument("--expect-stdout", metavar="REGEX",
                    help="the check's stdout without the break; the break is caught when it no longer matches")
+    p.add_argument("--replay", action="store_true",
+                   help="for evidence.py: one run with the break in and no look at its report, which the caller "
+                   "compares with the line recorded")
     p.add_argument("command", nargs=argparse.REMAINDER, help="the check, with its options; a leading -- is dropped")
     a = p.parse_args(args)
     a.command = a.command[1:] if a.command[:1] == ["--"] else a.command
@@ -205,9 +234,13 @@ def main(args=None):
             return refuse(f"the check fails without the break, so a failure with it proves nothing: {untemp(reported(output))}")
         with open(a.file, "wb") as f:
             f.write(original.replace(find, replace))
+        runs = []
         try:
-            run = subprocess.run(argv_for(a.command, a.cwd), cwd=a.cwd, capture_output=True, text=True,
-                                 encoding="utf-8", errors="replace", env=env)
+            # Twice, so a report that changes from one run to the next (a pid, a temporary name) is refused,
+            # not recorded: the replay on another machine would print another line.
+            for _ in range(1 if a.replay else 2):
+                runs.append(subprocess.run(argv_for(a.command, a.cwd), cwd=a.cwd, capture_output=True, text=True,
+                                           encoding="utf-8", errors="replace", env=env))
         except FileNotFoundError as e:
             return refuse(f"the command did not start: {e}")
     finally:
@@ -218,15 +251,30 @@ def main(args=None):
     with open(a.file, "rb") as f:
         if f.read() != original:
             return refuse(f"{a.file} is not back as it was: restore it by hand")
-    output = run.stdout + run.stderr
-    said = not_run(run.returncode, output)
-    if said:
-        return refuse(f"the command started but the check did not run, so nothing is recorded: {untemp(said)}")
-    if not caught(run.returncode, run.stdout, a.expect_stdout):
+    for run in runs:
+        said = not_run(run.returncode, run.stdout + run.stderr)
+        if said:
+            return refuse(f"the command started but the check did not run, so nothing is recorded: {untemp(said)}")
+    seen = [caught(run.returncode, run.stdout, a.expect_stdout) for run in runs]
+    if not any(seen):
+        output = runs[0].stdout + runs[0].stderr
         print(f"The check passed with the break in: it cannot see this break.\n  last line: {reported(output)}")
         return 1
+    if not all(seen):
+        return refuse("the check failed in one run with the break in and passed in the other: "
+                      "it is flaky, so nothing is recorded")
+    reports = [untemp(reported(run.stdout + run.stderr)) for run in runs]
+    if len(set(reports)) > 1:
+        return refuse(f"the report differs between two runs with the break in, so the replay would not print it "
+                      f"again: {reports[0]!r} then {reports[1]!r}; have the test print a fixed word in place of "
+                      "what changes")
+    if not a.replay and (found := unstable(reports[0])):
+        name, text = found
+        return refuse(f"the report holds {name} ({text}), which another run or machine prints differently: "
+                      f"{reports[0]!r}; have the test print a fixed word in its place (<uuid>, <head>, <pid>, "
+                      "a relative path)")
     print(manifest(a))
-    print(f"broken: {a.what} → {untemp(reported(output))}")
+    print(f"broken: {a.what} → {reports[0]}")
     return 0
 
 
