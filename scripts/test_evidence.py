@@ -179,6 +179,15 @@ class EvidenceTest(Repo):
         self.assertIn("reported 'AssertionError: broken', the spec says 'AssertionError: something else'",
                       run.stdout)
 
+    def test_a_recorded_report_that_holds_a_uuid_still_replays(self):
+        # the break runs once with --replay: a uuid in the report is compared with the spec, not refused
+        message = "AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed"
+        check = [sys.executable, "-c", f"import sys; sys.exit({message!r}) if 'broken' in open('app.txt').read() "
+                 "else None"]
+        run = self.run_evidence(spec(report=message), breaks=(dict(BREAK, command=check),))
+        self.assertEqual(run.returncode, 0)  # no output in the message: it holds the uuid
+        self.assertEqual(run.stdout.count("all evidence holds"), 1)
+
     def test_a_name_recorded_twice_fails_rather_than_replay_the_last(self):
         # bearing #66: two breaks named alike, and the second entry replaced the first.
         run = self.run_evidence(spec(), breaks=(dict(BREAK, command=[sys.executable, "-c", "pass"]), BREAK))

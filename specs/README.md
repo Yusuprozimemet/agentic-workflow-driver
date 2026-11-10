@@ -107,6 +107,22 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   - A check whose break bites on one system only (a carriage return on Windows) says so, and
     that a local run there guards it, not CI: CI's Linux run passes either way. In wordtally,
     Days 2 and 4 had one each.
+  - A break's report must be one any run prints again, on Windows and on Linux: no pid, session
+    id, commit hash, time, temporary name, absolute path or path separator. The test prints a
+    fixed word in its place (`<uuid>`, `<head>`). Here, up to Day 7, 21 Defect lines were
+    reports that did not replay, 12 of them the same problem come back (D03.17 to D07.40).
+    `scripts/break.py` runs the check twice with the break in and refuses a report that differs
+    between the runs, or that holds a pid, a uuid, a commit hash or an absolute path, a
+    fixture's fixed one included: it cannot tell that from a real one.
+  - Red today is the failure at the start of the criterion's track, on `main` with the tracks
+    before it merged, not on the day the spec was written: an earlier track that adds the
+    module or the argparse choice changes it (D06.16, D06.20). A behaviour an earlier track
+    already makes true is a `hold` (D03.14).
+  - What the spec takes `gh`, `git`, the `claude` CLI or the operating system to do is an
+    `Assumed` line in its Notes, with the command that shows it and what it printed, or who
+    runs it and before which track when the auditor cannot (a command that writes). Read from
+    source and never run, three such claims were wrong or unchecked on Days 5 and 6 (D05.12,
+    D06.13, D06.14).
   - The closing PR copies breaks; it does not run the first one. A criterion whose only
     `broken:` lines the close itself ran was a check no track had shown can fail: record it as a
     `Defect` (`found: close`). In jobmatch-microservices, four of the paper's six spec escapes

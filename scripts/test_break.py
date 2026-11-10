@@ -40,6 +40,16 @@ class SummaryTest(unittest.TestCase):
         for summary in ("Tests: 1 failed, 4 passed, 5 total", "Tests  1 failed | 4 passed (5)"):
             self.assertEqual(script.reported("FAIL detail\n" + summary + "\n"), summary)
 
+    def test_a_plain_report_holds_nothing_unstable(self):
+        script = load()
+        for line in ("AssertionError: 3 != 4", "Tests: 1 failed, 4 passed, 5 total",
+                     "AssertionError: '--resume' not found in ['-p', '--settings', '<tmp>/state/settings.json']",
+                     "AssertionError: ['plan.md', 'driver/loop.py'] != []", "see https://github.com/a/b/pull/12",
+                     "AssertionError: 1234567 != 7654321", "AssertionError: 'deadbeef' != 'defaced'",
+                     "FAILED (failures=1)", "AssertionError: <uuid> on <head> != None"):
+            self.assertIsNone(script.unstable(line), line)
+        self.assertEqual(script.unstable("run on 1dc0f03 failed"), ("a commit hash", "1dc0f03"))
+
 
 class BreakTest(unittest.TestCase):
     def setUp(self):
@@ -264,6 +274,75 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertIn("another break is active", run.stderr)
         self.assertEqual(self.contents(), self.original)
+
+    def test_the_check_runs_twice_with_the_break_in(self):
+        # the baseline, then two runs with the break in: the count is what the replay on another machine repeats
+        runs = os.path.join(self.dir, "runs.txt")
+        command = [sys.executable, "-c", f"import sys; t = open({self.file!r}).read(); "
+                   f"open({runs!r}, 'a').write('run\\n'); "
+                   "sys.exit('AssertionError: expected ok but was broken') if 'broken' in t else print('1 passed')"]
+        run = self.run_break("// ok", "// broken", command)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.strip().splitlines()[-1],
+                         "broken: the guard removed → AssertionError: expected ok but was broken")
+        with open(runs) as f:
+            count = len(f.read().splitlines())
+        self.assertEqual(count, 3)
+
+    def test_a_report_that_differs_between_the_two_runs_is_refused(self):
+        # a pid in the report: each run with the break in prints another one
+        command = [sys.executable, "-c", f"import os, sys; t = open({self.file!r}).read(); "
+                   "sys.exit(f'AssertionError: worker {os.getpid()} died') if 'broken' in t else print('1 passed')"]
+        run = self.run_break("// ok", "// broken", command)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("the report differs between two runs", run.stderr)
+        self.assertNotIn("broken:", run.stdout)
+        self.assertEqual(self.contents(), self.original)
+
+    def test_a_check_that_fails_once_and_passes_once_with_the_break_in_is_refused(self):
+        # a flaky check: the first run with the break in creates the marker and fails, the second finds it
+        marker = os.path.join(self.dir, "failed-once")
+        command = [sys.executable, "-c", f"import os, sys; t = open({self.file!r}).read(); m = {marker!r}; "
+                   "print('1 passed') if 'broken' not in t or os.path.exists(m) else "
+                   "(open(m, 'w').close(), sys.exit('AssertionError: expected ok but was broken'))"]
+        run = self.run_break("// ok", "// broken", command)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("failed in one run with the break in and passed in the other", run.stderr)
+        self.assertNotIn("broken:", run.stdout)
+        self.assertEqual(self.contents(), self.original)
+
+    def test_a_report_that_holds_a_pid_uuid_commit_hash_or_absolute_path_is_refused(self):
+        cases = (
+            ("a pid", "AssertionError: pid 4242 still holds the lock"),
+            ("a uuid", "AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed"),
+            ("a commit hash", "AssertionError: None != 'park: the evidence run on `1dc0f03` ended `failure`'"),
+            ("an absolute path", "AssertionError: 'C:\\Users\\me\\repo\\plan.md' is missing"),
+            ("an absolute path", "AssertionError: '/home/me/repo/plan.md' is missing"),
+        )
+        for name, message in cases:
+            with self.subTest(what=name, message=message):
+                command = [sys.executable, "-c", f"import sys; t = open({self.file!r}).read(); "
+                           f"sys.exit({message!r}) if 'broken' in t else print('1 passed')"]
+                run = self.run_break("// ok", "// broken", command)
+                self.assertEqual(run.returncode, 2)
+                self.assertIn(f"the report holds {name}", run.stderr)
+                self.assertNotIn("broken:", run.stdout)
+                self.assertEqual(self.contents(), self.original)
+
+    def test_replay_runs_the_break_once_and_leaves_the_report_to_its_caller(self):
+        # evidence.py and replay-history.py pass --replay: a recorded uuid replays, one run only
+        runs = os.path.join(self.dir, "runs.txt")
+        message = "AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed"
+        command = [sys.executable, "-c", f"import sys; t = open({self.file!r}).read(); "
+                   f"open({runs!r}, 'a').write('run\\n'); "
+                   f"sys.exit({message!r}) if 'broken' in t else print('1 passed')"]
+        run = self.run_break("// ok", "// broken", command, extra=("--replay",))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.strip().splitlines()[-1],
+                         "broken: the guard removed → AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed")
+        with open(runs) as f:
+            count = len(f.read().splitlines())
+        self.assertEqual(count, 2)
 
 
 if __name__ == "__main__":
