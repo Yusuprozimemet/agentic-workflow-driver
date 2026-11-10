@@ -58,6 +58,7 @@ CUT_AT = 3_000  # cap-output.py's KEEP: its cut marker follows the head, this ma
 # prompt-caching notes; a cache read the skill gives no figure for is 0.1x input. A model not here costs 0.
 PRICES_CHECKED = "2026-11-02"
 PRICES = {
+    "claude-fable-5-2": (8, 10, 16, 0.20, 40),  # this row checked 2026-11-10
     "claude-fable-5-1": (10, 12.5, 20, 0.25, 50),
     "claude-opus-5-5": (4, 5, 8, 0.20, 20),
     "claude-opus-5": (5, 6.25, 10, 0.50, 25),
