@@ -27,6 +27,17 @@ do not guess which one is right.
 - **Run the tests the brief names**, from the repository root, with `python -m unittest <module>.<Class>.<test>` (all of them: `python scripts/test-parallel.py`, one file per process; CI runs the same tests serially as `python -m unittest discover -s tests`). There is no report directory: read
   unittest's "Ran N tests" and "OK" lines, not the exit code. CI also runs `ruff check . && ruff format --check .`: run it.
 - If a test fails, fix your change, not the test, unless the brief says the test changes.
+- **Write tests whose failure can be replayed.** The main session breaks the code on purpose
+  and records what each test reported; the close replays it on Linux. So:
+  - A failure message holds nothing that differs between runs or machines: no pid, session id,
+    commit hash, time, duration, temporary name or absolute path, and no set printed in its own
+    order. Compare a bool, a sorted list, or the value with `<uuid>`, `<head>` or `<pid>` put in
+    its place.
+  - A test fails by an assertion, not by an error: read a key with `.get`, check a list's
+    length before indexing it. Under a break, `KeyError` or `IndexError` proves nothing.
+  - Every wait and poll has a bound that fails the test: a regression must not hang it.
+  - A test that would pass on the code before your change does not test it: say which line of
+    the old code it fails on.
 
 ## Never
 

@@ -36,6 +36,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 
 ## Notes
 - <risks, gotchas, decisions deferred>
+- **Assumed** — <what the spec takes `gh`, `git`, the CLI or the system to do>: `<the command
+  that shows it>` → <what it printed, and the version> | not run: <who runs it, before which track>.
 - **Defect** DNN.1 — found: <auditor | spec-change PR | review | seen red | break on purpose | self |
   Track X | close | evidence replay | dashboard | Day NN review> · cause: <spec | implementation | process | environment> ·
   made: <Day NN | none> · [same-as: <the earlier Defect's ID, e.g. D21.2> ·] <one problem: what
