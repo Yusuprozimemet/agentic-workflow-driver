@@ -182,11 +182,11 @@ def pr_state(project, gh, number):
     code, view = _gh(
         project,
         gh,
-        ["pr", "view", str(number), "--json", "state,mergeCommit,files,body"],
+        ["pr", "view", str(number), "--json", "state,mergeCommit,files,body,headRefOid"],
         want=dict,
     )
     if code != 0 or view is None:
-        return None, None, [], "", f"gh pr view exited {code}"
+        return None, None, [], "", f"gh pr view exited {code}", None
     merge = view.get("mergeCommit") or {}
     return (
         view.get("state"),
@@ -194,4 +194,5 @@ def pr_state(project, gh, number):
         [f["path"] for f in view.get("files") or []],
         view.get("body") or "",
         None,
+        view.get("headRefOid") or None,
     )

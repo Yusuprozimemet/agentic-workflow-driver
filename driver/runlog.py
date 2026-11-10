@@ -54,13 +54,29 @@ def end(state, session, outcome, cost_usd, denials, refused=None):
     append(state, record)
 
 
-def park(state, step, line):
+def wait(state, pr):
+    # Written before the first read of the pull request, so a wait that ends in any way names it.
+    append(state, {"event": "wait", "at": stamp(), "pr": pr})
+
+
+def park(state, step, line, pr=None, head=None):
     # Every park the driver prints is counted, one written before a session and one after it alike.
-    append(state, {"event": "park", "at": stamp(), "step": step, "line": line})
+    # pr and head go last, only the gated parks give them: the other park lines keep their keys.
+    record = {"event": "park", "at": stamp(), "step": step, "line": line}
+    if pr is not None:
+        record["pr"] = pr
+    if head is not None:
+        record["head"] = head
+    append(state, record)
 
 
-def merged(state, pr):
-    append(state, {"event": "merged", "at": stamp(), "pr": pr})
+def merged(state, pr, head=None, changed=None):
+    # changed is True or False when both heads are known, else null; head goes only when known.
+    record = {"event": "merged", "at": stamp(), "pr": pr}
+    if head is not None:
+        record["head"] = head
+    record["changed"] = changed
+    append(state, record)
 
 
 def fix(state, session, pr, n):

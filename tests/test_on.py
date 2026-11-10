@@ -302,6 +302,23 @@ class OnTest(OnCase, unittest.TestCase):
             (0, ["13"], "on: 1 steps, the night's count"),
         )
 
+    def test_wait_line_after_fix(self):
+        # The wait on the pull request the fix opened is logged after the first one's: each wait
+        # line names the pull request it waits on.
+        do = (
+            'if "--resume" in args:\n'
+            '    gh_file = folder.parent / "gh" / "fake.json"\n'
+            "    gh_spec = json.loads(gh_file.read_bytes())\n"
+            '    gh_spec["prs"] = [{**pr, "number": 13} for pr in gh_spec["prs"]]\n'
+            '    gh_file.write_bytes(json.dumps(gh_spec).encode("utf-8"))\n'
+        )
+        self.build("fixed_wait", steps=1, checks=[RED, GREEN], do=do)
+        code, _, _ = self.on()
+        path = self.state / "run.jsonl"
+        log = [json.loads(line) for line in path.read_bytes().splitlines()] if path.exists() else []
+        waits = [record.get("pr") for record in log if record.get("event") == "wait"]
+        self.assertEqual((code, waits), (0, [STEP_PR["number"], 13]))
+
     def test_on_refuses_a_dry_run(self):
         self.build("dry")
         code, out, err = self.on("--dry-run")
