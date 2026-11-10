@@ -291,6 +291,50 @@ def clock(rows):
     return dict(prs=prs, sessions=sessions)
 
 
+def driver_runs(rows, at):
+    """Made-up steps of a driver that drove Days 4 to 6, in the format scripts/driver-runs.py writes and
+    scripts/spec-drift.py passes on: one step per pull request of those Days, its last session ending as
+    the pull request opens. Every way a step can end is here: merged untouched, merged after one or two
+    fix rounds, parked on a decision that is the maintainer's, parked by a fault, merged after a first
+    session crashed, and still open. Each park names its issue, which was closed when it was answered."""
+    def stamp(date, minutes):
+        return f"{date}T{minutes // 60:02d}:{minutes % 60:02d}:00Z"
+
+    def run(pr, k, date, start, end, fixes=0):
+        return dict(session=f"demo-session-{pr}-{k}", start=stamp(date, start), end=None if end is None else stamp(date, end),
+                    cost=0.0 if end is None else round(0.9 + (pr % 4) * 0.3 + fixes * 0.25, 2), denials=0, fixes=fixes,
+                    crashed=end is None)
+    named = dict(spec=("Day {:02d}: read the spec against the code, then the spec-change PR", "day-{:02d}/spec"),
+                 code=("Day {:02d} Track A: {}", "day-{:02d}/track-a"), close=("Day {:02d}: the closing PR", "day-{:02d}/close-the-day"))
+    asked = "park: the session parked: a criterion cannot be met as written (session `{}`)"
+    lost = "park: the session ended with no pull request and no PARK line (session `{}`)"
+    steps, parks = [], []
+    driven = [p for p in clock(rows)["prs"] if p["day"] in (4, 5, 6) and p["kind"] in named]
+    last = day_prs(6)[-1]  # Day 6's close: its pull request is open
+    driven.append(dict(number=last["number"], day=6, kind="close", opened=stamp(max(r["date"] for r in rows), 15 * 60), merged=None))
+    for i, p in enumerate(driven):
+        pr, day, date = p["number"], p["day"], p["opened"][:10]
+        opened = int(p["opened"][11:13]) * 60 + int(p["opened"][14:16])
+        sentence, prefix = (text.format(day, DAYS[day]["work"]) for text in named[p["kind"]])
+        fixes = {1: 2, 7: 1}.get(i, 0)
+        sessions, parked = [], []
+        if i in (2, 4):
+            # The first session parks; the maintainer closes the issue; a second session opens the pull request.
+            line, by, began, waited = ((asked, "maintainer", opened - 120, 70), (lost, "fault", opened - 70, 25))[i == 4]
+            sessions.append(run(pr, 1, date, began, began + 15))
+            number = 900 + len(parks) + 1
+            parked.append(dict(at=stamp(date, began + 15), line=line.format(sessions[0]["session"]), by=by, issue=number))
+            parks.append(dict(number=number, title=parked[0]["line"], url=f"https://github.com/example/{PROJECT}/issues/{number}",
+                              opened=stamp(date, began + 15), closed=stamp(date, began + 15 + waited)))
+        if i == 5:
+            sessions.append(run(pr, 1, date, opened - 60, None))
+        sessions.append(run(pr, len(sessions) + 1, date, opened - 20, opened + 10 * fixes, fixes))
+        steps.append(dict(step=sentence, day=day, prefix=prefix.format(day), sessions=sessions, fixes=fixes,
+                          crashes=sum(s["crashed"] for s in sessions), pr=pr, merged=p["merged"], parks=parked,
+                          ended="parked" if parked else "open" if p["merged"] is None else "fixed" if fixes else "merged"))
+    return dict(source="docs/dashboard/driver-runs.json", counted=at, steps=steps, parks=parks)
+
+
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
@@ -315,7 +359,9 @@ def demo():
     tokens = [dict(date=f"2026-10-{n + 2:02d}", day=n, model=model, agent=agent,
                    input=900 * n + 400, cache_write=12000 * n, cache_read=310000 * n + 2000,
                    output=5200 * n + 300 if agent == "main" else 2100 * n, replies=40 * n + 7,
-                   cost=round(1.9 * n + 0.4 if agent == "main" else 0.2 * n, 2), **hooks(n))
+                   cost=round(1.9 * n + 0.4 if agent == "main" else 0.2 * n, 2), **hooks(n),
+                   # The story: once the hooks are in, less of the main session's dollars is spent past 150k tokens.
+                   cost_past_150k=round((1.9 * n + 0.4) * (0.45, 0.5, 0.55, 0.3, 0.2, 0.15)[n - 1], 2) if agent == "main" else 0.0)
               for n in range(1, 7)
               for agent, model in (("main", "claude-sonnet-5-5"), ("implementer", "claude-haiku-5-5"))]
     refusals = [dict(date=f"2026-10-{n + 2:02d}", guard=g, refused=k) for n, g, k in
@@ -395,6 +441,7 @@ def demo():
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
         yardsticks=yardsticks(),
         clock=clock(rows), counted=dict(at=f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
+        driver_runs=driver_runs(rows, f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",

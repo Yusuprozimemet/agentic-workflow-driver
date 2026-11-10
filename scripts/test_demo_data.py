@@ -124,6 +124,38 @@ class DemoData(unittest.TestCase):
             else:
                 self.assertEqual(r["own_day"], r["day"])
 
+    def test_the_main_sessions_token_rows_say_what_was_spent_past_150k_and_never_more_than_the_cost(self):
+        rows = demo_data.demo()["tokens"]
+        self.assertEqual([r for r in rows if not 0 <= r["cost_past_150k"] <= r["cost"]], [])
+        self.assertTrue(all(r["cost_past_150k"] > 0 for r in rows if r["agent"] == "main"))
+
+    def test_the_drivers_steps_are_in_the_counters_format_and_end_every_way_a_step_can(self):
+        runs = demo_data.demo()["driver_runs"]
+        self.assertEqual(sorted({s["ended"] for s in runs["steps"]}), ["fixed", "merged", "open", "parked"])
+        self.assertEqual(sorted({p["by"] for s in runs["steps"] for p in s["parks"]}), ["fault", "maintainer"])
+        self.assertEqual(sum(s["crashes"] for s in runs["steps"]), 1)
+        # Each park's issue is one of the parked issues, titled with its line, and was answered.
+        issues = {i["number"]: i for i in runs["parks"]}
+        for park in (p for s in runs["steps"] for p in s["parks"]):
+            self.assertEqual(issues[park["issue"]]["title"], park["line"])
+            self.assertLess(issues[park["issue"]]["opened"], issues[park["issue"]]["closed"])
+        # The keys are those scripts/driver-runs.py writes, with the issue spec-drift.py gives a park.
+        spec = importlib.util.spec_from_file_location("driver_runs", os.path.join(HERE, "driver-runs.py"))
+        counter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(counter)
+        sentence = "Day 04 Track A: the day's work"
+        (counted,) = counter.count([
+            dict(event="start", at="2026-10-11T09:00:00Z", step=sentence, prefix="day-04/track-a", session="s"),
+            dict(event="park", at="2026-10-11T09:30:00Z", step=sentence, line="park: #1 carries Oversized:")])
+        for step in runs["steps"]:
+            self.assertEqual(list(step), list(counted))
+            self.assertEqual(counter.count([dict(event="park", step=step["step"], line="")])[0]["prefix"], step["prefix"])
+            for session in step["sessions"]:
+                self.assertEqual(list(session), list(counted["sessions"][0]))
+            for park in step["parks"]:
+                self.assertEqual(list(park), list(counted["parks"][0]) + ["issue"])
+                self.assertEqual(counter.by(park["line"]), park["by"])
+
     def test_the_same_dict_comes_out_on_every_call(self):
         self.assertEqual(demo_data.demo(), demo_data.demo())
 

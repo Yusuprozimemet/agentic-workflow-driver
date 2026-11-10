@@ -24,6 +24,7 @@ permissions:
   contents: read
   actions: read
   pull-requests: read
+  issues: read  # the parked issues: how long each of the driver's parks waited (spec-drift.py)
   pages: write
   id-token: write
 

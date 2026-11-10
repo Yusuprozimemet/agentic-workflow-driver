@@ -501,6 +501,67 @@ def counted():
     return page_json("counted.json") or None
 
 
+PARK_LIMIT = 500
+PARK_SLACK = datetime.timedelta(minutes=10)  # a park's issue is opened after its line is in the run log
+
+
+def parked_issues(note=None):
+    """The project's issues labelled "parked", open and closed, by number: the driver opens one for each
+    park and the maintainer closes it to let the driver go on, so how long a park waited is GitHub's to
+    say. None when they cannot be read: with no GitHub remote (the note), or when gh refuses."""
+    if note:
+        return None
+    try:
+        listed = gh_list(PARK_LIMIT, "issue", "list", "--label", "parked", "--state", "all", "--json",
+                         "number,title,url,createdAt,closedAt")
+    except subprocess.CalledProcessError as e:
+        print(f"The parked issues could not be read (gh issue list: {(e.stderr or '').strip()})", file=sys.stderr)
+        return None
+    return [dict(number=i["number"], title=i["title"], url=i["url"], opened=i["createdAt"], closed=i.get("closedAt"))
+            for i in sorted(listed, key=lambda i: i["number"])]
+
+
+def moment(stamp):
+    """A UTC time as GitHub and the driver's run log write it, or None when it is not one: a time
+    with no zone is none, since it cannot be set against one that has it."""
+    try:
+        at = datetime.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return at if at.tzinfo else None
+
+
+def park_issue(park, issues):
+    """The number of the issue a park in the run log opened, or commented on when its reason was parked
+    and open already: the issue titled with the park's line (its first 200 characters, as the driver
+    cuts it) that was not closed before the park and was opened no later than PARK_SLACK after it; the
+    newest of those, or None."""
+    at, line = moment(park.get("at")), park.get("line")
+    if at is None or not isinstance(line, str):
+        return None
+    found = None
+    for i in issues:
+        opened, closed = moment(i["opened"]), moment(i["closed"]) if i["closed"] else None
+        if i["title"] != line[:200] or opened is None or opened > at + PARK_SLACK or (closed and closed < at):
+            continue
+        found = i if found is None or opened > moment(found["opened"]) else found
+    return found["number"] if found else None
+
+
+def driver_runs(issues, runs=None):
+    """What the page knows of the driver, for whichever project this runs in: the steps the driver
+    started as scripts/driver-runs.py last counted its run log into docs/dashboard/driver-runs.json
+    (that file's format is the contract; before its first count, steps is None and the page draws
+    nothing of the driver), each park given the number of its issue, beside the parked issues from
+    GitHub. Times are UTC, as both give them; the page moves them to the sessions' clock."""
+    runs = page_json("driver-runs.json") if runs is None else runs
+    runs = runs if isinstance(runs, dict) else {}
+    steps = runs.get("steps")
+    if steps is not None:
+        steps = [dict(s, parks=[dict(p, issue=park_issue(p, issues or [])) for p in s.get("parks", [])]) for s in steps]
+    return dict(source="docs/dashboard/driver-runs.json", counted=runs.get("counted"), steps=steps, parks=issues)
+
+
 def clock(prs, runs, sessions=None):
     """Graph 10's times: each merged PR's opening and merge, with the checks on its branch (their
     first start and last end, the stretches they were running in, how many workflow runs over how
@@ -2622,7 +2683,7 @@ def main():
                     deployment=deployment(),
                     evidence_checks=checks, replay=replay_history(),
                     conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
-                    clock=clock(prs, runs), counted=counted(),
+                    clock=clock(prs, runs), counted=counted(), driver_runs=driver_runs(parked_issues(note)),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
