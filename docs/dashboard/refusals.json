@@ -8,5 +8,6 @@
 {"date":"2026-11-08","guard":"step-guard","refused":2},
 {"date":"2026-11-09","guard":"read-guard","refused":15},
 {"date":"2026-11-09","guard":"step-guard","refused":2},
-{"date":"2026-11-10","guard":"read-guard","refused":3}
+{"date":"2026-11-10","guard":"auditor-guard","refused":4},
+{"date":"2026-11-10","guard":"read-guard","refused":9}
 ]
