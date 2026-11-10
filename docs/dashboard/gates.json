@@ -51,7 +51,7 @@
 {"date":"2026-11-09","day":7,"gate":"hooks","runs":7,"replies":13,"context":705381,"output":5773,"cost":0.0772},
 {"date":"2026-11-09","day":7,"gate":"seen red","runs":15,"replies":22,"context":2699566,"output":40630,"cost":1.7962},
 {"date":"2026-11-10","day":null,"gate":"auditors","runs":3,"replies":154,"context":17397182,"output":128479,"cost":8.233},
-{"date":"2026-11-10","day":null,"gate":"break on purpose","runs":42,"replies":68,"context":8561266,"output":66008,"cost":6.4366},
+{"date":"2026-11-10","day":null,"gate":"break on purpose","runs":45,"replies":73,"context":9008147,"output":68213,"cost":6.6781},
 {"date":"2026-11-10","day":null,"gate":"evidence replay","runs":16,"replies":26,"context":2129090,"output":27499,"cost":2.583},
 {"date":"2026-11-10","day":null,"gate":"hooks","runs":1,"replies":2,"context":128508,"output":1402,"cost":0.1296},
 {"date":"2026-11-10","day":null,"gate":"seen red","runs":3,"replies":6,"context":400046,"output":6730,"cost":0.6192},
