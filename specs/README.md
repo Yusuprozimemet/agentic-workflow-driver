@@ -111,6 +111,9 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     id, commit hash, time, temporary name, absolute path or path separator. The test prints a
     fixed word in its place (`<uuid>`, `<head>`). Here, up to Day 7, 21 Defect lines were
     reports that did not replay, 12 of them the same problem come back (D03.17 to D07.40).
+    `scripts/break.py` runs the check twice with the break in and refuses a report that differs
+    between the runs, or that holds a pid, a uuid, a commit hash or an absolute path, a
+    fixture's fixed one included: it cannot tell that from a real one.
   - Red today is the failure at the start of the criterion's track, on `main` with the tracks
     before it merged, not on the day the spec was written: an earlier track that adds the
     module or the argparse choice changes it (D06.16, D06.20). A behaviour an earlier track

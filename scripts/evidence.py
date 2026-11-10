@@ -314,7 +314,7 @@ def run_break(entry, worktree, env):
     if command[0] == "bash":
         command = [bash(), *command[1:]]
     expect = ["--expect-stdout", entry["expect_stdout"]] if "expect_stdout" in entry else []
-    run = subprocess.run([sys.executable, BREAK, "--file", os.path.join(worktree, entry["file"]),
+    run = subprocess.run([sys.executable, BREAK, "--replay", "--file", os.path.join(worktree, entry["file"]),
                           "--find", entry["find"], "--replace", entry["replace"], "--what", entry["what"],
                           "--cwd", worktree, *expect, "--", *command],
                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)

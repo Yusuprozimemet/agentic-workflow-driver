@@ -193,7 +193,7 @@ def classify(entry, tests, report, worktree, sha, pre, env):
         return "not applicable on this platform", "a POSIX-only break"
     command = [ev.bash(), *entry["command"][1:]] if entry["command"][0] == "bash" else entry["command"]
     expect = ["--expect-stdout", entry["expect_stdout"]] if "expect_stdout" in entry else []
-    run = subprocess.run([sys.executable, ev.BREAK, "--file", path, "--find", entry["find"], "--replace",
+    run = subprocess.run([sys.executable, ev.BREAK, "--replay", "--file", path, "--find", entry["find"], "--replace",
                           entry["replace"], "--what", entry["what"], "--cwd", worktree, *expect, "--", *command],
                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     lines = (run.stdout + run.stderr).strip().splitlines() or [f"break.py exited {run.returncode}"]
