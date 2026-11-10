@@ -333,6 +333,11 @@ class SpecDriftTest(unittest.TestCase):
         # Without the sessions file, no sessions; nothing fails.
         self.assertIsInstance(sd.clock({}, [])["sessions"], list)
 
+    def test_the_clock_gives_area_work_no_day_even_when_its_branch_names_one(self):
+        pr = dict(number=33, title="Status", headRefName="specs/status-day-05", state="MERGED", body="",
+                  createdAt="2026-01-02T09:00:00Z", mergedAt="2026-01-02T10:00:00Z")
+        self.assertIsNone(sd.clock({33: pr}, [], sessions=[])["prs"][0]["day"])
+
     def test_the_page_is_given_when_the_transcripts_were_last_counted_or_nothing(self):
         real = sd.PAGE
         sd.PAGE = tempfile.mkdtemp()
@@ -1753,6 +1758,12 @@ The cleanup day first.
         other = dict(headRefName="claude/focused-sagan-96xo1w", title="account-service README: pull the image")
         self.assertEqual(sd.day_branch(other), other["headRefName"])
 
+    def test_own_day_is_the_day_the_branch_names_and_none_for_area_work(self):
+        self.assertEqual(sd.own_day(dict(headRefName="day-07/track-a-x", title="t")), 7)
+        self.assertIsNone(sd.own_day(dict(headRefName="dashboard/one-day-rule", title="Show one rule on every graph")))
+        self.assertIsNone(sd.own_day(dict(headRefName="specs/status-day-05", title="t")))
+        self.assertEqual(sd.own_day(dict(headRefName="claude/focused-bell", title="ABC-82 Day 28 track D: stopping-point review")), 28)
+
 
 class PlainWordsTest(unittest.TestCase):
     FILE = os.path.join(HERE, "..", "docs", "dashboard", "plain-promises.json")
@@ -1900,6 +1911,12 @@ class UserStoriesTest(unittest.TestCase):
         self.assertEqual([a["key"] for a in data["abilities"]], self.KEYS)
         self.assertEqual(len(data["problems"]), 2)
         self.assertTrue(all(p.startswith("#3 ") for p in data["problems"]))
+
+    def test_user_stories_gives_area_work_no_day_and_a_pr_with_no_branch_does_not_crash(self):
+        prs = [self.pr(6, "## User story\n\nAs the maintainer, I want q.\nAbility: see\n", branch="specs/status-day-05"),
+               dict(number=7, title="PR 7", url="https://example.test/pull/7", state="MERGED", body=None, mergedAt="2026-11-01T10:00:00Z")]
+        data = sd.user_stories(prs, self.written({}))
+        self.assertEqual([(r["number"], r["day"]) for r in data["stories"]], [(6, None), (7, None)])
 
     def test_user_stories_falls_back_as_if_empty_on_a_missing_or_unreadable_file(self):
         prs = [self.pr(1, "## User story\n\nAs the maintainer, I want x, so that y.\nAbility: loop\n")]

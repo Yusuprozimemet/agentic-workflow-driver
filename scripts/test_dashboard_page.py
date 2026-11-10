@@ -133,7 +133,8 @@ class ModelTest(unittest.TestCase):
         story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
         g = model(data(user_stories=dict(ABILITIES, stories=[story(2, 1, "a"), story(1, 1, "a"), story(3, 2, "b"), story(4, None, "a"),
                                                              story(5, 1, "gone")]),
-                       hand_offs=[dict(to=3, picked=True), dict(to=3, picked=False), dict(to=4, picked=False)]))["g3"]
+                       hand_offs=[dict(to=3, picked=True), dict(to=3, picked=False), dict(to=4, picked=False, id="H02.1"),
+                                  dict(to=4, picked=False)]))["g3"]
         self.assertEqual([(c["label"], c["mark"]) for c in g["cols"]], [("1", "✓"), ("2", "✓"), ("3", "now"), ("No Day", "")])
         self.assertEqual([(r["name"], [c["n"] for c in r["cells"]]) for r in g["rows"]],
                          [("Runs", [2, 0, 0, 1]), ("Stops", [0, 1, 0, 0]), ("No ability named", [1, 0, 0, 0])])
@@ -143,7 +144,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["rows"][1]["cells"][0]["b"], ["No pull request grew this ability on Day 1."])
         self.assertEqual(g["read"]["t"], "5 merged pull requests, each tagged with the ability it grew")
         self.assertEqual(g["read"]["b"], ["Days 1 to 2 are closed and Day 3 is in progress. 1 of the 2 notes earlier Days left for Day 3 "
-                                          "were picked up; 1 more wait for Day 4. The plan stops for the maintainer after Day 3."])
+                                          "were picked up; 2 more wait for Day 4, 1 of them numbered. The plan stops for the maintainer after Day 3."])
         self.assertEqual(g["table"]["rows"][0], ["Runs", 2, 0, 0, 1, 3])
 
     def test_graph_4_gives_each_promise_the_state_of_its_newest_recheck(self):
@@ -193,7 +194,21 @@ class ModelTest(unittest.TestCase):
              "6 promises, not yet tied to a pull request")])
         self.assertEqual(g["read"]["t"], "“Stops” is the best proven: 1 of its 1 re-checked promise")
         self.assertEqual(g["read"]["b"], ["“Runs” has none proven yet. 1 promise touches more than one ability and is drawn under the one "
-                                          "most of its pull requests grew."])
+                                          "most of its pull requests grew, the first named when they tie."])
+
+    def test_graph_5_ties_an_open_days_built_promise_to_the_pull_request_that_built_it(self):
+        story = dict(number=7, day=3, ability="b", title="t")
+        model_out = model(data(criteria_index=[promise("C3.1", ticked=False), promise("C3.2", ticked=False)],
+                               user_stories=dict(ABILITIES, stories=[story]),
+                               look_ahead=dict(columns=[dict(pr=None, got=[]), dict(pr=7, got=["C3.1"])], pending=None, hand_offs=[]),
+                               rows=[dict(pr=None, kind="origin", day=0), dict(pr=7, kind="code", day=3, own_day=3)]))
+        rows = model_out["g5"]["rows"]
+        self.assertEqual([(r["name"], [(x["day"], [t["id"] for t in x["tiles"]]) for x in r["groups"]]) for r in rows],
+                         [("Runs", []), ("Stops", [(3, ["C3.1"])]), ("Day 3, still being built", [(3, ["C3.2"])])])
+        self.assertEqual(rows[1]["count"], "1 promise · 1 pull request")
+        self.assertEqual(rows[2]["count"], "1 promise, not yet tied to a pull request")
+        tiles = {t["id"]: t for r in model_out["g4"]["rows"] for t in r["tiles"]}
+        self.assertIn("Built by pull request #7. No evidence yet: the Day is not closed.", tiles["C3.1"]["b"])
 
     def test_an_ability_with_no_promise_says_whether_its_work_was_outside_the_days(self):
         story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
@@ -204,13 +219,14 @@ class ModelTest(unittest.TestCase):
     def test_graph_6_keeps_each_merges_gap_its_time_open_and_its_failed_check(self):
         row = lambda pr, kind, day, gap, **more: dict(dict(pr=pr, kind=kind, day=day, gap_full=gap, title=f"`{kind}`", date="2026-01-01"), **more)
         check = lambda n, hours, failed=0: dict(number=n, hours=hours, failed=failed, failed_in=["PR checks"] * bool(failed))
-        g = model(data(rows=[row(None, "origin", 0, 50.0), row(1, "spec", 1, 54.0), row(2, "code", 1, 48.0), row(3, "close", 1, 48.0),
-                             row(4, "other", 2, 47.0, gap_chance=52.0, gap_chance_band=[50.0, 54.0])],
-                       verification=[check(1, 0.05), check(2, 2.0, 2), check(3, 0.1), check(4, 0.1)]))["g6"]
+        g = model(data(rows=[row(None, "origin", 0, 50.0), row(1, "spec", 1, 54.0, own_day=1), row(2, "code", 1, 48.0, own_day=1),
+                             row(3, "close", 1, 48.0, own_day=1), row(4, "other", 1, 47.0),
+                             row(5, "code", 1, 47.0, gap_chance=52.0, gap_chance_band=[50.0, 54.0])],
+                       verification=[check(1, 0.05), check(2, 2.0, 2), check(3, 0.1), check(4, 0.1), check(5, 0.1)]))["g6"]
         self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A Day's close 1", "Other (tooling, dashboard) 2",
                                                    "A check failed before the merge 1"])
-        self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=1, n=3), dict(day=2, n=1)])
-        self.assertEqual([m["y"] for m in g["merges"]], [0.5, 0.1, 0.7, 0.7, 0.8])  # the scale runs from 55° down to 45°
+        self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=1, n=5)])
+        self.assertEqual([m["y"] for m in g["merges"]], [0.5, 0.1, 0.7, 0.7, 0.8, 0.8])  # the scale runs from 55° down to 45°
         self.assertEqual(g["merges"][0]["t"], "The first commit · the first commit · before Day 1")
         code = g["merges"][2]
         self.assertEqual((code["t"], code["b"]), ("Pull request #2 · code · Day 1", [
@@ -221,8 +237,22 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["read"]["t"], "Now 47.0° apart, where chance alone would give 52.0°")
         self.assertEqual(g["read"]["b"], ["The specs and the code share more names than chance would: nineteen times in twenty, chance gives "
                                           "50.0° to 54.0°. On average a spec merge moved the dot up by 4.0° and a code merge down by 6.0°. "
-                                          "1 of 4 pull requests had a check fail before they merged."])
+                                          "1 of 5 pull requests had a check fail before they merged."])
         self.assertEqual(g["table"]["rows"][2], ["#2", "code", 1, "2026-01-01", "48.0", 120, "yes"])
+        self.assertEqual(g["table"]["rows"][4][:3], ["#4", "other", ""])
+        self.assertEqual(g["merges"][4]["t"], "Pull request #4 · other · outside any Day, merged after Day 1 closed")
+        self.assertEqual(g["merges"][5]["t"], "Pull request #5 · other · outside any Day, merged after Day 1 closed")
+        self.assertTrue(g["say"].endswith("The first column is the first commit, before any pull request."))
+
+    def test_a_days_spec_change_merged_before_the_day_before_closed_still_belongs_to_its_own_day(self):
+        row = lambda pr, kind, day, gap, **more: dict(dict(pr=pr, kind=kind, day=day, gap_full=gap, title=f"`{kind}`", date="2026-01-01"), **more)
+        g = model(data(rows=[row(None, "origin", 0, 50.0), row(1, "code", 1, 48.0, own_day=1), row(2, "spec", 1, 54.0, own_day=2),
+                             row(3, "other", 1, 47.0), row(4, "close", 1, 48.0, own_day=1), row(5, "other", 1, 47.0)]))["g6"]
+        self.assertEqual([m["day"] for m in g["merges"]], [0, 1, 2, 0, 1, 0])
+        self.assertTrue(g["merges"][2]["t"].endswith("· spec · Day 2"))
+        self.assertTrue(g["merges"][3]["t"].endswith("outside any Day, merged while Day 2 was open"))
+        self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=1, n=1), dict(day=2, n=2), dict(day=1, n=1), dict(day=2, n=1)])
+        self.assertTrue(g["merges"][5]["t"].endswith("outside any Day, merged while Day 2 was open"))
 
     def test_graph_7_puts_each_defect_at_the_gate_that_caught_it(self):
         defect = lambda i, found, cause, made, same=None: dict(id=i, found=found, cause=cause, made=made, same_as=same, problem=None)
@@ -272,15 +302,24 @@ class ModelTest(unittest.TestCase):
                                    "counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.")
 
     def test_graph_9_adds_each_days_changed_lines_by_what_the_file_is(self):
-        g = model(data(rows=[dict(pr=None, day=0, work=dict(spec=7)), dict(pr=1, day=1, work=dict(spec=10, context=5, prod=20, test=40, tooling=0)),
-                             dict(pr=2, day=1, work=dict(prod=10, test=20))]))["g9"]
+        g = model(data(rows=[dict(pr=None, day=0, work=dict(spec=7)),
+                             dict(pr=1, day=0, own_day=1, work=dict(spec=10, context=5, prod=20, test=40, tooling=0)),
+                             dict(pr=2, day=1, own_day=1, work=dict(prod=10, test=20)),
+                             dict(pr=3, day=1, work=dict(prod=5, test=100, tooling=50)),
+                             dict(pr=4, day=1, own_day=2, kind="spec", work=dict(spec=30))]))["g9"]
         first = g["bars"][0]
         self.assertEqual((first["w"], first["total"], first["prs"], first["ratio"]), (dict(spec=15, prod=30, test=60, tooling=0), 105, 2, "2.0"))
         self.assertEqual(first["b"], ["Spec and agent context 15, production code 30, tests 60, tooling 0. 2 pull requests merged. "
                                       "2.0 test lines for each production line."])
+        self.assertEqual((first["aside"]["total"], first["aside"]["prs"]), (155, 1))
+        self.assertEqual(first["aside"]["t"], "Outside any Day · merged while Day 1 was open or after it closed · 155 lines changed")
+        self.assertEqual((g["bars"][1]["total"], g["bars"][1]["prs"], g["bars"][1]["aside"]), (30, 1, None))
         self.assertEqual(g["bars"][2]["t"], "Day 3 (in progress) · 0 lines changed")
-        self.assertEqual(g["read"]["t"], "105 lines changed in Days 1 to 3; the largest share is tests")
+        self.assertEqual(g["read"]["t"], "135 lines changed in Days 1 to 3; the largest share is tests")
         self.assertIn("Another 7 lines came before Day 1.", g["read"]["b"][0])
+        self.assertIn("Another 155 lines, in 1 pull request, are outside any Day (dashboard and tooling work)", g["read"]["b"][0])
+        self.assertEqual(g["max"], 155)
+        self.assertEqual(g["table"]["rows"][0][-4:], [2, "2.0", 155, 1])
 
     def test_graph_2_marks_a_day_over_the_baseline_and_keeps_a_yardstick_never_counted_apart(self):
         value = lambda day, v, text: dict(day=day, value=v, text=text)
@@ -309,8 +348,8 @@ class ModelTest(unittest.TestCase):
         look = dict(columns=[col(None, 0, [], 10, 0), col(1, 0, [], 14, 1), col(2, 2, ["C2.1", "C2.2"], 14, 1), col(3, 3, ["C2.3"], 14, 1)],
                     pending=dict(day=3, tracks=[dict(track="F", ids=["C3.1", "C3.2"]), dict(track="G", ids=["C3.3"])], at_close=["C3.4"]),
                     hand_offs=[dict(id="H03.1", to=[4], closed=None), dict(id=None, to=[4], closed=None), dict(id="H02.1", to=[4], closed="Day 3")])
-        rows = [dict(pr=None, kind="origin", day=0, title="The first commit"), dict(pr=1, kind="spec", day=2, title="`spec`"),
-                dict(pr=2, kind="code", day=2, title="`code`"), dict(pr=3, kind="close", day=2, title="`close`")]
+        rows = [dict(pr=None, kind="origin", day=0, title="The first commit"), dict(pr=1, kind="spec", day=2, own_day=2, title="`spec`"),
+                dict(pr=2, kind="code", day=2, own_day=2, title="`code`"), dict(pr=3, kind="close", day=2, own_day=2, title="`close`")]
         g = model(data(rows=rows, look_ahead=look, order=[1, 2, 3, 4], now=dict(current_day=3, stop_after=4)))["g1"]
         self.assertEqual([(m["built"], m["written"], m["open"]) for m in g["merges"]], [(0, 10, 0), (0, 14, 1), (2, 14, 1), (3, 14, 1)])
         self.assertEqual((g["merges"][1]["t"], g["merges"][1]["b"]), ("Pull request #1 · spec · Day 2", [
@@ -325,10 +364,10 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["bands"], [dict(day=0, n=1), dict(day=2, n=3), dict(day=3, n=3)])
         self.assertEqual(g["read"]["t"], "3 of 14 promises built · 4 promises and Day 4 before the stop")
         self.assertEqual(g["read"]["b"], ["Day 3 has 2 tracks left (F: 2, G: 1) and its close.",
-                                          "Day 4 has no spec, so its size cannot be drawn. 1 hand-off waits for it (H03.1).",
+                                          "Day 4 has no spec, so its size cannot be drawn. 1 numbered hand-off waits for it (H03.1).",
                                           "After Day 4 the plan stops for the maintainer. What comes after is not specified, so the graph "
                                           "ends there and gives no percentage of the whole plan."])
-        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A Day's close 1", "Other (tooling, dashboard) 1",
+        self.assertEqual([k[1] for k in g["key"]], ["Spec merge 1", "Code merge 1", "A Day's close 1", "Other (tooling, dashboard) 0",
                                                    "Promises built", "Promises written", "Hand-offs open", "Specified, not merged", "Not specified yet"])
         self.assertEqual(g["table"]["head"], ["Merge", "Kind", "Day", "Built", "Written", "Hand-offs open"])
         self.assertEqual(g["table"]["rows"][0], ["start", "the first commit", "", 0, 10, 0])
@@ -337,7 +376,7 @@ class ModelTest(unittest.TestCase):
     def test_graph_1_with_nothing_ahead_and_no_stop_ends_at_today(self):
         col = lambda pr, built, got: dict(pr=pr, built=built, got=got, written=2, open=0, open_numbered=0, opened=[], closed=[])
         look = dict(columns=[col(None, 0, []), col(1, 1, ["C1.1"])], pending=None, hand_offs=[])
-        g = model(data(rows=[dict(pr=None, kind="origin", day=0, title="The first commit"), dict(pr=1, kind="spec", day=1, title="`spec`")],
+        g = model(data(rows=[dict(pr=None, kind="origin", day=0, title="The first commit"), dict(pr=1, kind="spec", day=1, own_day=1, title="`spec`")],
                        look_ahead=look, now=dict(current_day=3, stop_after=None)))["g1"]
         self.assertEqual((g["ahead"], g["unknown"], g["stop"]), ([], [], None))
         self.assertEqual(g["read"]["t"], "1 of 2 promises built")
@@ -479,7 +518,7 @@ class ModelTest(unittest.TestCase):
     def test_graphs_6_and_10_give_a_pull_request_the_same_minutes_open(self):
         # Open for 3 minutes 20 seconds. The hours beside it are rounded to 0.06, which is 3.6 minutes: graph 6 said 4.
         clock = dict(sessions=[], prs=[dict(number=1, day=1, kind="code", branch="day-01/track-a", opened="2026-01-01T09:00:00Z", merged="2026-01-01T09:03:20Z", checks=None)])
-        got = model(data(rows=[dict(pr=1, kind="code", day=1, gap_full=48.0, title="`code`", date="2026-01-01")],
+        got = model(data(rows=[dict(pr=1, kind="code", day=1, own_day=1, gap_full=48.0, title="`code`", date="2026-01-01")],
                          verification=[dict(number=1, hours=0.06, failed=0, failed_in=[])], clock=clock))
         self.assertIn("Open for 3 minutes before it merged.", got["g6"]["merges"][0]["b"][1])
         self.assertEqual(got["g6"]["table"]["rows"][0][5], 3)
@@ -542,7 +581,7 @@ class ModelTest(unittest.TestCase):
 class BootTest(unittest.TestCase):
     def test_the_page_draws_without_an_error_on_data_with_every_graph_in_it(self):
         out = boot(data(**PROMISES, user_stories=dict(ABILITIES, stories=[dict(number=1, day=1, ability="a", title="t")]),
-                        rows=[dict(pr=1, kind="code", day=1, gap_full=40.0, title="t", date="2026-01-01", work=dict(prod=3))],
+                        rows=[dict(pr=1, kind="code", day=1, own_day=1, gap_full=40.0, title="t", date="2026-01-01", work=dict(prod=3))],
                         tokens=[dict(date="2026-01-01", agent="main", cost=1.0, replies=1, cut=0)],
                         yardsticks=dict(days=[1], problems=[], rows=[dict(key="cost", name="Cost", unit="$", decimals=2, baseline=1.0,
                                                                          values=[dict(day=1, value=2.0, text="t")])])))

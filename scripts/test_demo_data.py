@@ -115,6 +115,15 @@ class DemoData(unittest.TestCase):
             self.assertGreaterEqual(row["reads"], row["whole"])
             self.assertGreaterEqual(row["bash"], row["cut"])
 
+    def test_every_demo_row_says_which_day_its_pull_request_belongs_to(self):
+        rows = demo_data.demo()["rows"]
+        self.assertEqual([r["own_day"] for r in rows if "own_day" not in r], [])
+        for r in rows:
+            if not r["branch"].startswith("day-"):
+                self.assertIsNone(r["own_day"], r["branch"])
+            else:
+                self.assertEqual(r["own_day"], r["day"])
+
     def test_the_same_dict_comes_out_on_every_call(self):
         self.assertEqual(demo_data.demo(), demo_data.demo())
 

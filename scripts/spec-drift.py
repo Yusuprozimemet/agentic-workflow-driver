@@ -288,6 +288,13 @@ def day_branch(pr):
     return f"day-{m.group(1)}/track-{m.group(2).lower()}-titled" if m else branch
 
 
+def own_day(pr):
+    """The Day a pull request belongs to, on every graph: the one its branch names (as day_branch reads it),
+    wherever it merged. None for area work (dashboard/, tooling/, specs/...), which is no Day's."""
+    m = re.match(r"day-(\d+)/", day_branch(pr))
+    return int(m.group(1)) if m else None
+
+
 def code_like(tok):
     """Whether a backticked token is a code name. One ending in "_" is a pattern's prefix (`aws_ecs_*`), not a name.
     Nor is one of Python's own (ImportError): a spec cites it for a failure, not for the code to hold."""
@@ -512,7 +519,7 @@ def clock(prs, runs, sessions=None):
         checks = dict(start=min(r["createdAt"] for r in on), end=max(r.get("updatedAt") or r["createdAt"] for r in on),
                       runs=len(on), failed=sum(r.get("conclusion") == "failure" for r in on),
                       pushes=len({r.get("headSha") for r in on}), spans=run_spans(on)) if on else None
-        out.append(dict(number=p["number"], day=day_of(day_branch(p)), kind=kind(p["title"], day_branch(p)),
+        out.append(dict(number=p["number"], day=own_day(p), kind=kind(p["title"], day_branch(p)),
                         branch=p["headRefName"], opened=p.get("createdAt"), merged=p.get("mergedAt"), checks=checks))
     return dict(prs=out, sessions=page_json("sessions.json") if sessions is None else sessions)
 
@@ -525,7 +532,7 @@ def verification(prs, runs):
         if p.get("state") == "MERGED":
             pushes, failed, failed_in = ci.get(p["headRefName"], (0, 0, []))
             k = kind(p["title"], day_branch(p))
-            out.append(dict(number=p["number"], url=p.get("url"), day=day_of(day_branch(p)), kind=k, step=step_kind(k, p["headRefName"]),
+            out.append(dict(number=p["number"], url=p.get("url"), day=own_day(p), kind=k, step=step_kind(k, p["headRefName"]),
                             hours=hours_open(p), breaks=break_state(p.get("body"), p["number"]), pushes=pushes,
                             failed=failed, failed_in=failed_in))
     return out
@@ -878,7 +885,9 @@ def trajectory(snaps, blobs, order=()):
         names_added, names_dropped = name_steps(before, (named, klass, all_flags)) if before else (None, None)
         before = (named, klass, all_flags)
         rows.append(dict(i=i, sha=s["sha"], date=s["date"], pr=s["pr"], title=s["title"], branch=s["branch"], kind=s["kind"],
-                         day=day if s["pr"] else 0, added=added, deleted=deleted,
+                         day=day if s["pr"] else 0,
+                         own_day=own_day(dict(headRefName=s["branch"] or "", title=s["title"])) if s["pr"] else None,
+                         added=added, deleted=deleted,
                          gap_full=gap_full,
                          gap_chance=chance and chance[0], gap_chance_band=chance and chance[1:],
                          gap_excess=gap_excess, gap_excess_band=gap_excess_band, gap_percentile=gap_percentile,
@@ -2181,9 +2190,9 @@ def user_stories(prs, path=None):
         if ability_source == "missing":
             problems.append(f"#{number} names no ability: add an Ability: line or an entry in "
                             "docs/dashboard/user-stories.json")
-        match = re.match(r"day-(\d+)/", p.get("headRefName") or "")
+        named = dict(headRefName=p.get("headRefName") or "", title=p.get("title") or "")
         rows.append(dict(number=number, title=p["title"], url=p["url"], branch=p.get("headRefName") or "",
-                         day=int(match.group(1)) if match else None,
+                         day=own_day(named),
                          date=(p.get("mergedAt") or "")[:10] or None, ability=ability,
                          ability_source=ability_source, story=story, story_source=story_source,
                          reader=story_reader(story)))

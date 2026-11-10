@@ -100,7 +100,7 @@ def row(i, p):
         work["tooling"] = 12
     return dict(i=i, sha=f"{(i * 2654435761) % 16 ** 7:07x}", date=f"2026-10-{i:02d}", pr=p["number"],
                 title=p["title"], branch=p["branch"], kind=p["kind"], day=p["day"],
-                added=40 + 3 * i, deleted=2 * i, gap_full=gap, gap_chance=chance,
+                own_day=p["day"] if p["branch"].startswith("day-") else None, added=40 + 3 * i, deleted=2 * i, gap_full=gap, gap_chance=chance,
                 gap_chance_band=[round(chance - 4, 2), round(chance + 4, 2)], coverage=coverage_at(p),
                 name_coverage=min(1.0, round(0.2 + 0.04 * i, 3)), jaccard=round(0.1 + 0.03 * i, 3),
                 names_kept=i, names_retired=0, prod_name_coverage=round(0.1 + 0.02 * i, 3),
@@ -114,7 +114,7 @@ def build_rows():
     """The origin snapshot, then one per merged PR, in merge order."""
     merged = [p for d in SHIPPED for p in day_prs(d) if p["state"] == "MERGED"]
     origin = dict(row(0, dict(number=None, kind="origin", title="Plan and specs as written", branch="", day=0)),
-                  date="2026-09-29", sha="5e1f0a2", pr=None, branch="", kind="origin", day=0, added=0, deleted=0,
+                  date="2026-09-29", sha="5e1f0a2", pr=None, branch="", kind="origin", day=0, own_day=None, added=0, deleted=0,
                   gap_full=71.5, gap_chance=77.8, gap_chance_band=[73.8, 81.8], name_coverage=0.2, jaccard=0.2,
                   names_kept=0, work=dict(spec=0, context=0, prod=0, test=0, tooling=0))
     rows, closed = [origin], 0
@@ -278,7 +278,7 @@ def clock(rows):
         opened = 8 * 60 + (r["pr"] % 5) * 60 + (r["pr"] * 7) % 60  # 08:00 to 12:59 UTC, 10:00 to 14:59 on the clock
         merged = opened + open_for[r["kind"]] + (r["pr"] % 3) * 5
         failed = 1 if r["kind"] == "code" and r["pr"] % 2 else 0
-        prs.append(dict(number=r["pr"], day=r["day"], kind=r["kind"], branch=r["branch"], opened=stamp(r["date"], opened),
+        prs.append(dict(number=r["pr"], day=r["own_day"], kind=r["kind"], branch=r["branch"], opened=stamp(r["date"], opened),
                         merged=stamp(r["date"], merged), checks=dict(start=stamp(r["date"], opened + 1), end=stamp(r["date"], opened + 5 + failed * 4),
                                                                    runs=4 + failed * 5, failed=failed)))
     for date in sorted({r["date"] for r in rows if r["pr"]}):
@@ -385,7 +385,7 @@ def demo():
         user_stories=dict(
             abilities=[dict(a) for a in ABILITIES], problems=[], source="docs/dashboard/user-stories.json",
             stories=[dict(number=r["pr"], title=r["title"], url=f"https://github.com/example/{PROJECT}/pull/{r['pr']}",
-                          branch=r["branch"], day=r["day"], date=r["date"], ability=a, ability_source="pr",
+                          branch=r["branch"], day=r["own_day"], date=r["date"], ability=a, ability_source="pr",
                           story=f"Made-up story for pull request {r['pr']}.", story_source="pr", reader="desk")
                      for r in merged
                      for a in [DAY_ABILITIES[r["day"]][0] if r["kind"] != "other" and r["day"] in DAY_ABILITIES

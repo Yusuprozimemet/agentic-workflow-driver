@@ -90,6 +90,21 @@ function model(DATA) {
   const mergedAt = new Map(TIMES.map(p => [p.number, Date.parse(p.merged)]));
   const inCount = pr => countedMs == null || !mergedAt.has(pr) || mergedAt.get(pr) <= countedMs;
   const dayInCount = day => countedMs == null || !TIMES.some(p => p.day === day && Date.parse(p.merged) > countedMs);
+  // One rule for which Day a pull request belongs to, on every graph: the Day its branch names (`own_day`).
+  // A dashboard/ or tooling/ pull request is no Day's work: it is placed by `at`, the furthest Day begun when it merged,
+  // and says whether that Day was open or closed by then. A row's `day` is the gap's "Day reached" and is not read here.
+  const dayOrder = DATA.order || [], rankOf = d => dayOrder.includes(d) ? dayOrder.indexOf(d) : d;
+  let top = 0; const shut = new Set();
+  const PLACED = (DATA.rows || []).map(r => {
+    const own = r.pr && r.own_day != null ? r.own_day : null;
+    if (own != null && (!top || rankOf(own) > rankOf(top))) top = own;
+    const kind = r.kind in KINDS ? r.kind : "other";
+    const p = { own, at: own != null ? own : top, area: !!r.pr && own == null, kind: r.pr && own == null && (kind === "code" || kind === "close") ? "other" : kind,
+      whose: !r.pr ? "before Day 1" : own != null ? `Day ${own}` : !top ? "outside any Day, merged before Day 1 began"
+        : `outside any Day, merged ${shut.has(top) ? `after Day ${top} closed` : `while Day ${top} was open`}` };
+    if (own != null && kind === "close") shut.add(own);
+    return p;
+  });
 
   function head() {
     const g = now.generated || "", when = g.length >= 16 ? `${shortDate(g)} ${g.slice(0, 4)} at ${g.slice(11, 16)}` : g;
@@ -118,7 +133,7 @@ function model(DATA) {
     }) }));
     const H = DATA.hand_offs || [], mine = H.filter(h => h.to === current), later = H.filter(h => current != null && h.to > current);
     const notes = [mine.length && `${mine.filter(h => h.picked).length} of the ${plural(mine.length, "note", "notes")} earlier Days left for Day ${current} ${mine.length === 1 ? "was" : "were"} picked up`,
-      later.length && `${later.length} more wait for ${daySpan([...new Set(later.map(h => h.to))].sort((a, b) => a - b))}`].filter(Boolean);
+      later.length && `${later.length} more wait for ${daySpan([...new Set(later.map(h => h.to))].sort((a, b) => a - b))}, ${later.filter(h => h.id).length || "none"} of them numbered`].filter(Boolean);
     return { cols, rows,
       read: { t: stories.length ? `${plural(stories.length, "merged pull request", "merged pull requests")}, each tagged with the ability it grew` : "No merged pull request yet",
         b: [daysSay + (notes.length ? ` ${notes.join("; ")}.` : "") + (now.stop_after != null ? ` The plan stops for the maintainer after Day ${now.stop_after}.` : "")] },
@@ -134,24 +149,28 @@ function model(DATA) {
     const cells = [...(rp.cells || [])].sort((a, b) => a.n - b.n), latest = new Map(cells.map(c => [c.criterion, c]));
     const age = pr => pr == null || now.last_pr == null ? "" : pr >= now.last_pr ? ", the latest change" : `, ${plural(now.last_pr - pr, "change", "changes")} ago`;
     const atClose = new Set(days.flatMap(d => d.broken_at_close || []));
+    // An open Day's promises get their abilities only at its close: until then graph 1 says which pull request built each one.
+    const builtBy = new Map(((DATA.look_ahead || {}).columns || []).filter(c => c.pr != null).flatMap(c => (c.got || []).map(id => [id, c.pr])));
+    const abilityOf = pr => { const s = stories.find(x => x.number === pr), a = s ? s.ability : null; return named.some(k => k.key === a) ? [a] : []; };
     const tiles = index.map(c => {
       const day = byDay.get(c.day), cell = latest.get(c.id), look = (cell && REPLAY_LOOK[cell.state]) || {};
+      const pr = builtBy.get(c.id) || null, abilities = (c.abilities || []).length ? c.abilities : abilityOf(pr);
       const status = !day || !finished(day) ? "building" : (c.replaced_by || []).length ? "replaced" : c.ticked === false ? "open" : look.group || "unchecked";
       const why = status === "replaced" ? `by ${c.replaced_by.join(", ")}` : status === "building" ? `Day ${c.day} is still being built`
         : (COUNTED.includes(status) && look.why) || STATES[status].means;
       const seen = c.seen_red || {}, mark = (ok, yes, no) => ok ? `✓ ${yes}` : `✕ ${no}`;
       const lines = [c.plain || c.claim || ""];
-      if (status === "building" && !c.ticked) lines.push("No evidence yet: the Day is not closed.");
+      if (status === "building" && !c.ticked) lines.push(pr ? `Built by pull request #${pr}. No evidence yet: the Day is not closed.` : "No evidence yet: the Day is not closed.");
       else lines.push([mark(c.ticked, "ticked at the close", "not ticked"), mark(c.cited, "cites its pull request", "cites no pull request"),
         mark(c.test_found, "names a test that exists", "names no test that exists"),
         seen.state ? "✓ a failure was recorded when it was built" : seen.state === false && (seen.none || []).length ? `– no failure could be planted: ${seen.none.join("; ")}`
           : seen.state === false ? "✕ no failure recorded when built" : "– a failure when built was not measured"].join(" · ")
         + (atClose.has(c.id) ? " · its check was first seen failing at the close, not in the pull request that wrote it" : ""));
-      const m = cell && byN.get(cell.n), grows = (c.abilities || []).map(abilityName).filter(Boolean);
+      const m = cell && byN.get(cell.n), grows = abilities.map(abilityName).filter(Boolean);
       const last = [COUNTED.includes(status) && m ? `Last re-checked after pull request #${m.pr}${age(m.pr)}${cell.mixed ? "; its checks disagree" : ""}.` : "",
         grows.length ? `It grew “${grows[0]}”${grows.length > 1 ? `, and also ${andList(grows.slice(1).map(g => `“${g}”`))}` : ""}.` : ""].filter(Boolean).join(" ");
       if (last) lines.push(last);
-      return { id: c.id, day: c.day, status, abilities: c.abilities || [], glyph: STATES[status].glyph || "",
+      return { id: c.id, day: c.day, status, abilities, built_by: pr, glyph: STATES[status].glyph || "",
         t: `${c.id} · ${c.tag === "hold" ? "must keep holding" : "new behaviour"} · ${STATES[status].word}: ${why}`, b: lines };
     });
     const n = (list, s) => list.filter(t => t.status === s).length, counted = list => list.filter(t => COUNTED.includes(t.status)).length;
@@ -208,7 +227,7 @@ function model(DATA) {
     const none = ranked.filter(r => !r.proven), bare = real.filter(r => !r.tiles.length), shared = P.tiles.filter(t => t.abilities.length > 1).length;
     const b = [none.length && `${andList(none.map(r => `“${r.name}”`))} ${none.length === 1 ? "has" : "have"} none proven yet.`,
       bare.length && `${plural(bare.length, "ability", "abilities")}, with ${plural(sum(bare, r => r.prs), "pull request", "pull requests")} between them, ${bare.length === 1 ? "has" : "have"} no promise at all.`,
-      shared && `${plural(shared, "promise touches", "promises touch")} more than one ability and ${shared === 1 ? "is" : "are"} drawn under the one most of ${shared === 1 ? "its" : "their"} pull requests grew.`].filter(Boolean);
+      shared && `${plural(shared, "promise touches", "promises touch")} more than one ability and ${shared === 1 ? "is" : "are"} drawn under the one most of ${shared === 1 ? "its" : "their"} pull requests grew, the first named when they tie.`].filter(Boolean);
     const cols = ["proven", "unproven", "repair", "broken", "skipped", "replaced", "building"];
     return { rows,
       read: { t: ranked.length && ranked[0].proven ? `“${ranked[0].name}” is the best proven: ${ranked[0].proven} of its ${plural(ranked[0].counted, "re-checked promise", "re-checked promises")}` : "No ability has a proven promise yet", b: [b.join(" ")].filter(Boolean) },
@@ -227,17 +246,17 @@ function model(DATA) {
     const top = Math.max(120, ...mins.filter(m => m != null)), barAt = m => (6 + Math.log2(Math.max(m, 1)) / Math.log2(top) * 54) / 60;
     let before = null;
     const merges = R.map((r, i) => {
-      const kind = r.kind in KINDS ? r.kind : "other", v = V.get(r.pr) || {}, m = mins[i], failed = (v.failed || 0) > 0, g = r.gap_full;
+      const placed = PLACED[i], kind = placed.kind, v = V.get(r.pr) || {}, m = mins[i], failed = (v.failed || 0) > 0, g = r.gap_full;
       const moved = g == null || before == null ? null : g - before;
       if (g != null) before = g;
       const says = [g == null ? "The gap was not measured at this merge." : `Spec and code ${g.toFixed(1)}° apart${moved == null ? "" : Math.abs(moved) < 0.05 ? ", unchanged" : `, ${moved > 0 ? "up" : "down"} ${Math.abs(moved).toFixed(1)}° from the merge before`}.`,
         m == null ? "" : `Open for ${openFor(m)} before it merged.`,
         !r.pr ? "" : failed ? `A check failed on it first${(v.failed_in || []).length ? ` (${v.failed_in.join(", ")})` : ""}.` : "No check failed on it."].filter(Boolean).join(" ");
-      return { pr: r.pr, kind, day: r.day || 0, date: r.date, gap: g, moved, mins: m, failed, y: g == null ? null : (hi - g) / (hi - lo), h: m == null ? 0 : barAt(m),
-        t: `${r.pr ? `Pull request #${r.pr}` : "The first commit"} · ${KINDS[kind]} · ${r.day ? `Day ${r.day}` : "before Day 1"}`, b: [r.title, says].filter(Boolean) };
+      return { pr: r.pr, kind, day: placed.own || 0, at: placed.at, date: r.date, gap: g, moved, mins: m, failed, y: g == null ? null : (hi - g) / (hi - lo), h: m == null ? 0 : barAt(m),
+        t: `${r.pr ? `Pull request #${r.pr}` : "The first commit"} · ${KINDS[kind]} · ${placed.whose}`, b: [r.title, says].filter(Boolean) };
     });
     const bands = [];
-    merges.forEach(m => { const b = bands[bands.length - 1]; if (b && b.day === m.day) b.n++; else bands.push({ day: m.day, n: 1 }); });
+    merges.forEach(m => { const b = bands[bands.length - 1]; if (b && b.day === m.at) b.n++; else bands.push({ day: m.at, n: 1 }); });
     const nKind = k => merges.filter(m => m.kind === k).length, withPr = merges.filter(m => m.pr), nFailed = merges.filter(m => m.failed).length;
     const mean = k => { const ms = merges.filter(m => m.kind === k && m.moved != null); return ms.length ? sum(ms, m => m.moved) / ms.length : null; };
     const last = R[R.length - 1] || {}, band = last.gap_chance_band, spec = mean("spec"), code = mean("code");
@@ -250,8 +269,8 @@ function model(DATA) {
     for (let t = lo + step; t < hi; t += step) ticks.push({ label: `${t}°`, y: (hi - t) / (hi - lo) });
     return { merges, bands, ticks, barTicks: [[1, "1 min"], [10, "10 min"], [top, top >= 90 ? `${Math.round(top / 60)} h` : `${Math.round(top)} min`]].map(([m, label]) => ({ label, h: barAt(m) })),
       key: [["spec", `Spec merge ${nKind("spec")}`], ["code", `Code merge ${nKind("code")}`], ["close", `A Day's close ${nKind("close")}`],
-        ["other", `Other (tooling, dashboard) ${nKind("other") + nKind("origin")}`], ["failed", `A check failed before the merge ${nFailed}`]],
-      say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open.`,
+        ["other", `Other (tooling, dashboard) ${nKind("other")}`], ["failed", `A check failed before the merge ${nFailed}`]],
+      say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open. The first column is the first commit, before any pull request.`,
       read: { t: last.gap_full == null ? "No gap is measured yet" : `Now ${last.gap_full.toFixed(1)}° apart` + (last.gap_chance != null ? `, where chance alone would give ${last.gap_chance.toFixed(1)}°` : ""), b: [b.join(" ")].filter(Boolean) },
       table: { head: ["Merge", "Kind", "Day", "Date", "Gap, degrees", "Minutes open", "Checks failed"],
         rows: merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.date || "", m.gap == null ? "" : m.gap.toFixed(1), m.mins == null ? "" : Math.round(m.mins), m.failed ? "yes" : ""]) } };
@@ -339,22 +358,31 @@ function model(DATA) {
   function workGraph() {
     const R = DATA.rows || [], part = (r, k) => { const w = r.work || {}; return k === "spec" ? (w.spec || 0) + (w.context || 0) : w[k] || 0; };
     const of = list => Object.fromEntries(WORK.map(([k]) => [k, sum(list, r => part(r, k))]));
+    // A Day's bar is its own pull requests (by `own_day`); the area work placed beside it is drawn paler and counts in no Day.
+    const breakdown = w => WORK.map(([k, name], i) => `${i ? lower(name) : name} ${comma(w[k])}`).join(", ");
     const bars = days.map(d => {
-      const mine = R.filter(r => r.day === d.day), w = of(mine), total = sum(Object.values(w)), prs = mine.filter(r => r.pr).length;
+      const mine = R.filter((r, i) => PLACED[i].own === d.day), w = of(mine), total = sum(Object.values(w)), prs = mine.filter(r => r.pr).length;
       const ratio = w.prod ? (w.test / w.prod).toFixed(1) : "–";
+      const beside = R.filter((r, i) => PLACED[i].area && PLACED[i].at === d.day), aw = of(beside), atotal = sum(Object.values(aw)), aprs = beside.filter(r => r.pr).length;
       return { day: d.day, w, total, prs, ratio, label: total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total),
         t: `Day ${d.day}${d.day === current ? " (in progress)" : ""} · ${comma(total)} lines changed`,
-        b: [`${WORK.map(([k, name], i) => `${i ? lower(name) : name} ${comma(w[k])}`).join(", ")}. ${plural(prs, "pull request", "pull requests")} merged.`
-          + (w.prod ? ` ${ratio} test lines for each production line.` : "")] };
+        b: [`${breakdown(w)}. ${plural(prs, "pull request", "pull requests")} merged.` + (w.prod ? ` ${ratio} test lines for each production line.` : "")],
+        aside: atotal > 0 || aprs > 0 ? { w: aw, total: atotal, prs: aprs, label: atotal >= 1000 ? `${(atotal / 1000).toFixed(1)}k` : String(atotal),
+          t: `Outside any Day · merged while Day ${d.day} was open or after it closed · ${comma(atotal)} lines changed`,
+          b: [`${breakdown(aw)}. ${plural(aprs, "pull request", "pull requests")} merged. No Day's size or test ratio counts them.`] } : null };
     });
-    const all = of(R.filter(r => days.some(d => d.day === r.day))), total = sum(Object.values(all)), before = sum(Object.values(of(R.filter(r => !days.some(d => d.day === r.day)))));
+    const all = of(R.filter((r, i) => days.some(d => d.day === PLACED[i].own))), total = sum(Object.values(all));
+    const before = sum(Object.values(of(R.filter((r, i) => PLACED[i].own == null && PLACED[i].at === 0))));
+    const asideTotal = sum(bars, x => x.aside ? x.aside.total : 0), asidePrs = sum(bars, x => x.aside ? x.aside.prs : 0);
+    const asideSay = bars.some(x => x.aside) ? `Another ${comma(asideTotal)} lines, in ${plural(asidePrs, "pull request", "pull requests")}, are outside any Day (dashboard and tooling work): drawn paler beside the Day that was open when they merged, and in no Day's size or test ratio.` : "";
     const ranked = WORK.map(([k, name]) => [name, all[k]]).sort((a, b) => b[1] - a[1]);
-    return { bars, max: Math.max(1, ...bars.map(x => x.total)), key: WORK.map(([k, name]) => [k, name]),
+    return { bars, max: Math.max(1, ...bars.map(x => x.total), ...bars.map(x => x.aside ? x.aside.total : 0)),
+      key: [...WORK.map(([k, name]) => [k, name]), ["aside", "Paler: outside any Day"]],
       read: { t: total ? `${comma(total)} lines changed in ${daySpan(days.map(d => d.day))}; the largest share is ${lower(ranked[0][0])}` : "No Day has merged work yet",
         b: total ? [`${ranked.map(([name, v], i) => `${i ? lower(name) : name} ${comma(v)}`).join(", ")}.` + (before ? ` Another ${comma(before)} lines came before Day 1.` : "")
-          + " Breaks on purpose never merge, so checking did more than its lines show."] : [] },
-      table: { head: ["Day", ...WORK.map(w => w[1]), "All", "Pull requests merged", "Test lines for each production line"],
-        rows: bars.map(x => [`Day ${x.day}`, ...WORK.map(([k]) => x.w[k]), x.total, x.prs, x.ratio]) } };
+          + (asideSay ? ` ${asideSay}` : "") + " Breaks on purpose never merge, so checking did more than its lines show."] : [] },
+      table: { head: ["Day", ...WORK.map(w => w[1]), "All", "Pull requests merged", "Test lines for each production line", "Outside any Day: lines", "Outside any Day: pull requests"],
+        rows: bars.map(x => [`Day ${x.day}`, ...WORK.map(([k]) => x.w[k]), x.total, x.prs, x.ratio, x.aside ? x.aside.total : 0, x.aside ? x.aside.prs : 0]) } };
   }
 
   /* Graph 2: the plan's yardsticks, each on its own scale, against the kit's baseline where it has one */
@@ -407,13 +435,13 @@ function model(DATA) {
     const hMax = ceil(Math.max(0, ...C.map(c => c.open_numbered || 0)), 6);
     const written = last.written || 0, built = last.built || 0;
     const merges = C.map((c, i) => {
-      const r = R[i] || {}, kind = r.kind in KINDS ? r.kind : "other", day = r.day || 0, got = c.got || [], open = c.open_numbered || 0;
+      const r = R[i] || {}, placed = PLACED[i] || {}, kind = placed.kind || "other", day = placed.own || 0, got = c.got || [], open = c.open_numbered || 0;
       const moved = i ? (c.written || 0) - (C[i - 1].written || 0) : 0;
       const says = [moved > 0 ? `Its spec wrote ${plural(moved, "promise", "promises")}.` : moved < 0 ? `Its spec dropped ${plural(-moved, "promise", "promises")}.` : "",
         got.length ? `Built ${got.join(", ")}.` : "Built no promise.", `${c.built || 0} of ${c.written || 0} built after it.`,
         `${plural(open, "hand-off", "hand-offs")} open after it.`].filter(Boolean).join(" ");
-      return { pr: c.pr, kind, day, built: c.built || 0, written: c.written || 0, open, got, yb: 1 - (c.built || 0) / pMax, yw: 1 - (c.written || 0) / pMax, h: open / hMax,
-        t: `${c.pr ? `Pull request #${c.pr}` : "The first commit"} · ${KINDS[kind]} · ${day ? `Day ${day}` : "before Day 1"}`, b: [r.title, says] };
+      return { pr: c.pr, kind, day, at: placed.at || 0, built: c.built || 0, written: c.written || 0, open, got, yb: 1 - (c.built || 0) / pMax, yw: 1 - (c.written || 0) / pMax, h: open / hMax,
+        t: `${c.pr ? `Pull request #${c.pr}` : "The first commit"} · ${KINDS[kind]} · ${placed.whose}`, b: [r.title, says] };
     });
     const aheadOut = ahead.map(a => ({ label: a.label, close: a.close, ids: a.ids, day: a.day, built: a.built, yb: 1 - a.built / pMax,
       t: a.close ? `Day ${P.day}'s close · specified, not merged` : `Day ${P.day} track ${a.label} · specified, not merged`,
@@ -424,10 +452,10 @@ function model(DATA) {
     const unknown = (at < 0 ? [] : order.slice(at + 1)).filter(d => !have.has(d) && (stop == null || d <= stop)).map(day => {
       const waiting = ledger.filter(x => x.closed == null && x.id && (x.to || []).includes(day)), waits = waiting.length;
       return { day, waits, ids: waiting.map(x => x.id), t: `Day ${day} · no spec yet`,
-        b: ["Its size cannot be drawn until its spec is written.", waits ? `${plural(waits, "hand-off waits", "hand-offs wait")} for it (${waiting.map(x => x.id).join(", ")}).` : ""].filter(Boolean) };
+        b: ["Its size cannot be drawn until its spec is written.", waits ? `${plural(waits, "numbered hand-off waits", "numbered hand-offs wait")} for it (${waiting.map(x => x.id).join(", ")}).` : ""].filter(Boolean) };
     });
     const bands = [];
-    merges.forEach(m => { const b = bands[bands.length - 1]; if (b && b.day === m.day) b.n++; else bands.push({ day: m.day, n: 1 }); });
+    merges.forEach(m => { const b = bands[bands.length - 1]; if (b && b.day === m.at) b.n++; else bands.push({ day: m.at, n: 1 }); });
     if (aheadOut.length) { const b = bands[bands.length - 1]; if (b && b.day === P.day) b.n += aheadOut.length; else bands.push({ day: P.day, n: aheadOut.length }); }
     const nKind = k => merges.filter(m => m.kind === k).length;
     const left = aheadOut.length ? aheadOut[aheadOut.length - 1].built - built : 0;
@@ -435,15 +463,15 @@ function model(DATA) {
     const tracks = P ? (P.tracks || []) : [];
     const b = [P ? (tracks.length ? `Day ${P.day} has ${plural(tracks.length, "track left", "tracks left")} (${tracks.map(t => `${t.track}: ${(t.ids || []).length}`).join(", ")}) and its close.`
         : `Day ${P.day} has only its close left.`) : "",
-      ...unknown.map(u => `Day ${u.day} has no spec, so its size cannot be drawn.` + (u.waits ? ` ${plural(u.waits, "hand-off waits", "hand-offs wait")} for it (${u.ids.join(", ")}).` : "")),
+      ...unknown.map(u => `Day ${u.day} has no spec, so its size cannot be drawn.` + (u.waits ? ` ${plural(u.waits, "numbered hand-off waits", "numbered hand-offs wait")} for it (${u.ids.join(", ")}).` : "")),
       stop != null ? `After Day ${stop} the plan stops for the maintainer. What comes after is not specified, so the graph ends there and gives no percentage of the whole plan.` : ""].filter(Boolean);
     const ticks = [], every = pMax > 120 ? 40 : 20;
     for (let t = 0; t <= pMax; t += every) ticks.push({ label: String(t), y: 1 - t / pMax });
     return { merges, ahead: aheadOut, unknown, stop, pMax, hMax, ticks, bands, barTicks: [{ label: String(hMax / 2), h: 0.5 }, { label: String(hMax), h: 1 }],
       key: [["pt spec", `Spec merge ${nKind("spec")}`], ["pt code", `Code merge ${nKind("code")}`], ["pt close", `A Day's close ${nKind("close")}`],
-        ["pt other", `Other (tooling, dashboard) ${nKind("other") + nKind("origin")}`], ["sw built", "Promises built"], ["sw written", "Promises written"],
+        ["pt other", `Other (tooling, dashboard) ${nKind("other")}`], ["sw built", "Promises built"], ["sw written", "Promises written"],
         ["sw handoff", "Hand-offs open"], ["pt todo", "Specified, not merged"], ["sw unknown", "Not specified yet"]],
-      say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the number of promises built once that merge landed; the dashed line above it is the number written. The bar under it is the numbered hand-offs still open. Right of today, the outlined dots are tracks that are specified and not merged.`,
+      say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the number of promises built once that merge landed; the dashed line above it is the number written. The bar under it is the numbered hand-offs still open. Right of today, the outlined dots are tracks that are specified and not merged. The first column is the first commit, before any pull request.`,
       ladder: [{ cls: "now", name: "Level 0 · today", need: "The maintainer starts each step and merges.", state: "Where the project is" },
         { cls: "", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: "Enters at the Day 8 trial" },
         { cls: "wait", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: "Not counted yet" },
@@ -873,7 +901,7 @@ function draw(M, DATA) {
   function bars(g, m, mark, items, parts, under) {
     const H = 150;
     const stack = x => parts.map(([cls, value]) => [cls, value(x) / m.max * H]).filter(p => p[1] >= 1).map(([cls, hgt], i) => h("span", { class: `seg ${cls}${i ? "" : " cap"}`, style: `height:${Math.max(2, Math.round(hgt))}px` }));
-    put(`${g}-plot`, h("div", { class: "bars" }, items.map(x => forDays(mark(h("button", { type: "button", class: "bar" }, h("b", null, x.top), stack(x)), x), x.lit))),
+    put(`${g}-plot`, h("div", { class: "bars" }, items.map(x => forDays(mark(h("button", { type: "button", class: x.pale ? "bar aside" : "bar" }, h("b", null, x.top), stack(x)), x), x.lit))),
       h("div", { class: "bar-labels" }, items.map(x => forDays(h("div", null, x.under), x.lit))),
       under.map(([name, value]) => h("div", { class: "bar-extra" }, h("p", null, name), h("div", { class: "mono" }, items.map(x => forDays(h("div", null, value(x)), x.lit))))));
   }
@@ -885,7 +913,10 @@ function draw(M, DATA) {
   });
   graph("g9", (m, mark) => {
     key("g9-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-    bars("g9", m, mark, m.bars.map(x => ({ ...x, top: x.label, under: String(x.day), lit: [x.day] })), [...m.key].reverse().map(([k]) => [k, x => x.w[k]]),
+    // A Day's paler bar of outside-any-Day work follows its own bar, and counts in no Day's size.
+    const items = m.bars.flatMap(x => [{ ...x, top: x.label, under: String(x.day), lit: [x.day] },
+      ...(x.aside ? [{ ...x.aside, top: x.aside.label, under: "+", lit: [x.day], pale: true, prs: x.aside.prs, ratio: "·" }] : [])]);
+    bars("g9", m, mark, items, m.key.filter(([k]) => k !== "aside").reverse().map(([k]) => [k, x => x.w[k]]),
       [["Pull requests merged", x => String(x.prs)], ["Test lines for each production line", x => x.ratio]]);
   });
 
