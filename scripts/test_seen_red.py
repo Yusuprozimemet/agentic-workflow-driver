@@ -115,7 +115,7 @@ class SeenRedTest(unittest.TestCase):
 
     def test_a_module_the_change_adds_is_not_served_by_an_editable_install(self):
         # pip install -e serves the package from the working tree through a finder on sys.meta_path;
-        # the base must not import the module the change adds from there (bearing, Day 8 track A).
+        # the base must not import the module the change adds from there (bearing, D08 track A).
         self.write("pyproject.toml", '[build-system]\nrequires = ["setuptools>=64"]\n'
                                      'build-backend = "setuptools.build_meta"\n\n'
                                      '[project]\nname = "pkg"\nversion = "0"\n\n'

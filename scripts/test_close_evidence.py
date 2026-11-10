@@ -146,7 +146,7 @@ class ClosingSpecTest(unittest.TestCase):
             self.assertIsNone(close_commit("01", "main"))
 
     def test_closed_specs_lists_only_days_with_a_closing_commit(self):
-        # Day 07 closed by a merge, Day 08's spec merged but not closed, and a template beside them.
+        # One day closed by a merge, the next day's spec merged but not closed, and a template beside them.
         self.merge(("day-07-example.md", "_template.md"))
         with open(os.path.join(self.repo, "specs", "day-08-next.md"), "w") as file:
             file.write("# Day 08\n")

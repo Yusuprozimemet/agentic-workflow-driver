@@ -61,7 +61,7 @@ def changed_tests(base):
 
 # An editable install (pip install -e) puts a finder on sys.meta_path that serves the package from
 # the working tree. The worktree's copy wins for the package itself, but a module or subpackage the
-# change adds is missing there, so the finder served the working tree's: on bearing's Day 8 track A
+# change adds is missing there, so the finder served the working tree's: on bearing's D08 track A
 # five tests passed "on main" that fail on its code. This runs at startup, before the command.
 DROP_EDITABLE = """import sys
 sys.meta_path[:] = [f for f in sys.meta_path
