@@ -322,3 +322,43 @@ def issue_cost(state, number):
             continue
         total += cost
     return total
+
+
+def late_refusals(state, records):
+    # The hook log's refusals the run log does not count: those of a session with a start line in
+    # records, when they are later than the session's last end line, or all of them when it has none.
+    # A hook line in the same second as that end line is counted by it, so only a later one is kept.
+    # A missing or unreadable hook log, or a line that is not a refusal, gives none; this writes nothing.
+    try:
+        with open(os.path.join(state, "refusals", "hooks.jsonl"), "rb") as f:
+            data = f.read()
+    except OSError:
+        return []
+    started = {record.get("session") for record in records if record.get("event") == "start"}
+    last_end = {}
+    for record in records:
+        if record.get("event") == "end":
+            at = record.get("at")
+            last_end[record.get("session")] = at if isinstance(at, str) else ""
+    late = []
+    for raw in data.split(b"\n"):
+        try:
+            line = json.loads(raw.decode("utf-8"))
+        except ValueError:
+            continue
+        if not isinstance(line, dict) or not isinstance(line.get("at"), str):
+            continue
+        session = line.get("session")
+        if not isinstance(session, str) or session not in started:
+            continue
+        if session in last_end and not line["at"] > last_end[session]:
+            continue
+        tool, tool_input = line.get("tool"), line.get("input")
+        late.append(
+            {
+                "session": session,
+                "tool": tool if isinstance(tool, str) else "unknown",
+                "input": tool_input if isinstance(tool_input, str) else "{}",
+            }
+        )
+    return late

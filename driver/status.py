@@ -32,11 +32,12 @@ def run(project, gh, state) -> int:
         lines += ["in progress: unknown", f"run log: {reason}"]
     else:
         records = records or []
+        late = runlog.late_refusals(state, records)
         lines.append(_in_progress(state, live, records, session))
-        lines += _steps(records)
+        lines += _steps(records, late)
         lines += _parks(records)
-        lines.append(f"refusals: {_refusals(records)}")
-        lines += _refused(records)
+        lines.append(f"refusals: {_refusals(records, late)}")
+        lines += _refused(records, late)
         lines.append(_cost(records))
         lines.append(_level_2(records))
     for line in lines:
@@ -127,7 +128,7 @@ def _cost_of(records, session):
     )
 
 
-def _steps(records):
+def _steps(records, late=()):
     starts = [record for record in records if record.get("event") == "start"]
     if not starts:
         return ["steps: none"]
@@ -138,6 +139,7 @@ def _steps(records):
         outcome = str(ends[-1].get("outcome")) if ends else "no end"
         cost = sum(_number(r.get("cost_usd")) for r in ends)
         refusals = sum(_number(r.get("denials")) for r in ends)
+        refusals += sum(1 for item in late if item["session"] == session)
         lines.append(
             f"  {start.get('at')} {start.get('step')}: {outcome}, ${cost:.2f}, "
             f"refusals {refusals}, session `{session}`"
@@ -164,11 +166,15 @@ def _reason(line):
     return re.sub(r"\(\d+ paths\)", "(n paths)", line)
 
 
-def _refusals(records):
-    return sum(_number(record.get("denials")) for record in records if record.get("event") == "end")
+def _refusals(records, late=()):
+    # The end lines' denials, and the hook log's refusals after each session's last end line.
+    ended = sum(
+        _number(record.get("denials")) for record in records if record.get("event") == "end"
+    )
+    return ended + len(late)
 
 
-def _refused(records):
+def _refused(records, late=()):
     # One line per tool and input the driver refused, the most often refused first.
     counts = collections.Counter(
         f"{item['tool']}: {item['input']}"
@@ -176,6 +182,7 @@ def _refused(records):
         if record.get("event") == "end"
         for item in record.get("refused") or []
     )
+    counts.update(f"{item['tool']}: {item['input']}" for item in late)
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return [f"  {count} {text}" for text, count in ranked]
 

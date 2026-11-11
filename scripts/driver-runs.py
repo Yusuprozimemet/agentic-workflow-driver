@@ -17,7 +17,8 @@ draws nothing of the driver without it:
      "steps": [one per step the log names, in the log's order:
        {"step": "<the kit's sentence>", "day": <its Day, or null>, "prefix": "<branch prefix, or null>",
         "sessions": [{"session": "<uuid>", "start": "<UTC>", "end": "<UTC, or null>", "cost": <dollars>,
-                      "denials": <refused tool calls>, "fixes": <fix rounds>, "crashed": <true or false>}],
+                      "denials": <refused tool calls, the hook log's after the last end line included>,
+                      "fixes": <fix rounds>, "crashed": <true or false>}],
         "fixes": <the sessions' fix rounds>, "crashes": <its sessions that crashed>,
         "pr": <the pull request it opened, or null>, "merged": "<UTC, or null>",
         "parks": [{"at": "<UTC>", "line": "<the park line>", "by": "maintainer" or "fault"}],
@@ -81,7 +82,7 @@ def text(value):
     return value if isinstance(value, str) else None
 
 
-def count(records, live=None):
+def count(records, live=None, late=()):
     """The steps the log's records name, as the docstring above gives them. `live` is the session whose
     process still runs (runlog.live_session), which has no end line and has not crashed."""
     steps, sessions, by_pr = {}, {}, {}
@@ -126,6 +127,11 @@ def count(records, live=None):
             step = by_pr.get(pr) if isinstance(pr, int) else None
             if step is not None and step["merged"] is None:
                 step["merged"] = at
+    # The hook log's refusals after a session's last end line: a session killed before its end line
+    # has no other count of them.
+    for item in late:
+        if item["session"] in sessions:
+            sessions[item["session"]][1]["denials"] += 1
     for step in steps.values():
         for run in step["sessions"]:
             run["crashed"] = run["end"] is None and run["session"] != live
@@ -163,7 +169,7 @@ def main(argv=None, now=None):
     if not os.path.isdir(os.path.dirname(os.path.abspath(out))):
         print(f"{out}: its folder does not exist; nothing written", file=sys.stderr)
         return 2
-    steps = count(records, runlog.live_session(args.state)[0])
+    steps = count(records, runlog.live_session(args.state)[0], runlog.late_refusals(args.state, records))
     at = (now or datetime.datetime.now()).astimezone().isoformat(timespec="seconds")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         rows = ",\n".join(json.dumps(step, separators=(",", ":"), ensure_ascii=False) for step in steps)
