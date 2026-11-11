@@ -38,7 +38,9 @@ DONE = {"type": "result", "is_error": False, "result": "done"}
 PLAIN = {"type": "assistant", "message": {"content": []}}
 # The fake session takes its entry from runs.json by the number of starts so far, records the start
 # in starts.jsonl, appends the entry's records to the session's transcript and prints its result.
-# A resumed session appends to the same transcript, as the CLI does.
+# A resumed session appends to the same transcript, as the CLI does. A limit record's resetsAt is
+# given in seconds ahead and set from the fake's own clock, so that the driver's start-up does not
+# use up the wait.
 DO = """import time
 runs = json.loads((folder / "runs.json").read_bytes())
 starts = folder / "starts.jsonl"
@@ -52,13 +54,16 @@ if entry.get("records"):
     transcript.parent.mkdir(parents=True, exist_ok=True)
     with transcript.open("ab") as log:
         for record in entry["records"]:
+            if record.get("apiError"):
+                info = record["apiErrorParams"]["rate_limit_info"]
+                info["resetsAt"] = time.time() + info["resetsAt"]
             log.write(json.dumps(record).encode("utf-8") + b"\\n")
 spec["result"] = entry["result"]
 """
 
 
-def limit_record(reset):
-    info = {"resetsAt": reset, "rateLimitType": "five_hour"}
+def limit_record(ahead):
+    info = {"resetsAt": ahead, "rateLimitType": "five_hour"}
     return {
         "type": "assistant",
         "apiError": "usage_limit_reached",
@@ -68,9 +73,19 @@ def limit_record(reset):
     }
 
 
-def limit_records(reset):
+def limit_records(ahead):
     # The CLI's transcript at the limit: the limit record, then two records that are not assistant.
-    return [limit_record(reset), {"type": "last-prompt"}, {"type": "cost-state"}]
+    return [limit_record(ahead), {"type": "last-prompt"}, {"type": "cost-state"}]
+
+
+def resets(folder):
+    # The resetsAt of each limit record the fake wrote, in the order written.
+    found = []
+    for path in sorted((folder / "config" / "projects" / "p").glob("*.jsonl")):
+        for record in jsonl(path):
+            if record.get("apiError"):
+                found.append(record["apiErrorParams"]["rate_limit_info"]["resetsAt"])
+    return found
 
 
 def jsonl(path):
@@ -156,14 +171,9 @@ class UsageLimitTest(unittest.TestCase):
             out, code = proc.communicate(timeout=60)[0], None
         text = out.decode("utf-8")
         session = session_of(folder)
-        # The reset's local time differs on every run too; only the runs' own resets are replaced.
-        runs = json.loads((folder / "claude" / "runs.json").read_bytes())
-        for run in runs:
-            for record in run.get("records", []):
-                reset = record.get("apiErrorParams", {}).get("rate_limit_info", {}).get("resetsAt")
-                if reset is not None:
-                    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(reset))
-                    text = text.replace(when, "<when>")
+        # The reset's local time differs on every run too; only the transcript's own are replaced.
+        for reset in resets(folder):
+            text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
         return code, (text.replace(session, "<uuid>") if session else text).splitlines()
 
     def halt_after_end(self, folder):
@@ -176,9 +186,8 @@ class UsageLimitTest(unittest.TestCase):
 
     def test_waits_and_resumes(self):
         # C09.1: the session hits a limit two seconds ahead and is resumed after it.
-        reset = int(time.time()) + 2
         # The resumed session writes a later assistant record, as the CLI would on carrying on.
-        runs = [{"records": limit_records(reset), "result": LIMITED}]
+        runs = [{"records": limit_records(2), "result": LIMITED}]
         folder, proc = self.start(runs + [{"records": [PLAIN], "result": DONE}])
         code, lines = self.finish(folder, proc)
         starts = starts_of(folder)
@@ -189,13 +198,13 @@ class UsageLimitTest(unittest.TestCase):
         self.assertTrue(lines[0].startswith(WAITING) and lines[0].endswith("(session `<uuid>`)"))
         self.assertEqual(args[args.index("--resume") + 1 :][:1], [session])
         self.assertNotIn("--session-id", args)
+        reset = (resets(folder) or [float("inf")])[0]
         self.assertEqual((resumed["at"] >= reset, resumed["stdin"]), (True, PROMPT))
         self.assertEqual(events(folder), ["start", "pid", "end", "pid", "end"])
 
     def test_second_limit_parks(self):
         # C09.2: the resumed session's last assistant record is the limit again: the step parks.
-        reset = int(time.time()) + 2
-        runs = [{"records": limit_records(r), "result": LIMITED} for r in (reset, reset + 1)]
+        runs = [{"records": limit_records(ahead), "result": LIMITED} for ahead in (2, 3)]
         folder, proc = self.start(runs)
         code, lines = self.finish(folder, proc)
         # The run's own issue is created too; the park's is the create call not titled "Driver run".
@@ -206,7 +215,7 @@ class UsageLimitTest(unittest.TestCase):
     def test_far_reset_parks(self):
         # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
         far = "park: the usage limit resets at <when>, more than 6 hours away (session `<uuid>`)"
-        runs = [{"records": limit_records(int(time.time()) + 30 * 3600), "result": LIMITED}]
+        runs = [{"records": limit_records(30 * 3600), "result": LIMITED}]
         folder, proc = self.start(runs)
         code, lines = self.finish(folder, proc, bound=10)
         self.assertEqual((code, len(starts_of(folder)), lines), (1, 1, [far]))
@@ -217,9 +226,7 @@ class UsageLimitTest(unittest.TestCase):
 
     def test_halt_during_wait(self):
         # C09.4: the halt file written during a 60-second wait stops the driver within 5 seconds.
-        folder, proc = self.start(
-            [{"records": limit_records(int(time.time()) + 60), "result": LIMITED}]
-        )
+        folder, proc = self.start([{"records": limit_records(60), "result": LIMITED}])
         ended = self.halt_after_end(folder)
         code, lines = self.finish(folder, proc, bound=5)
         self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
@@ -228,7 +235,7 @@ class UsageLimitTest(unittest.TestCase):
     def test_earlier_limit_is_not_the_last(self):
         # C09.5: no transcript, or a limit followed by a later assistant record, is no usage limit.
         # The limit is 30 hours ahead: read as the last, it would park at once, not wait.
-        later = [limit_record(int(time.time()) + 30 * 3600), {"type": "last-prompt"}, PLAIN]
+        later = [limit_record(30 * 3600), {"type": "last-prompt"}, PLAIN]
         cases = {
             "no transcript": [{"result": LIMITED}],
             "later assistant": [{"records": later, "result": LIMITED}],
