@@ -14,7 +14,7 @@ from time import monotonic, sleep
 
 from driver import github, issues, livecheck, once, runlog, tree
 from driver import home as driver_home
-from driver.preflight import kit_lines
+from driver.preflight import image_claude, kit_lines
 from driver.steps import Step
 
 
@@ -239,10 +239,15 @@ def steps(args, home, project, read_facts, config):
     started, reason = driver_home.check(home)
     if reason:
         return once.refuse([f"cannot start: {reason}"])
-    drift, code = once.preflight(args, project)
+    drift, code = once.preflight(args, project, config)
     if drift is None:
         return code
-    line = livecheck.refusal(args.state, args.claude)
+    command = (
+        image_claude(args.docker, config["container_image"])
+        if "container_image" in config
+        else None
+    )
+    line = livecheck.refusal(args.state, args.claude, command)
     if line:
         return once.refuse([line])
     reason = once.settle(args, project)

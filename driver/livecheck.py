@@ -13,23 +13,23 @@ from driver.preflight import CLI, cli_lines
 NAME = "live-checked.txt"
 
 
-def version(path):
-    # The first line of `<path> --version`, stripped; "" when it prints none.
-    probe = subprocess.run([path, "--version"], check=False, **CLI)
+def version(*command):
+    # The first line of `<command> --version`, stripped; "" when it prints none.
+    probe = subprocess.run([*command, "--version"], check=False, **CLI)
     lines = probe.stdout.splitlines()
     return lines[0].strip() if lines else ""
 
 
-def refusal(state, program):
+def refusal(state, program, command=None):
     # None when the installed version is listed in the record, else the line `on` refuses with. A
-    # record that cannot be read lists nothing.
+    # record that cannot be read lists nothing. A command given reads the version in its place.
     try:
         with open(os.path.join(state, NAME), "rb") as record:
             data = record.read()
     except OSError:
         data = b""
     listed = [line.strip() for line in data.decode("utf-8", errors="replace").splitlines()]
-    line = version(shutil.which(program))
+    line = version(*command) if command is not None else version(shutil.which(program))
     if line in listed:
         return None
     return f"cannot start: Claude Code `{line}` has not passed the live check; run run-steps.py live-check"

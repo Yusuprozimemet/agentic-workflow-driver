@@ -1,7 +1,7 @@
 """The checks run before a dry run or a session: the project's kit (spec-drift.py, pr-names.py,
 evidence.yml and the fields of spec-drift.py's JSON), the remote origin, and the Claude Code CLI
-(`--version` and `--help` only). Each check returns the lines of what is missing, none when nothing
-is."""
+(`--version` and `--help` only), and Docker, the image and the secrets file of a container. Each
+check returns the lines of what is missing, none when nothing is."""
 
 import json
 import os
@@ -145,13 +145,16 @@ def listed(flag, text):
     return flag.endswith("-file") and (flag[: -len("-file")] + "[-file]") in text
 
 
-def cli_lines(program):
-    # Runs only `<program> --version` and `<program> --help`: neither starts a session.
-    path = shutil.which(program)
-    if path is None:
-        return [f"cannot run a session: {program} is not found"]
+def cli_lines(program, command=None):
+    # Runs only `<program> --version` and `<program> --help`: neither starts a session. A command
+    # given (as image_claude returns it) runs in place of the program found on PATH.
+    if command is None:
+        path = shutil.which(program)
+        if path is None:
+            return [f"cannot run a session: {program} is not found"]
+        command = [path]
     lines = []
-    done = subprocess.run([path, "--version"], check=False, **CLI)
+    done = subprocess.run([*command, "--version"], check=False, **CLI)
     found = re.match(r"(\d+)\.(\d+)\.(\d+)", done.stdout.lstrip()) if done.returncode == 0 else None
     if found is None:
         lines.append(f"cannot run a session: {program} --version printed no version")
@@ -162,10 +165,34 @@ def cli_lines(program):
             f"cannot run a session: Claude Code {version} is older than {oldest}, "
             "the oldest the driver was checked on"
         )
-    done = subprocess.run([path, "--help"], check=False, **CLI)
+    done = subprocess.run([*command, "--help"], check=False, **CLI)
     lines += [
         f"cannot run a session: {program} --help lists no {flag}"
         for flag in FLAGS
         if not listed(flag, done.stdout)
     ]
     return lines
+
+
+def image_claude(docker, image):
+    # The image's claude runs in a container of its own, so the version checked is the image's.
+    return [shutil.which(docker) or docker, "run", "--rm", image, "claude"]
+
+
+def box_line(docker, image, secrets):
+    # The first of Docker, the image and the secrets file that fails, or None. Only `docker version`
+    # and `docker image inspect` run: no container starts here.
+    path = shutil.which(docker)
+    if path is None:
+        return f"cannot start: Docker does not run: {docker} is not found"
+    done = subprocess.run([path, "version", "--format", "{{.Server.Version}}"], check=False, **CLI)
+    if done.returncode != 0:
+        errors = [line.strip() for line in done.stderr.splitlines() if line.strip()]
+        last = errors[-1] if errors else f"exit {done.returncode}"
+        return f"cannot start: Docker does not run: {last}"
+    done = subprocess.run([path, "image", "inspect", image], check=False, **CLI)
+    if done.returncode != 0:
+        return f"cannot start: the image `{image}` is not built; docs/container.md says how"
+    if not os.path.isfile(secrets):
+        return f"cannot start: the secrets file `{secrets}` does not exist"
+    return None

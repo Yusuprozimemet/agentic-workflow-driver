@@ -31,7 +31,7 @@ from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
 from driver.decide import decide
-from driver.preflight import cli_lines, kit_lines
+from driver.preflight import box_line, cli_lines, image_claude, kit_lines
 from driver.steps import classify
 
 
@@ -257,10 +257,20 @@ def say(line, code):
     print(line, file=sys.stderr if code == 2 else sys.stdout, flush=True)
 
 
-def preflight(args, project):
+def preflight(args, project, config):
     # The kit and the CLI are checked before the project's issues are read.
     lines, drift = kit_lines(project)
-    lines += cli_lines(args.claude)
+    if "container_image" in config:
+        # The keys come as a pair (driver.config.load), and only the first of Docker, the image and
+        # the secrets file that fails is printed; the image's Claude Code is checked in place of
+        # the PC's.
+        image = config["container_image"]
+        line = box_line(args.docker, image, config["container_secrets"])
+        lines += (
+            [line] if line else cli_lines("the image's claude", image_claude(args.docker, image))
+        )
+    else:
+        lines += cli_lines(args.claude)
     if lines:
         return None, refuse(lines)
     return drift, None
@@ -325,7 +335,7 @@ def checked(args, home, project, read_facts, config):
     started, reason = driver_home.check(home)
     if reason:
         return refuse([f"cannot start: {reason}"])
-    drift, code = preflight(args, project)
+    drift, code = preflight(args, project, config)
     if drift is None:
         return code
     reason = settle(args, project)
