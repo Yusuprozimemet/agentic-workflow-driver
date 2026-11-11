@@ -6,6 +6,7 @@ git and numpy; the page tests run docs/dashboard/dashboard.js and need node.
 
     python scripts/test_spec_drift.py
 """
+import contextlib
 import importlib.util
 import json
 import os
@@ -21,6 +22,28 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
 sd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sd)
+
+
+def split_modules(name):
+    """spec-drift.py and the modules it is split into that hold name: what was one global is a
+    name in each module that reads it, and a test patches them all."""
+    mods = (sd, *(sys.modules[m] for m in sorted(sys.modules) if m.startswith("spec_drift_")))
+    return [m for m in mods if hasattr(m, name)]
+
+
+def setall(name, value):
+    for m in split_modules(name):
+        setattr(m, name, value)
+
+
+@contextlib.contextmanager
+def patch_all(name, new=None, **kwargs):
+    """mock.patch.object on every module that holds name, with one mock or value for all."""
+    new = mock.MagicMock(**kwargs) if new is None else new
+    with contextlib.ExitStack() as stack:
+        for m in split_modules(name):
+            stack.enter_context(mock.patch.object(m, name, new))
+        yield new
 COMPARE = os.path.join(HERE, "..", "kit", "compare-page.py")
 
 PLAN = "# Plan\n\nThe plan names `FooService` and `bar_table`.\n"
@@ -48,8 +71,8 @@ def use_project(test, fields):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(fields, f)
     for name, value in sd.project_config(path).items():
-        test.addCleanup(setattr, sd, name, getattr(sd, name))
-        setattr(sd, name, value)
+        test.addCleanup(setall, name, getattr(sd, name))
+        setall(name, value)
 
 
 class Repo:
@@ -219,16 +242,36 @@ class SpecDriftTest(unittest.TestCase):
         self.repo.rows()
         self.repo.merge({"specs/day-01-x.md": DAY + "It calls `BazClient`.\n", "src/Use.java": "BazClient b;\n"})
         calls, real = [], sd.run
-        sd.run = lambda *a: calls.append(a) or real(*a)
+        setall("run", lambda *a: calls.append(a) or real(*a))
         try:
             cached = self.repo.rows()
             sd.CACHE.clear()
             fresh_from = len(calls)
             fresh = self.repo.rows()
         finally:
-            sd.run = real
+            setall("run", real)
         self.assertEqual(cached, fresh)
         self.assertLess(fresh_from, len(calls) - fresh_from)
+
+    def test_a_change_to_any_file_of_the_script_starts_the_cache_over(self):
+        # The script is split into modules beside it: an edit to one of them is an edit to it.
+        folder = tempfile.mkdtemp(prefix="spec-drift-split-")
+        self.addCleanup(shutil.rmtree, folder, True)
+        for name in sd.SOURCES:
+            shutil.copy(os.path.join(HERE, name), folder)
+        self.addCleanup(setattr, sd, "__file__", sd.__file__)
+        self.addCleanup(sd.CACHE.clear)
+        sd.__file__ = os.path.join(folder, "spec-drift.py")
+        cache = os.path.join(folder, "c.json")
+        sd.load_cache(cache)
+        sd.CACHE["git"] = {"k": "v"}
+        sd.save_cache(cache)
+        sd.load_cache(cache)
+        self.assertEqual(sd.CACHE["git"], {"k": "v"})
+        with open(os.path.join(folder, sd.SOURCES[-1]), "a", encoding="utf-8") as f:
+            f.write("# edited\n")
+        sd.load_cache(cache)
+        self.assertEqual(sorted(sd.CACHE), ["version"])
 
     def test_a_comment_naming_a_spec_name_is_not_code(self):
         rows = self.repo.merge({"src/Foo.java": "// FooService comes later\n /* FooService */\n",
@@ -294,8 +337,8 @@ class SpecDriftTest(unittest.TestCase):
                             ("", "silent"), (None, "silent")]:
             self.assertEqual(sd.break_state(body and body + checklist, 310), state, body)
         self.assertEqual(sd.break_state(checklist, 310), "silent")
-        self.addCleanup(setattr, sd, "BREAK_LINE_FROM_PR", sd.BREAK_LINE_FROM_PR)
-        sd.BREAK_LINE_FROM_PR = 310  # the source project asked for the line from #310
+        self.addCleanup(setall, "BREAK_LINE_FROM_PR", sd.BREAK_LINE_FROM_PR)
+        setall("BREAK_LINE_FROM_PR", 310)  # the source project asked for the line from #310
         self.assertEqual(sd.break_state("broken: the guard removed → 401\n", 309), "not measured")
 
     def test_a_new_project_reads_the_break_line_from_its_first_pr(self):
@@ -347,26 +390,26 @@ class SpecDriftTest(unittest.TestCase):
     def test_a_gh_list_as_long_as_its_limit_is_refused(self):
         real = sd.run
         try:
-            sd.run = lambda *args: "[" + ",".join(["{}"] * n) + "]"
+            setall("run", lambda *args: "[" + ",".join(["{}"] * n) + "]")
             n = 2
             self.assertEqual(len(sd.gh_list(3, "pr", "list")), 2)
             n = 3
             with self.assertRaisesRegex(SystemExit, "pr list returned its limit of 3"):
                 sd.gh_list(3, "pr", "list")
         finally:
-            sd.run = real
+            setall("run", real)
 
     def test_a_gh_list_of_a_thousand_is_refused_under_a_larger_limit(self):
         # GitHub gives at most 1,000 for a filtered run list, so 1,000 may be cut whatever the limit.
         real = sd.run
         try:
-            sd.run = lambda *args: "[" + ",".join(["{}"] * 1000) + "]"
+            setall("run", lambda *args: "[" + ",".join(["{}"] * 1000) + "]")
             with self.assertRaisesRegex(SystemExit, "run list returned 1000"):
                 sd.gh_list(5000, "run", "list")
-            sd.run = lambda *args: "[" + ",".join(["{}"] * 999) + "]"
+            setall("run", lambda *args: "[" + ",".join(["{}"] * 999) + "]")
             self.assertEqual(len(sd.gh_list(5000, "run", "list")), 999)
         finally:
-            sd.run = real
+            setall("run", real)
 
     def test_an_infra_run_whose_artifact_does_not_download_is_skipped(self):
         def fake(*args):
@@ -383,10 +426,10 @@ class SpecDriftTest(unittest.TestCase):
             return ""
         real = sd.run
         try:
-            sd.run = fake
+            setall("run", fake)
             got = sd.infra("infra.yaml")
         finally:
-            sd.run = real
+            setall("run", real)
         self.assertEqual([r["sha"] for r in got["runs"]], ["bbbbbbb", "aaaaaaa"])
         self.assertEqual(got["latest"], dict(sha="aaaaaaa", conclusion="success", date="2026-10-07", url="u1",
                                              summary={"criteria": {"C32.2": "pass"}}))
@@ -402,18 +445,18 @@ class SpecDriftTest(unittest.TestCase):
             return "[]"
         real = sd.run
         try:
-            sd.run = fake
+            setall("run", fake)
             remote = False
             self.assertEqual(sd.github(), ([], [], sd.NO_REMOTE))
             remote = True
             self.assertEqual(sd.github(), ([dict(number=1, author=dict(login="me"))], [], None))
         finally:
-            sd.run = real
+            setall("run", real)
         self.assertTrue(sd.NO_REMOTE.startswith("No GitHub remote"))
 
     def test_the_deployment_is_its_checks_and_none_without_the_file(self):
         real = sd.PAGE
-        sd.PAGE = tempfile.mkdtemp()
+        setall("PAGE", tempfile.mkdtemp())
         try:
             self.assertIsNone(sd.deployment())
             checks = [dict(criterion="C35.16", name="the site answers", ok=True, detail="200", at="2026-10-10T09:00:00Z"),
@@ -424,7 +467,7 @@ class SpecDriftTest(unittest.TestCase):
             self.assertEqual(sd.deployment()["checks"], checks)
         finally:
             shutil.rmtree(sd.PAGE)
-            sd.PAGE = real
+            setall("PAGE", real)
 
     def test_the_data_names_the_commit_versions_and_draws_that_made_it(self):
         p = sd.provenance()
@@ -443,6 +486,17 @@ class SpecDriftTest(unittest.TestCase):
         sd.__file__ = script
         p = empty.inside(lambda blobs: sd.provenance())
         self.assertEqual((p["commit"], p["script_edited"]), (None, True))
+
+    def test_an_edit_to_a_module_of_the_script_is_the_script_edited(self):
+        # The script is split into modules beside it: an edit to one of them is an edit to it.
+        repo = Repo().merge({name: "" for name in sd.SOURCES})
+        self.addCleanup(repo.close)
+        self.addCleanup(setattr, sd, "__file__", sd.__file__)
+        sd.__file__ = os.path.join(repo.path, "spec-drift.py")
+        self.assertFalse(repo.inside(lambda blobs: sd.provenance())["script_edited"])
+        with open(os.path.join(repo.path, sd.SOURCES[-1]), "w", encoding="utf-8") as f:
+            f.write("# edited\n")
+        self.assertTrue(repo.inside(lambda blobs: sd.provenance())["script_edited"])
 
     def test_the_spec_rules_and_template_are_not_specs_for_the_vocabulary(self):
         # a pilot: 5 of the 8 names "missing" from its code were the source project's examples there.
@@ -1078,8 +1132,8 @@ class ProjectFileTest(unittest.TestCase):
 
     def test_the_infra_workflow_is_the_files_and_with_none_gh_is_not_asked(self):
         asked, real = [], sd.run
-        self.addCleanup(setattr, sd, "run", real)
-        sd.run = lambda *args: asked.append(args) or "[]"
+        self.addCleanup(setall, "run", real)
+        setall("run", lambda *args: asked.append(args) or "[]")
         use_project(self, PROJECT)
         sd.infra(sd.INFRA_WORKFLOW)
         self.assertEqual([a[:5] for a in asked], [("gh", "run", "list", "--workflow", "infra.yaml")])
@@ -1127,13 +1181,13 @@ class OwnerAndCaveatTest(unittest.TestCase):
                 return "/home/someone/toy-folder\n"
         real = sd.run
         try:
-            sd.run = fake
+            setall("run", fake)
             remote = True
             self.assertEqual(sd.project_name(), "toy-repo")
             remote = False
             self.assertEqual(sd.project_name(), "toy-folder")
         finally:
-            sd.run = real
+            setall("run", real)
 
 
 def page_row(i, pr, kind, gap):
@@ -1367,8 +1421,8 @@ class EvidenceReportTest(unittest.TestCase):
                      dict(day=3, status="active", file="specs/day-03-z.md", prs=[])]
         page = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, page, True)
-        self.addCleanup(setattr, sd, "PAGE", sd.PAGE)
-        sd.PAGE = page
+        self.addCleanup(setall, "PAGE", sd.PAGE)
+        setall("PAGE", page)
 
     def read(self, report):
         if report is not None:
@@ -2160,14 +2214,14 @@ class DataBranch:
         for name in sd.DATA_FILES:
             with open(os.path.join(page, name), "w", encoding="utf-8") as f:
                 f.write('{"left": "in the working tree"}')
-        self.patch = mock.patch.object(sd, "PAGE", page)
-        self.patch.start()
+        self.patch = patch_all("PAGE", page)
+        self.patch.__enter__()
         self.saved = dict(sd.DATA)
         sd.data_branch()
         return self
 
     def __exit__(self, *exc):
-        self.patch.stop()
+        self.patch.__exit__(None, None, None)
         sd.DATA.update(self.saved)
         shutil.rmtree(self.tmp, ignore_errors=True)
 
@@ -2209,7 +2263,7 @@ class DriverRunsTest(unittest.TestCase):
     def test_the_parked_issues_are_read_open_and_closed_and_come_out_by_number(self):
         listed = [dict(number=9, title="park: b", url="u9", createdAt="2026-11-12T13:00:05Z", closedAt=None),
                   dict(number=4, title="park: a", url="u4", createdAt="2026-11-12T09:00:05Z", closedAt="2026-11-12T10:10:00Z")]
-        with mock.patch.object(sd, "run", return_value=json.dumps(listed)) as run:
+        with patch_all("run", return_value=json.dumps(listed)) as run:
             got = sd.parked_issues()
         self.assertEqual(got, [dict(number=4, title="park: a", url="u4", opened="2026-11-12T09:00:05Z", closed="2026-11-12T10:10:00Z"),
                                dict(number=9, title="park: b", url="u9", opened="2026-11-12T13:00:05Z", closed=None)])
@@ -2217,11 +2271,11 @@ class DriverRunsTest(unittest.TestCase):
         self.assertEqual(asked[:7], ("gh", "issue", "list", "--label", "parked", "--state", "all"))
 
     def test_with_no_remote_or_a_gh_that_refuses_the_parks_are_unread_not_none_found(self):
-        with mock.patch.object(sd, "run") as run:
+        with patch_all("run") as run:
             self.assertIsNone(sd.parked_issues(sd.NO_REMOTE))
             run.assert_not_called()
         refused = subprocess.CalledProcessError(1, "gh", stderr="issues are disabled")
-        with mock.patch.object(sd, "run", side_effect=refused), mock.patch("sys.stderr"):
+        with patch_all("run", side_effect=refused), mock.patch("sys.stderr"):
             self.assertIsNone(sd.parked_issues())
 
     def test_a_park_is_given_the_issue_of_its_line_that_was_open_for_it(self):

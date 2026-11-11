@@ -348,7 +348,9 @@ class ProofKindsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as page:
             with open(os.path.join(page, "evidence-checks.json"), "w", encoding="utf-8") as f:
                 json.dump(report, f)
-            with mock.patch.object(spec_drift, "PAGE", page):
+            with mock.patch.object(
+                sys.modules[spec_drift.evidence_checks.__module__], "PAGE", page
+            ):
                 out = spec_drift.evidence_checks(days, [{"sha": "abc", "pr": None}])
         self.assertEqual(out["state"], "loaded", out.get("diagnostic"))
         proof = out["days"][0]["proof"]
