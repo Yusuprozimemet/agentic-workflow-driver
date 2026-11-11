@@ -26,3 +26,6 @@ Each closing PR adds what its day found; the details are in
   `new` test was seen red, and nothing the day made escaped it. The close's evidence rehearsals
   caught two recorded breaks that could not replay: one report held a hash that changes on
   every run, the other a Windows path. Only CI's Linux rehearsal caught the second.
+- **Day 08:** the driver ran one day of another project at level 1, three pull requests merged
+  unchanged, two parks, one refusal, and that day's evidence replay green. The spec-auditor found 66 of the
+  day's 85 defects before any code. The trial did not meet the usage limit, so that part stays not proven.
