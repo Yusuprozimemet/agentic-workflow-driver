@@ -54,7 +54,7 @@ days on a small Python CLI. What that evidence does and does not show is in
    the kit's `.git`). There, delete `kit/` (`rm -r kit`) and start the history on `main`:
    `git init -b main`. The dashboard reads the branch `main` by name and stops without it.
 2. Fill every `<!-- PROJECT: … -->`: `git grep -n "PROJECT:"` lists them (`CLAUDE.md`, the
-   agents, `specs/README.md`, the PR template, `docs/workflow.md`, `scripts/spec-drift.py`, `evidence.yml`, `scripts/test_evidence_workflow.py`). Fill
+   agents, `specs/README.md`, the PR template, `docs/workflow.md`, `scripts/spec_drift_common.py`, `evidence.yml`, `scripts/test_evidence_workflow.py`). Fill
    `plan.md`'s `<name>` and `<NN>`, and `spec-drift.config.json`: every field is empty until the
    project has what it names (services, moved paths, an infra workflow, PR areas, frozen files,
    code under `tests/`).
