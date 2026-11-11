@@ -1857,7 +1857,11 @@ def replay_state(states):
 def replay_history(path=None):
     """docs/dashboard/replay-history.json, as scripts/replay-history.py wrote it, read, never run here:
     one cell per criterion and merge, its checks' worst state, mixed when they differ. No file is
-    "absent", one this cannot read "invalid": neither a pass."""
+    "absent", one this cannot read "invalid": neither a pass.
+
+    A merge re-checked on two platforms (the Windows history and the Linux re-check job) has a row
+    for each: a check one platform ran outranks the other's "not applicable on this platform", and a
+    merge's run and copied counts are one platform's, Linux's where it has rows (CI's)."""
     path = path or os.path.join(PAGE, "replay-history.json")
     if not os.path.exists(path):
         return dict(state="absent")
@@ -1871,17 +1875,22 @@ def replay_history(path=None):
             r = dict(r, state=replay_row_state(r))
             if r["state"] not in REPLAY_STATES:
                 raise ValueError(f"{r['criterion']} at {r['merge']}: state {r['state']!r}")
-            m = merges.setdefault(r["n"], dict(n=r["n"], merge=r["merge"], pr=r.get("pr"), sample=r["sample"],
-                                               run=0, copied=0))
+            m = merges.setdefault(r["n"], dict(n=r["n"], merge=r["merge"], pr=r.get("pr"), sample=r["sample"], by={}))
             if "key" in r:
-                m["copied" if "reused_from" in r else "run"] += 1
+                tally = m["by"].setdefault(r.get("platform"), dict(run=0, copied=0))
+                tally["copied" if "reused_from" in r else "run"] += 1
             cells.setdefault((r["criterion"], r["n"]), dict(day=r["day"], checks=[]))["checks"].append(
                 {k: r[k] for k in ("check", "state", "detail", "reused_from", "platform") if k in r})
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         return dict(state="invalid", why=str(e))
+    for m in merges.values():
+        by = m.pop("by")
+        m.update(by.get("linux") or (by[min(by, key=str)] if by else dict(run=0, copied=0)))
     num = lambda cid: tuple(int(x) for x in re.findall(r"\d+", cid))  # noqa: E731
     out = []
     for (cid, n), c in sorted(cells.items(), key=lambda kv: (num(kv[0][0]), kv[0][1])):
+        ran = {ch["check"] for ch in c["checks"] if ch["state"] != "not applicable on this platform"}
+        c["checks"] = [ch for ch in c["checks"] if ch["state"] != "not applicable on this platform" or ch["check"] not in ran]
         states = {ch["state"] for ch in c["checks"]}
         out.append(dict(criterion=cid, day=c["day"], n=n, state=replay_state(states), mixed=len(states) > 1,
                         checks=c["checks"]))
