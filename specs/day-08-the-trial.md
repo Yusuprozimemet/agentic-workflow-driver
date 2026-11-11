@@ -216,11 +216,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`,
       `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`,
       `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config`.
-      Replaces: C07.18 — was: the same, with break reports that ended at the `cost` line.
       Evidence: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`, `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`, `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config` (#126).
       broken: status drops the refusals line → AssertionError: Lists differ: ['mod[627 chars]f', 'cost: $1.20, merged pull requests 2, $0.6[93 chars]ked'] != ['mod[627 chars]f', 'refusals: 3', 'cost: $1.20, merged pull r[108 chars]ked'] (#126)
-      broken: status skipping the config → AssertionError: "mode: off\nlevel: 1\nhalt: none\nrun's i[219 chars]ed\n" != '' (#126)
+      broken: status skipping the config → AssertionError: "mode: off\nlevel: 1\nhalt: none\nrun's i[225 chars]ed\n" != '' (#126)
       broken: a log that cannot be read passing as empty → AssertionError: Lists differ: ['in progress: none', 'steps: none', 'parks by reason: n[144 chars]ked'] != ['in progress: unknown', 'run log: the run log cannot be read at line 2'] (#126)
+      Replaces: C07.18 — was: the same, with break reports that ended at the `cost` line.
 - [x] C08.3 **new** — An `end` line whose `session` is `["s1"]` or whose `refused` is `"x"`, a
       `refused` is `[{"tool": 5, "input": "{}"}]`, a `merged` line whose `pr` is `true` or `"3"`, a
       `closed` or `wait` line whose `pr` is `"3"`, a `park` line whose `pr` is `true`, or a `park` or
@@ -373,6 +373,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: such a session parks with a Day 4 line ("the session ended in an error: …" or
       another), with no wait.
       Test: `UsageLimitTest.test_waits_and_resumes`, `UsageLimitTest.test_second_limit_parks`.
+      Evidence: none; Track F did not open (#129).
       Not proven: the trial did not meet the limit
 - [x] C08.16 **hold** — The rest of C07.16 holds: a park before a session and one after it each
       write one `park` line, its `line` the printed line and its `step` the sentence; `start(...,
@@ -462,7 +463,7 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
 - **Assumed** — `token-usage.py` counts the driver's headless transcripts: they exist, named by the
   `--session-id` (`"entrypoint":"sdk-cli"`, which `token-usage.py` does not read) | not run: the count, the trial.
 - **Assumed** — `--resume <id>` resumes a session after a usage limit | not run: Track F, if it opens.
-- Two blind passes: the first, of 81 entries, moved D08.19 and D08.60 from `spec` to `process`, each a fault in a break's record. The last whole pass, of 82 after D08.82, is the one the closing PR quotes: stage 76, cause 78, made 78 agree, and the rater unclear on cause 3, made 2, stage 5. All its disagreements are kept. D08.10, D08.21, D08.60, D08.65 and D08.78's stage: the rater says the line does not say where it was found, and the tags come from the spec-change PR and #118. D08.16: no close step owns the map, so `none`. D08.17: the rule came after the spec was written, so `process`, `none`. D08.21's cause: the auditor found a spec gap. D08.76 and D08.81: the field allows no "unclear"; each test file was added by the day named, and the lines say the cause was not found.
+- The blind rater ran on 81, 82 and 85 entries as defects were added; the last whole pass is the one the closing PR quotes: stage 82, cause 80, made 81 of 85 agree, the rater unclear on cause 2, made 2, stage 1. From the first pass D08.19 and D08.60 moved from `spec` to `process`, each a fault in a break's record. From the last, D08.84 and D08.85 moved from `found: close` to `found: self`: a check on the closing PR caught them before its merge. Kept: D08.65's stage (the tag comes from the spec-change PR); D08.16 (no close step owns the map, so `none`); D08.17 (the rule came after the spec was written, so `process`, `none`); D08.74 (the brief was wrong, not the spec); D08.83 (`process`, as D07.40); D08.76 and D08.81 (the field allows no "unclear"; each test file was added by the day named, and the lines say the cause was not found).
 - **Defect** D08.1 — found: auditor · cause: spec · made: Day 08 · three `new` criteria sat in a maintainer row of the Tracks table that "Track tests seen red" does not read, two had no `Test:` field and one named a class, not a test; moved to Track E with `TrialRecordTest` cases.
 - **Defect** D08.2 — found: auditor · cause: spec · made: Day 08 · C08.11's evidence was a `gh` command the replay does not run, and C08.9 named a command the replay would count but never run; both now proved by tests.
 - **Defect** D08.3 — found: auditor · cause: spec · made: Day 08 · the phone's park half timed the driver "going on", but a park ends the run (C05.6) and the driver prints no times; now timed from the issue's `closedAt` and the next `start` line.
@@ -553,6 +554,9 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
 - **Defect** D08.80 — found: Track E · cause: spec · made: Day 08 · the spec expected the park after a `STOP`-killed session to need VS Code; it was closed from the phone, and the next start ran the step in a new session (#129).
 - **Defect** D08.81 — found: close · cause: implementation · made: Day 05 · a whole-suite run at the close failed once in `tests/test_once_stop.py` and the next passed; the report was not kept, so the test and the cause are not known (H08.3).
 - **Defect** D08.82 — found: evidence replay · cause: process · made: Day 08 · C08.16's break "park_issue writing no park line" was recorded on #111 with a find that Track C1 then changed, when `runlog.park` took two more arguments, so the close's rehearsal refused it, "occurs 0 times"; re-run on today's line, with the same report.
+- **Defect** D08.83 — found: evidence replay · cause: process · made: Day 08 · same-as: D07.40 · C08.2's break "status skipping the config" was recorded on Windows and its report is 6 characters longer on Linux, where CI replays it; the spec now holds Linux's.
+- **Defect** D08.84 — found: self · cause: process · made: Day 08 · the close's script dropped C08.2's `broken:` placeholders and left its `Replaces:` line above the first `Evidence:`, so "Criteria keep their wording" read it as a changed statement; moved below the `broken:` lines.
+- **Defect** D08.85 — found: self · cause: process · made: Day 08 · C08.15's `Not proven:` line had no `Evidence:` or `broken:` line above it, so the same check read it as part of the criterion's statement; an `Evidence:` line now ends the statement.
 - **Hand-off** H08.1 → the maintainer: H06.1, how a headless session reports the usage limit. The trial did not meet it, so `once.outcome` still parks such a session with a Day 4 line and no wait, and `--resume` after a limit has not been run.
 - **Hand-off** H08.2 → the maintainer: neither `hooks/guard.py` nor `bearing`'s guards log a refusal, so a guard's refusal that does not reach `permission_denials` is seen nowhere (D08.79). The Note above leaves this to the stop's plan-auditor.
 - **Hand-off** H08.3 → the maintainer: `OnceHaltTest.test_halt_during_once` and a test in `tests/test_once_stop.py` fail on and off under load (D08.76, D08.81). `OnceStopTest` and `OnceHaltTest` expect `["start", "pid"]`, so a killed session's `end` line may be a race in the driver and not only in the tests; no day owns it.
