@@ -12,7 +12,8 @@ close it to let the driver go on. While the session runs, --once reads the proje
 (Day 5, "The phone's STOP during a session"). A session that runs past --session-minutes has its tree
 killed, and the step parks with a park line. A session whose transcript's last assistant record is
 the usage limit waits for the reset and is resumed once, or parks when the reset is more than
---limit-hours away (Day 9)."""
+--limit-hours away (Day 9). A halt file found when a session returns, its own or a resumed one,
+ends the step with a halt line before its outcome is read, and with no end line."""
 
 import glob
 import json
@@ -558,6 +559,13 @@ def wait_limit(args, reset, session):
             )
 
 
+def halted_after(args, session):
+    # A halt file set while the session ran (by `halt` or a hook) leaves its outcome unread, no end line.
+    if os.path.exists(os.path.join(args.state, "halt")):
+        return f"halt: the halt file was set while the session ran (session `{session}`)"
+    return None
+
+
 def usage_limit(command, args, project, record, out, reset):
     # The session's transcript ends in the usage limit: the driver parks when the reset is further
     # away than --limit-hours, else waits for it and resumes the session once. Returns (line, code),
@@ -591,6 +599,10 @@ def usage_limit(command, args, project, record, out, reset):
         return line, code
     stdout, returncode = done
     out = stdout.decode("utf-8", errors="replace")
+    halted = halted_after(args, session)
+    if halted:
+        say(halted, 1)
+        return halted, 1
     if limit_reset(session) is not None:
         line, code = f"park: the usage limit was reached (session `{session}`)", 1
     else:
@@ -610,6 +622,10 @@ def one_session(command, prompt, args, project, record):
         say(line, code)
         return line, code
     stdout, returncode = done
+    halted = halted_after(args, record["session"])
+    if halted:
+        say(halted, 1)
+        return halted, 1
     out = stdout.decode("utf-8", errors="replace")
     # A session that hit the usage limit is waited for and resumed, or parked, before its outcome.
     reset = limit_reset(record["session"])

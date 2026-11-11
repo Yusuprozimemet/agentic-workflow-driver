@@ -73,6 +73,9 @@ def resume(args, project, number, record, command, failed, used):
     if done is once.PAST:
         return once.past_bound(args, session)
     stdout, returncode = done
+    halted = once.halted_after(args, session)
+    if halted:
+        return halted, 1
     out = stdout.decode("utf-8", errors="replace")
     line, code = once.outcome(out, returncode, session, project, args.gh, record["step"])
     once.write_end(args.state, session, line, out)

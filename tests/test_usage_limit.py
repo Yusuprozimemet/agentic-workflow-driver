@@ -40,7 +40,7 @@ PLAIN = {"type": "assistant", "message": {"content": []}}
 # in starts.jsonl, appends the entry's records to the session's transcript and prints its result.
 # A resumed session appends to the same transcript, as the CLI does. A limit record's resetsAt is
 # given in seconds ahead and set from the fake's own clock, so that the driver's start-up does not
-# use up the wait.
+# use up the wait. An entry with "halt" writes the driver's halt file before the result, as a hook would.
 DO = """import time
 runs = json.loads((folder / "runs.json").read_bytes())
 starts = folder / "starts.jsonl"
@@ -58,6 +58,8 @@ if entry.get("records"):
                 info = record["apiErrorParams"]["rate_limit_info"]
                 info["resetsAt"] = time.time() + info["resetsAt"]
             log.write(json.dumps(record).encode("utf-8") + b"\\n")
+if entry.get("halt"):
+    (folder.parent / "state" / "halt").write_bytes(b"halted by the session\\n")
 spec["result"] = entry["result"]
 """
 
