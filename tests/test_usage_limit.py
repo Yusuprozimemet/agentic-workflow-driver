@@ -156,6 +156,14 @@ class UsageLimitTest(unittest.TestCase):
             out, code = proc.communicate(timeout=60)[0], None
         text = out.decode("utf-8")
         session = session_of(folder)
+        # The reset's local time differs on every run too; only the runs' own resets are replaced.
+        runs = json.loads((folder / "claude" / "runs.json").read_bytes())
+        for run in runs:
+            for record in run.get("records", []):
+                reset = record.get("apiErrorParams", {}).get("rate_limit_info", {}).get("resetsAt")
+                if reset is not None:
+                    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(reset))
+                    text = text.replace(when, "<when>")
         return code, (text.replace(session, "<uuid>") if session else text).splitlines()
 
     def halt_after_end(self, folder):
@@ -197,14 +205,10 @@ class UsageLimitTest(unittest.TestCase):
 
     def test_far_reset_parks(self):
         # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
-        reset = int(time.time()) + 30 * 3600
-        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(reset))
         far = "park: the usage limit resets at <when>, more than 6 hours away (session `<uuid>`)"
-        runs = [{"records": limit_records(reset), "result": LIMITED}]
+        runs = [{"records": limit_records(int(time.time()) + 30 * 3600), "result": LIMITED}]
         folder, proc = self.start(runs)
         code, lines = self.finish(folder, proc, bound=10)
-        # The time printed is the reset's, local; a report that named it could not be replayed.
-        lines = [line.replace(when, "<when>") for line in lines]
         self.assertEqual((code, len(starts_of(folder)), lines), (1, 1, [far]))
         folder, proc = self.start(runs, flags=["--limit-hours", "40"])
         ended = self.halt_after_end(folder)
@@ -223,7 +227,8 @@ class UsageLimitTest(unittest.TestCase):
 
     def test_earlier_limit_is_not_the_last(self):
         # C09.5: no transcript, or a limit followed by a later assistant record, is no usage limit.
-        later = [limit_record(int(time.time()) + 3600), {"type": "last-prompt"}, PLAIN]
+        # The limit is 30 hours ahead: read as the last, it would park at once, not wait.
+        later = [limit_record(int(time.time()) + 30 * 3600), {"type": "last-prompt"}, PLAIN]
         cases = {
             "no transcript": [{"result": LIMITED}],
             "later assistant": [{"records": later, "result": LIMITED}],
