@@ -86,7 +86,8 @@ what an unattended run needs: the switches, the parks, the merge.
   fired on the same call, with the same event and matcher, and inside a subagent. A `--settings`
   hook that exits 2 while a halt file exists refused the call, and the command did not run.
   `--strict-mcp-config` was accepted without a config, and a session started with `--agent`
-  gave its hooks the agent's name.
+  gave its hooks the agent's name. Repeated on 2.1.322 (`live-check`) before the Day 8 trial,
+  which ran on that version.
 - **The driver does depend on the kit**: on the sentence `next_step()` returns, the `--out`
   JSON, the branch names and more. "What the driver needs from the kit" lists them, and what
   happens on a project whose kit says them differently.
@@ -147,8 +148,11 @@ the trial shows how often it comes up.
   brought up to the kit, by the maintainer.
 - **A contract test in the driver's repository.** It calls `next_step()` in the repository's own
   copy of the kit's script for every sentence it can return and checks that each one is known.
-  Bringing that copy up to a newer kit is how a newer kit is tested, and the driver's README
-  names the kit commits the test has passed on.
+  That copy is no longer the kit's file: #134 and #135 split it into `spec-drift.py` and
+  `spec_drift_*.py` modules, so a newer kit cannot be dropped in. A newer kit is tested by
+  porting the change to its `next_step()` into the split copy and running the test; the driver's
+  README names the kit commits the test has passed on, and a trial's record names the commit of
+  its project's copy.
 - **In a run**: what the driver does not recognise parks.
 
 ## The switches
@@ -350,7 +354,9 @@ shows it. The driver resumes when the maintainer's account closes the issue.
   permission mode ("Decisions for the maintainer").
 - The next step is "write its day spec": a manual hand-off for now; the maintainer writes the
   spec ("What the driver needs from the kit").
-- The usage limit is reached: the driver waits and retries, and parks only if that fails.
+- The usage limit is reached: the driver waits and retries, and parks only if that fails. Not
+  built at Phase 1's end (C08.15 is not met): such a session parks as one that ended with neither
+  a pull request nor `PARK:`. Day 9 builds the wait.
 
 To answer a park that needs a conversation, open VS Code on that PC and work as today. Level 0
 stays available.
@@ -432,7 +438,8 @@ agents work, stop only for the plan".
 From the kit's [Cost baseline for automation](https://github.com/Yusuprozimemet/agentic-workflow-kit/blob/393dda6/kit/six-kits-plan.md#cost-baseline-for-automation): **$1.86 per
 merged pull request** and **34.4 replies per merged pull request**, main sessions only (bearing,
 84 PRs). An unattended run should not raise either, with the reviewer session counted in. Beside
-them: escapes per day, parks by reason, and the refusals in `docs/dashboard/refusals.json`.
+them: escapes per day, parks by reason, and the refusals: the run log's, and this repository's
+in `refusals.json` on the `dashboard-data` branch.
 
 ## What to build
 
@@ -454,7 +461,7 @@ is built until the trial at level 1 has been read.
    - reads the project's `spec-drift.py --out` JSON, not only the sentence it prints: the next
      step, and each day's `phase`, since the sentence never names a phase's end or the audit
      that follows it;
-   - runs, in the project's folder, `claude -p "<step>" --model <the main session's>
+   - runs, in the project's folder, with the step on standard input, `claude -p --model <the main session's>
      --output-format json --max-budget-usd <n> --permission-mode auto --strict-mcp-config
      --settings <the driver's>
      --append-system-prompt-file <the driver's rules>`. `--strict-mcp-config` is there so that no
@@ -462,7 +469,8 @@ is built until the trial at level 1 has been read.
    - writes the step, its branch prefix and the session's id (`--session-id`) to the run log
      before the session starts ("Recovery");
    - finds the step's PR on GitHub by its branch, not in the session's text;
-   - waits with `gh pr checks <n> --watch`. On a red check it resumes that step's session
+   - polls the required checks (`gh pr checks <n> --required`) every `--poll` seconds, as Day 6
+     built it in place of `--watch`. On a red check it resumes that step's session
      (`--resume`, the id from the JSON output) with the failing lines, filtered and capped, twice
      at most;
    - waits for the maintainer's merge, checks the evidence run after a close, pulls `main`.
@@ -504,11 +512,12 @@ runs without them:
   maintainer changes the settings; a script only reads them.
 - Later, if the trial says the driver stays: the next step as fields in the `--out` JSON, so
   that the driver stops reading a sentence, and an "Unattended runs" table on the dashboard.
-  Both reach into `scripts/spec-drift.py`, so they wait.
+  Both reach into `scripts/spec-drift.py`, so they wait. This repository's dashboard already
+  draws the second as "Can it run without a person?" (#115-#117); the kit's does not.
 
 ## Phases
 
-Each phase is a series of <400-line PRs, so CI stays green. Days 1 and 2 have specs in
+Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 8 have specs in
 [`specs/`](specs/). The days after them are titles: each gets its spec when its turn comes.
 
 ### Phase 0 — The dry run
@@ -542,9 +551,25 @@ Each phase is a series of <400-line PRs, so CI stays green. Days 1 and 2 have sp
 
 ### Phase 2 — Level 2: the driver merges
 **Goal:** a pull request that passes every gate and touches no human-only file merges without
-the maintainer. Not specified until the stop after Phase 1 is lifted. Before it starts: the
-sessions run under a second Windows account, and `main` requires a pull request and allows no
-bypass.
+the maintainer. Its days are built at level 1 while the trial's project runs on at level 1. The
+level 2 merge is switched on in a run only when Levels' three conditions hold: `status` reports
+15 of 15, the sessions run under the second Windows account, and the project's `main` requires
+a pull request with no bypass ("Course correction after Phase 1").
+- Day 9: Phase 1's leftovers: the usage limit's wait and retry (C08.15, H08.1); the driver's
+  guard and halt hooks log each refusal to the driver's state folder, so a killed session's
+  refusals are counted (H08.2); the halt tests that fail on and off, and the race they may show
+  (H08.3); a test tying `status`'s level 2 count to the park sentence it counts (H08.4).
+- Day 10: the second Windows account: the driver starts each session as that user and can kill
+  it; `on` checks that the account cannot write the driver's folder; `setup-check.py` reports
+  "do not allow bypassing".
+- Day 11: the reviewer ("What to build", item 6).
+- Day 12: the level 2 merge (item 7): the path check, the check of the driver's own repository
+  before each merge, `gh pr merge --match-head-commit <sha>`; its spec carries `Replaces: C07.1`.
+  It refuses to merge unless the three conditions hold.
+- Day 13: the trial's record at level 2: what merged without the maintainer, what parked, what
+  the reviewer found, what it cost beside the baseline and beside level 1.
+- **Done when:** the level 2 trial's day closed with its evidence replay green, and the record
+  names every merge the driver made, every park and every refusal.
 
 ### Phase 3 — Level 3: phases chain
 **Goal:** the next phase starts when the plan-auditor names no plan change.
@@ -553,12 +578,44 @@ bypass.
 
 - **Day 8 (the level 1 trial's record) is a stopping point.** The plan-auditor reads the whole
   plan against the code, and Phase 2 is specified only once the maintainer lifts the stop.
+  Lifted by "Course correction after Phase 1".
+- **Day 13 (the level 2 trial's record) is a stopping point.** The same reading, before Phase 3.
 
 ## Course corrections
 
 <!-- Added by plan-change PRs, newest first: what a stopping point or audit found, and what the
 maintainer chose. Empty at the start. A stop's decisions go under their own heading,
 "## Course correction after Phase N", N the stop item's phase: that heading lifts the stop. -->
+
+## Course correction after Phase 1
+
+Three plan-auditor runs on 2026-11-11 (`main` at `5355b29`: Phase 1, Phase 2, the whole plan)
+found Phase 1's Done-when met, and found the following. The maintainer chose the whole-plan
+audit's recommendation: change course, do not go straight to level 2.
+
+- **The level 2 count stays at 15.** The trial gave 3 of 15. The trial's project runs its next
+  days at level 1 with the maintainer merging, while Phase 2's days are built here; the count
+  is the project's run log's. Phase 2's merge is built but not switched on until the count, the
+  second account and the protection all hold (Levels).
+- **One GitHub account, two Windows accounts.** The second Windows account's `gh` login is a
+  fine-grained token of the maintainer's GitHub account, scoped as "The token" says. The PRs the
+  sessions open stay the maintainer's, so the driver's `--author @me` and Recovery's "an open
+  pull request from the maintainer's account" hold. A second GitHub identity is the dropped
+  plan's code-owner review and is still not needed ("What this does not stop").
+- **The maintainer owns two settings outside the repositories:** the second Windows account, and
+  the trial project's `main` protection with administrators not allowed to bypass. On
+  2026-11-11 `bearing`'s `main` required a pull request but `enforce_admins` was false.
+- **Owners for what Phase 1 left with no day:** H08.1 to H08.4 go to Day 9; the bypass line of
+  `setup-check.py` to Day 10; the level 2 merge's `Replaces: C07.1` and its check of the
+  driver's own repository before a merge to Day 12. H08.5 (`auto` mode did not refuse a file
+  write that D03.13 says it did, on 2.1.170) is a question for Day 9's audit, on 2.1.322.
+- **The kit copy is split** (#134, #135): "How it is kept" now says how a newer kit is tested.
+- **Stale lines corrected:** the step on standard input, the polled checks, the refusals' place,
+  Days 1 to 8 with specs, the CLI version, the "Still open" decisions taken by the trial, and
+  "Unverified" from the trial's record (`docs/trial/day-08.md`).
+- **Not settled here:** the Phase 1 audit read the replay history as saying breaks of C04.7,
+  C04.8 and C07.5 no longer apply at #130; the whole-plan audit read none at #136. That is a
+  spec-change matter, checked against `replay-history.json` before any PR.
 
 ## Day-by-day specs
 
@@ -567,7 +624,8 @@ The phases are broken into day specs in [`specs/`](specs/). Read
 
 1. Phase 0: Days 1-2.
 2. Phase 1: Days 3-8. **Stop and evaluate.**
-3. Phases 2–3: numbered from 9.
+3. Phase 2: Days 9-13. **Stop and evaluate.**
+4. Phase 3: numbered from 14.
 
 ## Removing it
 
@@ -617,17 +675,21 @@ Decided 2026-11-06:
   request and allows no bypass, so that GitHub and not a hook refuses a red merge. Today `main`
   on the kit has 12 required checks, no pull request required, administrators may bypass.
 
-Still open:
+Decided by the Day 8 trial (2026-11-11, `docs/trial/day-08.md`):
 
-| Decision | Recommendation |
-|---|---|
-| Which project runs the trial | one with a filled `plan.md` that is neither the kit nor the driver's repository |
-| Budget | a dollar cap per step (`--max-budget-usd`) and a count of steps per night |
-| The human-only list | as in "Who does what". Spec-change PRs are not on it: the agents change specs daily, and "Criteria keep their wording" guards accepted criteria elsewhere. |
+- **The trial's project:** `bearing`.
+- **Budget:** `budget_usd` 10 per step and `steps_per_night` 6 in `driver.json`.
+- **The human-only list:** as in "Who does what", ten paths in `driver.json`. Spec-change PRs are
+  not on it: the agents change specs daily, and "Criteria keep their wording" guards accepted
+  criteria elsewhere.
+
+Decided 2026-11-11, "Course correction after Phase 1": the level 2 count stays 15; the second
+Windows account's `gh` login is a token of the maintainer's GitHub account.
 
 ## What this does not stop
 
-The step session, the driver and the maintainer share one GitHub account and one token. The hook
+The step session, the driver and the maintainer share one GitHub account; from Day 10 the
+sessions hold a token of their own for it, under the second Windows account. The hook
 that refuses a merge reads the command, as `auditor-guard.py` does; a session that set out to get
 round it could. With bypassing turned off and a token that cannot change that setting, GitHub
 refuses a red merge and a push that edits `.github/workflows/`. Nothing on GitHub stops a green
@@ -642,35 +704,29 @@ what level 1 does about that and what would prevent it.
 
 ## Unverified
 
+Shown by the Day 8 trial on 2.1.322 (`docs/trial/day-08.md`, "Unverified"): the kit's hooks act
+in `claude -p` in `auto` mode, in a subagent too; a hook's exit-2 refusal reaches
+`permission_denials`; a step session ends after one pull request; `token-usage.py` counts
+headless transcripts; the fine-grained token is enough for the checks, the runs, the push and the
+PR; `--session-id` works with `claude -p`; `--settings` hooks still merge after the CLI update.
+Still not shown:
+
 - How a headless session reports the usage limit, and what state a `--max-budget-usd` stop
-  leaves the branch in. The flag exists in Claude Code 2.1.170 (`claude --help`).
-- That the kit's own hooks act in `claude -p` in `auto` mode on this PC. A scratch project's
-  hook did on 2.1.170 ("Where the driver lives"); the kit's four did in the container test,
-  under `bypassPermissions` and without `--bare`. Headless chose Sonnet there until `--model`
-  was set.
-- That a step session reliably ends after one pull request.
-- That resuming is cheaper than a new session for a fix. It follows from the 100k measurement,
-  which was taken on interactive sessions; it also depends on the prompt cache still being warm
-  when CI finishes. The trial counts both ways with `token-usage.py`.
+  leaves the branch in. Neither happened in the trial. Day 9 builds the wait on it.
+- That resuming is cheaper than a new session for a fix, that `--resume` takes the
+  `--session-id`, that `--settings` hooks merge on a resumed session, and whether a resumed
+  session's transcript is counted twice. No step in the trial needed a fix.
 - That killing the process tree on Windows (`taskkill /T /F`) ends the session's subagents and
-  the commands they started. The halt hook is there in case it does not.
-- That `token-usage.py` counts headless sessions' transcripts. It reads every `.jsonl` under the
-  project's folder; whether a resumed session writes a second transcript that repeats the first,
-  and so counts twice, is not known.
+  the commands they started. The killed session had started none. The halt hook is there in
+  case it does not.
+- What `auto` mode refuses over a whole step: nothing in the three sessions that ended; the
+  killed session's refusals are not known (Day 9 logs them).
+- Which credential `git push` used: the git config sends it through `gh auth git-credential`.
+  No merge has used the token; at level 1 the maintainer merges.
+- That a session follows rules passed with `--append-system-prompt-file` as it follows
+  `CLAUDE.md` (the trial's sessions followed them; nothing compared), and that `--agents` with
+  `--agent` starts the reviewer from a brief outside the project: checked only on 2.1.170.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
-- That a fine-grained token with contents, pull requests and issues (read and write) and Actions
-  (read) is enough for `gh pr checks`, `gh run view` and the merge, and that `git push` uses it
-  and not a stored login.
-- That `--session-id` works with `claude -p`, and that `--resume` then takes that id.
-- That `--settings` hooks still merge after the CLI is updated, and on a resumed session. The
-  driver passes them on every call, and its first test repeats the check.
-- That a session follows rules passed with `--append-system-prompt-file` as it follows
-  `CLAUDE.md`, and that `--agents` with `--agent` starts the reviewer from a brief outside the
-  project.
-- What `auto` mode refuses over a whole step. The check's commands matched an allow rule, so its
-  classifier was not exercised.
 - The second Windows account: that a session started as it can run the hooks it cannot write,
   and that the driver can kill it.
-- The CLI on this PC is 2.1.170; `CLAUDE.md` cites the VS Code extension at 2.1.312. Update the
-  CLI before the trial, so both modes run one version, and repeat the `--settings` check on it.
