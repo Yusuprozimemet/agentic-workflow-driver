@@ -12,7 +12,7 @@ driver lives. Neither needs a project or a config; --state defaults to the state
 file. live-check [--state] [--claude] [--python] runs the driver's own tests on the installed Claude
 Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
 refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; it takes no lock and writes nothing. --once
-[--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] does one step's checks in order:
+[--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] [--limit-hours] does one step's checks in order:
 halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
 evidence run, then the run log;
 for now it prints "would start: <sentence>" and starts nothing."""
@@ -115,6 +115,12 @@ def main(argv=None) -> int:
         type=float,
         default=120,
         help="minutes a session may run before its tree is killed and the step parks",
+    )
+    parser.add_argument(
+        "--limit-hours",
+        type=float,
+        default=6,
+        help="hours to the usage limit's reset the driver waits for; further, the step parks",
     )
     args = parser.parse_args(argv)
     if args.once:

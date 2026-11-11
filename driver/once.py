@@ -10,8 +10,11 @@ driver's own files in reach. Then the run's issue is closed with the outcome as 
 close it to let the driver go on. While the session runs, --once reads the project's issues every
 --poll seconds: an open STOP issue halts the driver, reports on the run's issue and kills the session
 (Day 5, "The phone's STOP during a session"). A session that runs past --session-minutes has its tree
-killed, and the step parks with a park line."""
+killed, and the step parks with a park line. A session whose transcript's last assistant record is
+the usage limit waits for the reset and is resumed once, or parks when the reset is more than
+--limit-hours away (Day 9)."""
 
+import glob
 import json
 import os
 import shutil
@@ -157,6 +160,13 @@ def write_end(state, session, line, out):
 # What run_session returns when the session ran past --session-minutes: its tree is killed, and the
 # step parks on it (past_bound).
 PAST = object()
+
+# The prompt of the session that is resumed once the usage limit has reset: the step's own prompt
+# is not sent again, the resumed session has it already.
+LIMIT_PROMPT = (
+    "The usage limit has reset. Carry on with this step as before, open its one pull request, "
+    "and stop.\n"
+)
 
 
 def past_bound(args, session):
@@ -501,6 +511,95 @@ def begin(args, home, project, config, step):
     return record, command, prompt, None
 
 
+def limit_reset(session):
+    # The resetsAt of the session's transcript when its last assistant record is the usage limit,
+    # else None. The CLI writes the transcript, one JSON object per line, under its config folder.
+    config = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    pattern = os.path.join(glob.escape(config), "projects", "*", f"{session}.jsonl")
+    for path in glob.glob(pattern):
+        try:
+            with open(path, "rb") as transcript:
+                text = transcript.read().decode("utf-8", errors="replace")
+        except OSError:
+            return None
+        # Split on newlines only: a line separator inside a JSON string is not the end of a record.
+        last = None
+        for line in text.split("\n"):
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(record, dict) and record.get("type") == "assistant":
+                last = record
+        if last is None or last.get("apiError") != "usage_limit_reached":
+            continue
+        params = last.get("apiErrorParams")
+        info = params.get("rate_limit_info") if isinstance(params, dict) else None
+        reset = info.get("resetsAt") if isinstance(info, dict) else None
+        if isinstance(reset, bool) or not isinstance(reset, (int, float)):
+            return None
+        return reset
+    return None
+
+
+def wait_limit(args, reset, session):
+    # Sleeps a poll at a time until the reset and one more poll; the halt file is read after each
+    # sleep. Returns the halt's line when it is set during the wait, None when the wait ran out.
+    halt = os.path.join(args.state, "halt")
+    while True:
+        remaining = reset + args.poll - time.time()
+        if remaining <= 0:
+            return None
+        time.sleep(min(args.poll, remaining))
+        if os.path.exists(halt):
+            return (
+                "halt: the halt file was set during the wait for the usage limit "
+                f"(session `{session}`)"
+            )
+
+
+def usage_limit(command, args, project, record, out, reset):
+    # The session's transcript ends in the usage limit: the driver parks when the reset is further
+    # away than --limit-hours, else waits for it and resumes the session once. Returns (line, code),
+    # or None when a STOP issue stopped the resumed session.
+    session = record["session"]
+    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(reset))
+    if reset - time.time() > args.limit_hours * 3600:
+        line = (
+            f"park: the usage limit resets at {when}, more than {args.limit_hours:g} hours away "
+            f"(session `{session}`)"
+        )
+        say(line, 1)
+        write_end(args.state, session, line, out)
+        return line, 1
+    line = f"limit: the usage limit was reached; waiting until {when} (session `{session}`)"
+    say(line, 0)
+    write_end(args.state, session, line, out)
+    halted = wait_limit(args, reset, session)
+    if halted:
+        say(halted, 1)
+        return halted, 1
+    # The resumed command is the session's own, with --resume in place of --session-id.
+    resumed = list(command)
+    resumed[resumed.index("--session-id")] = "--resume"
+    done = run_session(resumed, LIMIT_PROMPT, args, project, record["issue"], record)
+    if done is None:
+        return None
+    if done is PAST:
+        line, code = past_bound(args, session)
+        say(line, code)
+        return line, code
+    stdout, returncode = done
+    out = stdout.decode("utf-8", errors="replace")
+    if limit_reset(session) is not None:
+        line, code = f"park: the usage limit was reached (session `{session}`)", 1
+    else:
+        line, code = outcome(out, returncode, session, project, args.gh, record["step"])
+    say(line, code)
+    write_end(args.state, session, line, out)
+    return line, code
+
+
 def one_session(command, prompt, args, project, record):
     # Runs the session and reads its outcome: (line, code), or None when a STOP issue stopped it.
     done = run_session(command, prompt, args, project, record["issue"], record)
@@ -512,6 +611,10 @@ def one_session(command, prompt, args, project, record):
         return line, code
     stdout, returncode = done
     out = stdout.decode("utf-8", errors="replace")
+    # A session that hit the usage limit is waited for and resumed, or parked, before its outcome.
+    reset = limit_reset(record["session"])
+    if reset is not None:
+        return usage_limit(command, args, project, record, out, reset)
     line, code = outcome(out, returncode, record["session"], project, args.gh, record["step"])
     say(line, code)
     write_end(args.state, record["session"], line, out)
