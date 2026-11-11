@@ -253,6 +253,11 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(cached, fresh)
         self.assertLess(fresh_from, len(calls) - fresh_from)
 
+    def test_every_module_of_the_script_is_one_of_its_sources(self):
+        # The two tests below loop over SOURCES: a module left out of it would pass them both.
+        beside = sorted(n for n in os.listdir(HERE) if re.fullmatch(r"spec_drift_\w+\.py", n))
+        self.assertEqual(sorted(sd.SOURCES), sorted(["spec-drift.py", *beside]))
+
     def test_a_change_to_any_file_of_the_script_starts_the_cache_over(self):
         # The script is split into modules beside it: an edit to one of them is an edit to it.
         folder = tempfile.mkdtemp(prefix="spec-drift-split-")
