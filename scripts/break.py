@@ -168,6 +168,23 @@ def manifest(a):
     return "manifest: " + json.dumps(entry, ensure_ascii=False)
 
 
+def endings(find, replace, original):
+    """A multi-line --find typed with LF, in a file checked out with CRLF: both in the file's endings.
+    The manifest keeps them as typed, which an LF checkout (CI's) replays."""
+    if find not in original and b"\n" in find and b"\r" not in find and b"\r\n" in original:
+        return find.replace(b"\n", b"\r\n"), replace.replace(b"\n", b"\r\n")
+    return find, replace
+
+
+def lines_of(find, original):
+    """The lines a find occurs on, each once, for a refusal to name."""
+    found, at = set(), original.find(find)
+    while at != -1:
+        found.add(original.count(b"\n", 0, at) + 1)
+        at = original.find(find, at + len(find))
+    return sorted(found)
+
+
 def refuse(message):
     print(f"break.py: {message}", file=sys.stderr)
     return 2
@@ -206,9 +223,10 @@ def main(args=None):
                       "the break would not be in the code the check runs; name the file in that tree")
     with open(a.file, "rb") as f:
         original = f.read()
-    find, replace = a.find.encode(), a.replace.encode()
+    find, replace = endings(a.find.encode(), a.replace.encode(), original)
     if original.count(find) != 1:
-        return refuse(f"--find occurs {original.count(find)} times in {a.file}, want exactly once")
+        where = f" (lines {', '.join(map(str, lines_of(find, original)))})" if find in original else ""
+        return refuse(f"--find occurs {original.count(find)} times in {a.file}{where}, want exactly once")
     # A break's check that runs break.py itself (a break of break.py, or of evidence.py) takes the
     # lock its parent names, in a directory of its own: one under the same root would be refused.
     lock = os.environ.get("BREAK_LOCK") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", LOCK)

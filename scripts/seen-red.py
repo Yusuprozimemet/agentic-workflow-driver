@@ -12,7 +12,9 @@ argument list with no shell. Nothing in the working tree is touched.
 It exits 0 only when the command failed there, and prints the record for the PR:
 `seen red: <command> on <base> → <what it reported>`. A command that passes on the base exits 1:
 the tests do not see the change. Read the reported line: `errors=` alone may be an import error,
-not the behaviour the test asserts.
+not the behaviour the test asserts. `--expect <regex>` makes that mechanical: give it the spec's
+Red today, and a failure whose output does not match it exits 1 (D08.67: a `.get` failed on
+`None` where the spec's red was a `KeyError`, and only review saw it).
 
 The step was a Note, not a script, and did not carry: a pilot of the kit merged two tracks whose new
 tests were never seen red on the code before them.
@@ -105,9 +107,16 @@ def refuse(message):
 def main(args=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--base", default="main")
+    p.add_argument("--expect", metavar="REGEX",
+                   help="the red the spec gives (its Red today: line); a failure whose output does not match is "
+                   "a red for another reason, and nothing is recorded")
     p.add_argument("command", nargs="+")
     a = p.parse_args(args)
     sys.stdout.reconfigure(encoding="utf-8")  # the arrow; a Windows console's default is cp1252
+    try:
+        expect = re.compile(a.expect) if a.expect is not None else None
+    except re.error as e:
+        return refuse(f"--expect is not a regex: {e}")
 
     root = git("rev-parse", "--show-toplevel").strip()
     os.chdir(root)
@@ -125,6 +134,10 @@ def main(args=None):
     command = " ".join(a.command)
     if run.returncode == 0:
         print(f"The check passed on {a.base}: it does not see the change.\n  last line: {break_.reported(output)}")
+        return 1
+    if expect and not expect.search(output):
+        print(f"The check failed on {a.base}, but not as --expect says: it is red for another reason "
+              f"(an import, a fixture, a .get where the spec reads a key).\n  last line: {break_.reported(output)}")
         return 1
     print(f"seen red: {command} on {a.base} → {break_.reported(output)}")
     return 0

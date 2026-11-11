@@ -1,0 +1,32 @@
+name: Track breaks
+
+# A track PR's breaks, and the day's earlier tracks', replayed on Linux on the PR's merge commit, as
+# the close's replay will (scripts/track-breaks.py). `edited` too: the fix for a line that does not
+# replay is a new line in the PR body, and the check runs again on it. Any other branch passes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  track-breaks:
+    name: A track's breaks replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # PROJECT: install what the replayed checks need, as evidence.yml does.
+      - name: Install what the replayed checks need
+        run: if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+      # The branch name and the PR number come through the environment, never into the script's text.
+      - name: Replay the track's breaks
+        env:
+          BRANCH: ${{ github.head_ref }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR"

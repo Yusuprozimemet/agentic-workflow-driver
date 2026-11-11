@@ -66,6 +66,18 @@ class SeenRedTest(unittest.TestCase):
         self.assertTrue(run.stdout.startswith("seen red: "), run.stdout)
         self.assertIn(" on main → AssertionError: 'ab' != 'abab'", run.stdout)
 
+    def test_a_red_for_another_reason_than_the_spec_gives_is_refused(self):
+        # D08.67: the spec's red was a KeyError; the test read the key with .get and failed on None.
+        self.write("app.py", "def double(x):\n    return x * 2\n")
+        self.write("tests/test_app.py", NEW_TEST)
+        run = self.seen_red("--expect", "KeyError")
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertIn("failed on main, but not as --expect says", run.stdout)
+        self.assertNotIn("seen red:", run.stdout)
+        run = self.seen_red("--expect", r"'ab' != 'abab'")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn(" on main → AssertionError: 'ab' != 'abab'", run.stdout)
+
     def test_an_untracked_test_file_is_copied_in(self):
         self.write("tests/test_more.py", "import unittest\nfrom app import triple\n\n"
                                          "class M(unittest.TestCase):\n    def test_it(self):\n        triple(1)\n")
