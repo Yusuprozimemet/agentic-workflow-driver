@@ -115,7 +115,28 @@ What would prevent it:
 | A container or VM with only the project's checkout inside, the driver outside | the same, and everything else on the PC | the setup of the dropped plan |
 
 Neither stops a session from using the token it holds ("What this does not stop"). Which one,
-and when, is in "Decisions for the maintainer".
+and when, is in "Decisions for the maintainer": the container, chosen 2026-11-11 ("Course
+corrections"). Docker Desktop was already on the PC, so most of that row's cost was paid.
+
+**The session's container.** At level 2, and at level 1 when `driver.json` asks for it, the
+driver runs each session's `claude -p` with `docker run -i --rm --name <a name from the session's
+id>`, from an image the driver's repository builds (Claude Code at the live-checked version,
+Python, git, `gh`). The step still goes in on standard input and the JSON result comes out on
+standard output. What the session can reach is what the driver mounts:
+
+- the project's checkout, writable: the one tree a step edits;
+- the driver's hooks, its rules and the settings file it wrote, and the state folder with the
+  halt file, read-only: Docker refuses a write there, not a hook;
+- `<state>/refusals`, writable, for the hooks' log (Day 9);
+- a Claude Code folder of the driver's state, writable, as the session's `CLAUDE_CONFIG_DIR`: its
+  transcripts, which the usage limit and the cost are read from;
+- the fine-grained token as `GH_TOKEN`, and a Claude Code token for a headless login, from a file
+  the maintainer keeps outside both repositories. None of the maintainer's own logins or files.
+
+The driver kills a session with `docker kill`, and `halt` kills the container the run log names
+as well as the driver. The driver itself stays on the PC, under the maintainer's account, with
+the maintainer's `gh` login: it polls, and at level 2 it merges. The session now runs on Linux,
+so the project's tests run there in a step as they do in CI.
 
 ## What the driver needs from the kit
 
@@ -424,7 +445,7 @@ Autonomy is earned one level at a time, and lost the same way.
 |---|---|---|---|
 | 0, today | starts each step, merges, says "merged", opens the session | | |
 | 1, you merge | merges each PR from the phone; answers parks | starts each step in a new session, watches the checks, checks evidence, finds the next step | the driver exists and its `--dry-run` names the step `spec-drift.py` prints, and a phase's end where the days' phases show one; sessions in `auto` mode; a token scoped to the trial's repository |
-| 2, the driver merges | answers parks; reads the morning report; samples PRs at each phase end | also merges a PR that passes every gate and touches no human-only file | 15 PRs in a row merged at level 1 without the maintainer asking for a change; the sessions under a second Windows account; `main` requires a pull request and allows no bypass |
+| 2, the driver merges | answers parks; reads the morning report; samples PRs at each phase end | also merges a PR that passes every gate and touches no human-only file | 15 PRs in a row merged at level 1 without the maintainer asking for a change; the sessions in the driver's container; `main` requires a pull request and allows no bypass |
 | 3, phases chain | answers parks; acts at the plan's stopping points | also starts the next phase when the plan-auditor names no plan change | one whole phase at level 2 with no escape |
 
 **Back one level** on an escape: a Defect line found at `close`, by the `dashboard` or in a
@@ -553,15 +574,18 @@ Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 8 have spe
 **Goal:** a pull request that passes every gate and touches no human-only file merges without
 the maintainer. Its days are built at level 1 while the trial's project runs on at level 1. The
 level 2 merge is switched on in a run only when Levels' three conditions hold: `status` reports
-15 of 15, the sessions run under the second Windows account, and the project's `main` requires
-a pull request with no bypass ("Course correction after Phase 1").
+15 of 15, the sessions run in the driver's container, and the project's `main` requires a pull
+request with no bypass ("Course correction after Phase 1", and the container's correction above
+it).
 - Day 9: Phase 1's leftovers: the usage limit's wait and retry (C08.15, H08.1); the driver's
   guard and halt hooks log each refusal to the driver's state folder, so a killed session's
   refusals are counted (H08.2); the halt tests that fail on and off, and the race they may show
   (H08.3); a test tying `status`'s level 2 count to the park sentence it counts (H08.4).
-- Day 10: the second Windows account: the driver starts each session as that user and can kill
-  it; `on` checks that the account cannot write the driver's folder; `setup-check.py` reports
-  "do not allow bypassing".
+- Day 10: the session's container ("Where the driver lives"): the image; the driver starts each
+  session in it with the mounts that section lists and can kill it, `halt` included; before a
+  session, `on` checks from inside the container that the driver's folder cannot be written and
+  that the project and `<state>/refusals` can; the usage limit is read from the container's
+  Claude Code folder (H09.1); `setup-check.py` reports "do not allow bypassing".
 - Day 11: the reviewer ("What to build", item 6).
 - Day 12: the level 2 merge (item 7): the path check, the check of the driver's own repository
   before each merge, `gh pr merge --match-head-commit <sha>`; its spec carries `Replaces: C07.1`.
@@ -586,6 +610,22 @@ a pull request with no bypass ("Course correction after Phase 1").
 <!-- Added by plan-change PRs, newest first: what a stopping point or audit found, and what the
 maintainer chose. Empty at the start. A stop's decisions go under their own heading,
 "## Course correction after Phase N", N the stop item's phase: that heading lifts the stop. -->
+
+### 2026-11-11: the sessions run in a container, not as a second Windows account
+
+Day 10's first spec (a second Windows account) was audited before any work: starting a process
+as another user from a non-elevated Python needs `CreateProcessWithLogonW` through `ctypes`, a
+job object to kill it, a stored password and `icacls` grants into the maintainer's profile, and
+none of it could be tested in CI or before the account existed. The maintainer chose the
+isolation table's other row, the container ("Where the driver lives"). It gives what the second
+account was for: a session cannot write the driver, its hooks, the halt file or the run log, and
+holds only the fine-grained token, not the maintainer's `gh` login (today `repo` and `workflow`
+scopes, as the repository's owner). It also keeps the session out of the rest of the PC, and the
+driver's code stays with pipes and `docker kill`, which CI's Linux runners can run.
+"Course correction after Phase 1"'s "One GitHub account, two Windows accounts" now reads: one
+GitHub account; the container holds a token of it. The PRs stay the maintainer's, so `--author
+@me` holds. Not yet shown: that a Claude Code token logs in a headless session inside a
+container ("Unverified").
 
 ## Course correction after Phase 1
 
@@ -670,8 +710,8 @@ Decided 2026-11-06:
 - **The token.** Fine-grained, for the trial's repository only: contents, pull requests and
   issues; no Administration, no Workflows. GitHub then refuses a change to the protection and a
   push that edits `.github/workflows/`, and the PRs still come from the maintainer's account.
-- **Before level 2**, besides its count of pull requests: the sessions run under a second
-  Windows account with no write permission on the driver's folder, and `main` requires a pull
+- **Before level 2**, besides its count of pull requests: the sessions run in the driver's
+  container, with the driver's folder mounted read-only, and `main` requires a pull
   request and allows no bypass, so that GitHub and not a hook refuses a red merge. Today `main`
   on the kit has 12 required checks, no pull request required, administrators may bypass.
 
@@ -686,10 +726,13 @@ Decided by the Day 8 trial (2026-11-11, `docs/trial/day-08.md`):
 Decided 2026-11-11, "Course correction after Phase 1": the level 2 count stays 15; the second
 Windows account's `gh` login is a token of the maintainer's GitHub account.
 
+Decided 2026-11-11, "Course corrections": the sessions run in a container, not as a second
+Windows account; the container holds the token of the maintainer's GitHub account.
+
 ## What this does not stop
 
 The step session, the driver and the maintainer share one GitHub account; from Day 10 the
-sessions hold a token of their own for it, under the second Windows account. The hook
+sessions hold a token of their own for it, inside the driver's container. The hook
 that refuses a merge reads the command, as `auditor-guard.py` does; a session that set out to get
 round it could. With bypassing turned off and a token that cannot change that setting, GitHub
 refuses a red merge and a push that edits `.github/workflows/`. Nothing on GitHub stops a green
@@ -698,9 +741,11 @@ check does. A second
 identity with required code-owner review closes that. It was the dropped plan, and this one does
 not need it to reach level 2 on a pilot.
 
-The step session and the driver also share one Windows account. The driver's own folder keeps it
-out of the project's pull requests, not out of a session's reach: "Where the driver lives" says
-what level 1 does about that and what would prevent it.
+At level 1 without the container, the step session and the driver also share one Windows
+account. The driver's own folder keeps it out of the project's pull requests, not out of a
+session's reach: "Where the driver lives" says what level 1 does about that, and what the
+container prevents. The container does not stop a session from using the network and the token
+it holds, and it is no stronger than Docker Desktop's own isolation.
 
 ## Unverified
 
@@ -728,5 +773,8 @@ Still not shown:
   `--agent` starts the reviewer from a brief outside the project: checked only on 2.1.170.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
-- The second Windows account: that a session started as it can run the hooks it cannot write,
-  and that the driver can kill it.
+- The container: that a Claude Code token (`claude setup-token`) logs in a headless session in
+  it; that the driver's `--settings` hooks fire there from a read-only mount; that `docker kill`
+  ends the session and what it started; that a session's work on a checkout mounted from Windows
+  (line endings, file modes, git's `safe.directory`, speed) gives the same pull request as on the
+  PC; and that `token-usage.py` counts transcripts from the container's Claude Code folder.
