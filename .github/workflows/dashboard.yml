@@ -3,7 +3,14 @@ name: Dashboard
 # Rebuilds the project dashboard after every merge to main and publishes it
 # to GitHub Pages, so anyone can see where the project stands without an
 # account. The page is docs/dashboard/; scripts/spec-drift.py --build fills in
-# the data from git history and the pull request list.
+# the data from git history and the pull request list, and reads what neither
+# holds from the dashboard-data branch: the sessions' and the driver's counts,
+# pushed from the maintainer's machine (scripts/publish-counts.py), and the
+# re-check rows, pushed by recheck.yml. Nothing of that is committed to main.
+# With the branch or a file on it missing, the page says so and draws none of it.
+#
+# A push to dashboard-data starts no workflow, so both publishers ask for this
+# one with workflow_dispatch after they push.
 #
 # Pull requests do not trigger it: the dashboard reports main, and running on
 # pull_request_target to show open PRs would run in the base repository's
@@ -84,13 +91,6 @@ jobs:
           path: .spec-drift-cache.json
           key: spec-drift-${{ github.run_id }}
           restore-keys: spec-drift-
-
-      # The sessions' counts and the driver's come from the maintainer's machine, which pushes them to
-      # a branch of their own between closes (scripts/publish-counts.py); a close commits the sessions'
-      # to main as before. The later of the two is the one the page shows. The re-check rows come from
-      # recheck.yml, on the same branch; the page reads them together with the ones committed on main.
-      - name: Take the newer counts and the re-check rows
-        run: python scripts/publish-counts.py --take
 
       - name: Measure and build
         env:

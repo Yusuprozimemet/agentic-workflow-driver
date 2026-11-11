@@ -82,7 +82,7 @@ function model(DATA) {
   const daysSay = (done.length ? `${daySpan(done)} ${done.length === 1 ? "is" : "are"} closed` : "No Day is closed yet")
     + (current != null ? ` and Day ${current} is in progress.` : ".");
   // The dollars, refusals, gate runs and sessions are counted on the maintainer's computer and end at that count
-  // (docs/dashboard/counted.json); the pull requests come from GitHub and go on. What sets one against the other
+  // (counted.json on the dashboard-data branch); the pull requests come from GitHub and go on. What sets one against the other
   // takes only the pull requests merged by then. With no count on record, nothing is left out and nothing is claimed.
   const countedAt = (DATA.counted || {}).at || null, countedMs = countedAt ? Date.parse(countedAt) : null;
   const countedSay = countedAt ? `${countedAt.slice(11, 16)} on ${shortDate(countedAt)}` : "";
@@ -106,6 +106,19 @@ function model(DATA) {
     return p;
   });
 
+  // The counts and the re-check rows come from the dashboard-data branch alone (spec-drift.py, data_source): with the
+  // branch or one of its files missing, the page says what it leaves out, rather than draw nothing and say nothing.
+  const DATA_WHAT = { "token-usage.json": "the dollars", "refusals.json": "the hooks' refusals", "gates.json": "the gates' runs and cost",
+    "sessions.json": "the sessions' times", "counted.json": "when the sessions were last counted", "driver-runs.json": "the driver's steps",
+    "replay-history.json": "the re-checks of finished promises" };
+  function dataMissing() {
+    const D = DATA.data;
+    if (!D) return null;
+    const what = names => andList(names.map(n => DATA_WHAT[n] || n));
+    if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.`;
+    if (!(D.absent || []).length) return null;
+    return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.`;
+  }
   function head() {
     const g = now.generated || "", when = g.length >= 16 ? `${shortDate(g)} ${g.slice(0, 4)} at ${g.slice(11, 16)}` : g;
     // A Day is a step of the plan and not a calendar day: how many dates the closed Days' own pull requests ran over says so.
@@ -114,7 +127,7 @@ function model(DATA) {
     closed.forEach(d => { for (let t = Date.parse(d.worked[0]); t <= Date.parse(d.worked[1]); t += 86400000) dates.add(t); });
     const took = closed.length ? `${daySpan(closed.map(d => d.day))} took ${plural(dates.size, "date", "dates")}` : "";
     return { project: (DATA.meta || {}).project || "", when, commit: String(now.head || "").slice(0, 7), demo: DATA.demo === true,
-      now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length, took };
+      missing: dataMissing(), now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length, took };
   }
 
   /* Graph 3: ability by day */
@@ -349,12 +362,12 @@ function model(DATA) {
       `The hooks refused ${plural(sum(bars, x => x.refused), "call", "calls")} and cut ${plural(sum(bars, x => x.cut), "long output", "long outputs")}.`,
       pastBars.length ? `Over ${plural(pastBars.length, "date", "dates")} where it is known, ${money(sum(pastBars, x => x.past))} of the main session's ${money(sum(pastBars, x => x.main))} came after a session passed 150k tokens.` : "",
       countedAt ? `Counted on the maintainer's computer up to ${countedSay}${later ? `: ${plural(later, "pull request has", "pull requests have")} merged since, and what ${later === 1 ? "it" : "they"} cost is not in yet` : ""}.`
-      // With no count on record, the last date is counted up to the close run on it: what merged later that date is in the pull requests and not in the dollars.
-      : newest && lastDate && newest >= lastDate ? `Counted at each Day's close on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the close run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
+      // With no count on record, the last date is counted up to the last count run on it: what merged later that date is in the pull requests and not in the dollars.
+      : newest && lastDate && newest >= lastDate ? `Counted on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the last count run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
     return { bars, max: Math.max(0.01, ...bars.map(x => x.total)),
       key: [["main", `Main session ${money(main)}`], ["rest", `Auditors and the implementer ${money(all - main)}`], ...pastKey],
       say: "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.",
-      read: { t: bars.length ? `${money(all)} of tokens at list prices; ${Math.round(100 * main / (all || 1))}% of it in the main session` : "No token counts yet", b: bars.length ? [b.join(" ")] : ["They are counted at a Day's close, on the maintainer's computer."] },
+      read: { t: bars.length ? `${money(all)} of tokens at list prices; ${Math.round(100 * main / (all || 1))}% of it in the main session` : "No token counts yet", b: bars.length ? [b.join(" ")] : ["They are counted on the maintainer's computer when a session starts or ends, and pushed to the dashboard-data branch."] },
       table: { head: ["Date", "Days", "Main session, $", "Main session after 150k, $", "Auditors, $", "Implementer and others, $", "Replies", "Calls refused", "Outputs cut", "Pull requests merged", "Merged before the count"],
         rows: bars.map(x => [x.label, x.days.join(", "), x.main.toFixed(2), x.past == null ? "" : x.past.toFixed(2), x.aud.toFixed(2), x.other.toFixed(2), x.replies, x.refused, x.cut, x.merged, x.shared]) } };
   }
@@ -513,7 +526,7 @@ function model(DATA) {
     return { total: (DATA.attention || []).length, groups };
   }
 
-  // Graph 10: one date on the clock. The sessions (docs/dashboard/sessions.json) are stamped with the offset of the
+  // Graph 10: one date on the clock. The sessions (sessions.json on the dashboard-data branch) are stamped with the offset of the
   // machine that recorded them, so the clock is the maintainer's and not the reader's; GitHub's times are UTC and
   // are moved to that offset. A stretch that crosses midnight is clipped to each date it touches.
   const LANES = [["main", "Main session"], ["implementer", "Implementer"], ["auditors", "Auditors"], ["other", "Other subagents"]];
@@ -531,7 +544,7 @@ function model(DATA) {
     const DR = DATA.driver_runs || {}, DSTEPS = DR.steps || null, DPARKS = DR.parks || null, DCOUNT = DR.counted || null;
     const DSESS = (DSTEPS || []).flatMap(s => (s.sessions || []).filter(x => x.start).map(x => ({ x, s })));
     const DMERGES = (DSTEPS || []).filter(s => s.merged), stepOfPark = i => (DSTEPS || []).find(s => (s.parks || []).some(p => p.issue === i.number));
-    if (!S.length && !PRS.length && !DSESS.length && !DMERGES.length && !(DPARKS || []).length) return { empty: "no session, pull request or check times are recorded yet. `python scripts/token-usage.py` writes the sessions to `docs/dashboard/sessions.json` from this machine's transcripts; the pull requests' and checks' times come from GitHub.",
+    if (!S.length && !PRS.length && !DSESS.length && !DMERGES.length && !(DPARKS || []).length) return { empty: "no session, pull request or check times are recorded yet. The maintainer's sessions count their transcripts into `sessions.json` on the dashboard-data branch (`scripts/publish-counts.py`); the pull requests' and checks' times come from GitHub.",
       dates: [], at: -1, hours: [], read: { t: "No times are recorded yet.", b: [] }, table: none };
     const counts = new Map();
     S.forEach(s => counts.set(offsetOf(s.from), (counts.get(offsetOf(s.from)) || 0) + 1));
@@ -670,7 +683,7 @@ function model(DATA) {
         open ? `${plural(open, "step", "steps")} still open.` : "",
         counted ? `Counted on the maintainer's computer up to ${counted.slice(11, 16)} on ${shortDate(counted)}.` : "",
         "A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; the fix rounds, the crashes and how a step ended come from the driver's run log."].filter(Boolean).join(" ")] };
-    return { empty: steps ? null : "the driver's run log is not counted for this project yet. `python scripts/driver-runs.py --project <its path>` writes `docs/dashboard/driver-runs.json` from the run log on the maintainer's computer.",
+    return { empty: steps ? null : "the driver's run log is not counted for this project yet. The maintainer's sessions count the run log beside run-steps.py into `driver-runs.json` on the dashboard-data branch (`scripts/publish-counts.py`).",
       say: `Each dot is one step the driver started${steps ? `, ${steps.length} in all,` : ""} placed by how the step ended. A step further right needed more of a person.`,
       cols, rows, read, table: { head: ["Day", ...COLS.map(c => c[1]), "Still open", "Fix rounds", "Crashed sessions", "Parks", "Minutes parked", "Needed no person"],
         rows: rows.map(r => [r.label, ...r.cells.map(c => c.length), r.open, r.fixes, r.crashes, r.parks, r.minutes, `${r.alone} of ${r.n}`]) } };
@@ -867,6 +880,9 @@ function draw(M, DATA) {
   const banner = $("demo-banner");
   banner.textContent = "Example data: this project has no day specs yet. The page will show real data after the first day spec merges.";
   banner.hidden = !H.demo;
+  const missing = $("data-banner");
+  missing.textContent = H.missing || "";
+  missing.hidden = !H.missing;
   put("now", h("strong", null, "Now: "), H.now, " ", h("strong", null, "Next step: "), rich(H.next));
   if (H.took) $("words-took").textContent = H.took;
   const A = M.attention;

@@ -328,7 +328,6 @@ sequenceDiagram
     participant PR as Closing PR
 
     S->>S: tick criteria, write Notes, lab notebook
-    S->>S: token-usage.py, commit token-usage.json, sessions.json, counted.json
     S->>R: blind specs/day-NN-*.md --out dir
     R-->>S: blind.md, tags stripped
     S->>DR: blind.md
@@ -368,7 +367,7 @@ flowchart LR
         GHAPI["PRs and their<br/>broken: and seen red: lines"]
         SPECS["specs: criteria,<br/>Defect and Hand-off lines"]
         CFG[spec-drift.config.json]
-        TOK[token-usage.json]
+        TOK["dashboard-data branch:<br/>the counts, the driver's,<br/>the re-check rows"]
         EVJ[evidence-checks.json]
     end
     SDP[spec-drift.py]

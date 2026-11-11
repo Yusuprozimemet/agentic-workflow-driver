@@ -3,13 +3,14 @@ name: Re-check history
 # After every merge to main, re-checks each in-force criterion on the merges that have no Linux row
 # yet (scripts/replay-history.py: its breaks re-run on that merge's code), pushes the rows to the
 # dashboard-data branch beside the sessions' counts (scripts/publish-counts.py --put) and asks for
-# the page's rebuild, which takes them (--take in dashboard.yml). It runs here, not in the page's
-# build, which stays as fast as it was; and nobody runs it by hand.
+# the page's rebuild, which reads them from that branch (scripts/spec-drift.py). It runs here, not in
+# the page's build, which stays as fast as it was; and nobody runs it by hand.
 #
-# replay-history.py starts from the rows already measured, the branch's or else the ones committed
-# on main, and skips every merge that has a row for this platform: a run that was stopped, or the
-# first run, which re-checks the whole history on Linux, is carried on by the next. Rows are pushed
-# even when the time runs out, since the script writes them after every merge.
+# replay-history.py starts from the rows the branch holds, the only copy (none is on main), and skips
+# every merge that has a row for this platform: a run that was stopped is carried on by the next. Rows
+# are pushed even when the time runs out, since the script writes them after every merge. With no
+# rows on the branch, replay-history.py stops and asks for --since: the history is not rebuilt from
+# nothing without someone choosing where it starts.
 
 on:
   push:
@@ -51,8 +52,8 @@ jobs:
       - name: Start from the rows already measured
         run: |
           git fetch -q origin +refs/heads/dashboard-data:refs/remotes/origin/dashboard-data || true
-          git show origin/dashboard-data:docs/dashboard/replay-history.json > "$RUNNER_TEMP/replay-history.json" 2>/dev/null \
-            || cp docs/dashboard/replay-history.json "$RUNNER_TEMP/replay-history.json"
+          git show origin/dashboard-data:docs/dashboard/replay-history.json > "$RUNNER_TEMP/replay-history.json" \
+            || rm -f "$RUNNER_TEMP/replay-history.json"
 
       - name: Re-check
         env:

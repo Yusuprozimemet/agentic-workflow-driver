@@ -93,6 +93,13 @@ flowchart TD
 | "merged" on the closing PR of Phase 3 (level 3: phases chain, the last phase `plan.md` names) | dashboard refresh, then the three end-of-phase auditors, independently, on fresh `main` | three reports for the maintainer; nothing is destroyed until they say so |
 | any time, by hand | either auditor | for example "use the plan-auditor on Phase 3" |
 
+The dashboard refresh needs no step from anyone. Every merge to `main` rebuilds the page from git and
+GitHub, and from the `dashboard-data` branch for what those do not hold: the sessions' counts and the
+driver's, pushed from the maintainer's machine when a session starts or ends
+(`scripts/publish-counts.py`), and the re-check rows, pushed after every merge by
+`.github/workflows/recheck.yml`. Nothing of that is committed to `main`, the close included. With the
+branch or one of its files missing, the page says so instead of drawing it.
+
 ## Starting, for someone new
 
 1. Clone the repository and open Claude Code in it. `CLAUDE.md` and the two agents load on

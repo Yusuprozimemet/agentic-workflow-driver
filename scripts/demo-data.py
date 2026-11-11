@@ -442,6 +442,8 @@ def demo():
         yardsticks=yardsticks(),
         clock=clock(rows), counted=dict(at=f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
         driver_runs=driver_runs(rows, f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
+        # every file of the data branch on record, so no missing-data banner shows beside the example one
+        data=dict(branch="dashboard-data", commit="example", at=f"{max(r['date'] for r in rows)}T18:00:00+02:00", absent=[]),
         meta=dict(caveats=["Made-up data for the dashboard's layout: no number here was measured.",
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",

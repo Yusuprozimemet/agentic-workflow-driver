@@ -32,7 +32,8 @@ maintainer who merges every PR. Read:
   why it happened), `git log` and its `Co-Authored-By` lines, PR descriptions
   (`gh pr list --state merged --limit 400`, `gh pr view <n>`), the `broken:` lines.
 - The measurements: `python scripts/spec-drift.py --out <tmp>/d.json` and its source, the dashboard
-  (`docs/dashboard/`), `docs/dashboard/token-usage.json` and `scripts/token-usage.py`.
+  (`docs/dashboard/`), `token-usage.json` on the `dashboard-data` branch
+  (`git show origin/dashboard-data:docs/dashboard/token-usage.json`) and `scripts/token-usage.py`.
 - Memory the sessions carried between days, if present on this machine:
   `~/.claude/projects/<this project's folder>/memory/`. It records the maintainer's corrections.
 

@@ -3,16 +3,16 @@
 
     python scripts/publish-counts.py            # count, push to the data branch, rebuild the page
     python scripts/publish-counts.py --detach   # the same in the background (the session hooks)
-    python scripts/publish-counts.py --take     # the dashboard workflow: use the branch's files if newer
     python scripts/publish-counts.py --put <file> --message <subject>   # CI: one file to the branch
 
 The sessions' times, tokens, gates and refusals are counted from transcripts only this machine
-holds (scripts/token-usage.py), and `main` is protected, so between two closes the page's session
-lanes stood still while GitHub's pull requests went on. The five count files go to a branch that
+holds (scripts/token-usage.py), and `main` is protected: when a close committed them, the page's
+session lanes stood still between closes while GitHub's pull requests went on. The five count files go to a branch that
 holds nothing else, as a commit built from git objects: no checkout, no index, and the working
 tree and the current branch are left as they were. A push to that branch starts no workflow (the
-branch has none), so the page's rebuild is asked for on `main`, where the workflow takes whichever
-count is newer, the branch's or the one a close committed.
+branch has none), so the page's rebuild is asked for on `main`; the build reads the files from the
+branch (scripts/spec-drift.py, data_branch). Nothing commits them to `main`: the branch is their only
+store, and a count starts from what it holds.
 
 The driver's run log sits beside run-steps.py on this machine too, so the count also runs
 scripts/driver-runs.py and pushes driver-runs.json as a sixth file (none while there is no log).
@@ -21,10 +21,8 @@ push keeps the files it does not write, and a push rejected because another one 
 built again on the branch as it now stands.
 """
 import argparse
-import datetime
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -123,10 +121,6 @@ def count(repo, counter, driver_counter, parent):
         # The counter never lowers a row it finds, so it starts from the last count published.
         for name in FILES:
             old = blob(repo, parent, name) if parent else None
-            path = os.path.join(repo, FOLDER, name)
-            if old is None and os.path.exists(path):
-                with open(path, "rb") as f:
-                    old = f.read()
             if old is not None:
                 with open(os.path.join(tmp, name), "wb") as f:
                     f.write(old)
@@ -179,88 +173,6 @@ def put(repo, remote, branch, paths, message, dispatch):
     return ask_rebuild(repo) if dispatch else 0
 
 
-def later(have, at):
-    return datetime.datetime.fromisoformat(at) > datetime.datetime.fromisoformat(have)
-
-
-def take_counts(repo, remote, branch, commit):
-    """Writes the branch's five files over the working tree's when its count is the later one."""
-    theirs = commit and blob(repo, commit, "counted.json")
-    if not theirs:
-        print(f"publish-counts: no count on {remote}/{branch}, keeping the committed one")
-        return
-    at = json.loads(theirs)["at"]
-    mine = os.path.join(repo, FOLDER, "counted.json")
-    if os.path.exists(mine):
-        with open(mine, encoding="utf-8") as f:
-            have = json.load(f)["at"]
-        if not later(have, at):
-            print(f"publish-counts: the committed count ({have}) is not older than the branch's ({at}), keeping it")
-            return
-    for name in FILES:
-        data = blob(repo, commit, name)
-        if data is None:
-            sys.exit(f"publish-counts: {remote}/{branch} has no {name}: the five are published together")
-        with open(os.path.join(repo, FOLDER, name), "wb") as f:
-            f.write(data)
-    print(f"publish-counts: took the count up to {at} from {remote}/{branch}")
-
-
-def take_driver(repo, remote, branch, commit):
-    """The branch's driver count, unless a committed one is not older."""
-    theirs = commit and blob(repo, commit, DRIVER)
-    if not theirs:
-        print(f"publish-counts: no driver count on {remote}/{branch}")
-        return
-    at = json.loads(theirs)["counted"]
-    mine = os.path.join(repo, FOLDER, DRIVER)
-    if os.path.exists(mine):
-        with open(mine, encoding="utf-8") as f:
-            have = json.load(f)["counted"]
-        if not later(have, at):
-            print(f"publish-counts: the committed driver count ({have}) is not older than the branch's ({at}), keeping it")
-            return
-    with open(mine, "wb") as f:
-        f.write(theirs)
-    print(f"publish-counts: took the driver count up to {at} from {remote}/{branch}")
-
-
-def take_replay(repo, remote, branch, commit):
-    """The committed re-check rows and the branch's together, the branch's where both have a row
-    for the same merge, platform, criterion and check: the committed file is the fallback until
-    the branch holds the whole history."""
-    theirs = commit and blob(repo, commit, REPLAY)
-    if not theirs:
-        print(f"publish-counts: no re-check rows on {remote}/{branch}, keeping the committed ones")
-        return
-    theirs = json.loads(theirs)
-    mine = os.path.join(repo, FOLDER, REPLAY)
-    ours = {"rows": []}
-    if os.path.exists(mine):
-        with open(mine, encoding="utf-8") as f:
-            ours = json.load(f)
-    at = lambda r: (r["n"], r["platform"], r["criterion"], r["check"])  # noqa: E731
-    rows = {at(r): r for r in ours["rows"]}
-    rows.update((at(r), r) for r in theirs["rows"])
-    since = ours.get("since") or theirs.get("since")
-    # replay-history.py's order: one row a line, keys sorted, so the file diffs as that script writes it.
-    order = lambda r: (r["n"], r["platform"], r["day"], tuple(int(x) for x in re.findall(r"\d+", r["criterion"])), r["check"])  # noqa: E731
-    body = ",\n".join("  " + json.dumps(r, sort_keys=True, ensure_ascii=False) for r in sorted(rows.values(), key=order))
-    with open(mine, "w", encoding="utf-8", newline="\n") as f:
-        f.write(f'{{"schema": {json.dumps(theirs.get("schema", 1))}, "since": {json.dumps(since)}, '
-                f'"states": {json.dumps(theirs.get("states") or ours.get("states"))}, "rows": [\n{body}\n]}}\n')
-    print(f"publish-counts: took {len(theirs['rows'])} re-check rows from {remote}/{branch}, "
-          f"{len(rows)} with the committed ones")
-
-
-def take(repo, remote, branch):
-    commit = fetched(repo, remote, branch)
-    take_counts(repo, remote, branch, commit)
-    take_driver(repo, remote, branch, commit)
-    take_replay(repo, remote, branch, commit)
-    return 0
-
-
 def detach(argv, repo):
     """Starts the same command without --detach and returns at once: a session's end hook is given
     about a second, and the count and the push take longer. What it printed is in the log."""
@@ -291,12 +203,9 @@ def main(argv=None):
     ap.add_argument("--detach", action="store_true", help="run in the background and return at once")
     ap.add_argument("--driver-counter", default=os.path.join(HERE, "driver-runs.py"),
                     help="the script that writes driver-runs.json from the driver's run log")
-    ap.add_argument("--take", action="store_true", help="write the branch's files into the working tree where newer")
     ap.add_argument("--put", nargs="+", metavar="FILE", help="push these files to the branch as they are, no count")
     ap.add_argument("--message", help="the commit subject for --put")
     args = ap.parse_args(argv)
-    if args.take:
-        return take(args.repo, args.remote, args.branch)
     if args.detach:
         return detach(argv, args.repo)
     if args.put:

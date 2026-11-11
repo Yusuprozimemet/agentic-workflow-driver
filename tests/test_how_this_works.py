@@ -18,6 +18,11 @@ SPECS = [p.relative_to(ROOT).as_posix() for p in SPECS]
 
 
 def real(path):
+    """A file as the build reads it: the re-check rows from the dashboard-data branch, the rest from here."""
+    if path == spec_drift.HOW_REPLAY:
+        if not spec_drift.DATA["commit"]:
+            spec_drift.data_branch()
+        return spec_drift.data_text("replay-history.json") or ""
     return (ROOT / path).read_text(encoding="utf-8")
 
 
@@ -226,6 +231,8 @@ class ExcerptTest(unittest.TestCase):
 
     def test_the_recheck_is_the_promises_newest(self):
         # Day 05 has been re-checked; the newest day, which the panel follows, need not have been.
+        if not real(spec_drift.HOW_REPLAY):
+            self.skipTest("no replay-history.json on the dashboard-data branch: nothing to compare")
         excerpts = spec_drift.how_excerpts(real, ["specs/day-05-parks.md"])
         got = excerpts["recheck"]["text"]
         rows = [

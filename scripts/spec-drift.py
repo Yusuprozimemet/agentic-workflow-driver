@@ -189,6 +189,15 @@ CAVEATS = [
     "Day the work belonged to.",
 ]
 PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
+# What the page cannot compute from git and GitHub: the sessions' counts and the driver's, from the
+# maintainer's machine (scripts/publish-counts.py), and the re-check rows (recheck.yml). Machines push
+# them to a branch of their own and nothing commits them to main: the page reads them there, and says
+# so when the branch or a file on it is missing, rather than draw what an older copy held.
+DATA_BRANCH = "dashboard-data"
+DATA_FOLDER = "docs/dashboard"
+DATA_FILES = ("token-usage.json", "refusals.json", "gates.json", "sessions.json", "counted.json",
+              "driver-runs.json", "replay-history.json")
+DATA = dict(commit=None, at=None, held=())  # data_branch() fills it; until then every file reads as absent
 # What git said about each merge, kept between runs: every call cached here names commits only by
 # SHA, so its output never changes. Keyed on this script's text too, so a change here starts over.
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, ".spec-drift-cache.json")
@@ -1711,13 +1720,46 @@ def conclusion(notebook):
     return dict(reads=reads, measured=[r for r in rows[2:] if len(r) == len(head)], measured_head=head)
 
 
+def data_git(*args):
+    return subprocess.run(["git", "-C", os.path.join(PAGE, os.pardir, os.pardir), *args], capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", env=dict(os.environ, GIT_TERMINAL_PROMPT="0"))
+
+
+def data_branch(remote="origin"):
+    """Fetches the data branch and keeps in DATA its commit, the time of that commit and the files it
+    holds; with no such branch on the remote, or no remote, DATA stays empty and every file is absent.
+    A fetch that fails (offline) leaves the branch as it was last fetched."""
+    ref = f"refs/remotes/{remote}/{DATA_BRANCH}"
+    data_git("fetch", "-q", remote, f"+refs/heads/{DATA_BRANCH}:{ref}")
+    p = data_git("log", "-1", "--format=%H %cI", ref, "--")
+    if p.returncode or not p.stdout.strip():
+        DATA.update(commit=None, at=None, held=())
+        return DATA
+    commit, at = p.stdout.split()
+    held = data_git("ls-tree", "--name-only", f"{commit}:{DATA_FOLDER}").stdout.split()
+    DATA.update(commit=commit, at=at, held=tuple(held))
+    return DATA
+
+
+def data_text(name):
+    """One of DATA_FILES as the data branch holds it, or None when the branch or the file is missing."""
+    if not DATA["commit"] or name not in DATA["held"]:
+        return None
+    p = data_git("show", f"{DATA['commit']}:{DATA_FOLDER}/{name}")
+    return None if p.returncode else p.stdout
+
+
+def data_source():
+    """What the page says of where its counts and re-check rows came from: the branch's commit and when
+    it was made, or None when there is no branch; and the files it lacks, each drawn as not on record."""
+    return dict(branch=DATA_BRANCH, commit=DATA["commit"] and DATA["commit"][:12], at=DATA["at"],
+                absent=[n for n in DATA_FILES if n not in DATA["held"]])
+
+
 def page_json(name):
-    """One of the files scripts/token-usage.py writes beside the page, or nothing before its first run."""
-    path = os.path.join(PAGE, name)
-    if not os.path.exists(path):
-        return []
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    """One of the files on the data branch, parsed, or nothing when it is not there."""
+    text = data_text(name)
+    return json.loads(text) if text else []
 
 
 def token_usage():
@@ -1855,19 +1897,24 @@ def replay_state(states):
 
 
 def replay_history(path=None):
-    """docs/dashboard/replay-history.json, as scripts/replay-history.py wrote it, read, never run here:
-    one cell per criterion and merge, its checks' worst state, mixed when they differ. No file is
-    "absent", one this cannot read "invalid": neither a pass.
+    """replay-history.json on the data branch (or the file at path), as scripts/replay-history.py wrote it in
+    recheck.yml, read, never run here: one cell per criterion and merge, its checks' worst state, mixed when
+    they differ. No file is "absent", one this cannot read "invalid": neither a pass.
 
     A merge re-checked on two platforms (the Windows history and the Linux re-check job) has a row
     for each: a check one platform ran outranks the other's "not applicable on this platform", and a
     merge's run and copied counts are one platform's, Linux's where it has rows (CI's)."""
-    path = path or os.path.join(PAGE, "replay-history.json")
-    if not os.path.exists(path):
+    if path is None:
+        text = data_text("replay-history.json")
+    elif os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    else:
+        text = None
+    if text is None:
         return dict(state="absent")
     try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+        data = json.loads(text)
         if data.get("schema") != 1:
             raise ValueError(f"schema {data.get('schema')!r}, this page reads 1")
         merges, cells = {}, {}
@@ -1899,12 +1946,8 @@ def replay_history(path=None):
 
 def refusals(name="refusals.json"):
     """The guards' refusals per date and guard, or with gates.json each gate's runs and tokens, as
-    scripts/token-usage.py last wrote them."""
-    path = os.path.join(PAGE, name)
-    if not os.path.exists(path):
-        return []
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    scripts/token-usage.py last counted them onto the data branch."""
+    return page_json(name)
 
 
 # Each gate and the found: value its Defect lines carry (specs/README.md); the hooks find no Defect
@@ -2649,6 +2692,7 @@ def main():
     if not args.no_cache:
         load_cache(args.cache)
     listed, runs, note = github()
+    data_branch()
     prs = {p["number"]: p for p in listed}
     open_prs = sorted((p for p in listed if p["state"] == "OPEN"), key=lambda p: p["number"])
     with Blobs() as blobs:
@@ -2693,11 +2737,14 @@ def main():
                     evidence_checks=checks, replay=replay_history(),
                     conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
                     clock=clock(prs, runs), counted=counted(), driver_runs=driver_runs(parked_issues(note)),
+                    data=data_source(),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
         if args.build:
-            real["how_this_works"] = how_excerpts(lambda path: blobs.read(head, path), how_specs(days))
+            # The re-check rows are on the data branch, every other file the panel quotes on main.
+            how_read = lambda path: (data_text("replay-history.json") or "") if path == HOW_REPLAY else blobs.read(head, path)  # noqa: E731
+            real["how_this_works"] = how_excerpts(how_read, how_specs(days))
     payload = page_data(real, spec_days) if args.build else real
     data = json.dumps(payload, separators=(",", ":"))
     target = args.build or args.out

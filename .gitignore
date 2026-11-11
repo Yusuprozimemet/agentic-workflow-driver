@@ -5,6 +5,15 @@ spec-drift.json
 __pycache__/
 # the replay report the dashboard workflow writes before each build (scripts/close-evidence.py --all)
 docs/dashboard/evidence-checks.json
+# what the dashboard-data branch holds, and only it (scripts/publish-counts.py, recheck.yml): a copy
+# written here by running a counter by hand is never committed
+docs/dashboard/token-usage.json
+docs/dashboard/refusals.json
+docs/dashboard/gates.json
+docs/dashboard/sessions.json
+docs/dashboard/counted.json
+docs/dashboard/driver-runs.json
+docs/dashboard/replay-history.json
 
 # --- Bash output the hook saved in full (scripts/cap-output.py) ---
 .claude/tool-output/
