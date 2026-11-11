@@ -13,6 +13,7 @@ project). That file is all the page knows of the driver; its format is the contr
 draws nothing of the driver without it:
 
     {"counted": "<when, on this machine's clock with its offset>",
+     "level_2": {"run": <k>, "of": 15},
      "steps": [one per step the log names, in the log's order:
        {"step": "<the kit's sentence>", "day": <its Day, or null>, "prefix": "<branch prefix, or null>",
         "sessions": [{"session": "<uuid>", "start": "<UTC>", "end": "<UTC, or null>", "cost": <dollars>,
@@ -28,6 +29,7 @@ session. It ended "parked" when it has a park, whatever came after: it needed a 
 "fixed" when it merged after a fix round, "merged" when it merged with none, and "open" until then.
 A session crashed when its last line is not an end line and its process is gone. A park's wait is not
 here: it is how long its issue stayed open, which scripts/spec-drift.py reads from GitHub.
+The level_2 count is the one driver/status.py prints, published here so the page does not count it again.
 
 What the log does not hold is not here either: when the driver was switched on and off, and a halt.
 The log does not name its project, so one state folder serves one project, or the count mixes them.
@@ -42,7 +44,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, os.pardir))
 sys.path.insert(0, ROOT)
-from driver import runlog  # noqa: E402
+from driver import runlog, status  # noqa: E402
 from driver.steps import classify  # noqa: E402
 
 FILE = os.path.join("docs", "dashboard", "driver-runs.json")
@@ -165,7 +167,9 @@ def main(argv=None, now=None):
     at = (now or datetime.datetime.now()).astimezone().isoformat(timespec="seconds")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         rows = ",\n".join(json.dumps(step, separators=(",", ":"), ensure_ascii=False) for step in steps)
-        f.write('{\n"counted":' + json.dumps(at) + ',\n"steps":[\n' + rows + "\n]\n}\n")
+        level_2 = dict(run=status.level_2_run(records), of=status.LEVEL_2_RUN)
+        f.write('{\n"counted":' + json.dumps(at) + ',\n"level_2":' + json.dumps(level_2, separators=(",", ":"))
+                + ',\n"steps":[\n' + rows + "\n]\n}\n")
     print(f"{out}: counted up to {at}, {summary(steps)}")
     return 0
 

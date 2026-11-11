@@ -338,6 +338,7 @@ function model(DATA) {
     const bars = dates.map(date => {
       const rows = T.filter(t => t.date === date), cost = pick => sum(rows.filter(pick), t => t.cost);
       const main = cost(t => t.agent === "main"), aud = cost(t => /auditor|rater/.test(t.agent || "")), other = cost(() => true) - main - aud, total = main + aud + other;
+      const out = cost(t => t.day == null);
       const on = days.filter(d => d.worked && d.worked[0] <= date && date <= d.worked[1]).map(d => d.day);
       const refused = F.filter(r => r.date === date && r.refused), nRefused = sum(refused, r => r.refused), cut = sum(rows, t => t.cut), replies = sum(rows, t => t.replies);
       // The date's dollars end at the count: only the pull requests merged by then share them.
@@ -345,6 +346,7 @@ function model(DATA) {
       // The main session's dollars after a session passed 150k tokens (cost_past_150k): a row without the key is not known, so no row that has it is not zero.
       const known = rows.filter(t => t.agent === "main" && t.cost_past_150k != null), past = known.length ? sum(known, t => t.cost_past_150k) : null;
       return { date, label: shortDate(date), days: on, main, aud, other, total, replies, refused: nRefused, cut, merged, shared, past, setup: !start || date < start,
+        day: cost(t => t.day != null), out, share: total ? Math.round(100 * out / total) : null,
         t: `${shortDate(date)} · ${on.length ? daySpan(on) : !start || date < start ? "before Day 1" : "between Days"} · ${money(total)}`,
         b: [`Main session ${money(main)}, auditors ${money(aud)}, implementer and others ${money(other)}. ${comma(replies)} replies.`
           + (past == null ? "" : ` ${money(past)} of the main session's ${money(main)} came after a session passed 150k tokens.`)
@@ -364,8 +366,13 @@ function model(DATA) {
       countedAt ? `Counted on the maintainer's computer up to ${countedSay}${later ? `: ${plural(later, "pull request has", "pull requests have")} merged since, and what ${later === 1 ? "it" : "they"} cost is not in yet` : ""}.`
       // With no count on record, the last date is counted up to the last count run on it: what merged later that date is in the pull requests and not in the dollars.
       : newest && lastDate && newest >= lastDate ? `Counted on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the last count run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
+    // By Day: the split of the dates' dollars, and the most the outside share can be (a Day's audits run on main, so they count as outside).
+    const dayAll = sum(bars, x => x.day), outAll = sum(bars, x => x.out), outPct = Math.round(100 * outAll / (all || 1));
     return { bars, max: Math.max(0.01, ...bars.map(x => x.total)),
       key: [["main", `Main session ${money(main)}`], ["rest", `Auditors and the implementer ${money(all - main)}`], ...pastKey],
+      byDay: bars.length ? { key: [["day", `A Day's work ${money(dayAll)}`], ["out", `Outside any Day ${money(outAll)}`]],
+        t: `${money(outAll)} of ${money(all)} (${outPct}%) was spent outside any Day`,
+        b: `A session belongs to a Day by the branch it worked on. A Day's audits and post-merge steps run on main, so they count as outside: ${outPct}% is the most the outside share can be, not its exact size.` } : null,
       say: "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.",
       read: { t: bars.length ? `${money(all)} of tokens at list prices; ${Math.round(100 * main / (all || 1))}% of it in the main session` : "No token counts yet", b: bars.length ? [b.join(" ")] : ["They are counted on the maintainer's computer when a session starts or ends, and pushed to the dashboard-data branch."] },
       table: { head: ["Date", "Days", "Main session, $", "Main session after 150k, $", "Auditors, $", "Implementer and others, $", "Replies", "Calls refused", "Outputs cut", "Pull requests merged", "Merged before the count"],
@@ -439,7 +446,9 @@ function model(DATA) {
         return { day, value: v.value, text: show(r, v.value), h: v.value ? Math.max(0.06, v.value / max) : 0.03, over,
           t: `${r.name} · Day ${day}: ${show(r, v.value)}` + (r.baseline != null ? `${over ? ", above" : ", within"} the baseline of ${show(r, r.baseline)}` : ""), b: [v.text || ""] };
       });
-      return { key: r.key, name: r.name, cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
+      // The cost row's count changed at Day 7 (outside work counted until then): the row says so, and graph 8's By Day view has the split.
+      return { key: r.key, name: r.name, foot: r.key === "cost" ? "Days 1 to 6 count every pull request merged since the last count, outside work included; Days 7 and 8 count the Day's own only. The two halves of the row do not compare; graph 8's By Day view has the split." : null,
+        cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
         over: cells.filter(c => c.over).length, n: vals.length, last: vals[vals.length - 1],
         note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v),
         avg, avgNote: lastAvg ? `average so far: ${lastAvg.text}${noun ? ` over every ${noun}` : ""}` : "" };
@@ -498,6 +507,19 @@ function model(DATA) {
         : `Day ${P.day} has only its close left.`) : "",
       ...unknown.map(u => `Day ${u.day} has no spec, so its size cannot be drawn.` + (u.waits ? ` ${plural(u.waits, "numbered hand-off waits", "numbered hand-offs wait")} for it (${u.ids.join(", ")}).` : "")),
       stop != null ? `After Day ${stop} the plan stops for the maintainer. What comes after is not specified, so the graph ends there and gives no percentage of the whole plan.` : ""].filter(Boolean);
+    // The ladder starts at the project's own count when the driver's count holds steps; Level 2 is drawn when its count is in.
+    const DR = DATA.driver_runs || {}, steps = DR.steps, L2 = DR.level_2 || {};
+    const counted2 = typeof L2.run === "number" && typeof L2.of === "number";
+    const rung2 = counted2 ? { cls: "", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: `${L2.run} of ${L2.of} in a row`, run: L2.run, of: L2.of }
+      : { cls: "wait", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: "Not counted yet" };
+    const rung3 = { cls: "wait", name: "Level 3 · phases chain", need: "One whole phase at level 2 with no escape.", state: counted2 ? "Waits on level 2" : "Not counted yet" };
+    const ladder = Array.isArray(steps) && steps.length ? [
+      { cls: "", name: "Level 0 · the maintainer starts", need: "The maintainer starts each step and merges.", state: "Passed at the Day 8 trial" },
+      { cls: "now", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: `Where the trial's project is: ${plural(steps.length, "step", "steps")} run` },
+      rung2, rung3]
+      : [{ cls: "now", name: "Level 0 · today", need: "The maintainer starts each step and merges.", state: "Where the project is" },
+        { cls: "", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: "Enters at the Day 8 trial" },
+        rung2, rung3];
     const ticks = [], every = pMax > 120 ? 40 : 20;
     for (let t = 0; t <= pMax; t += every) ticks.push({ label: String(t), y: 1 - t / pMax });
     return { merges, ahead: aheadOut, unknown, stop, pMax, hMax, ticks, bands, barTicks: [{ label: String(hMax / 2), h: 0.5 }, { label: String(hMax), h: 1 }],
@@ -505,10 +527,7 @@ function model(DATA) {
         ["pt other", `Other (tooling, dashboard) ${nKind("other")}`], ["sw built", "Promises built"], ["sw written", "Promises written"],
         ["sw handoff", "Hand-offs open"], ["pt todo", "Specified, not merged"], ["sw unknown", "Not specified yet"]],
       say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the number of promises built once that merge landed; the dashed line above it is the number written. The bar under it is the numbered hand-offs still open. Right of today, the outlined dots are tracks that are specified and not merged. The first column is the first commit, before any pull request.`,
-      ladder: [{ cls: "now", name: "Level 0 · today", need: "The maintainer starts each step and merges.", state: "Where the project is" },
-        { cls: "", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: "Enters at the Day 8 trial" },
-        { cls: "wait", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: "Not counted yet" },
-        { cls: "wait", name: "Level 3 · phases chain", need: "One whole phase at level 2 with no escape.", state: "Not counted yet" }],
+      ladder,
       read: !C.length ? { t: "Nothing is merged yet", b: [] }
         : { t: `${built} of ${written} promises built` + (parts.length ? ` · ${andList(parts)}${stop != null ? " before the stop" : " still to come"}` : ""), b },
       table: { head: ["Merge", "Kind", "Day", "Built", "Written", "Hand-offs open"],
@@ -650,7 +669,7 @@ function model(DATA) {
       const wait = parked && pk.length && waits.every(w => w != null) ? sum(waits) : null;
       const how = { merged: "merged, nobody touched it", fixed: `merged after ${plural(fixes, "fix round", "fix rounds")}`, maintainer: "parked for the maintainer", fault: "parked by a fault" }[col];
       const crashed = (s.crashes || 0) > 0;
-      return { col, fixes, crashed, wait, t: `${day == null ? "No Day" : `Day ${day}`} · ${s.step} · ${how}`,
+      return { col, fixes, crashed, wait, t: `${day == null ? "No project Day" : `Project's Day ${day}`} · ${s.step} · ${how}`,
         b: [parked && pk.length ? `${pk.map(p => sentence(p.line)).join(" ")} ${wait == null ? "The wait is not known." : `It waited ${span(wait)}.`}` : null,
           crashed ? "A session of this step crashed: the run log has no end for it." : null].filter(Boolean) };
     };
@@ -670,7 +689,7 @@ function model(DATA) {
       const mine = steps.filter(s => dayOf(s) === day), cells = COLS.map(([col]) => mine.filter(s => colOf(s) === col).map(s => dot(s, col, day)));
       const n = sum(cells, c => c.length), alone = cells[0].length + cells[1].length, open = mine.filter(s => s.ended === "open").length;
       const ps = mine.flatMap(s => s.parks || []), known = ps.map(waitOf).filter(w => w != null);
-      return { day, label: day == null ? "No Day" : `Day ${day}`, cells, n, alone, open, share: n ? alone / n : null,
+      return { day, label: day == null ? "No project Day" : `Project's Day ${day}`, cells, n, alone, open, share: n ? alone / n : null,
         fixes: sum(mine, s => s.fixes), crashes: sum(mine, s => s.crashes), parks: ps.length, minutes: Math.round(sum(known)) };
     });
     const all = steps || [], ended = sum(rows, r => r.n), alone = sum(rows, r => r.alone), open = sum(rows, r => r.open);
@@ -684,8 +703,8 @@ function model(DATA) {
         counted ? `Counted on the maintainer's computer up to ${counted.slice(11, 16)} on ${shortDate(counted)}.` : "",
         "A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; the fix rounds, the crashes and how a step ended come from the driver's run log."].filter(Boolean).join(" ")] };
     return { empty: steps ? null : "the driver's run log is not counted for this project yet. The maintainer's sessions count the run log beside run-steps.py into `driver-runs.json` on the dashboard-data branch (`scripts/publish-counts.py`).",
-      say: `Each dot is one step the driver started${steps ? `, ${steps.length} in all,` : ""} placed by how the step ended. A step further right needed more of a person.`,
-      cols, rows, read, table: { head: ["Day", ...COLS.map(c => c[1]), "Still open", "Fix rounds", "Crashed sessions", "Parks", "Minutes parked", "Needed no person"],
+      say: `Each dot is one step the driver started${steps ? `, ${steps.length} in all,` : ""} placed by how the step ended. A step further right needed more of a person. Its Days are the Days of the project the driver ran on, not this repository's.`,
+      cols, rows, read, table: { head: ["Project's Day", ...COLS.map(c => c[1]), "Still open", "Fix rounds", "Crashed sessions", "Parks", "Minutes parked", "Needed no person"],
         rows: rows.map(r => [r.label, ...r.cells.map(c => c.length), r.open, r.fixes, r.crashes, r.parks, r.minutes, `${r.alone} of ${r.n}`]) } };
   }
 
@@ -945,7 +964,10 @@ function draw(M, DATA) {
       h("div", { class: "g1-main" }, h("div", { class: "g1-lane" }, bands, area), after)));
     $("g1-say").textContent = m.say;
     key("g1-key", m.key);
-    put("g1-ladder", m.ladder.map(r => h("div", { class: `rung ${r.cls}` }, h("b", null, r.name), r.need, h("small", null, r.state))));
+    // A rung with a count (Level 2) draws one square per pull request in the run: the ones merged so far are lit.
+    put("g1-ladder", m.ladder.map(r => h("div", { class: `rung ${r.cls}` }, h("b", null, r.name), r.need,
+      typeof r.of === "number" && h("span", { class: "run", "aria-hidden": "true" }, Array.from({ length: r.of }, (_, k) => h("i", { class: k < r.run ? "on" : "" }))),
+      h("small", null, r.state))));
   });
 
   /* Graph 3 */
@@ -1018,9 +1040,32 @@ function draw(M, DATA) {
   }
   graph("g8", (m, mark) => {
     $("g8-say").textContent = m.say;
-    key("g8-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-    bars("g8", m, mark, m.bars.map(x => ({ ...x, top: `$${Math.round(x.total)}`, under: x.label, lit: x.days })), [["rest", x => x.aud + x.other], ["past", x => x.past || 0], ["main", x => x.main - (x.past || 0)]],
-      [["Calls the hooks refused", x => x.refused ? String(x.refused) : "·"], ["Long outputs the hooks cut short", x => x.cut ? String(x.cut) : "·"]]);
+    const items = m.bars.map(x => ({ ...x, top: `$${Math.round(x.total)}`, under: x.label, lit: x.days }));
+    const hooks = [["Calls the hooks refused", x => x.refused ? String(x.refused) : "·"], ["Long outputs the hooks cut short", x => x.cut ? String(x.cut) : "·"]];
+    if (!m.byDay) {
+      key("g8-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
+      bars("g8", m, mark, items, [["rest", x => x.aud + x.other], ["past", x => x.past || 0], ["main", x => x.main - (x.past || 0)]], hooks);
+      return;
+    }
+    // The same dates two ways: by who ran each session (the view above), or by the Day each session worked on.
+    const byWho = h("button", { type: "button", "aria-pressed": "true" }, "By who"), byDay = h("button", { type: "button", "aria-pressed": "false" }, "By Day");
+    const toggles = h("div", { class: "g10-dates" }, byWho, byDay);
+    const show = who => {
+      byWho.setAttribute("aria-pressed", who ? "true" : "false");
+      byDay.setAttribute("aria-pressed", who ? "false" : "true");
+      mark.base(m.read);
+      put("g8-key", toggles, (who ? m.key : m.byDay.key).map(([k, text]) => h("span", null, h("i", { class: `sw ${k}` }), text)));
+      if (who) {
+        bars("g8", m, mark, items, [["rest", x => x.aud + x.other], ["past", x => x.past || 0], ["main", x => x.main - (x.past || 0)]], hooks);
+        put("g8-byday");
+      } else {
+        bars("g8", m, mark, items, [["out", x => x.out], ["day", x => x.day]], [["Outside any Day", x => x.share == null ? "·" : `${x.share}%`], ...hooks]);
+        put("g8-byday", h("strong", null, m.byDay.t), ` ${m.byDay.b}`);
+      }
+    };
+    byWho.addEventListener("click", () => show(true));
+    byDay.addEventListener("click", () => show(false));
+    show(true);
   });
   graph("g9", (m, mark) => {
     key("g9-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
@@ -1047,10 +1092,10 @@ function draw(M, DATA) {
     };
     put("g2-plot", h("div", { class: "yard" },
       h("div", { class: "yard-row head" }, h("div", { class: "yard-name" }), h("div", { class: "yard-cells" }, m.cols.map(d => forDays(h("div", null, `Day ${d}`), [d]))), h("div", { class: "yard-note" })),
-      m.rows.map(r => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, r.name),
+      m.rows.flatMap(r => [h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, r.name),
         h("div", { class: "yard-cells" }, r.cells.map(c => forDays(mark(h("button", { type: "button", class: "yard-cell" }, h("b", null, c.text), h("span", { class: c.over ? "over" : "", style: `height:${px(c.h * 34)}` })), c), [c.day])),
           r.line != null && h("div", { class: "yard-line", style: `bottom:${px(r.line * 34)}` }), r.avg.length > 0 && avgSvg(r)),
-        h("div", { class: "yard-note" }, r.note, r.avgNote ? h("span", { class: "yard-avg-note" }, r.avgNote) : null))),
+        h("div", { class: "yard-note" }, r.note, r.avgNote ? h("span", { class: "yard-avg-note" }, r.avgNote) : null)), r.foot && h("p", { class: "yard-foot" }, r.foot)]),
       m.waiting.map(w => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, w.name), h("div", { class: "yard-wait" }, h("span", null, "Not measured yet: ", rich(w.why))), h("div", { class: "yard-note" }, "draws here once it is counted")))));
   });
 
@@ -1086,11 +1131,12 @@ function draw(M, DATA) {
     put("g11-plot", h("div", { class: "run-plot" },
       h("div", { class: "run-row head" }, h("div", { class: "run-day" }), h("div", { class: "run-cols" }, m.cols.map(c => h("div", { class: "run-col" }, h("strong", null, c.name), h("span", null, c.sub)))),
         h("div", { class: "run-share" }, "Steps that needed no person")),
-      m.rows.map(r => forDays(h("div", { class: "run-row" }, h("div", { class: "run-day" }, r.label),
+      // A row is the project's Day, not this repository's: the Day buttons above do not light it.
+      m.rows.map(r => h("div", { class: "run-row" }, h("div", { class: "run-day" }, r.label),
         h("div", { class: "run-cols" }, r.cells.map(list => h("div", { class: "run-cell" }, list.map(o => mark(h("button", { type: "button", class: `dot run-${o.col}${o.col === "fault" ? " square" : ""}${o.crashed ? " ring" : ""}`, style: o.wait != null ? `margin-left:${Math.min(160, o.wait).toFixed(1)}px` : "" },
           o.col === "fixed" ? String(o.fixes) : null, o.wait != null ? h("i", { class: "run-tail", style: `width:${Math.min(160, o.wait).toFixed(1)}px` }) : null), o))))),
         h("div", { class: "run-share" }, h("span", { class: "run-bar" }, h("i", { style: `width:${r.share == null ? 0 : (100 * r.share).toFixed(1)}%` })),
-          h("span", { class: "mono" }, `${r.alone} of ${r.n}`), r.open ? h("span", { class: "run-open" }, `${r.open} still open`) : null)), [r.day]))));
+          h("span", { class: "mono" }, `${r.alone} of ${r.n}`), r.open ? h("span", { class: "run-open" }, `${r.open} still open`) : null)))));
   });
 
   /* the foot of the page */

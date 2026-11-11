@@ -2301,7 +2301,8 @@ class DriverRunsTest(unittest.TestCase):
         issues = [parked(5, self.LINE, "2026-11-12T13:00:04Z")]
         with DataBranch({}):
             got = sd.driver_runs(issues)
-        self.assertEqual(got, dict(source="docs/dashboard/driver-runs.json", counted=None, steps=None, parks=issues))
+        self.assertEqual(got, dict(source="docs/dashboard/driver-runs.json", counted=None, level_2=None, steps=None,
+                                   parks=issues))
         self.assertEqual(sd.driver_runs(None, {})["parks"], None)
 
     def test_the_counted_file_is_read_from_the_data_branch_and_each_park_names_its_issue(self):

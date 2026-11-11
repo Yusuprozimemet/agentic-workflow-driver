@@ -315,6 +315,19 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["say"], "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, "
                                    "counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.")
 
+    def test_graph_8_splits_each_date_into_day_work_and_outside_work(self):
+        token = lambda date, agent, cost, day: dict(date=date, agent=agent, cost=cost, replies=1, cut=0, day=day)
+        g = model(data(days=[a_day(3, "active")],
+                       tokens=[token("2026-01-01", "main", 2.0, 3), token("2026-01-01", "spec-auditor", 0.5, None),
+                               token("2026-01-02", "main", 3.0, None), token("2026-01-02", "implementer", 0.5, 3)]))["g8"]
+        self.assertEqual([(b.get("day"), b.get("out"), b.get("share")) for b in g["bars"]], [(2.0, 0.5, 20), (0.5, 3.0, 86)])
+        by = g.get("byDay") or {}
+        self.assertEqual(by.get("key"), [["day", "A Day's work $2.50"], ["out", "Outside any Day $3.50"]])
+        self.assertEqual(by.get("t"), "$3.50 of $6.00 (58%) was spent outside any Day")
+        self.assertEqual(by.get("b"), "A session belongs to a Day by the branch it worked on. A Day's audits and post-merge steps run on "
+                                      "main, so they count as outside: 58% is the most the outside share can be, not its exact size.")
+        self.assertIsNone(model(data(tokens=[]))["g8"].get("byDay"))
+
     def test_graph_9_adds_each_days_changed_lines_by_what_the_file_is(self):
         g = model(data(rows=[dict(pr=None, day=0, work=dict(spec=7)),
                              dict(pr=1, day=0, own_day=1, work=dict(spec=10, context=5, prod=20, test=40, tooling=0)),
@@ -400,6 +413,24 @@ class ModelTest(unittest.TestCase):
         self.assertNotIn("error", g)
         self.assertEqual((g["merges"], g["read"]["t"]), ([], "Nothing is merged yet"))
 
+    def test_graph_1_ladder_puts_the_project_at_level_1_and_draws_the_level_2_count(self):
+        steps = [run_step(n, 1, "merged") for n in "ABCD"]
+        g = model(data(driver_runs=dict(source="run log", counted=None, steps=steps, parks=[], level_2=dict(run=3, of=15))))["g1"]
+        ladder = g.get("ladder", [])
+        self.assertEqual(len(ladder), 4)
+        self.assertEqual([r.get("cls") for r in ladder], ["", "now", "", "wait"])
+        self.assertEqual(ladder[1].get("state"), "Where the trial's project is: 4 steps run")
+        self.assertEqual((ladder[2].get("state"), ladder[2].get("run"), ladder[2].get("of")), ("3 of 15 in a row", 3, 15))
+        self.assertEqual(ladder[3].get("state"), "Waits on level 2")
+
+    def test_graph_1_ladder_without_a_driver_count_stays_at_level_0(self):
+        g = model(data())["g1"]
+        ladder = g.get("ladder", [])
+        self.assertEqual(len(ladder), 4)
+        self.assertEqual([r.get("cls") for r in ladder], ["now", "", "wait", "wait"])
+        self.assertEqual(ladder[2].get("state"), "Not counted yet")
+        self.assertNotIn("run", ladder[2])
+
     def test_graph_2_draws_each_rows_average_so_far_inside_its_scale(self):
         value = lambda day, v, text: dict(day=day, value=v, text=text)
         g = model(data(yardsticks=dict(days=[1, 2], problems=[], rows=[
@@ -414,6 +445,19 @@ class ModelTest(unittest.TestCase):
         self.assertEqual([(a["day"], a["text"], round(a["y"], 3)) for a in cost["avg"]], [(1, "$1.20", 0.5), (2, "$2.40", 1.0)])
         self.assertEqual((cost["avgNote"], round(cost["line"], 3)), ("average so far: $2.40 over every pull request", 0.625))
         self.assertEqual((replies["avg"], replies["avgNote"]), ([], ""))
+
+    def test_graph_2_cost_row_says_its_count_changed_at_day_7(self):
+        value = lambda day, v, text: dict(day=day, value=v, text=text)
+        got = model(data(yardsticks=dict(days=[1, 2], problems=[], rows=[
+            dict(key="cost", name="Cost of each merged pull request", unit="$", decimals=2, baseline=1.5,
+                 values=[value(1, 1.2, "$6 over 5"), value(2, 1.8, "$9 over 5")]),
+            dict(key="parks", name="Times it stopped", unit="", decimals=0, baseline=None,
+                 values=[value(1, 1, "one park"), value(2, 2, "two parks")])])))["g2"]
+        self.assertEqual(len(got.get("rows", [])), 2)
+        self.assertEqual(got["rows"][0].get("foot"), "Days 1 to 6 count every pull request merged since the last count, outside work included; "
+                                                     "Days 7 and 8 count the Day's own only. The two halves of the row do not compare; "
+                                                     "graph 8's By Day view has the split.")
+        self.assertIsNone(got["rows"][1].get("foot"))
 
     def test_graph_10_puts_one_date_on_the_clock_of_the_machine_that_recorded_the_sessions(self):
         # The sessions are stamped +01:00, GitHub's times are UTC: a pull request opened at 09:30Z sits at 10:30 on
@@ -600,7 +644,8 @@ class ModelTest(unittest.TestCase):
                       an_issue(22, "2026-01-02T09:00:00Z"), an_issue(23, "2026-01-02T11:00:00Z", "2026-01-02T11:30:00Z")])
         g = model(data(driver_runs=driver)).get("g11", {})
         rows = g.get("rows", [])
-        self.assertEqual([r.get("label") for r in rows], ["Day 1", "Day 2", "Day 3", "No Day"])
+        self.assertEqual([r.get("label") for r in rows], ["Project's Day 1", "Project's Day 2", "Project's Day 3", "No project Day"])
+        self.assertTrue(g.get("say", "").endswith(" Its Days are the Days of the project the driver ran on, not this repository's."))
         self.assertEqual([[len(c) for c in r.get("cells", [])] for r in rows], [[1, 1, 0, 0], [0, 0, 2, 1], [0, 0, 0, 0], [1, 0, 0, 0]])
         self.assertEqual([(r.get("alone"), r.get("n"), r.get("open")) for r in rows], [(2, 2, 0), (0, 3, 0), (0, 0, 1), (1, 1, 0)])
         dots = [[[(o.get("col"), o.get("fixes"), o.get("crashed"), o.get("wait")) for o in c] for c in r.get("cells", [])] for r in rows]
