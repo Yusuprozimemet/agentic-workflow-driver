@@ -134,9 +134,26 @@ standard output. What the session can reach is what the driver mounts:
   the maintainer keeps outside both repositories. None of the maintainer's own logins or files.
 
 The driver kills a session with `docker kill`, and `halt` kills the container the run log names
-as well as the driver. The driver itself stays on the PC, under the maintainer's account, with
-the maintainer's `gh` login: it polls, and at level 2 it merges. The session now runs on Linux,
-so the project's tests run there in a step as they do in CI.
+as well as the driver: killing the driver, or the `docker` client it started, leaves the
+container running. The driver itself stays on the PC, under the maintainer's account, with the
+maintainer's `gh` login: it polls, and at level 2 it merges. The session now runs on Linux, so
+the project's tests run there in a step as they do in CI.
+
+The image's system git config (`/etc/gitconfig`) sets `safe.directory` to the mounted checkout,
+`core.autocrlf` true and `core.filemode` false. Without them git in the container refuses the
+checkout ("detected dubious ownership": the mount's files are owned by root), and with
+`safe.directory` alone it reads every file of a Windows checkout as changed (CRLF, and every file
+mode `777`). `safe.directory` is not read from `GIT_CONFIG_COUNT` variables.
+
+**Shown on 2026-11-11** (Docker Desktop 29.4.3, WSL 2; an image from `node:22-bookworm-slim` with
+Claude Code 2.1.322, Python, git and `gh`; a clone of bearing): the step in on standard input and
+the output back on standard output through `subprocess`; `claude --version` in the container;
+writes refused under a read-only mount ("Read-only file system") for the driver's folder, its
+hooks, the halt file and the settings file, while a writable `refusals` folder mounted inside the
+read-only state folder takes them; the halt file readable; `docker kill` closing the session's
+pipe in under a second with no container left; and, with the git config above, `git status`
+clean on the Windows checkout, a commit made in the container storing LF line endings, and the
+checkout clean on the PC after it. Not yet shown: "Unverified".
 
 ## What the driver needs from the kit
 
@@ -773,8 +790,11 @@ Still not shown:
   `--agent` starts the reviewer from a brief outside the project: checked only on 2.1.170.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
-- The container: that a Claude Code token (`claude setup-token`) logs in a headless session in
-  it; that the driver's `--settings` hooks fire there from a read-only mount; that `docker kill`
-  ends the session and what it started; that a session's work on a checkout mounted from Windows
-  (line endings, file modes, git's `safe.directory`, speed) gives the same pull request as on the
-  PC; and that `token-usage.py` counts transcripts from the container's Claude Code folder.
+- The container, with a real session (the rest is shown in "Where the driver lives"): that a
+  Claude Code token (`claude setup-token`) logs in a headless session in it; that the driver's
+  `--settings` hooks fire there from a read-only mount and refuse a call; that the transcripts
+  land in the mounted Claude Code folder, where the usage limit and `token-usage.py` read them;
+  that `docker kill` ends a running `claude -p` and what it started; and that the fine-grained
+  token as `GH_TOKEN` lets the session push and open a pull request. The maintainer makes the
+  Claude Code token before Day 10's spec; the first four are checked then, the push by Day 10's
+  first live run.
