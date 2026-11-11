@@ -248,13 +248,23 @@ python -m unittest tests.test_usage_limit tests.test_hook_log tests.test_hook_re
   `.claude/state/refusals.jsonl`, a main session's and its subagents' hook calls share one
   session ID (interactive). Not run headless, and `--resume` after a limit never (`plan.md`,
   "Unverified"). The fakes stand in.
-- **H08.5, for the maintainer before this spec-change PR merges** (it costs a model call): in a
-  scratch folder, `claude -p "Run this exact command with the Bash tool: echo driver > out.txt"
-  --model haiku --output-format json --permission-mode auto --allowedTools "Bash(echo:*)"
-  --max-budget-usd 0.5`, then read `permission_denials` and whether `out.txt` exists. D03.13
-  recorded it denied on 2.1.170; #118 saw it pass on 2.1.170. `tests/test_live_cli.py` does not
-  answer it: it passes `--allowedTools Bash`. The answer goes in the spec-change PR; a difference
-  from D03.13 is a Defect of Day 03.
+- **H08.5, answered by the maintainer on 2026-11-11** (picks up H08.5): `claude -p "Run this
+  exact command with the Bash tool: echo driver > out.txt" --model haiku --output-format json
+  --permission-mode auto --allowedTools "Bash(echo:*)" --max-budget-usd 0.5` on 2.1.322 →
+  `"permission_denials": []`, `"is_error": false`, and `out.txt` held "driver" (run in this
+  repository's root by mistake; the file was removed before any commit). So `auto` mode let the
+  write through, as #118 saw on 2.1.170, where D03.13 saw it denied on 2.1.170.
+  `tests/test_live_cli.py` cannot tell: it passes `--allowedTools Bash`. Nothing in Day 9 rests
+  on `auto` mode refusing a call: what the driver must refuse, its own hooks refuse, and they
+  log it (C09.6–C09.9).
+- **Defect** D09.1 — found: spec-change PR · cause: environment · made: none · `auto` mode with
+  `--allowedTools "Bash(echo:*)"` denied `echo driver > out.txt` once (D03.13, 2.1.170) and let it
+  through twice (#118 on 2.1.170, this PR on 2.1.322): the same call does not get the same answer,
+  so a refusal by `auto` mode is not something a criterion can rest on. Day 3's choice of `Bash`
+  for the live check stands.
+- The result of a headless session carries `"api_error_status"` (null in the H08.5 run) beside
+  `is_error`; whether a usage limit sets it is not known (H09.2). The driver reads the transcript,
+  not this field.
 - A crash during the wait leaves the session with an `end` line whose outcome starts "limit:":
   the next start reads the step as Day 7's table does (a branch with no pull request), and starts
   a new session. Recorded, not changed.
