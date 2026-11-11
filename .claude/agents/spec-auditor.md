@@ -76,12 +76,19 @@ that changes behaviour in force without a `Replaces:` line is a finding.
     runs it and before which track; none is a must-fix (D05.12, D06.13, D06.14: read from
     source, never run). For each criterion and each named break, say whether it holds and
     bites on both Windows and Linux (D04.7, D04.9); try the other one in a container when one
-    is there.
+    is there. A claim about another project, such as the one a trial runs on (its hooks, its
+    files, what its guards write), is read in that project at the commit the spec names, not
+    taken from this repository's copy or the kit's: D08.79 said `bearing`'s guards wrote
+    `.claude/state/refusals.jsonl`, and at `c214b09` they wrote nothing. With no checkout of
+    it, the claim is a finding that names who checks it and before which track.
 11. **Named breaks.** Each break a criterion names has a track that runs it (D03.16: none did).
     For a `new` criterion, follow the broken line to the named test's assertion: say which
     assertion fails first, and whether anything before it hides the break (D04.13, D04.15). A
     break whose report would hold a pid, a session id, a commit hash, a time, a temporary name
     or an absolute path cannot replay: say what fixed text the test should print in its place.
+    A break whose find is a line an earlier or later track of the day rewrites stops applying
+    at that track (D07.39, D08.82): say which, so the track that rewrites it records the break
+    again.
 
 ## How to work
 

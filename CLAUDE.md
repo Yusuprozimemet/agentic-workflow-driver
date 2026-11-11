@@ -151,10 +151,13 @@ and writes the PR. Specs, audits, spec-change PRs and closing PRs stay with the 
 implementer never commits or pushes.
 
 A brief that carries the spec's exact expected outputs lets the implementer finish in one pass.
+Before sending it, run `python scripts/brief-check.py <brief file>`: it fails when a backticked
+name sits in another file than the one the line names (D07.24, D08.77).
 Every track PR shows its new tests failing first (`specs/README.md`). When the tests live under
-`tests/`, `python scripts/seen-red.py -- <the test command>` runs the branch's `tests/` on
-`main`'s code in a scratch worktree and prints the `seen red: ... → <what it reported>` line for
-the PR; exit 1 means they pass there. Otherwise, without a Track 0 or an extra commit, stash the
+`tests/`, `python scripts/seen-red.py --expect <regex> -- <the test command>` runs the branch's
+`tests/` on `main`'s code in a scratch worktree and prints the `seen red: ... → <what it reported>`
+line for the PR; exit 1 means they pass there, or fail for another reason than `--expect`, the
+spec's Red today (D08.67). Otherwise, without a Track 0 or an extra commit, stash the
 code change (`git stash push -- <the code's directory>`), run the new tests on `main`'s code,
 compare with what the spec says fails today, `git stash pop`, and put what they reported in the
 PR. CI's "Track tests seen red" re-runs each `new` criterion's test this way when the
@@ -175,7 +178,9 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   spent starting processes (#60); the runner's floor is its slowest file, `test_on.py`. Run
   the serial command only to reproduce CI. Nothing is built first; the tests need
   `numpy` (`ContractTest` loads `scripts/spec-drift.py`). CI runs the style check and the
-  serial command, nothing the local commands do not.
+  serial command, nothing the local commands do not. A failing file's output is kept in
+  `.claude/state/test-failures/` and its path printed: a failure seen once is not lost
+  (D07.27, D08.81). For a file that fails on and off, `--repeat 10 <file>` says how often.
 - There is no test report directory: read unittest's "Ran N tests" and "OK" lines, and that N is
   the count the change should give, not the exit code.
 - A test that passes before and after a change proves nothing until it has been seen to fail.
@@ -191,7 +196,10 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   Paste it as printed into the body file and check it with `gh pr view <n> --json body`: retyped
   or passed through a shell string, it loses a level of backslashes (`\s` for `\\s`) and no
   longer parses or matches (bearing D01.21). GitHub's rendered page drops one too: copy from the
-  raw body.
+  raw body. CI's "A track's breaks replay" (`scripts/track-breaks.py`) replays them, and the
+  day's earlier tracks', on Linux on the PR's merge commit, and runs again when the body is
+  edited: a report recorded on Windows, or a find this track rewrote, fails there and not at the
+  close. Record the break again in this PR's body, under the same `<what>`, with CI's report.
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
   description turns the failure into a warning. None yet. `main` is protected, so the check must

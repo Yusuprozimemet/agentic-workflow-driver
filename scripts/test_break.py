@@ -129,6 +129,22 @@ class BreakTest(unittest.TestCase):
             self.assertIn("want exactly once", run.stderr)
             self.assertEqual(self.contents(), self.original)
 
+    def test_an_ambiguous_find_names_the_lines_it_occurs_on(self):
+        # D08.69: the refusal said "occurs 2 times" and the line had to be found by hand.
+        run = self.run_break("a", "broken")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("(lines 1, 2)", run.stderr)
+
+    def test_a_multi_line_find_written_with_lf_breaks_a_crlf_file(self):
+        # D08.68, D08.72: a two-line --find never matched a CRLF checkout, and was redone on one line.
+        crlf = [sys.executable, "-c", f"import sys; t = open({self.file!r}, 'rb').read(); "
+                "sys.exit('AssertionError: broken') if b'{\\r\\n    boolean ok = true; // broken' in t else None"]
+        run = self.run_break("Guard {\n    boolean ok = true; // ok", "Guard {\n    boolean ok = true; // broken",
+                             command=crlf)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.strip().splitlines()[-1], "broken: the guard removed → AssertionError: broken")
+        self.assertEqual(self.contents(), self.original)
+
     def test_a_maven_check_without_clean_is_refused_before_anything_changes(self):
         run = self.run_break("// ok", "// broken", ["../../mvnw", "verify", "-Dtest=GuardIT"])
         self.assertEqual(run.returncode, 2)
