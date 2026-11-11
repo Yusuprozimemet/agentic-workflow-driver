@@ -1,9 +1,9 @@
 """The guard hook: a session's PreToolUse check against the calls a session never makes.
 
-`python hooks/guard.py <driver folder>` reads Claude Code's PreToolUse JSON on stdin. It exits 2
-with one line on stderr when the call merges a pull request, pushes to main, names the driver's
-folder or edits inside it, and when the call cannot be read at all. Otherwise it exits 0 and
-prints nothing.
+`python hooks/guard.py <driver folder> [<refusals folder>]` reads Claude Code's PreToolUse JSON on
+stdin. It exits 2 with one line on stderr when the call merges a pull request, pushes to main, names
+the driver's folder or edits inside it, and when the call cannot be read at all. Otherwise it exits 0
+and prints nothing. Given a refusals folder, each refusal is also appended to its hooks.jsonl.
 
 Known limit: the hook reads the command, not git's configuration or the shell's working directory.
 A bare `git push` on main names no destination and passes, and a path relative to the project
@@ -15,6 +15,8 @@ import os
 import re
 import shlex
 import sys
+
+import hook_log
 
 MERGE = "refused by the driver: a session never merges"
 PUSH = "refused by the driver: a session never pushes to main"
@@ -120,12 +122,15 @@ def main(argv, stdin):
     try:
         call = json.loads(stdin)
     except ValueError:
+        call = None
         line = UNREAD
     else:
         line = refusal(argv[1], call)
     if line is None:
         return 0
     print(line, file=sys.stderr)
+    if len(argv) > 2 and argv[2]:
+        hook_log.log(argv[2], "guard", call, line)
     return 2
 
 
