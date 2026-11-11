@@ -6,9 +6,11 @@
 
 The run log (<state>/run.jsonl, driver/runlog.py) sits on the maintainer's machine, uncommitted: CI
 cannot read it, and a step session cannot either (the driver's hook refuses a command that names its
-folder). So, as scripts/token-usage.py does for the transcripts, this is run by hand, outside a
-session, and the file it writes is committed in the project. That file is all the page knows of the
-driver; its format is the contract, and the page draws nothing of the driver without it:
+folder). So, as scripts/token-usage.py does for the transcripts, it runs on that machine, outside a
+session: scripts/publish-counts.py runs it with --out at each session's start and end and pushes the
+file to the dashboard-data branch, where the page's build takes it (one may also be committed in the
+project). That file is all the page knows of the driver; its format is the contract, and the page
+draws nothing of the driver without it:
 
     {"counted": "<when, on this machine's clock with its offset>",
      "steps": [one per step the log names, in the log's order:

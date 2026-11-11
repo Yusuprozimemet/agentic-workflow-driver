@@ -85,10 +85,11 @@ jobs:
           key: spec-drift-${{ github.run_id }}
           restore-keys: spec-drift-
 
-      # The sessions' counts come from the maintainer's machine, which pushes them to a branch of their
-      # own between closes (scripts/publish-counts.py); a close commits them to main as before. The
-      # later of the two is the one the page shows.
-      - name: Take the newer count of the sessions
+      # The sessions' counts and the driver's come from the maintainer's machine, which pushes them to
+      # a branch of their own between closes (scripts/publish-counts.py); a close commits the sessions'
+      # to main as before. The later of the two is the one the page shows. The re-check rows come from
+      # recheck.yml, on the same branch; the page reads them together with the ones committed on main.
+      - name: Take the newer counts and the re-check rows
         run: python scripts/publish-counts.py --take
 
       - name: Measure and build

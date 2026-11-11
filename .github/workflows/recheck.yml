@@ -1,0 +1,70 @@
+name: Re-check history
+
+# After every merge to main, re-checks each in-force criterion on the merges that have no Linux row
+# yet (scripts/replay-history.py: its breaks re-run on that merge's code), pushes the rows to the
+# dashboard-data branch beside the sessions' counts (scripts/publish-counts.py --put) and asks for
+# the page's rebuild, which takes them (--take in dashboard.yml). It runs here, not in the page's
+# build, which stays as fast as it was; and nobody runs it by hand.
+#
+# replay-history.py starts from the rows already measured, the branch's or else the ones committed
+# on main, and skips every merge that has a row for this platform: a run that was stopped, or the
+# first run, which re-checks the whole history on Linux, is carried on by the next. Rows are pushed
+# even when the time runs out, since the script writes them after every merge.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Each run fills every merge still missing a row, so a queued run is enough: none is cancelled
+# (a cancelled run would drop what it measured since its last push).
+concurrency:
+  group: recheck-history
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recheck:
+    name: Re-check the merges with no row
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    permissions:
+      contents: write  # push to dashboard-data; main is protected by its rules, not by this token
+      actions: write   # ask for the page's rebuild (gh workflow run dashboard.yml)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # every merge on main is re-checked at its own commit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PROJECT: install what the replayed checks need, as evidence.yml does.
+      - name: Install what the re-checked tests need
+        run: |
+          python -m pip install numpy
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
+
+      - name: Start from the rows already measured
+        run: |
+          git fetch -q origin +refs/heads/dashboard-data:refs/remotes/origin/dashboard-data || true
+          git show origin/dashboard-data:docs/dashboard/replay-history.json > "$RUNNER_TEMP/replay-history.json" 2>/dev/null \
+            || cp docs/dashboard/replay-history.json "$RUNNER_TEMP/replay-history.json"
+
+      - name: Re-check
+        env:
+          JIRA_KEY: ${{ vars.JIRA_KEY }}
+        run: python scripts/replay-history.py --out "$RUNNER_TEMP/replay-history.json"
+
+      - name: Push the rows and ask for the page's rebuild
+        if: always() # a run stopped by its time limit is cancelled: what it measured still goes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python scripts/publish-counts.py --put "$RUNNER_TEMP/replay-history.json" \
+            --message "Re-check the merges up to ${GITHUB_SHA::12}"

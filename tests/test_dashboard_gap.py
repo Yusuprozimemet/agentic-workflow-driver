@@ -244,6 +244,42 @@ class ReplayHistoryTest(unittest.TestCase):
             [(5, 9, "all", 3, 0), (6, 10, "day", 0, 1)],
         )
 
+    def test_a_merge_on_two_platforms_takes_the_check_that_ran_and_counts_one_platform(self):
+        row = {"day": "04", "pr": 9, "sample": "all", "merge": "aaa", "n": 5}
+        win, lin = dict(row, platform="windows"), dict(row, platform="linux")
+        skipped = "not applicable on this platform"
+        rows = [
+            dict(win, criterion="C04.1", check="posix", state=skipped, key="w1"),
+            dict(win, criterion="C04.1", check="b", state="holds", key="w2"),
+            dict(win, criterion="C04.2", check="posix", state=skipped, key="w3"),
+            dict(win, criterion="C04.3", check="a", state="holds", key="w4"),
+            dict(lin, criterion="C04.1", check="posix", state="holds", key="l1"),
+            dict(lin, criterion="C04.1", check="b", state="holds", key="l2", reused_from="zzz"),
+            dict(lin, criterion="C04.2", check="posix", state="code broken", key="l3"),
+        ]
+        got = spec_drift.replay_history(self.write({"schema": 1, "rows": rows}))
+        self.assertEqual(
+            [
+                (
+                    c["criterion"],
+                    c["state"],
+                    c["mixed"],
+                    sorted(ch["platform"] for ch in c["checks"]),
+                )
+                for c in got["cells"]
+            ],
+            [
+                ("C04.1", "holds", False, ["linux", "linux", "windows"]),
+                ("C04.2", "code broken", False, ["linux"]),
+                ("C04.3", "holds", False, ["windows"]),
+            ],
+        )
+        self.assertEqual([(m["n"], m["run"], m["copied"]) for m in got["merges"]], [(5, 2, 1)])
+        only_windows = [r for r in rows if r["platform"] == "windows"]
+        got = spec_drift.replay_history(self.write({"schema": 1, "rows": only_windows}))
+        self.assertEqual([c["state"] for c in got["cells"]], [skipped, skipped, "holds"])
+        self.assertEqual([(m["run"], m["copied"]) for m in got["merges"]], [(4, 0)])
+
     def test_no_file_is_absent_and_one_it_cannot_read_is_invalid(self):
         self.assertEqual(
             spec_drift.replay_history(os.path.join(tempfile.gettempdir(), "no-such-replay.json")),
