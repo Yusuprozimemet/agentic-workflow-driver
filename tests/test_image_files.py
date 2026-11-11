@@ -61,10 +61,10 @@ class ImageFilesTest(unittest.TestCase):
         doc = (ROOT / DOC).read_bytes().decode("utf-8")
         for needle in DOCKERFILE_NEEDLES:
             with self.subTest(file=DOCKERFILE, needle=needle):
-                self.assertIn(needle, dockerfile, f"{DOCKERFILE} does not hold {needle!r}")
+                self.assertTrue(needle in dockerfile, f"{DOCKERFILE} does not hold {needle!r}")
         for needle in DOC_NEEDLES:
             with self.subTest(file=DOC, needle=needle):
-                self.assertIn(needle, doc, f"{DOC} does not hold {needle!r}")
+                self.assertTrue(needle in doc, f"{DOC} does not hold {needle!r}")
         completed = subprocess.run(
             [sys.executable, "scripts/check-links.py", DOC],
             check=False,
@@ -80,6 +80,8 @@ class ImageFilesTest(unittest.TestCase):
         sources = re.findall(r"source=([^,\s`|]+)", text)
         self.assertTrue(sources, f"{DOC} shows no mount source")
         for source in sources:
-            self.assertIn(source, MOUNT_SOURCES, f"{DOC} shows the unknown mount source {source!r}")
-        self.assertNotIn("-v ", text, f"{DOC} shows a -v flag")
-        self.assertNotIn("--volume", text, f"{DOC} shows a --volume flag")
+            self.assertTrue(
+                source in MOUNT_SOURCES, f"{DOC} shows the unknown mount source {source!r}"
+            )
+        self.assertTrue("-v " not in text, f"{DOC} shows a -v flag")
+        self.assertTrue("--volume" not in text, f"{DOC} shows a --volume flag")
