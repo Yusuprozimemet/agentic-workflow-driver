@@ -3,6 +3,8 @@
 .evidence-cache.json
 spec-drift.json
 __pycache__/
+# what close-evidence.py --rehearse writes at the root before a closing PR
+evidence-rehearsal.json
 # the replay report the dashboard workflow writes before each build (scripts/close-evidence.py --all)
 docs/dashboard/evidence-checks.json
 # what the dashboard-data branch holds, and only it (scripts/publish-counts.py, recheck.yml): a copy

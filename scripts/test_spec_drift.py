@@ -44,7 +44,6 @@ def patch_all(name, new=None, **kwargs):
         for m in split_modules(name):
             stack.enter_context(mock.patch.object(m, name, new))
         yield new
-COMPARE = os.path.join(HERE, "..", "kit", "compare-page.py")
 
 PLAN = "# Plan\n\nThe plan names `FooService` and `bar_table`.\n"
 DAY = "# Day 01\n\nThe day adds `FooService`, then the rest of the day.\n"
@@ -1193,10 +1192,6 @@ class OwnerAndCaveatTest(unittest.TestCase):
             self.assertEqual(sd.project_name(), "toy-folder")
         finally:
             setall("run", real)
-
-
-def page_row(i, pr, kind, gap):
-    return dict(i=i, sha=f"{i:07x}", date="2026-01-01", pr=pr, title="t", kind=kind, gap_full=gap)
 
 
 class OtherGroupsTest(unittest.TestCase):
