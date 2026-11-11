@@ -5,8 +5,9 @@ plan-change PR. -->
 
 Written 2026-11-06 in the [kit](https://github.com/Yusuprozimemet/agentic-workflow-kit) as
 `kit/automation-plan.md`, and moved here when this repository was set up from the kit at
-`393dda6`. It replaces the plan the kit reverted in `de61820` (its PR #104): no container, no GitHub
-App, no CODEOWNERS. One script on a PC that stays on, and GitHub on the phone. The script has a
+`393dda6`. It replaces the plan the kit reverted in `de61820` (its PR #104): no GitHub App, no
+CODEOWNERS, and at first no container; from Day 10 each session runs in one ("Course
+corrections"). One script on a PC that stays on, and GitHub on the phone. The script has a
 repository of its own ("Where the driver lives"); the kit is not changed for it.
 
 ## Short answer
@@ -96,8 +97,8 @@ what an unattended run needs: the switches, the parks, the merge.
 
 - It keeps the driver out of the project's pull requests and out of the tree a step session
   works in. No PR can change it, and neither can a checkout or an uncommitted edit in the project.
-- It does not keep a session out. A step session runs under the same Windows account as the
-  driver, and that account can write the driver's script, its settings file and hooks, the halt
+- It does not keep a session out, until Day 10's container. A step session on the PC runs under
+  the same Windows account as the driver, and that account can write the driver's script, its settings file and hooks, the halt
   file and the run log, and can read the stored token. A hook limits the tools; it does not
   change what the account may do.
 - **Level 1 refuses and detects; it does not prevent.** A hook from the driver's settings
@@ -118,42 +119,70 @@ Neither stops a session from using the token it holds ("What this does not stop"
 and when, is in "Decisions for the maintainer": the container, chosen 2026-11-11 ("Course
 corrections"). Docker Desktop was already on the PC, so most of that row's cost was paid.
 
-**The session's container.** At level 2, and at level 1 when `driver.json` asks for it, the
-driver runs each session's `claude -p` with `docker run -i --rm --name <a name from the session's
-id>`, from an image the driver's repository builds (Claude Code at the live-checked version,
-Python, git, `gh`). The step still goes in on standard input and the JSON result comes out on
-standard output. What the session can reach is what the driver mounts:
+**The session's container.** From Day 10, every session the driver starts on the trial's
+project runs in it, at level 1 too: the 15 pull requests level 2 needs are counted from
+container sessions only, so the merge is never switched on for a setup that has not earned it
+(the 3 of 15 from the Day 8 trial ran on the PC and do not count). Outside the trial, `driver.json`
+may still run sessions on the PC, at level 1 only. The driver runs each session's `claude -p`
+with `docker run -i --rm --name <a name from the session's id>`, from an image the driver's
+repository builds: Claude Code at the live-checked version, Python under the name `python` (the
+kit's hooks call it so), git, `gh`, and the project's test tools. The step still goes in on
+standard input and the JSON result comes out on standard output. What the session can reach is
+what the driver mounts, and nothing else:
 
 - the project's checkout, writable: the one tree a step edits;
-- the driver's hooks, its rules and the settings file it wrote, and the state folder with the
-  halt file, read-only: Docker refuses a write there, not a hook;
+- the driver's hooks, its rules and the settings file it wrote (which names the hooks by their
+  paths in the container), and the state folder with the halt file, read-only: Docker refuses a
+  write there, not a hook;
 - `<state>/refusals`, writable, for the hooks' log (Day 9);
 - a Claude Code folder of the driver's state, writable, as the session's `CLAUDE_CONFIG_DIR`: its
-  transcripts, which the usage limit and the cost are read from;
-- the fine-grained token as `GH_TOKEN`, and a Claude Code token for a headless login, from a file
-  the maintainer keeps outside both repositories. None of the maintainer's own logins or files.
+  transcripts, which the usage limit, the cost and the close's `token-usage.py` are read from;
+- two secrets, as environment variables from a file the maintainer keeps outside both
+  repositories (`--env-file`; never on the command line, in the run log or in a mount): the
+  fine-grained token as `GH_TOKEN`, and a Claude Code token (`claude setup-token`) for a headless
+  login. The second is long-lived and spends the maintainer's subscription.
 
-The driver kills a session with `docker kill`, and `halt` kills the container the run log names
-as well as the driver: killing the driver, or the `docker` client it started, leaves the
-container running. The driver itself stays on the PC, under the maintainer's account, with the
-maintainer's `gh` login: it polls, and at level 2 it merges. The session now runs on Linux, so
-the project's tests run there in a step as they do in CI.
+Never mounted: the Docker socket, the maintainer's profile or `~/.claude`, the folder that holds
+the repositories, or the secrets file. The container is never `--privileged`. Either would hand
+the session the PC back.
 
 The image's system git config (`/etc/gitconfig`) sets `safe.directory` to the mounted checkout,
-`core.autocrlf` true and `core.filemode` false. Without them git in the container refuses the
-checkout ("detected dubious ownership": the mount's files are owned by root), and with
-`safe.directory` alone it reads every file of a Windows checkout as changed (CRLF, and every file
-mode `777`). `safe.directory` is not read from `GIT_CONFIG_COUNT` variables.
+`core.autocrlf` true and `core.filemode` false, and the commit identity and the credential helper
+the push needs (on the PC both come from the maintainer's global config, which the container does
+not see). Without the first three, git in the container refuses the checkout ("detected dubious
+ownership": the mount's files are owned by root), and with `safe.directory` alone it reads every
+file of a Windows checkout as changed (CRLF, and every file mode `777`). `safe.directory` is not
+read from `GIT_CONFIG_COUNT` variables.
 
-**Shown on 2026-11-11** (Docker Desktop 29.4.3, WSL 2; an image from `node:22-bookworm-slim` with
-Claude Code 2.1.322, Python, git and `gh`; a clone of bearing): the step in on standard input and
-the output back on standard output through `subprocess`; `claude --version` in the container;
-writes refused under a read-only mount ("Read-only file system") for the driver's folder, its
-hooks, the halt file and the settings file, while a writable `refusals` folder mounted inside the
-read-only state folder takes them; the halt file readable; `docker kill` closing the session's
-pipe in under a second with no container left; and, with the git config above, `git status`
-clean on the Windows checkout, a commit made in the container storing LF line endings, and the
-checkout clean on the PC after it. Not yet shown: "Unverified".
+The driver kills a session with `docker kill`. Killing the driver, or the `docker` client it
+started, leaves the container running, so `halt` kills the container the run log names as well
+as the driver, and Recovery treats a running container the log names as a live session. The
+driver itself stays on the PC, under the maintainer's account, with the maintainer's `gh` login:
+it polls, and at level 2 it merges.
+
+The session's tests do not run as CI's do: CI checks out LF and installs the project; the
+container sees the PC's checkout, CRLF on Windows (bearing: 172 of 186 files), over a bind mount,
+and the session installs the project as CI does before its tests. Neither CI nor the PC has that
+combination. bearing's 104 tests passed there all the same, in 68 s against 290 s on the PC, once
+the project was installed; without the install, its console-script test fails.
+
+**Shown on 2026-11-11**, Docker Desktop 29.4.3 (WSL 2), images from `node:22-bookworm-slim` and
+`node:22-trixie-slim` (Python 3.13.5, Claude Code 2.1.322, git, `gh`, pytest), a clone of bearing:
+- through `subprocess`, the step in on standard input and the output back on standard output;
+- writes refused ("Read-only file system") to the driver's folder, its hooks, the halt file and
+  the settings file, while a writable `refusals` folder mounted inside the read-only state folder
+  takes them; a halt file made on the PC after the container started was seen inside it;
+- `claude -p --permission-mode auto` with the Claude Code token from `--env-file` logged in and
+  answered (`is_error` false, $0.0032 on Haiku), and its transcript landed in the mounted folder
+  as `projects/-work/<session>.jsonl`;
+- the driver's `halt.py`, named in `--settings` from the read-only mount, refused a Bash call while
+  the halt file existed: one `permission_denials` entry and one `hooks.jsonl` line in the
+  writable `refusals` folder;
+- `docker kill` ended a running `claude -p` 0.4 s later, with no container left; killing only the
+  `docker` client left the container running;
+- with the git config above, `git status` clean on the Windows checkout, a commit made in the
+  container storing LF, and the checkout clean on the PC after all of it.
+Not yet shown: "Unverified".
 
 ## What the driver needs from the kit
 
@@ -224,7 +253,8 @@ stateDiagram-v2
 1. Writes the halt file, in the driver's folder. From then on a hook refuses every tool call in
    every session the driver started, subagents included. This holds even if a process survives.
 2. Kills the running session and everything it started: the whole process tree of the driver
-   process the lock names.
+   process the lock names, and, for a session in the container, that container by the name the
+   run log gives it (`docker kill`), since killing the driver leaves the container running.
 3. Merges nothing, starts nothing, and exits. Open pull requests stay open and unmerged.
 4. Writes what was in progress to the run's issue: the step, the branch, the last commit, whether
    the working tree was left with uncommitted changes.
@@ -353,7 +383,7 @@ before the PR opened may have left no line.
 | Say "merged", refresh the dashboard, report the next step | maintainer and session | driver | |
 | Check the evidence run after a close | session, step 5 | driver: `gh run list`, `gh run view --exit-status` | a failed, missing or pending run parks |
 | Start a new session | maintainer | driver: each `claude -p` call is one | |
-| Closing PR: ticks, Notes, lab notebook, `token-usage.py`, blind relabel, break manifest, rehearsal | main session | step session, on the same PC (the transcripts are local) | "A closed day's evidence replays" |
+| Closing PR: ticks, Notes, lab notebook, `token-usage.py`, blind relabel, break manifest, rehearsal | main session | step session, on the same PC; the step sessions' transcripts are in the driver's state, the container's Claude Code folder, and `token-usage.py` is pointed there | "A closed day's evidence replays" |
 | Decide each relabel disagreement | main session, maintainer reads it | step session; the report lists them | |
 | End of a phase: plan-auditor on both phases | session reports, maintainer says go | runs by itself; **parks with the report** until level 3 | |
 | A stopping point `plan.md` names | maintainer | **maintainer**, always | `spec-drift.py` holds the next step |
@@ -441,7 +471,7 @@ What the driver finds at a start, and what it does. The first row that applies:
 | It finds | It does |
 |---|---|
 | the halt file, or an open `STOP` issue from the maintainer | nothing: it stays halted until `clear` |
-| a live process of a session the log names | starts nothing; when the process ends, reads this table again |
+| a live process of a session the log names, or a running container the log names (a crashed driver leaves its container running) | starts nothing; when the process or the container ends, reads this table again |
 | an open `parked` issue of its own | waits for the maintainer to close it |
 | an open pull request from the maintainer's account | waits on its checks and its merge; no session |
 | uncommitted changes in the project | parks with the paths, the branch, the last commit and the session id |
@@ -499,7 +529,8 @@ is built until the trial at level 1 has been read.
    - reads the project's `spec-drift.py --out` JSON, not only the sentence it prints: the next
      step, and each day's `phase`, since the sentence never names a phase's end or the audit
      that follows it;
-   - runs, in the project's folder, with the step on standard input, `claude -p --model <the main session's>
+   - runs, in the project's folder (from Day 10 in the session's container, "Where the driver
+     lives"), with the step on standard input, `claude -p --model <the main session's>
      --output-format json --max-budget-usd <n> --permission-mode auto --strict-mcp-config
      --settings <the driver's>
      --append-system-prompt-file <the driver's rules>`. `--strict-mcp-config` is there so that no
@@ -555,7 +586,7 @@ runs without them:
 
 ## Phases
 
-Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 8 have specs in
+Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 9 have specs in
 [`specs/`](specs/). The days after them are titles: each gets its spec when its turn comes.
 
 ### Phase 0 — The dry run
@@ -591,18 +622,21 @@ Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 8 have spe
 **Goal:** a pull request that passes every gate and touches no human-only file merges without
 the maintainer. Its days are built at level 1 while the trial's project runs on at level 1. The
 level 2 merge is switched on in a run only when Levels' three conditions hold: `status` reports
-15 of 15, the sessions run in the driver's container, and the project's `main` requires a pull
-request with no bypass ("Course correction after Phase 1", and the container's correction above
-it).
+15 of 15 counted from container sessions only, the sessions run in the driver's container, and
+the project's `main` requires a pull request with no bypass ("Course correction after Phase 1",
+and the container's correction above it).
 - Day 9: Phase 1's leftovers: the usage limit's wait and retry (C08.15, H08.1); the driver's
   guard and halt hooks log each refusal to the driver's state folder, so a killed session's
   refusals are counted (H08.2); the halt tests that fail on and off, and the race they may show
   (H08.3); a test tying `status`'s level 2 count to the park sentence it counts (H08.4).
-- Day 10: the session's container ("Where the driver lives"): the image; the driver starts each
-  session in it with the mounts that section lists and can kill it, `halt` included; before a
-  session, `on` checks from inside the container that the driver's folder cannot be written and
-  that the project and `<state>/refusals` can; the usage limit is read from the container's
-  Claude Code folder (H09.1); `setup-check.py` reports "do not allow bypassing".
+- Day 10: the session's container ("Where the driver lives"): the image; `on`'s preflight checks
+  that Docker runs, the image exists and its Claude Code is the live-checked version; the driver
+  starts each session in it with the mounts that section lists and kills it, `halt` included;
+  Recovery reads a running container the log names as a live session; before a session, `on`
+  checks from inside the container that the driver's folder cannot be written and that the
+  project and `<state>/refusals` can; the usage limit is read from the container's Claude Code
+  folder (H09.1); `status`'s level 2 count reads only container sessions. Apart, in its own
+  track: `setup-check.py` reports "do not allow bypassing".
 - Day 11: the reviewer ("What to build", item 6).
 - Day 12: the level 2 merge (item 7): the path check, the check of the driver's own repository
   before each merge, `gh pr merge --match-head-commit <sha>`; its spec carries `Replaces: C07.1`.
@@ -639,10 +673,15 @@ account was for: a session cannot write the driver, its hooks, the halt file or 
 holds only the fine-grained token, not the maintainer's `gh` login (today `repo` and `workflow`
 scopes, as the repository's owner). It also keeps the session out of the rest of the PC, and the
 driver's code stays with pipes and `docker kill`, which CI's Linux runners can run.
-"Course correction after Phase 1"'s "One GitHub account, two Windows accounts" now reads: one
-GitHub account; the container holds a token of it. The PRs stay the maintainer's, so `--author
-@me` holds. Not yet shown: that a Claude Code token logs in a headless session inside a
-container ("Unverified").
+Three lines of "Course correction after Phase 1" change with it. "One GitHub account, two
+Windows accounts" now reads: one GitHub account; the container holds a token of it, and the PRs
+stay the maintainer's, so `--author @me` holds. "The count, the second account and the
+protection" now reads the count, the container and the protection. "Two settings outside the
+repositories" are now Docker Desktop with the two secrets, and `main`'s protection with no
+bypass. And the count: the 15 are counted from container sessions only, from Day 10 on, so the
+Day 8 trial's 3 do not count (Fable's audit of this PR, the maintainer's choice). Before this
+merged, a spike ran real `claude -p` sessions in the container ("Where the driver lives", "Shown
+on 2026-11-11"); the push with the fine-grained token is still to be shown ("Unverified").
 
 ## Course correction after Phase 1
 
@@ -690,14 +729,17 @@ The driver is outside the kit and outside every project it drives.
 
 - **Not running is already off.** No project holds a file, a hook or a setting of the driver's,
   so with the driver stopped a project works as it does today.
-- **Removing it is deleting its folder** and revoking its token. Nothing is reverted in the kit
-  or in a project.
+- **Removing it is deleting its folder**, revoking its two tokens, and deleting its image and its
+  secrets file. Nothing is reverted in the kit or in a project.
 
 | Part | Where it is | On removal |
 |---|---|---|
 | the driver, its switches, its settings and rules, the reviewer's brief, the human-only list | the driver's repository | deleted with it |
 | the halt file, the lock, the run log | the driver's folder, not committed | deleted with it |
 | the fine-grained token | the maintainer's GitHub account | revoked |
+| the Claude Code token (`claude setup-token`) | the maintainer's claude.ai account | revoked |
+| the secrets file holding both tokens | the maintainer's PC, outside every repository | deleted |
+| the session's image | Docker Desktop on the PC | deleted (`docker image rm`) |
 | the `parked` label and the runs' issues | the project, on GitHub | closed by hand; they are history |
 | pull requests the driver merged | the project | ordinary merges; they stay |
 | branch protection: a pull request required, no bypassing | the project's settings | changed back by hand if wanted |
@@ -761,8 +803,12 @@ not need it to reach level 2 on a pilot.
 At level 1 without the container, the step session and the driver also share one Windows
 account. The driver's own folder keeps it out of the project's pull requests, not out of a
 session's reach: "Where the driver lives" says what level 1 does about that, and what the
-container prevents. The container does not stop a session from using the network and the token
-it holds, and it is no stronger than Docker Desktop's own isolation.
+container prevents. The container does not stop a session from using the network and the two
+secrets it holds: the fine-grained token, which can push and open pull requests on the trial's
+repository, and the Claude Code token, which is long-lived and spends the maintainer's
+subscription; a session could send either out. It is no stronger than Docker Desktop's own
+isolation, and none at all with the Docker socket mounted or `--privileged`, which the driver
+never does.
 
 ## Unverified
 
@@ -790,11 +836,7 @@ Still not shown:
   `--agent` starts the reviewer from a brief outside the project: checked only on 2.1.170.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
-- The container, with a real session (the rest is shown in "Where the driver lives"): that a
-  Claude Code token (`claude setup-token`) logs in a headless session in it; that the driver's
-  `--settings` hooks fire there from a read-only mount and refuse a call; that the transcripts
-  land in the mounted Claude Code folder, where the usage limit and `token-usage.py` read them;
-  that `docker kill` ends a running `claude -p` and what it started; and that the fine-grained
-  token as `GH_TOKEN` lets the session push and open a pull request. The maintainer makes the
-  Claude Code token before Day 10's spec; the first four are checked then, the push by Day 10's
-  first live run.
+- The container (the rest is shown in "Where the driver lives"): that the fine-grained token as
+  `GH_TOKEN`, with the image's credential helper and commit identity, lets a session commit, push
+  and open a pull request; that `token-usage.py` counts the transcripts of the container's Claude
+  Code folder; and a whole step there, not a one-word reply. Day 10's first live run shows them.
