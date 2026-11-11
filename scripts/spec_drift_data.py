@@ -37,7 +37,8 @@ def driver_runs(issues, runs=None):
     steps = runs.get("steps")
     if steps is not None:
         steps = [dict(s, parks=[dict(p, issue=park_issue(p, issues or [])) for p in s.get("parks", [])]) for s in steps]
-    return dict(source="docs/dashboard/driver-runs.json", counted=runs.get("counted"), steps=steps, parks=issues)
+    return dict(source="docs/dashboard/driver-runs.json", counted=runs.get("counted"), level_2=runs.get("level_2"),
+                steps=steps, parks=issues)
 
 
 def data_git(*args):

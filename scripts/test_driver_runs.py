@@ -175,7 +175,9 @@ class WriteTest(unittest.TestCase):
     def test_the_file_holds_the_moment_of_the_count_and_the_steps(self):
         with tempfile.TemporaryDirectory() as root:
             out = os.path.join(root, "driver-runs.json")
-            lines = [json.dumps(r) + "\n" for r in (start("s1", 0), end("s1", 20), merged(30), park(31, step=TRACK_B))]
+            # merged() gives no "changed"; Level 2 counts a merge only when it says the head did not change.
+            records = [start("s1", 0), end("s1", 20), dict(merged(30), changed=False), park(31, step=TRACK_B)]
+            lines = [json.dumps(r) + "\n" for r in records]
             code, said, _ = self.run_main(root, lines, "--out", out)
             with open(out, "rb") as f:
                 raw = f.read()
@@ -185,7 +187,8 @@ class WriteTest(unittest.TestCase):
         # The same moment, on the clock of the machine that counts: its offset is the machine's, not NOW's.
         self.assertEqual(doc["counted"], self.NOW.astimezone().isoformat(timespec="seconds"))
         self.assertEqual(datetime.datetime.fromisoformat(doc["counted"]), self.NOW)
-        self.assertEqual(doc["steps"], dr.count([start("s1", 0), end("s1", 20), merged(30), park(31, step=TRACK_B)]))
+        self.assertEqual(doc["level_2"], {"run": 1, "of": 15})
+        self.assertEqual(doc["steps"], dr.count(records))
         self.assertIn("2 steps: 1 merged with no person, 0 after fixing themselves, 1 parked (0 by a fault), 0 open", said)
 
     def test_project_writes_the_projects_dashboard_file(self):

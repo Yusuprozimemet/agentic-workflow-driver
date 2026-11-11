@@ -96,6 +96,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .sw.s3, .g3-cell.s3 { background: var(--s3); color: var(--on-s34); } .sw.s4, .g3-cell.s4 { background: var(--s4); color: var(--on-s34); }
 .sw.main, .seg.main { background: var(--bar); } .sw.rest, .seg.rest { background: var(--bar-2); } .sw.over { background: var(--repair); }
 .sw.spec, .seg.spec { background: var(--spec); } .sw.prod, .seg.prod { background: var(--code); }
+.sw.day, .seg.day { background: var(--spec); } .sw.out, .seg.out { background: var(--code); }
 .sw.test, .seg.test { background: var(--test); } .sw.tooling, .seg.tooling { background: var(--other); }
 .sw.aside { background: var(--other); opacity: .45; }
 .dash { width: 18px; border-top: 1.5px dashed var(--ink); }
@@ -112,6 +113,9 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .rung.now { background: var(--ink); border-color: var(--ink); color: var(--card); }
 .rung.now b, .rung.now small { color: var(--card); }
 .rung.wait { border-style: dashed; }
+.rung .run { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
+.rung .run i { height: 10px; border-radius: 2px; background: var(--s1); }
+.rung .run i.on { background: var(--proven); }
 .sw.built { width: 18px; height: 2px; border-radius: 0; background: var(--ink); }
 .sw.written { width: 18px; height: 0; border-radius: 0; background: none; border-top: 2px dashed var(--ink-2); }
 .sw.handoff { width: 6px; height: 12px; border-radius: 2px 2px 0 0; background: var(--other); }
@@ -287,6 +291,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .yard-avg .dots { stroke: var(--spec); stroke-width: 6; stroke-linecap: round; }
 .sw.avg { width: 18px; height: 2px; border-radius: 0; background: var(--spec); }
 .yard-avg-note { display: block; margin-top: 3px; color: var(--ink); font-weight: 600; }
+.yard-foot { margin: 2px 0 8px; font-size: 12px; color: var(--muted); }
 
 /* graph 10: one date on the clock, a lane per actor, a bar per stretch it was busy */
 .g10-dates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }

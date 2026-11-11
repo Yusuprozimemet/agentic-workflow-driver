@@ -193,7 +193,7 @@ def _cost(records):
     )
 
 
-def _level_2(records):
+def level_2_run(records):
     # Counts back from the newest line until a merge asked for a change, a close, or a park that
     # says a check is still red; any other line is passed over.
     k = 0
@@ -206,7 +206,11 @@ def _level_2(records):
             k += 1
         elif event == "closed" or (event == "park" and "still red after two fixes" in line):
             break
-    return f"level 2: {k} of {LEVEL_2_RUN} pull requests in a row merged without a change asked"
+    return k
+
+
+def _level_2(records):
+    return f"level 2: {level_2_run(records)} of {LEVEL_2_RUN} pull requests in a row merged without a change asked"
 
 
 def _text(value):
