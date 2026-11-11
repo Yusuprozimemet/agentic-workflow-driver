@@ -37,13 +37,10 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    Track 0 holds the tests that must pass before and after the change, and lands first.
 3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
    command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
-   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). Run `python scripts/token-usage.py` and commit the refreshed
-   `docs/dashboard/token-usage.json`, `docs/dashboard/refusals.json`, `docs/dashboard/gates.json`
-   (each gate's runs and cost, beside what its `found:` lines caught), `docs/dashboard/sessions.json`
-   (each session's stretches of work on this machine's clock, graph 10) and `docs/dashboard/counted.json`
-   (the moment of the count, which the page gives as what the other four are counted up to; commit all
-   five together, or the page names a count its numbers do not match): CI cannot read the
-   transcripts or the guards' refusal log they count. Then relabel the
+   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). The
+   close commits no counts: the session hooks push them to the `dashboard-data` branch ("Where
+   things live"). For the notebook's figures, run `python scripts/publish-counts.py` and read them
+   from that branch (`git show origin/dashboard-data:docs/dashboard/token-usage.json`). Then relabel the
    day's defects blind: `python scripts/relabel.py blind specs/day-NN-*.md --out <dir>`, give
    `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run
    `python scripts/relabel.py compare <dir>`, and paste its lines unchanged in the PR (the dashboard
@@ -217,9 +214,9 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 - **Measurement:** `python scripts/spec-drift.py --out spec-drift.json` rebuilds the project
   dashboard's data from git and GitHub; `--build` writes the page (`docs/dashboard/`) with it, and until the first day spec exists it shows example data under a banner; `--out` never does.
   Every merge to `main` republishes it to [GitHub Pages](https://yusuprozimemet.github.io/agentic-workflow-driver/).
-- **The sessions' counts between closes:** a SessionStart and a SessionEnd hook run `scripts/publish-counts.py --detach`: it counts in the background, pushes the five count files and the driver's count (`driver-runs.json`, from the run log beside `run-steps.py`) to the `dashboard-data` branch (no working tree or branch here moves) and asks for the page's rebuild; the workflow shows whichever count is later, that branch's or the one a close committed. A count with nothing new is not pushed, and a push that lost a race with another session's is built again on it. After every merge to `main`, `.github/workflows/recheck.yml` re-checks the merges with no Linux row (`scripts/replay-history.py`) and pushes `replay-history.json` to the same branch; the page reads its rows with the ones committed on `main`. What it printed is in `.claude/state/publish-counts.log`: read it when the page's session lanes stand still.
+- **What git and GitHub cannot give the page:** one route, the `dashboard-data` branch, filled by machines and never committed to `main` (the seven files are gitignored there). A SessionStart and a SessionEnd hook run `scripts/publish-counts.py --detach`: it counts in the background from the last count on the branch, pushes the five count files (`token-usage.json`, `refusals.json`, `gates.json`, `sessions.json`, `counted.json`) and the driver's count (`driver-runs.json`, from the run log beside `run-steps.py`) to that branch (no working tree or branch here moves) and asks for the page's rebuild. A count with nothing new is not pushed, and a push that lost a race with another session's is built again on it. After every merge to `main`, `.github/workflows/recheck.yml` re-checks the merges with no Linux row (`scripts/replay-history.py`) and pushes `replay-history.json` to the same branch. `spec-drift.py` fetches the branch and reads the seven there, in CI and in a local run alike; with the branch or one of its files missing, the page says so in a banner and draws none of it. What the publisher printed is in `.claude/state/publish-counts.log`: read it when the page's session lanes stand still.
 - **Whole-file Reads:** a PreToolUse hook (`scripts/read-guard.py`) refuses a Read with no `offset`, `limit` or `pages` of a file over 8,000 bytes, and names its size and line count. Find the part with `grep -n` and read that range; to read all of it on purpose, give the `limit` it names. Edit works after a ranged Read. Images, PDFs and notebooks pass.
-- **Refusals:** step-guard, read-guard and auditor-guard each append every refusal to `.claude/state/refusals.jsonl` (gitignored; `scripts/refusal_log.py`). `token-usage.py` counts it into `docs/dashboard/refusals.json`, shown under the dashboard's graph 8 ("What did it cost?") and as a row of graph 2. Many of one kind mean a rule is read past or in the way: say so in the day's Notes.
+- **Refusals:** step-guard, read-guard and auditor-guard each append every refusal to `.claude/state/refusals.jsonl` (gitignored; `scripts/refusal_log.py`). `token-usage.py` counts it into `refusals.json` on the `dashboard-data` branch, shown under the dashboard's graph 8 ("What did it cost?") and as a row of graph 2. Many of one kind mean a rule is read past or in the way: say so in the day's Notes.
 - **Long Bash output:** a PostToolUse hook (`scripts/cap-output.py`) cuts stdout over 8,000 characters to its head and tail; the full output is in `.claude/tool-output/` (gitignored). Claude Code merges stderr into stdout, so a failing command's error comes back at the end of stdout with stderr `''`: it is cut, and the tail (last 3,000 characters) keeps it; the stderr guard only catches a separate stderr. An interrupted command is left whole, as is output of 30,000 characters or more, which Claude Code saves itself.
 
 ## Pitfalls this repository has already hit
@@ -231,7 +228,8 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   or let the build's `clean` delete old reports.
 - A project started from the kit inherits the kit's `docs/dashboard/token-usage.json`, and
   `token-usage.py` never lowers a row: the kit's six dates stayed on graph 8 as $151.56 of
-  "set-up" until they were deleted by hand. Start that file empty, here and in the kit.
+  "set-up" until they were deleted by hand. The counts now live on the `dashboard-data` branch:
+  a project started from the kit must not copy that branch.
 - The dashboard's dollars are API list prices, not a bill, and its sessions are this repository's
   only. On the page, "Day" is the plan's step and "date" the calendar's: keep the capital.
 

@@ -4,8 +4,9 @@ Reads the session transcripts Claude Code keeps on this machine (~/.claude/proje
 repository's path>, subagents included) and writes totals only, no prompt or reply text, to
 docs/dashboard/token-usage.json (tokens, their cost at list prices, the part of it spent in replies that read
 over 150k tokens, and the --tools counts per row), which scripts/spec-drift.py puts on the dashboard. The
-transcripts live on the maintainer's machine, not in CI, so this runs locally and its output is
-committed; the closing PR of each day refreshes it. Beside it, gates.json holds each gate's runs and the
+transcripts live on the maintainer's machine, not in CI, so this runs locally, started by
+scripts/publish-counts.py from the session hooks, which pushes what it writes to the dashboard-data
+branch; nothing of it is committed to main. Beside it, gates.json holds each gate's runs and the
 tokens of the replies that ran it or read its result (gates()), refusals.json the guards' refusals,
 sessions.json each transcript's stretches of work on this machine's clock (sessions()), for the
 dashboard's tenth graph, one date on the clock, and counted.json the moment of this count, which

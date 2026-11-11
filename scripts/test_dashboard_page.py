@@ -40,9 +40,9 @@ const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, mat
   console: { error: e => logged.push(String(e)) }, DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 let error = null;
 try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
-const banner = els["demo-banner"];
+const shown = el => el ? { hidden: el.hidden, text: el.textContent } : null;
 console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.textContent : null,
-  banner: banner ? { hidden: banner.hidden, text: banner.textContent } : null }));
+  banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]) }));
 """
 
 # tagOf() on each value of the list from stdin.
@@ -310,8 +310,8 @@ class ModelTest(unittest.TestCase):
         # The dollars are list prices and not a bill, and the last date is counted only up to its close: the page says both.
         self.assertEqual(g["read"]["t"], "$6.00 of tokens at list prices; 83% of it in the main session")
         self.assertEqual(g["read"]["b"], ["1 date of set-up cost $2.50 before Day 1. The Days cost $3.50 over 1 date, on which 2 pull requests merged. "
-                                          "The hooks refused 3 calls and cut 3 long outputs. Counted at each Day's close on the maintainer's computer, "
-                                          "so 2 Jan is counted only up to the close run on it, and nothing after it is in yet."])
+                                          "The hooks refused 3 calls and cut 3 long outputs. Counted on the maintainer's computer, "
+                                          "so 2 Jan is counted only up to the last count run on it, and nothing after it is in yet."])
         self.assertEqual(g["say"], "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, "
                                    "counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.")
 
@@ -615,7 +615,7 @@ class ModelTest(unittest.TestCase):
 
     def test_graph_11_without_a_count_says_so_under_not_measured(self):
         g = model(data()).get("g11", {})
-        self.assertIn("python scripts/driver-runs.py", g.get("empty", ""))
+        self.assertIn("`driver-runs.json` on the dashboard-data branch", g.get("empty", ""))
         self.assertEqual((g.get("rows"), g.get("read", {}).get("t")), ([], "No step of the driver is counted yet"))
         self.assertIn(["Whether it runs without a person", g.get("empty")], model(data()).get("notMeasured", []))
 
@@ -710,6 +710,22 @@ class BootTest(unittest.TestCase):
         self.assertEqual((out["error"], out["logged"]), (None, []))
         self.assertEqual(out["eyebrow"], "toy · read from git and GitHub on 3 Jan 2026 at 09:30 · commit abcdef1")
         self.assertTrue(out["banner"]["hidden"])
+
+    def test_the_data_branch_or_a_file_on_it_missing_is_said_on_the_page(self):
+        names = ["token-usage.json", "refusals.json", "gates.json", "sessions.json", "counted.json", "driver-runs.json",
+                 "replay-history.json"]
+        source = lambda commit, absent: dict(branch="dashboard-data", commit=commit, at=None, absent=absent)  # noqa: E731
+        whole = boot(data(data=source("abc", [])))
+        self.assertEqual((whole["error"], whole["missing"]["hidden"]), (None, True))
+        gone = boot(data(data=source(None, names)))
+        self.assertFalse(gone["missing"]["hidden"])
+        self.assertEqual(gone["missing"]["text"], "The dashboard-data branch is missing, so this page leaves out the dollars, the hooks' refusals, the gates' "
+                         "runs and cost, the sessions' times, when the sessions were last counted, the driver's steps and the "
+                         "re-checks of finished promises.")
+        one = boot(data(data=source("abc", ["replay-history.json"])))
+        self.assertEqual(one["missing"]["text"], "The dashboard-data branch has no replay-history.json, so this page leaves out "
+                         "the re-checks of finished promises.")
+        self.assertTrue(boot(data())["missing"]["hidden"])  # example data, or a page built before the branch: no claim
 
     def test_the_page_draws_without_an_error_on_data_with_nothing_in_it(self):
         out = boot({})

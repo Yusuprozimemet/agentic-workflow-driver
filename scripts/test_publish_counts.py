@@ -74,11 +74,7 @@ class PublishCountsTest(unittest.TestCase):
         git(tmp.name, "init", "-q", "--bare", "-b", "main", self.origin)
         git(tmp.name, "init", "-q", "-b", "main", self.repo)
         git(self.repo, "config", "core.autocrlf", "false")
-        os.makedirs(os.path.join(self.repo, "docs", "dashboard"))
-        self.write("sessions.json", '["committed"]\n')
-        self.write("counted.json", '{"at": "2026-01-02T00:00:00+01:00"}\n')
-        git(self.repo, "add", "-A")
-        git(self.repo, "commit", "-q", "-m", "first")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "first")
         git(self.repo, "remote", "add", "origin", self.origin)
         git(self.repo, "push", "-q", "origin", "main")
 
@@ -109,7 +105,7 @@ class PublishCountsTest(unittest.TestCase):
         self.assertEqual(git(self.origin, "rev-parse", "dashboard-data^^"), first)
         # the other publisher's file is kept, and the count is the one built on its commit
         self.assertEqual((self.on_branch("other.json"), json.loads(self.on_branch("sessions.json"))),
-                         ("other", ["committed", "one", "two"]))
+                         ("other", ["one", "two"]))
 
     def test_the_driver_count_is_a_sixth_file_and_its_moment_alone_is_no_news(self):
         self.run_script("--no-dispatch")  # no run log: no sixth file
@@ -122,7 +118,7 @@ class PublishCountsTest(unittest.TestCase):
         self.assertEqual(git(self.origin, "rev-parse", "dashboard-data"), tip)
         self.run_script("--no-dispatch", at="2026-01-07T00:00:00+01:00", STEPS='[{"step": "a"}, {"step": "b"}]')
         self.assertEqual(len(json.loads(self.on_branch("driver-runs.json"))["steps"]), 2)
-        self.assertEqual(json.loads(self.on_branch("sessions.json")), ["committed", "one"])
+        self.assertEqual(json.loads(self.on_branch("sessions.json")), ["one"])
 
     def test_put_pushes_a_file_as_it_is_and_keeps_the_count(self):
         self.run_script("--no-dispatch")
@@ -132,42 +128,24 @@ class PublishCountsTest(unittest.TestCase):
         p = self.run_script("--no-dispatch", "--put", rows, "--message", "Re-check")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual((self.on_branch("replay-history.json"), json.loads(self.on_branch("sessions.json"))),
-                         ('{"rows": []}', ["committed", "one"]))
+                         ('{"rows": []}', ["one"]))
         tip = git(self.origin, "rev-parse", "dashboard-data")
         self.assertIn("nothing pushed", self.run_script("--no-dispatch", "--put", rows, "--message", "Re-check").stdout)
         self.assertEqual(git(self.origin, "rev-parse", "dashboard-data"), tip)
 
-    def test_take_writes_the_newer_driver_count_and_both_sets_of_re_check_rows(self):
-        row = lambda n, platform, state: {"n": n, "platform": platform, "day": "01", "criterion": "C01.2",  # noqa: E731
-                                          "check": "b", "state": state, "merge": "m", "sample": "all"}
-        self.write("replay-history.json", json.dumps({"schema": 1, "since": "s", "states": ["holds"], "rows": [
-            row(1, "windows", "holds"), row(2, "linux", "old")]}) + "\n")
-        self.run_script("--no-dispatch", STEPS='[{"step": "a"}]')
-        branch_rows = os.path.join(self.repo, os.pardir, "replay-history.json")
-        with open(branch_rows, "w", newline="\n") as f:
-            json.dump({"schema": 1, "since": "s", "states": ["holds"], "rows": [row(2, "linux", "holds"), row(3, "linux", "holds")]}, f)
-        self.run_script("--no-dispatch", "--put", branch_rows, "--message", "Re-check")
-        p = self.run_script("--take")
-        self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(json.loads(self.read("driver-runs.json"))["steps"], [{"step": "a"}])
-        got = json.loads(self.read("replay-history.json"))
-        self.assertEqual([(r["n"], r["platform"], r["state"]) for r in got["rows"]],
-                         [(1, "windows", "holds"), (2, "linux", "holds"), (3, "linux", "holds")])
-        self.assertEqual(got["since"], "s")
-        self.write("driver-runs.json", json.dumps({"counted": "2026-02-01T00:00:00+01:00", "steps": []}) + "\n")
-        self.assertIn("keeping it", self.run_script("--take").stdout)
-        self.assertEqual(json.loads(self.read("driver-runs.json"))["steps"], [])
-
     def test_the_count_lands_on_the_data_branch_and_nothing_local_moves(self):
         head = git(self.repo, "rev-parse", "HEAD")
+        os.makedirs(os.path.join(self.repo, "docs", "dashboard"))
+        self.write("sessions.json", '["left in the working tree"]\n')
         p = self.run_script("--no-dispatch")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(git(self.origin, "ls-tree", "-r", "--name-only", "dashboard-data").split("\n"),
                          ["docs/dashboard/" + n for n in FILES])
-        # started from the committed count, since the branch did not exist yet
-        self.assertEqual(json.loads(git(self.origin, "show", "dashboard-data:docs/dashboard/sessions.json")), ["committed", "one"])
+        # the branch is the only store: with none yet, the count starts from nothing, not from a file left here
+        self.assertEqual(json.loads(git(self.origin, "show", "dashboard-data:docs/dashboard/sessions.json")), ["one"])
         self.assertEqual((git(self.repo, "rev-parse", "HEAD"), git(self.repo, "branch", "--show-current"),
-                          git(self.repo, "status", "--porcelain")), (head, "main", ""))
+                          git(self.repo, "status", "--porcelain"), self.read("sessions.json")),
+                         (head, "main", "?? docs/", '["left in the working tree"]\n'))
 
     def test_a_later_count_starts_from_the_branch_and_a_count_with_no_news_is_not_pushed(self):
         self.run_script("--no-dispatch")
@@ -178,20 +156,7 @@ class PublishCountsTest(unittest.TestCase):
         self.run_script("--no-dispatch", count="two", at="2026-01-05T00:00:00+01:00")
         self.assertEqual(git(self.origin, "rev-parse", "dashboard-data^"), first)
         self.assertEqual(json.loads(git(self.origin, "show", "dashboard-data:docs/dashboard/sessions.json")),
-                         ["committed", "one", "two"])
-
-    def test_take_writes_the_branchs_count_only_when_it_is_the_later_one(self):
-        p = self.run_script("--take")
-        self.assertEqual((p.returncode, self.read("sessions.json")), (0, '["committed"]\n'), p.stderr)  # no branch yet
-        self.run_script("--no-dispatch")
-        self.run_script("--take")
-        self.assertEqual((self.read("sessions.json"), json.loads(self.read("counted.json"))["at"]),
-                         ('["committed", "one"]\n', "2026-01-03T00:00:00+01:00"))
-        self.write("sessions.json", '["a close, later"]\n')
-        self.write("counted.json", '{"at": "2026-01-09T00:00:00+01:00"}\n')
-        p = self.run_script("--take")
-        self.assertIn("keeping it", p.stdout)
-        self.assertEqual(self.read("sessions.json"), '["a close, later"]\n')
+                         ["one", "two"])
 
 
 class WiringTest(unittest.TestCase):
@@ -202,12 +167,17 @@ class WiringTest(unittest.TestCase):
             commands = [h["command"] for group in hooks.get(event, []) for h in group["hooks"]]
             self.assertTrue(any("'publish-counts.py'" in c and "'--detach'" in c for c in commands), event)
 
-    def test_the_workflow_takes_the_newer_count_before_it_builds(self):
+    def test_the_page_build_reads_the_data_branch_alone_and_main_holds_none_of_its_files(self):
         with open(os.path.join(ROOT, ".github", "workflows", "dashboard.yml"), encoding="utf-8") as f:
             text = f.read()
         self.assertIn("workflow_dispatch", text)
-        self.assertLess(text.index("python scripts/publish-counts.py --take"), text.index("python scripts/spec-drift.py --build"))
+        self.assertIn("python scripts/spec-drift.py --build", text)
+        self.assertNotIn("python scripts/publish-counts.py", text)  # nothing taken into the working tree: spec-drift.py reads the branch
         self.assertNotIn("replay-history.py", text)  # the re-check is its own job: the page's build stays fast
+        self.assertNotIn("--take", subprocess.run([sys.executable, SCRIPT, "--help"], capture_output=True, text=True).stdout)
+        listed = subprocess.run(["git", "-C", ROOT, "ls-files", "docs/dashboard"], capture_output=True, text=True, check=True)
+        on_branch = FILES + ["driver-runs.json", "replay-history.json"]
+        self.assertEqual([p for p in listed.stdout.split() if p.rsplit("/", 1)[-1] in on_branch], [])
 
     def test_the_re_check_job_pushes_its_rows_to_the_data_branch_even_when_stopped(self):
         with open(os.path.join(ROOT, ".github", "workflows", "recheck.yml"), encoding="utf-8") as f:

@@ -339,16 +339,10 @@ class SpecDriftTest(unittest.TestCase):
         self.assertIsNone(sd.clock({33: pr}, [], sessions=[])["prs"][0]["day"])
 
     def test_the_page_is_given_when_the_transcripts_were_last_counted_or_nothing(self):
-        real = sd.PAGE
-        sd.PAGE = tempfile.mkdtemp()
-        try:
-            self.assertIsNone(sd.counted())  # before token-usage.py's first run
-            with open(os.path.join(sd.PAGE, "counted.json"), "w", encoding="utf-8") as f:
-                f.write('{"at": "2026-11-08T20:00:00+01:00"}\n')
+        with DataBranch({"sessions.json": "[]\n"}):
+            self.assertIsNone(sd.counted())  # before the first count reached the branch
+        with DataBranch({"counted.json": '{"at": "2026-11-08T20:00:00+01:00"}\n'}):
             self.assertEqual(sd.counted(), dict(at="2026-11-08T20:00:00+01:00"))
-        finally:
-            shutil.rmtree(sd.PAGE)
-            sd.PAGE = real
 
     def test_a_gh_list_as_long_as_its_limit_is_refused(self):
         real = sd.run
@@ -2136,6 +2130,74 @@ class LookAheadTest(unittest.TestCase):
         self.assertEqual(got["pending"], dict(day=2, tracks=[dict(track="B", ids=["C02.2"])], at_close=["C02.3"]))
 
 
+class DataBranch:
+    """A repository whose remote holds a dashboard-data branch with these files ({name: text}), or no such
+    branch with None; sd.PAGE points into it and sd.data_branch() has fetched it. The working tree holds
+    other files of the same names: the page must not read them."""
+
+    def __init__(self, files):
+        self.files = files
+
+    def __enter__(self):
+        self.tmp = tempfile.mkdtemp()
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+                   GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")
+        repo, origin = os.path.join(self.tmp, "repo"), os.path.join(self.tmp, "origin.git")
+        git = lambda *a: subprocess.run(["git", "-C", repo, *a], capture_output=True, env=env, check=True)  # noqa: E731
+        subprocess.run(["git", "init", "-q", "--bare", origin], capture_output=True, check=True)
+        subprocess.run(["git", "init", "-q", repo], capture_output=True, check=True)
+        git("remote", "add", "origin", origin)
+        page = os.path.join(repo, "docs", "dashboard")
+        os.makedirs(page)
+        if self.files is not None:
+            git("checkout", "-q", "--orphan", "dashboard-data")
+            for name, text in self.files.items():
+                with open(os.path.join(page, name), "w", encoding="utf-8", newline="\n") as f:
+                    f.write(text)
+            git("add", "-A")
+            git("commit", "-q", "--allow-empty", "-m", "count")
+            git("push", "-q", "origin", "dashboard-data")
+        for name in sd.DATA_FILES:
+            with open(os.path.join(page, name), "w", encoding="utf-8") as f:
+                f.write('{"left": "in the working tree"}')
+        self.patch = mock.patch.object(sd, "PAGE", page)
+        self.patch.start()
+        self.saved = dict(sd.DATA)
+        sd.data_branch()
+        return self
+
+    def __exit__(self, *exc):
+        self.patch.stop()
+        sd.DATA.update(self.saved)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+class DataBranchTest(unittest.TestCase):
+    def test_the_files_are_read_from_the_data_branch_and_what_it_lacks_is_named(self):
+        with DataBranch({"counted.json": '{"at": "2026-11-08T20:00:00+01:00"}\n', "gates.json": "[]\n"}):
+            self.assertEqual(sd.counted(), dict(at="2026-11-08T20:00:00+01:00"))
+            self.assertEqual(sd.refusals("gates.json"), [])
+            self.assertEqual(sd.refusals(), [])  # absent on the branch, though the working tree has one
+            self.assertEqual(sd.replay_history(), dict(state="absent"))
+            got = sd.data_source()
+            self.assertEqual(len(got["commit"]), 12)
+            self.assertEqual(got["absent"], [n for n in sd.DATA_FILES if n not in ("counted.json", "gates.json")])
+
+    def test_with_no_data_branch_every_file_is_absent_and_none_is_read_from_the_working_tree(self):
+        with DataBranch(None):
+            self.assertIsNone(sd.counted())
+            self.assertEqual((sd.token_usage(), sd.driver_runs([])["steps"]), ([], None))
+            self.assertEqual(sd.replay_history(), dict(state="absent"))
+            self.assertEqual(sd.data_source(), dict(branch="dashboard-data", commit=None, at=None, absent=list(sd.DATA_FILES)))
+
+    def test_the_re_check_rows_on_the_branch_are_read(self):
+        rows = {"schema": 1, "rows": [dict(n=1, merge="m", pr=2, sample="all", criterion="C01.1", day="01", check="t",
+                                            state="holds", platform="linux", key="k")]}
+        with DataBranch({"replay-history.json": json.dumps(rows)}):
+            got = sd.replay_history()
+        self.assertEqual((got["state"], [c["criterion"] for c in got["cells"]]), ("loaded", ["C01.1"]))
+
+
 def parked(number, title, opened, closed=None):
     return dict(number=number, title=title, url=f"https://github.com/example/shop/issues/{number}", opened=opened, closed=closed)
 
@@ -2183,20 +2245,18 @@ class DriverRunsTest(unittest.TestCase):
 
     def test_before_the_first_count_there_are_no_steps_and_the_parks_are_still_githubs(self):
         issues = [parked(5, self.LINE, "2026-11-12T13:00:04Z")]
-        with tempfile.TemporaryDirectory() as page, mock.patch.object(sd, "PAGE", page):
+        with DataBranch({}):
             got = sd.driver_runs(issues)
         self.assertEqual(got, dict(source="docs/dashboard/driver-runs.json", counted=None, steps=None, parks=issues))
         self.assertEqual(sd.driver_runs(None, {})["parks"], None)
 
-    def test_the_counted_file_is_read_from_the_page_folder_and_each_park_names_its_issue(self):
+    def test_the_counted_file_is_read_from_the_data_branch_and_each_park_names_its_issue(self):
         step = dict(step="Day 08 Track A: the first track", day=8, prefix="day-08/track-a", sessions=[], fixes=0, crashes=0,
                     pr=None, merged=None, ended="parked",
                     parks=[dict(at="2026-11-12T13:00:00Z", line=self.LINE, by="maintainer"),
                            dict(at="2026-11-12T15:00:00Z", line="park: #12 carries Oversized:", by="maintainer")])
         issues = [parked(5, self.LINE, "2026-11-12T13:00:04Z", "2026-11-12T14:10:00Z")]
-        with tempfile.TemporaryDirectory() as page, mock.patch.object(sd, "PAGE", page):
-            with open(os.path.join(page, "driver-runs.json"), "w", encoding="utf-8") as f:
-                json.dump(dict(counted="2026-11-12T18:00:00+01:00", steps=[step]), f)
+        with DataBranch({"driver-runs.json": json.dumps(dict(counted="2026-11-12T18:00:00+01:00", steps=[step]))}):
             got = sd.driver_runs(issues)
         self.assertEqual(got["counted"], "2026-11-12T18:00:00+01:00")
         self.assertEqual([p["issue"] for p in got["steps"][0]["parks"]], [5, None])
