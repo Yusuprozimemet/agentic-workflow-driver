@@ -1,8 +1,10 @@
 """The driver's config, the JSON file run-steps.py reads for the project when --project is not given.
 load() checks the whole file and returns every problem as one line, so a person fixes them in one
-pass. Plain stdlib: the file is read as UTF-8 bytes, and a problem is never raised."""
+pass. The optional container_image and container_secrets come as a pair, and a session's container
+needs both. Plain stdlib: the file is read as UTF-8 bytes, and a problem is never raised."""
 
 import json
+import os
 from pathlib import Path
 
 
@@ -24,6 +26,10 @@ def is_steps(value):
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
+def is_abs_path(value):
+    return isinstance(value, str) and os.path.isabs(value)
+
+
 def problems(path, config):
     # One line per key, in this order. A key that is absent is reported as missing, not as the
     # wrong type, so each line says what to add or what to change.
@@ -43,6 +49,17 @@ def problems(path, config):
             lines.append(f"cannot start: {path} has no {key}")
         elif not ok(config[key]):
             lines.append(message)
+    # The container keys are optional and come as a pair; each one present is checked for its type.
+    image = "container_image" in config
+    secrets = "container_secrets" in config
+    if image and not secrets:
+        lines.append(f"cannot start: {path} has container_image but no container_secrets")
+    if secrets and not image:
+        lines.append(f"cannot start: {path} has container_secrets but no container_image")
+    if image and not is_path(config["container_image"]):
+        lines.append(f"cannot start: {path}'s container_image must be an image name")
+    if secrets and not is_abs_path(config["container_secrets"]):
+        lines.append(f"cannot start: {path}'s container_secrets must be an absolute path")
     return lines
 
 

@@ -97,6 +97,7 @@ def main(argv=None) -> int:
         "--once", action="store_true", help="do one step: check, then start its session"
     )
     parser.add_argument("--gh", default="gh", help="the GitHub CLI program, found on PATH")
+    parser.add_argument("--docker", default="docker", help="the Docker CLI program, found on PATH")
     parser.add_argument("--model", default="opus", help="the session's model")
     parser.add_argument(
         "--poll",
