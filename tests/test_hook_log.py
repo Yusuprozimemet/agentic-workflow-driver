@@ -86,6 +86,11 @@ class HookLogTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertEqual(result.stderr, "")
         self.assertFalse(os.path.exists(self.refusals), "the refusals folder was created")
+        # A refusal into the same folder is its only line: the folder is in use, and the pass
+        # before it wrote nothing there.
+        run_hook("guard.py", [self.driver, self.refusals], json.dumps(PUSH_CALL))
+        records = self.log_records(self.refusals)
+        self.assertEqual([record.get("line") for record in records], [PUSH])
 
     def test_halt_logs_refusal(self):
         Path(self.halt).write_bytes(b"halted")
