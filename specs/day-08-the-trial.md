@@ -200,13 +200,14 @@ C3.
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 
-- [ ] C08.1 **hold** — The files Day 8 does not change are unchanged since `f9f43fd`: Verify's diff
+- [x] C08.1 **hold** — The files Day 8 does not change are unchanged since `f9f43fd`: Verify's diff
       prints nothing. Its list is C07.2's and C06.12's with `tests/test_merge_wait.py` and
       `tests/test_on.py` taken out (Tracks C1 and C2 edit them), and Day 8's own frozen files added.
       broken: a byte added to driver/decide.py → import re (#111)
       Replaces: C07.2 — was: earlier days' tests pass and Verify's diff is empty against `4a2c53f`, over a list that holds `tests/test_merge_wait.py` and `tests/test_on.py`.
       Replaces: C06.12 — was: earlier days' tests pass with their files unedited against `6f9e72c`, over a list that holds `tests/test_lock.py`, `tests/test_once_halt.py` and `tests/test_once_stop.py`, which Day 7 edited.
-- [ ] C08.2 **hold** — Day 7's `status` block still prints exactly for a log with no `refused`, no
+      Evidence: `git -c core.safecrlf=false diff --exit-code f9f43fd` over Verify's list printed nothing on `main` at `3c0952d`, after #129.
+- [x] C08.2 **hold** — Day 7's `status` block still prints exactly for a log with no `refused`, no
       `changed` and no `closed` line: the nine `StatusTest` cases pass, `test_full_report`,
       `test_no_parks` and `test_gh_down` only gaining the `level 2` line, and `test_no_merged`
       reading its `cost` line as the last but one (C08.10). C07.18 holds as written: `status`
@@ -215,11 +216,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`,
       `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`,
       `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config`.
-      broken: <`status` drops the `refusals` line> → <what it reported>
-      broken: <status skipping the config> → <what it reported>
-      broken: <a log that cannot be read passing as empty> → <what it reported>
       Replaces: C07.18 — was: the same, with break reports that ended at the `cost` line.
-- [ ] C08.3 **new** — An `end` line whose `session` is `["s1"]` or whose `refused` is `"x"`, a
+      Evidence: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`, `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`, `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config` (#126).
+      broken: status drops the refusals line → AssertionError: Lists differ: ['mod[627 chars]f', 'cost: $1.20, merged pull requests 2, $0.6[93 chars]ked'] != ['mod[627 chars]f', 'refusals: 3', 'cost: $1.20, merged pull r[108 chars]ked'] (#126)
+      broken: status skipping the config → AssertionError: "mode: off\nlevel: 1\nhalt: none\nrun's i[219 chars]ed\n" != '' (#126)
+      broken: a log that cannot be read passing as empty → AssertionError: Lists differ: ['in progress: none', 'steps: none', 'parks by reason: n[144 chars]ked'] != ['in progress: unknown', 'run log: the run log cannot be read at line 2'] (#126)
+- [x] C08.3 **new** — An `end` line whose `session` is `["s1"]` or whose `refused` is `"x"`, a
       `refused` is `[{"tool": 5, "input": "{}"}]`, a `merged` line whose `pr` is `true` or `"3"`, a
       `closed` or `wait` line whose `pr` is `"3"`, a `park` line whose `pr` is `true`, or a `park` or
       `merged` line whose `head` is `5`, makes `runlog.read`, `failures`
@@ -230,7 +232,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `RunlogEndTest.test_end_session_not_string`, `RunlogEndTest.test_merged_pr_not_int`,
       `RunlogEndTest.test_wait_pr_not_int`, `RunlogEndTest.test_closed_pr_not_int`, `RunlogEndTest.test_park_pr_not_int`,
       `RunlogEndTest.test_head_not_string`, `RunlogEndTest.test_refused_not_list`.
-- [ ] C08.4 **new** — A session whose result holds three `permission_denials`
+      Evidence: `RunlogEndTest.test_end_session_not_string`, `RunlogEndTest.test_merged_pr_not_int`, `RunlogEndTest.test_wait_pr_not_int`, `RunlogEndTest.test_closed_pr_not_int`, `RunlogEndTest.test_park_pr_not_int`, `RunlogEndTest.test_head_not_string`, `RunlogEndTest.test_refused_not_list` (#118).
+      seen red: python -m unittest tests.test_runlog_end tests.test_refused on main → AssertionError: Tuples differ: ([{'event': 'start', 'at': '2026-11-08T10:[146 chars]None) != (None, 'the run log cannot be read at line 2') (#118)
+      broken: an end line's session not checked → AssertionError: Tuples differ: ([{'event': 'start', 'at': '2026-11-08T10:[198 chars]None) != (None, 'the run log cannot be read at line 2') (#118)
+      broken: a refused that is not a list read as fine → AssertionError: Tuples differ: ([{'event': 'start', 'at': '2026-11-08T10:[212 chars]None) != (None, 'the run log cannot be read at line 2') (#118)
+      broken: a bool passing as a pull request's number → AssertionError: Tuples differ: ([{'event': 'start', 'at': '2026-11-08T10:[184 chars]None) != (None, 'the run log cannot be read at line 2') (#118)
+- [x] C08.4 **new** — A session whose result holds three `permission_denials`
       (`{"tool_name": "Bash", "tool_input": {"command": "git push --force"}}`, one with neither key,
       and `"x"`) writes an `end` line with `"denials": 3` and `"refused": [{"tool": "Bash", "input":
       "{\"command\": \"git push --force\"}"}, {"tool": "unknown", "input": "{}"}, {"tool":
@@ -239,7 +246,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `KeyError: 'refused'`.
       Test: `RefusedTest.test_end_names_refused_tools`, `RefusedTest.test_malformed_denials`,
       `RefusedTest.test_input_cut`.
-- [ ] C08.5 **new** — With a fake `gh` that exits 1 and writes "no required checks reported on the
+      Evidence: `RefusedTest.test_end_names_refused_tools`, `RefusedTest.test_malformed_denials`, `RefusedTest.test_input_cut` (#118).
+      seen red: python -m unittest tests.test_refused on main → FAILED (errors=3) (#118)
+      broken: a refused input not cut to 200 characters → AssertionError: '{"co[191 chars]aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa[270 chars]aa"}' != '{"co[191 chars]aaaaa' (#118)
+- [x] C08.5 **new** — With a fake `gh` that exits 1 and writes "no required checks reported on the
       'day-01/track-a-x' branch" (or "no checks reported on the 'day-01/track-a-x' branch") to
       stderr, `checks` gives `("none", [], None)`, and the wait on that pull request parks "park: no
       required checks on #7 after 0.01 minutes", exit 1.
@@ -248,15 +258,20 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ChecksNoneTest.test_no_required_checks`, `ChecksNoneTest.test_no_checks`,
       `ChecksNoneTest.test_wait_parks`.
       Replaces: C06.2 — was: every exit 1 of `gh pr checks` gives "gh pr checks exited 1", and `pr_state` asks `state,mergeCommit,files,body` and returns five values.
-- [ ] C08.6 **hold** — An exit 1 of `gh pr checks` with any other stderr, or none, still gives
+      Evidence: `ChecksNoneTest.test_no_required_checks`, `ChecksNoneTest.test_no_checks`, `ChecksNoneTest.test_wait_parks` (#120).
+      seen red: python -m unittest tests.test_checks_none on main → AssertionError: Tuples differ: ('cannot read the project: gh pr checks exited 1', 2) != ('park: no required checks on #7 after 0.01 minutes', 1) (#120)
+      broken: checks does not read gh's no required checks line → AssertionError: Tuples differ: (None, [], 'gh pr checks exited 1') != ('none', [], None) (#120)
+      broken: an exit 1 with gh's no checks line is a failed read again → AssertionError: Tuples differ: ('cannot read the project: gh pr checks exited 1', 2) != ('park: no required checks on #7 after 0.01 minutes', 1) (#120)
+- [x] C08.6 **hold** — An exit 1 of `gh pr checks` with any other stderr, or none, still gives
       "gh pr checks exited 1", and the rest of C06.2's `checks` and `failed_lines` hold: "pending"
       on exit 8, "red" with the failed checks' names, "green", "none" for an empty list, and the
       last 40 lines of each failed job's log, cut to its last 6,000 characters.
       Test: `ChecksNoneTest.test_other_exit_1`, `GitHubTest.test_checks`,
       `GitHubTest.test_failed_lines`.
       broken: failed_lines keeps 41 lines of a log → AssertionError: 'line 9\nline 10\nline 11\nline 12\nline 13\nli[367 chars]om/x' != 'line 10\nline 11\nline 12\nline 13\nline 14\nl[359 chars]om/x' (#111)
-      broken: <`checks` takes every exit 1 as "none"> → <what it reported>
-- [ ] C08.7 **new** — After a gated park of #7 with head "aaa", at the next `--once`, and at the
+      Evidence: `ChecksNoneTest.test_other_exit_1`, `GitHubTest.test_checks`, `GitHubTest.test_failed_lines` (#120).
+      broken: any stderr holding checks reported gives none → AssertionError: Tuples differ: ('none', [], None) != (None, [], 'gh pr checks exited 1') (#120)
+- [x] C08.7 **new** — After a gated park of #7 with head "aaa", at the next `--once`, and at the
       next `on`, with the fake saying "MERGED" and the same head and listing no open pull request,
       the log gains a `merged` line with `"pr": 7`, `"head": "aaa"`, `"changed": false` before the
       run's first new `start` line, and a second
@@ -272,7 +287,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `GatedMergeTest.test_wait_only_null`, `GatedMergeTest.test_closed`,
       `GatedMergeTest.test_gh_fails`.
       Replaces: C07.16 — was: a `park` line is `{"event", "at", "step", "line"}` and a `merged` line `{"event", "at", "pr"}`.
-- [ ] C08.8 **new** — `wait_pr` on #7 writes a `wait` line with `"pr": 7` before its first read. A
+      Evidence: `GatedMergeTest.test_merged_after_park`, `GatedMergeTest.test_on_writes_merged_at_start`, `GatedMergeTest.test_two_parks_one_line`, `GatedMergeTest.test_changed`, `GatedMergeTest.test_wait_only_null`, `GatedMergeTest.test_closed`, `GatedMergeTest.test_gh_fails` (#124); the torn log, `tests/test_recovery_holds.py`, which passes unedited.
+      seen red: python -m unittest tests.test_gated_merge on main → AssertionError: Lists differ: [] != [('merged', 7, 'aaa', None)] (#124)
+      broken: the start-time read asks again for a pull request with a `merged` line → AssertionError: Lists differ: [('merged', 7, 'aaa', False), ('merged', 7, 'aaa', False)] != [('merged', 7, 'aaa', False)] (#124)
+- [x] C08.8 **new** — `wait_pr` on #7 writes a `wait` line with `"pr": 7` before its first read. A
       resumed fix that opens #13 in that wait writes a `wait` line with `"pr": 13`. A gated park of
       #7 writes `"pr": 7` and `"head": "aaa"`. In `wait_merge`, a head of "aaa" at its
       first successful read after the green and "bbb" when it merges writes a `merged` line with
@@ -287,10 +305,19 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `MergeWaitHeadTest.test_no_head`, `OnTest.test_wait_line_after_fix`,
       `RunLogReportTest.test_merged_line`,
       `GitHubTest.test_pr_state`.
-- [ ] C08.9 **hold** — An open pull request a `wait` or `park` line named adds no line at a start.
+      Evidence: `MergeWaitHeadTest.test_wait_line`, `MergeWaitHeadTest.test_gated_park_carries_pr_head`, `MergeWaitHeadTest.test_changed`, `MergeWaitHeadTest.test_unchanged`, `MergeWaitHeadTest.test_no_head`, `OnTest.test_wait_line_after_fix`, `RunLogReportTest.test_merged_line`, `GitHubTest.test_pr_state` (#123).
+      seen red: python -m unittest tests.test_runlog_report.MergeWaitHeadTest.test_wait_line tests.test_runlog_report.MergeWaitHeadTest.test_gated_park_carries_pr_head tests.test_runlog_report.MergeWaitHeadTest.test_changed tests.test_runlog_report.MergeWaitHeadTest.test_unchanged tests.test_runlog_report.MergeWaitHeadTest.test_no_head tests.test_on.OnTest.test_wait_line_after_fix tests.test_runlog_report.RunLogReportTest.test_merged_line tests.test_github.GitHubTest.test_pr_state on main → AssertionError: Tuples differ: (None, None, [], '', 'gh pr view exited 1') != (None, None, [], '', 'gh pr view exited 1', None) (#123)
+      broken: runlog.wait writing no line → AssertionError: Tuples differ: ((None, 0), []) != ((None, 0), [7]) (#123)
+      broken: wait_merge comparing two unknown heads → AssertionError: Lists differ: [(False, True, False)] != [(False, True, None)] (#123)
+      broken: wait_merge comparing the heads the wrong way round → AssertionError: Lists differ: [(12, 'bbb', False)] != [(12, 'bbb', True)] (#123)
+      broken: a gated park dropping its head → AssertionError: Tuples differ: (1, 'park: #7 touches plan.md', [(7, None)]) != (1, 'park: #7 touches plan.md', [(7, 'aaa')]) (#123)
+      broken: wait_pr writing no wait line for the fix's pull request → AssertionError: Tuples differ: (0, [5]) != (0, [5, 13]) (#123)
+      broken: pr_state not asking for the head → AssertionError: Lists differ: [['pr', 'view', '12', '--json', 'state,mergeCommit,files,body']] != [['pr', 'view', '12', '--json', 'state,mergeCommit,files,body,headRefOid']] (#123)
+- [x] C08.9 **hold** — An open pull request a `wait` or `park` line named adds no line at a start.
       Test: `GatedMergeTest.test_open_adds_nothing`.
-      broken: <the start-time read appends `merged` for "OPEN"> → <what it reported>
-- [ ] C08.10 **new** — `status` on a log built by the test prints, under "refusals: 3", the lines
+      Evidence: `GatedMergeTest.test_open_adds_nothing` (#124).
+      broken: the start-time read appends `merged` for "OPEN" → AssertionError: Lists differ: ['merged', 'start'] != ['start'] (#124)
+- [x] C08.10 **new** — `status` on a log built by the test prints, under "refusals: 3", the lines
       "  2 Bash: {"command": "git push --force"}" and "  1 Edit: {}" (as printed, no backslashes),
       and after the `cost` line "level 2: 2 of 15 pull requests in a row merged without a change
       asked" for, oldest first, `merged` (changed false), a park "still red after two fixes",
@@ -301,27 +328,44 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `StatusTrialTest.test_refused_lines`, `StatusTrialTest.test_level_2_count`,
       `StatusTrialTest.test_count_ends`.
       Replaces: C07.17 — was: the block ended at the `cost` line, and `refusals` was one line.
-- [ ] C08.11 **new** — The trial ran: `docs/trial/run.jsonl` reads without a reason; every `start`
+      Evidence: `StatusTrialTest.test_refused_lines`, `StatusTrialTest.test_level_2_count`, `StatusTrialTest.test_count_ends` (#126).
+      seen red: python -m unittest tests.test_status_trial on main → AssertionError: Lists differ: ['refusals: 3', 'cost: $0.20, merged pull requests 0 (baseline $1.86)'] != ['refusals: 3', '  2 Bash: {"command": "git push --force"}', '  1 Edit: {}'] (#126)
+- [x] C08.11 **new** — The trial ran: `docs/trial/run.jsonl` reads without a reason; every `start`
       line has an `end` line, or a later `park` line "the run log names session `<id>` for this
       step, with no end" names its session; every `merged` and `closed` line's `pr` is named by an
       earlier `wait` line; and the record's Steps names each `wait` line's pull request.
       Red today: `docs/trial/run.jsonl` does not exist.
       Test: `TrialRecordTest.test_run_log_is_a_trial`.
-- [ ] C08.12 **new** — The record names every park and every permission refusal, and its `cost`
+      Evidence: `TrialRecordTest.test_run_log_is_a_trial` (#129).
+      seen red: python -m unittest tests.test_trial_record on main → AssertionError: None is not true : run log is empty (#129)
+      broken: the wait line of the closing pull request names another one → AssertionError: False is not true : wait pull request missing from Steps (#129)
+- [x] C08.12 **new** — The record names every park and every permission refusal, and its `cost`
       line is the one `status` gives on the copy of the run log.
       Red today: `docs/trial/day-08.md` does not exist.
       Test: `TrialRecordTest.test_every_park_named`, `TrialRecordTest.test_every_refusal_named`,
       `TrialRecordTest.test_cost_line_is_status`.
-- [ ] C08.13 **new** — The trial's day closed with its evidence replay green: the record's Evidence
+      Evidence: `TrialRecordTest.test_every_park_named`, `TrialRecordTest.test_every_refusal_named`, `TrialRecordTest.test_cost_line_is_status`, `TrialRecordTest.test_sections_in_order` (#129).
+      seen red: python -m unittest tests.test_trial_record on main → AssertionError: None is not true : run log is empty (#129)
+      broken: the record gives the last park another time → AssertionError: False is not true : park time missing from Parks (#129)
+      broken: the record names another refused tool → AssertionError: False is not true : refused tool line missing from Refusals (#129)
+      broken: the record's cost line differs from status → AssertionError: False is not true : cost line missing from Cost (#129)
+      broken: a section of the record is renamed → AssertionError: Lists differ: ['Set[15 chars]'Parked', 'Refusals', 'Cost', 'The phone', 'Th[36 chars]nce'] != ['Set[15 chars]'Parks', 'Refusals', 'Cost', 'The phone', 'The[35 chars]nce'] (#129)
+- [x] C08.13 **new** — The trial's day closed with its evidence replay green: the record's Evidence
       section names the closing PR, a merge commit of 40 hex characters, an evidence run id and
       "conclusion: success", and the copy holds a `merged` line for that pull request.
       Red today: `docs/trial/day-08.md` does not exist.
       Test: `TrialRecordTest.test_evidence_section`.
-- [ ] C08.14 **new** — A `STOP` opened from the phone halted the driver, and a park closed from the
+      Evidence: `TrialRecordTest.test_evidence_section` (#129): `bearing`'s closing PR #96, evidence run 42932015269, conclusion success.
+      seen red: python -m unittest tests.test_trial_record on main → AssertionError: None is not true : run log is empty (#129)
+      broken: the record's evidence run did not succeed → AssertionError: False is not true : conclusion line missing (#129)
+- [x] C08.14 **new** — A `STOP` opened from the phone halted the driver, and a park closed from the
       phone was followed by the next start, each with its two times and the seconds between in the
       record's The phone section (H05.3).
       Red today: `docs/trial/day-08.md` does not exist.
       Test: `TrialRecordTest.test_phone_lines`.
+      Evidence: `TrialRecordTest.test_phone_lines` (#129): 30 s from the `STOP` to the halt, 105 s from the park's close to the next start.
+      seen red: python -m unittest tests.test_trial_record on main → AssertionError: None is not true : run log is empty (#129)
+      broken: the phone's seconds do not match its stamps → AssertionError: 30 != 31 : seconds differ (#129)
 - [ ] C08.15 **new** — If the trial met the usage limit: a fake session ending with the fields the
       record quotes waits until its reset and resumes the same session once; a second one parks
       "park: the usage limit was reached (session `<id>`)". If it did not, this box stays unticked
@@ -329,17 +373,20 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: such a session parks with a Day 4 line ("the session ended in an error: …" or
       another), with no wait.
       Test: `UsageLimitTest.test_waits_and_resumes`, `UsageLimitTest.test_second_limit_parks`.
-- [ ] C08.16 **hold** — The rest of C07.16 holds: a park before a session and one after it each
+      Not proven: the trial did not meet the limit
+- [x] C08.16 **hold** — The rest of C07.16 holds: a park before a session and one after it each
       write one `park` line, its `line` the printed line and its `step` the sentence; `start(...,
       issue=12)` carries `"issue": 12`, and without it the line's keys are C04.4's.
       Test: `RunLogReportTest.test_park_lines`, `RunLogReportTest.test_issue_on_start`.
       broken: park_issue writing no park line → AssertionError: Tuples differ: (1, True, 0) != (1, True, 1) (#111)
       broken: start writing a null issue → AssertionError: Tuples differ: ('issue', None, ['event', 'at', 'step', 'prefix', 'session', 'claude']) != ('issue', 12, ['event', 'at', 'step', 'prefix', 'session', 'claude']) (#111)
-- [ ] C08.17 **hold** — A park other than the three of `gated` carries no `pr` key, even one that
+      Evidence: `RunLogReportTest.test_park_lines`, `RunLogReportTest.test_issue_on_start` (#123).
+- [x] C08.17 **hold** — A park other than the three of `gated` carries no `pr` key, even one that
       ends a wait on #7 in the same step ("park: #7 was closed without a merge", "park: the checks
       on #7 are red"), where `record["pr"]` is set.
       Test: `MergeWaitHeadTest.test_park_without_pr`.
-      broken: <a park line takes the wait's `pr`> → <what it reported>
+      Evidence: `MergeWaitHeadTest.test_park_without_pr` (#123).
+      broken: a park line takes the wait's pr → AssertionError: Tuples differ: (1, '[17 chars]on #7 are red: tests', [['event', 'at', 'step', 'line', 'pr']]) != (1, '[17 chars]on #7 are red: tests', [['event', 'at', 'step', 'line']]) (#123)
 
 ## Verify
 ```bash
@@ -481,3 +528,31 @@ git -c core.safecrlf=false diff --exit-code f9f43fd -- tests/test_contract.py te
 - **Defect** D08.64 — found: auditor · cause: spec · made: Day 08 · C08.7's `on` case could pass at C2's start, `wait_merge` writing the line itself; the fake now lists #7 as not open, and the line must come before the run's first new `start`.
 - **Defect** D08.65 — found: auditor · cause: spec · made: Day 08 · an Assumed line said headless transcripts carry `entrypoint` "claude-vscode"; they carry "sdk-cli".
 - **Defect** D08.66 — found: auditor · cause: spec · made: Day 08 · C2's case count, Expected PRs with a C3, and the start-time read's place beside `livecheck.refusal` were unstated or wrong; said.
+- Track F did not open: the record's "The usage limit" reads "not met", so C08.15 stays unticked and H06.1 goes on to the maintainer as H08.1. The day took the 8 pull requests it expected: #111, #118, #120, #123, #124, #126, #129 and this close.
+- At the close the suite is 340 tests (301 before the day), "OK (skipped=4)". The first of this close's two runs of `python scripts/test-parallel.py` failed once in `tests/test_once_stop.py`, "FAILED (failures=1)" of its 4, and its report was not kept (D08.81); the second passed. The file passed 5 of 5 alone, `OnceHaltTest.test_halt_during_once` 4 of 4 alone, and CI's serial run passed at `3c0952d`.
+- C08.6's break differs from the name the spec gave it: the spec said every exit 1 taken as "none", the break run was the narrower "any stderr holding checks reported gives none" (#120). The same test, `ChecksNoneTest.test_other_exit_1`, catches it.
+- C08.14's `STOP` landed during the closing session, not during a wait on a pull request as the spec asked; the record says so. The criterion's words hold: it was opened from the phone and halted the driver in 30 s.
+- C08.11 to C08.14 read the committed record. What they cannot check is that the record is true of the trial: that the `STOP` and the park were closed from the phone is the maintainer's word, and how #97 was closed is not recorded.
+- What the trial settled of the Assumed lines above. A hook's exit-2 refusal does appear in `permission_denials`, and from a subagent (one case, `bearing`'s `read-guard.py`). The kit's guards do not write `.claude/state/refusals.jsonl` on `bearing` at `c214b09` (D08.79). `token-usage.py` does count the headless transcripts, all four sessions. `gh issue create` prints the URL last and a second `gh issue close` exits 0 (#120, wordtally#57). `--resume <id>` after a usage limit was not run: Track F did not open.
+- The `permission_denials` shape was read on 2.1.170 from a deny rule (#118) and on 2.1.322 from a hook (the trial's one refusal). `auto` mode refused nothing in the trial's three finished sessions.
+- The trial's 3 of 15 toward Level 2 is one small day, three pull requests, and can be too high (the Note on "without the maintainer asking" above). Two costs are recorded and not reconciled: $0.93 per merged pull request by the sessions' own figures, $1.07 by list price, against the baseline's $1.86.
+- **Defect** D08.67 — found: review · cause: implementation · made: Day 08 · the implementer's `RefusedTest` read the line with `.get`, so its red was `None != [...]`, not the spec's `KeyError: 'refused'`; changed to index the key before the red was recorded (#118).
+- **Defect** D08.68 — found: break on purpose · cause: process · made: Day 08 · a two-line `--find` did not match the CRLF tree and `break.py` refused it, "occurs 0 times"; redone on one line (#118).
+- **Defect** D08.69 — found: break on purpose · cause: process · made: Day 08 · a `--find` occurred twice in `driver/runlog.py` and `break.py` refused it; redone with a line that occurs once (#118).
+- **Defect** D08.70 — found: self · cause: implementation · made: Day 08 · the implementer's first `tests/test_checks_none.py` failed the style check on two percent-format lines, UP031; fixed before it reported (#120).
+- **Defect** D08.71 — found: self · cause: process · made: Day 08 · the suite on `main` was not counted before Track B's change, so its PR could give 315 only as the branch's count (#120).
+- **Defect** D08.72 — found: break on purpose · cause: process · made: Day 08 · same-as: D08.68 · five more multi-line finds refused on the CRLF tree; re-run on single lines, which an LF checkout also replays (#123).
+- **Defect** D08.73 — found: break on purpose · cause: process · made: Day 08 · a break in a branch `MergeWaitHeadTest.test_no_head` never reaches could not fail it, and `break.py` exited 1; replaced by "wait_merge comparing two unknown heads" (#123).
+- **Defect** D08.74 — found: Track C1 · cause: process · made: Day 08 · the brief said a drift with #7 open makes `on` wait on #7, but the fake still served #5; the implementer rewrote the fake's number after the build (#123).
+- **Defect** D08.75 — found: Track C1 · cause: spec · made: Day 08 · the spec had `wait_merge` return the head with its park line, but a bare head cannot tell a gated park with no known head, which must carry `pr`, from a park that must not (C08.17); it returns the gated park's keys instead (#123).
+- **Defect** D08.76 — found: Track C1 · cause: implementation · made: Day 04 · `OnceHaltTest.test_halt_during_once` fails on and off, the log holding an `end` line it does not expect: 2 runs of 3 on the branch and 1 of 4 on `main` (#123). Tagged for the test's timing; the cause was not found, so a race in the driver is not ruled out (H08.3).
+- **Defect** D08.77 — found: Track D · cause: process · made: Day 08 · the brief named `tests/test_github.py` for the log helpers, which live in `tests/test_status.py`; the implementer said so and imported from there (#126).
+- **Defect** D08.78 — found: Track A · cause: process · made: Day 08 · the denied-call session ran on 2.1.170, not the updated CLI "Before this day" asks for; the trial's own refusal on 2.1.322 was written with its tool and input (#118, #129).
+- **Defect** D08.79 — found: Track E · cause: spec · made: Day 08 · the Assumed line that the kit's guards write `.claude/state/refusals.jsonl` does not hold on `bearing`: at `c214b09` they print their refusals and log them nowhere, and the file does not exist (#129).
+- **Defect** D08.80 — found: Track E · cause: spec · made: Day 08 · the spec expected the park after a `STOP`-killed session to need VS Code; it was closed from the phone, and the next start ran the step in a new session (#129).
+- **Defect** D08.81 — found: close · cause: implementation · made: Day 05 · a whole-suite run at the close failed once in `tests/test_once_stop.py` and the next passed; the report was not kept, so the test and the cause are not known (H08.3).
+- **Hand-off** H08.1 → the maintainer: H06.1, how a headless session reports the usage limit. The trial did not meet it, so `once.outcome` still parks such a session with a Day 4 line and no wait, and `--resume` after a limit has not been run.
+- **Hand-off** H08.2 → the maintainer: neither `hooks/guard.py` nor `bearing`'s guards log a refusal, so a guard's refusal that does not reach `permission_denials` is seen nowhere (D08.79). The Note above leaves this to the stop's plan-auditor.
+- **Hand-off** H08.3 → the maintainer: `OnceHaltTest.test_halt_during_once` and a test in `tests/test_once_stop.py` fail on and off under load (D08.76, D08.81). `OnceStopTest` and `OnceHaltTest` expect `["start", "pid"]`, so a killed session's `end` line may be a race in the driver and not only in the tests; no day owns it.
+- **Hand-off** H08.4 → the maintainer: the Level 2 count reads a park as a change asked by the words "still red after two fixes", the text `driver/loop.py` writes; a change to that sentence would stop the count seeing it, and no test ties the two files together (#126). Before Level 2 is entered on the count.
+- **Hand-off** H08.5 → the maintainer: under `--permission-mode auto --allowedTools "Bash(echo:*)"` on 2.1.170 a session was not denied `echo driver > out.txt` (#118), which D03.13 records as denied under the same mode and version. Not looked into.
