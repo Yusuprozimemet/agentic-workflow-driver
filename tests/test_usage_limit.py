@@ -176,7 +176,8 @@ class UsageLimitTest(unittest.TestCase):
         starts = starts_of(folder)
         resumed = starts[1] if len(starts) > 1 else {"args": [], "at": 0, "stdin": ""}
         args, session = resumed["args"], session_of(folder)
-        self.assertEqual((code, len(starts), lines[1:]), (0, 2, [OPENED]))
+        self.assertEqual((code, len(starts), lines[-1:]), (0, 2, [OPENED]))
+        self.assertEqual(len(lines), 2)
         self.assertTrue(lines[0].startswith(WAITING) and lines[0].endswith("(session `<uuid>`)"))
         self.assertEqual(args[args.index("--resume") + 1 :][:1], [session])
         self.assertNotIn("--session-id", args)
@@ -192,7 +193,7 @@ class UsageLimitTest(unittest.TestCase):
         # The run's own issue is created too; the park's is the create call not titled "Driver run".
         creates = [c for c in read_calls(folder / "gh") if c[:2] == ["issue", "create"]]
         parks = [c for c in creates if not any("Driver run" in arg for arg in c)]
-        self.assertEqual((code, len(starts_of(folder)), lines[1:], len(parks)), (1, 2, [AGAIN], 1))
+        self.assertEqual((code, len(starts_of(folder)), lines[-1:], len(parks)), (1, 2, [AGAIN], 1))
 
     def test_far_reset_parks(self):
         # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
