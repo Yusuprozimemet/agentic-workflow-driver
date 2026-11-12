@@ -296,7 +296,10 @@ def steps(args, home, project, read_facts, config):
             record["pr"] = int(re.search(r"#(\d+)", step.line).group(1))
             line, code = wait_found(args, project, step.line, record)
         else:
-            record, command, prompt, reason = once.begin(args, home, project, config, step)
+            session, line = once.reached(args, home, project, config)
+            if line:
+                return once.refuse([line])
+            record, command, prompt, reason = once.begin(args, home, project, config, step, session)
             if reason:
                 return once.refuse([f"cannot read the project: {reason}"])
             count += 1
