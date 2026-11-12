@@ -9,7 +9,9 @@ import os
 import shutil
 import sys
 import unittest
+import uuid
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
@@ -25,6 +27,10 @@ from tests.test_preflight import HELP
 VERSION = {"tail": ["claude", "--version"], "stdout": "2.1.170 (Claude Code)\n"}
 HELP_ANSWER = {"tail": ["claude", "--help"], "stdout": HELP}
 PREFIX = "driver-probe-"
+# The two sessions' uuids, fixed for the case; the session's container answers with RESULT.
+FIRST = "11111111-1111-4111-8111-111111111111"
+SECOND = "22222222-2222-4222-8222-222222222222"
+RESULT = json.dumps({"type": "result", "is_error": False, "result": "done", "session_id": FIRST})
 # The probe's six lines on a container that can write where it should and cannot where it should
 # not: the first three refused, the last three written.
 EXPECTED = [
@@ -167,18 +173,30 @@ class ReachCheckTest(OnCase, unittest.TestCase):
         # second, it prints written /state, so the second step is refused and no second session runs.
         good = probe_stdout(EXPECTED)
         bad = probe_stdout([*EXPECTED[:2], "written /state", *EXPECTED[3:]])
-        self.box("on-two", run=[{"tail": PROBE, "answers": [{"stdout": good}, {"stdout": bad}]}])
-        code, _, err = self.run_steps("on")
+        self.box(
+            "on-two",
+            run=[
+                {"tail": PROBE, "answers": [{"stdout": good}, {"stdout": bad}]},
+                {"tail": ["--session-id", FIRST], "stdout": RESULT},
+            ],
+        )
+        # The session runs in its container (C10.15), so its uuid is the first of the two given.
+        with mock.patch("uuid.uuid4", side_effect=[uuid.UUID(FIRST), uuid.UUID(SECOND)]):
+            code, _, err = self.run_steps("on")
         starts = [record for record in self.run_log() if record.get("event") == "start"]
         probes = [name for name, _ in self.run_names()]
         # The first probe's uuid is the first session's: the run log's start line names it. Every
         # issue body names that session only, so none was opened or commented for a second one.
         first_uuid = probes[0][len(PREFIX) :] if probes else None
         # The counts first, so that a report holds no uuid and no folder.
-        sessions = sum("--session-id" in call["args"] for call in self.sessions())
+        sessions = sum(
+            name.startswith("driver-") and not name.startswith(PREFIX) for name in probes
+        )
         self.assertEqual((code, sessions, len(starts), len(self.probe_runs())), (2, 1, 1, 2))
         line = "cannot start: the session's container can write `/state`"
         self.assertEqual(err.splitlines()[-1:], [line])
         self.assertEqual(starts[0].get("session"), first_uuid)
-        self.assertEqual([name for name in probes if not name.startswith(PREFIX)], [])
+        self.assertEqual(
+            [name for name in probes if not name.startswith(PREFIX)], [f"driver-{FIRST}"]
+        )
         self.assertEqual([b for b in self.bodies() if f"session: {first_uuid}" not in b], [])
