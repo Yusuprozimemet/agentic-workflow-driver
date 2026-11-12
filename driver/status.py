@@ -200,15 +200,40 @@ def _cost(records):
     )
 
 
+def _container_opened(records, pr):
+    # The newest session that opened this pull request decides: the merge counts only when that
+    # session ran in a container.
+    ends = []
+    for record in records:
+        if record.get("event") == "end":
+            match = re.match(r"opened: #(\d+)", _text(record.get("outcome")))
+            if match and int(match.group(1)) == pr:
+                ends.append(record)
+    if not ends:
+        return False
+    session = ends[-1].get("session")
+    if session is None:
+        return False
+    starts = [
+        record
+        for record in records
+        if record.get("event") == "start" and record.get("session") == session
+    ]
+    return bool(starts) and bool(starts[-1].get("container"))
+
+
 def level_2_run(records):
-    # Counts back from the newest line until a merge asked for a change, a close, or a park that
-    # says a check is still red; any other line is passed over.
+    # Counts back from the newest line until a merge asked for a change, a merge whose pull request
+    # no container session opened, a close, or a park that says a check is still red; any other
+    # line is passed over.
     k = 0
     for record in reversed(records):
         event = record.get("event")
         line = _text(record.get("line"))
         if event == "merged":
             if record.get("changed") is not False:
+                break
+            if not _container_opened(records, record.get("pr")):
                 break
             k += 1
         elif event == "closed" or (event == "park" and "still red after two fixes" in line):

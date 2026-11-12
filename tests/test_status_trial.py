@@ -59,6 +59,13 @@ def after_cost(lines):
     return lines[found[0] + 1 :] if found else None
 
 
+def opened(pr):
+    # A container session that opened pull request pr. A merge without a change counts only with one.
+    begun = start(f"s{pr}", "Step A", T1)
+    begun["container"] = f"driver-s{pr}"
+    return [begun, end(f"s{pr}", f"opened: #{pr} from `b{pr}`", 0.1, 0)]
+
+
 class StatusTrialTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
@@ -153,7 +160,12 @@ class StatusTrialTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0)
 
     def test_level_2_count(self):
-        self.write_log([merged(1, False), red_park(), merged(2, False), merged(3, False)])
+        self.write_log(
+            opened(1)
+            + opened(2)
+            + opened(3)
+            + [merged(1, False), red_park(), merged(2, False), merged(3, False)]
+        )
         done = self.status()
         self.assertEqual(after_cost(done.stdout.splitlines()), [LEVEL_2.format(2)])
         self.assertEqual(done.returncode, 0)
@@ -166,7 +178,16 @@ class StatusTrialTest(unittest.TestCase):
         # Other parks do not end the count.
         ones = os.path.join(self.root, "ones")
         self.write_log(
-            [merged(1, False), one_off_park(), merged(2, False), one_off_park(), merged(3, False)],
+            opened(1)
+            + opened(2)
+            + opened(3)
+            + [
+                merged(1, False),
+                one_off_park(),
+                merged(2, False),
+                one_off_park(),
+                merged(3, False),
+            ],
             state=ones,
         )
         done = self.status(state=ones)
@@ -184,14 +205,21 @@ class StatusTrialTest(unittest.TestCase):
             with self.subTest(ender=name):
                 state = os.path.join(self.root, f"ender-{number}")
                 self.write_log(
-                    [merged(1, False), merged(2, False), ender, merged(3, False)], state=state
+                    opened(1)
+                    + opened(2)
+                    + opened(3)
+                    + [merged(1, False), merged(2, False), ender, merged(3, False)],
+                    state=state,
                 )
                 done = self.status(state=state)
                 self.assertEqual(done.stdout.splitlines()[-1], LEVEL_2.format(1))
                 self.assertEqual(done.returncode, 0)
 
         newest = os.path.join(self.root, "newest")
-        self.write_log([merged(1, False), merged(2, False), merged(9, None)], state=newest)
+        self.write_log(
+            opened(1) + opened(2) + [merged(1, False), merged(2, False), merged(9, None)],
+            state=newest,
+        )
         done = self.status(state=newest)
         self.assertEqual(done.stdout.splitlines()[-1], LEVEL_2.format(0))
         self.assertEqual(done.returncode, 0)
