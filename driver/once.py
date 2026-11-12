@@ -26,7 +26,7 @@ import time
 import uuid
 from collections import namedtuple
 
-from driver import github, issues, livecheck, lock, runlog, tree
+from driver import box, github, issues, livecheck, lock, runlog, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -344,7 +344,10 @@ def checked(args, home, project, read_facts, config):
     step = ready(args, project, read_facts, drift)
     if step.kind != "start":
         return stopped(args, project, step)
-    record, command, prompt, reason = begin(args, home, project, config, step)
+    session, line = reached(args, home, project, config)
+    if line:
+        return refuse([line])
+    record, command, prompt, reason = begin(args, home, project, config, step, session)
     if reason:
         return refuse([f"cannot read the project: {reason}"])
     done = one_session(command, prompt, args, project, record)
@@ -479,12 +482,23 @@ def open_record(args, project, sentence, session, open_list):
     return record, None
 
 
-def begin(args, home, project, config, step):
+def reached(args, home, project, config):
+    # The session's uuid, and with the container keys the probe that checks the session's folders
+    # first: a line from it refuses the start, before any issue is opened or any run log line made.
+    session = str(uuid.uuid4())
+    if "container_image" not in config:
+        return session, None
+    for folder in ("refusals", "claude"):
+        os.makedirs(os.path.join(args.state, folder), exist_ok=True)
+    image, secrets = config["container_image"], config["container_secrets"]
+    return session, box.reach(args.docker, image, secrets, home, args.state, project, session)
+
+
+def begin(args, home, project, config, step, session):
     # Everything a session needs before it starts: its uuid, the run's issue, the settings, the run
     # log's start line, the command and the prompt. Returns (record, command, prompt, None), or
     # (None, None, None, reason) when the run's issue could not be opened.
     sentence = step.sentence
-    session = str(uuid.uuid4())
     record, reason = open_record(args, project, sentence, session, step.open_list)
     if reason:
         return None, None, None, reason

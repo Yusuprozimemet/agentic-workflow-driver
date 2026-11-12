@@ -10,7 +10,8 @@ from pathlib import Path
 
 # The fake program: it records its arguments in calls.jsonl beside it, then answers from fake.json
 # beside it. A missing key prints nothing and exits 0; a `run` with no matching tail does the same;
-# any other first argument exits 99.
+# a `run` entry with `answers` gives its answers in turn: the n-th run with its tail gets the n-th.
+# Any other first argument exits 99.
 FAKE = """import json
 import sys
 from pathlib import Path
@@ -29,7 +30,15 @@ elif args[:1] == ["inspect"]:
 elif args[:1] == ["kill"]:
     answer = spec["kill"]
 elif args[:1] == ["run"]:
-    answer = next((run for run in spec["run"] if args[-len(run["tail"]) :] == run["tail"]), {})
+    run = next((run for run in spec["run"] if args[-len(run["tail"]) :] == run["tail"]), {})
+    if "answers" in run:
+        # The n-th run with this tail, this one included, gets answers[n - 1]; the last repeats.
+        tail = run["tail"]
+        recorded = (folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+        seen = sum(json.loads(line)["args"][-len(tail) :] == tail for line in recorded)
+        answer = run["answers"][min(seen, len(run["answers"])) - 1]
+    else:
+        answer = run
 else:
     sys.exit(99)
 sys.stdout.write(answer.get("stdout", ""))
