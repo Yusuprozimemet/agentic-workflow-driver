@@ -13,9 +13,12 @@ from pathlib import Path
 # a `run` entry with `answers` gives its answers in turn: the n-th run with its tail gets the n-th.
 # An answer may hold `files`, a dict of absolute host path -> text: the fake writes each (parents
 # created, as bytes) before it prints, as a session writes its transcript into the mounted state.
-# Any other first argument exits 99.
+# A run may hold `until_kill`, a container name: after its files the fake waits until docker is
+# asked `kill <name>`, then writes {"ended": "itself"} to ended.jsonl beside it; it gives up after
+# 30 s, with exit 1 and no line. Any other first argument exits 99.
 FAKE = """import json
 import sys
+import time
 from pathlib import Path
 
 folder = Path(__file__).resolve().parent
@@ -46,6 +49,19 @@ else:
 for path, text in answer.get("files", {}).items():
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     Path(path).write_bytes(text.encode("utf-8"))
+if "until_kill" in answer:
+    # The container runs until its kill is recorded; a kill that never comes fails the run in 30 s.
+    kill = ["kill", answer["until_kill"]]
+    deadline = time.monotonic() + 30
+    while True:
+        recorded = (folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+        if any(json.loads(line)["args"] == kill for line in recorded):
+            break
+        if time.monotonic() >= deadline:
+            sys.exit(1)
+        time.sleep(0.05)
+    with (folder / "ended.jsonl").open("ab") as ended:
+        ended.write(json.dumps({"ended": "itself"}).encode("utf-8") + b"\\n")
 sys.stdout.write(answer.get("stdout", ""))
 sys.stderr.write(answer.get("stderr", ""))
 sys.exit(answer.get("code", 0))
@@ -81,3 +97,11 @@ def docker_calls(folder):
     if not path.exists():
         return []
     return [json.loads(line)["args"] for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def docker_ended(folder):
+    # The lines the runs that ended by a kill wrote, one per run; none when no run ended so.
+    path = Path(folder) / "ended.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]

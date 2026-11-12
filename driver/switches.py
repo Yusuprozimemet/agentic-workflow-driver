@@ -1,9 +1,9 @@
 """halt, clear and off, the switches a person pulls with run-steps.py. halt writes <state>/halt and,
 when the lock names a live driver, kills that process's tree; it also kills a session the run log
-names as still alive. Then it reports on the run's issue from <state>/run.json. clear removes the
-halt file and a stale lock, and refuses while a driver lives. off closes the project's open "Driver
-run" issues, so the run ends after its current step. Each prints its lines and returns its exit
-code; none starts anything."""
+names as still alive, and the container the run log names for a session. Then it reports on the
+run's issue from <state>/run.json. clear removes the halt file and a stale lock, and refuses while a
+driver lives. off closes the project's open "Driver run" issues, so the run ends after its current
+step. Each prints its lines and returns its exit code; none starts anything."""
 
 import json
 import os
@@ -17,7 +17,7 @@ TREE = "halt: set; killed pid {} and the processes it started"
 REPORT_KEYS = ("project", "gh", "issue", "step", "session")
 
 
-def halt(state):
+def halt(state, docker="docker"):
     os.makedirs(state, exist_ok=True)
     with open(os.path.join(state, "halt"), "wb") as f:
         f.write(f"halted at {lock.now().strftime(lock.STAMP)}".encode())
@@ -41,6 +41,10 @@ def halt(state):
     tried = session is not None and runlog.live_session(state)[:2] == (session, pid)
     if tried and kill_session(session, pid) and not reported:
         _report(state)
+    # A container outlives the docker client that ran it, so the one the log names is killed too.
+    container_session, name = runlog.live_container(state)
+    if name and _kill_container(docker, container_session, name):
+        found = True
     if not found and not tried:
         print("halt: set; no driver is running")
     return code
@@ -100,6 +104,25 @@ def kill_session(session, pid):
         print(f"halt: set; killed session `{session}` (pid {pid}) and the processes it started")
         return True
     print(f"halt: set; could not kill session `{session}` (pid {pid}): {reason}")
+    return False
+
+
+def _kill_container(docker, session, name):
+    # True when the container is killed. One already gone is not said, since the session ended by
+    # itself; a failure is said, and changes no exit code: the halt file stands.
+    try:
+        done = once.kill_container(docker, name)
+    except OSError as exc:
+        reason = exc.strerror or str(exc)
+    else:
+        if done.returncode == 0:
+            print(f"halt: set; killed container `{name}` of session `{session}`")
+            return True
+        if "No such container" in done.stderr:
+            return False
+        lines = [line.strip() for line in done.stderr.splitlines() if line.strip()]
+        reason = lines[-1] if lines else f"docker exited {done.returncode}"
+    print(f"halt: set; could not kill container `{name}`: {reason}")
     return False
 
 

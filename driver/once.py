@@ -120,6 +120,8 @@ def stop_session(proc, args, project, number, record, stop_number):
     finally:
         sys.stdout.flush()
         sys.stderr.flush()
+        if record.get("container"):
+            end_container(proc, args.docker, record["container"])
         if os.name == "nt":
             subprocess.run(
                 ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
@@ -194,10 +196,27 @@ def descendants(pid):
     return found
 
 
-def kill_session(proc):
+def kill_container(docker, name):
+    # The container is killed by its name; the result says whether docker did it.
+    return subprocess.run([docker, "kill", name], capture_output=True, text=True, check=False)
+
+
+def end_container(proc, docker, name):
+    # Killing the docker client leaves the container running, so the container is killed first: the
+    # client then ends by itself. A docker that cannot run is left to the tree kill that follows.
+    try:
+        kill_container(docker, name)
+        proc.wait(timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def kill_session(proc, docker=None, name=None):
     # Kills the session's tree. Not killpg: the session stays in the driver's own process group so
     # that `halt` still kills it (Day 3, "The tree"), and killing that group here would kill the
     # driver before it can park.
+    if name is not None:
+        end_container(proc, docker, name)
     if os.name == "nt":
         subprocess.run(
             ["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, check=False
@@ -242,7 +261,7 @@ def run_session(command, prompt, args, project, number, record):
             # Passing the input again raises ValueError, so later calls send none.
             data = None
             if time.monotonic() >= deadline:
-                kill_session(proc)
+                kill_session(proc, args.docker, record.get("container"))
                 return PAST
         open_list, reason = issues.open_issues(project, args.gh)
         if reason:
@@ -347,7 +366,7 @@ def checked(args, home, project, read_facts, config):
     reason = settle(args, project)
     if reason:
         return refuse([f"cannot read the project: {reason}"])
-    step = ready(args, project, read_facts, drift)
+    step = ready(args, project, read_facts, drift, "container_image" in config)
     if step.kind != "start":
         return stopped(args, project, step)
     session, line = reached(args, home, project, config)
@@ -364,7 +383,22 @@ def checked(args, home, project, read_facts, config):
     return finish(args, home, project, started, record, line, code, step.open_list)
 
 
-def ready(args, project, read_facts, drift):
+def container_running(docker, name):
+    # True when docker says the container runs. A docker that cannot run says it does not, so the
+    # rows below decide as they do without a container.
+    try:
+        done = subprocess.run(
+            [docker, "inspect", "--format", "{{.State.Running}}", name],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return done.stdout.strip() == "true"
+
+
+def ready(args, project, read_facts, drift, boxed=False):
     # The step --once would reach, as a Ready. Nothing is printed and no park issue is opened here:
     # stopped() and finish() do both, so that `on` ends its run through the same lines.
     halt = os.path.join(args.state, "halt")
@@ -385,6 +419,13 @@ def ready(args, project, read_facts, drift):
     if live:
         line = f"wait: session `{live}` is still running (pid {pid})"
         return Ready("running", line, 0, None, open_list)
+    # A session in a container may outlive its docker client, so a gone pid does not end the wait
+    # while docker says the container runs.
+    if boxed:
+        session, name = runlog.live_container(args.state)
+        if name and container_running(args.docker, name):
+            line = f"wait: session `{session}` is still running (container `{name}`)"
+            return Ready("running", line, 0, None, open_list)
     # A start that took over a lock with no log has nothing to say what the last driver left.
     old = lock.took_over(args.state)
     if old is not None and not os.path.exists(runlog.path(args.state)):

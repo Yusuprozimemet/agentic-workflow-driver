@@ -136,7 +136,7 @@ def main(argv=None) -> int:
         return loop.run(args, Path(__file__).resolve().parent, read_facts)
     # halt and clear touch only the state folder, so they run with no project and no config.
     if args.command == "halt":
-        return switches.halt(args.state)
+        return switches.halt(args.state, args.docker)
     if args.command == "clear":
         return switches.clear(args.state)
     # live-check needs no project or config either: it runs the driver's own tests.

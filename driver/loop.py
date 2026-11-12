@@ -270,7 +270,7 @@ def steps(args, home, project, read_facts, config):
             lines, drift = kit_lines(project)
             if lines:
                 return end("\n".join(lines), 2)
-        step = once.ready(args, project, read_facts, drift)
+        step = once.ready(args, project, read_facts, drift, "container_image" in config)
         open_list = step.open_list
         if step.kind == "running":
             # Row 2: said once. Each poll reads the table again; row 1 or the row below ends it.

@@ -273,6 +273,28 @@ def live_session(state):
     return None, None, None
 
 
+def live_container(state):
+    # Returns (session, name) for the newest session whose last pid line names a container and has
+    # no later end line, whether or not its process lives: a container outlives its docker client,
+    # so a gone pid does not end it. (None, None) when none does, when there is no log, or when the
+    # log cannot be read.
+    records, reason = read(state)
+    if reason:
+        return None, None
+    # Read from the end, as live_session does. A pid line without a container ends its session's
+    # search here too: that session's first pid line met is its last.
+    closed = []
+    for record in reversed(records or []):
+        session = record.get("session")
+        if record.get("event") == "end":
+            closed.append(session)
+        elif record.get("event") == "pid" and session not in closed:
+            if "container" in record:
+                return session, record["container"]
+            closed.append(session)
+    return None, None
+
+
 def last_session(state, prefix):
     # The newest session started for prefix, or None: also when the log cannot be read, since a
     # park's body only names it.
