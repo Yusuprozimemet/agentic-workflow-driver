@@ -320,12 +320,11 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
 - [ ] C10.18 **hold** — Without the container keys, the run log's lines keep their keys:
       `python -m unittest tests.test_runlog tests.test_runlog_fix tests.test_once_outcome` passes
       with the files unedited.
-- [ ] C10.19 **new** — Without the container keys the driver never runs Docker: on a config with
+- [ ] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
       neither key, `--once` and `on` run with a `--docker` that records every call and exits 1,
       reach the outcomes of `tests.test_once_run`'s first case and `tests.test_on`'s first case,
-      and the fake records no call.
-      Red today: `run-steps.py` rejects `--docker` (exit 2), until Track A; then the test does
-      not exist until D1.
+      and the fake records no call. True since Track A added `--docker`; Track D1 adds the test
+      and breaks it once (D10.12).
       Test: `BoxSessionTest.test_no_keys_no_docker`.
 - [ ] C10.20 **new** — As C10.15, on a fake session that sleeps until the fake `docker` is asked
       `kill driver-<uuid>`, then exits by itself: past `--session-minutes` the fake records that
@@ -538,6 +537,11 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
 - **Defect** D10.11 — found: auditor · cause: spec · made: Day 10 · the image's base and Python
   were not the spike's: bookworm's system Python refuses `pip install`, and no user was named; now
   trixie, `/opt/venv` and `USER node`, as the spike's (this spec-change PR).
+- **Defect** D10.12 — found: seen red · cause: spec · made: Day 10 · D10.6 tagged C10.19 `new` for a
+  red that lasted only until Track A: once `--docker` was accepted, the driver ran no Docker
+  without the keys, so the test passed on `main` before Track D1, and "Track tests seen red"
+  failed D1's PR (#153) on it. Now `hold`; its red before Track A was seen on 495bf69
+  (`SystemExit: 2`), and #153 breaks it once ("docker asked without the container keys").
 - **Hand-off** H10.1 → Day 12: `live-check` runs on the PC's Claude Code; the image is only
   checked to be at a version it listed (C10.9). Whether the level 2 merge needs `live-check` run in
   the image is Day 12's call.
