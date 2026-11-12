@@ -162,7 +162,7 @@ the trial's project ran in the container and opened its pull request.
 | C1 | | Docker, the image, the secrets file and the image's Claude Code checked before a session; `tests/fake_docker.py`: C10.8–C10.9 |
 | C2 | | `hooks/probe.py`, `driver.box.reach`, the reach check before each session: C10.10–C10.14 |
 | D1 | | Sessions start in the container; the run log's `container`; the transcripts' folder: C10.15–C10.19 |
-| D2 | | `docker kill` past the bound, on STOP and on `halt`; Recovery waits on a running container: C10.20–C10.23 |
+| D2 | | `docker kill` past the bound, on STOP and on `halt`; Recovery waits on a running container: C10.20–C10.23, C10.32 |
 | E | | `status`'s level 2 count from container sessions only: C10.24–C10.26 |
 | F | | `setup-check.py`'s bypass line: C10.27–C10.29 |
 | G | | The first step in the container, on the trial's project: C10.30 |
@@ -345,10 +345,9 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
 - [ ] C10.22 **new** — Recovery waits on a running container: with the container keys, a run log
       whose newest `pid` line names `"container": "driver-s1"` and a pid that is gone, with the
       fake's `inspect` printing "true", makes `--once` print "wait: session `s1` is still running
-      (container `driver-s1`)" and exit 0, starting nothing; with `inspect` printing "false" or
-      exiting 1 with "error: no such object: driver-s1", the row as today (Day 7's crash park).
+      (container `driver-s1`)" and exit 0, starting nothing.
       Red today: a gone pid is a gone session; the crash park is printed.
-      Test: `BoxRecoveryTest.test_running_container_waits`, `BoxRecoveryTest.test_stopped_container_parks`.
+      Test: `BoxRecoveryTest.test_running_container_waits`.
 - [ ] C10.23 **hold** — Without a `container` on the `pid` line, sessions are killed and Recovery
       reads as before: `python -m unittest tests.test_session_bound tests.test_once_stop
       tests.test_halt tests.test_halt_race tests.test_once_halt tests.test_recovery_table
@@ -415,6 +414,12 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       taken out.
       broken: a byte added to driver/decide.py → import re (#148)
       Replaces: C08.1 — was: the files Day 8 does not change are unchanged since `f9f43fd`, over a list that holds `driver/settings.py`, `driver/config.py`, `driver/preflight.py` and `hooks`.
+- [ ] C10.32 **hold** — Recovery parks on a stopped container as on a gone pid: with the container
+      keys, the run log of C10.22, and the fake's `inspect` printing "false" or exiting 1 with
+      "error: no such object: driver-s1", `--once` prints Day 7's crash park, "park: the run log
+      names session `s1` for this step, with no end", exits 1 and prints no wait line. True on
+      `main` since Day 7; Track D2 adds the test and breaks it once (D10.13).
+      Test: `BoxRecoveryTest.test_stopped_container_parks`.
 
 ## Verify
 ```bash
@@ -542,6 +547,11 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   without the keys, so the test passed on `main` before Track D1, and "Track tests seen red"
   failed D1's PR (#153) on it. Now `hold`; its red before Track A was seen on 495bf69
   (`SystemExit: 2`), and #153 breaks it once ("docker asked without the container keys").
+- **Defect** D10.13 — found: seen red · cause: spec · made: Day 10 · C10.22 was tagged `new` over
+  two tests, but its second half, the crash park on a stopped or missing container, is Day 7's
+  row unchanged, so `BoxRecoveryTest.test_stopped_container_parks` passed on `main` and "Track
+  tests seen red" failed Track D2's PR (#155) on it. That half is now C10.32, `hold`; #155 breaks
+  it once ("Recovery waited on a stopped container").
 - **Hand-off** H10.1 → Day 12: `live-check` runs on the PC's Claude Code; the image is only
   checked to be at a version it listed (C10.9). Whether the level 2 merge needs `live-check` run in
   the image is Day 12's call.
