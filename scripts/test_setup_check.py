@@ -34,14 +34,16 @@ def fake(**answers):
     """A gh_api answering a set-up repository, with each keyword replacing one path's answer."""
     paths = {
         "protection": (200, {"required_status_checks": {"contexts": list(setup_check.REQUIRED) + [PROJECT_TESTS]},
-                             "required_pull_request_reviews": {}}),
+                             "required_pull_request_reviews": {}, "enforce_admins": {"enabled": True}}),
         "rules": (200, []),
+        "ruleset": (200, {"id": 7, "bypass_actors": []}),
         "variable": (200, {"name": "TRACK_RED_RUNNER", "value": "pytest"}),
         "shared": (200, {"total_count": 0, "variables": []}),
         "pages": (200, {"build_type": "workflow", "html_url": "https://me.github.io/project/"}),
     }
     paths.update(answers)
     keys = {f"repos/{REPO}/branches/main/protection": "protection", f"repos/{REPO}/rules/branches/main": "rules",
+            f"repos/{REPO}/rulesets/7": "ruleset",
             f"repos/{REPO}/actions/variables/TRACK_RED_RUNNER": "variable",
             f"repos/{REPO}/actions/organization-variables": "shared", f"repos/{REPO}/pages": "pages"}
     return lambda path: paths[keys[path]]
@@ -60,18 +62,19 @@ class ProtectionTest(unittest.TestCase):
 
     def test_an_unprotected_main_fails_each_required_check_by_name(self):
         lines = setup_check.protection_lines(REPO, fake(protection=(404, ["gh: Branch not protected (HTTP 404)"])))
-        self.assertEqual(len(failed(lines)), len(setup_check.REQUIRED) + 2)
+        self.assertEqual(len(failed(lines)), len(setup_check.REQUIRED) + 3)
         self.assertIn('main requires "A closed day\'s evidence replays": not required', failed(lines))
         self.assertIn("main: a pull request before merging: not required", failed(lines))
 
     def test_one_missing_check_fails_that_line_alone(self):
         contexts = [c for c in setup_check.REQUIRED if c != "Track tests seen red"] + [PROJECT_TESTS]
-        lines = setup_check.protection_lines(REPO, fake(protection=(
-            200, {"required_status_checks": {"contexts": contexts}, "required_pull_request_reviews": {}})))
+        lines = setup_check.protection_lines(REPO, fake(protection=(200, {
+            "required_status_checks": {"contexts": contexts}, "required_pull_request_reviews": {},
+            "enforce_admins": {"enabled": True}})))
         self.assertEqual(failed(lines), ['main requires "Track tests seen red": not required'])
 
     def test_a_ruleset_protects_main_as_well_as_classic_protection(self):
-        rules = [{"type": "pull_request", "parameters": {}},
+        rules = [{"type": "pull_request", "ruleset_id": 7, "parameters": {}},
                  {"type": "required_status_checks", "parameters": {"required_status_checks": [
                      {"context": c} for c in setup_check.REQUIRED + (PROJECT_TESTS,)]}}]
         lines = setup_check.protection_lines(REPO, fake(protection=(404, ["(HTTP 404)"]), rules=(200, rules)))
@@ -80,13 +83,15 @@ class ProtectionTest(unittest.TestCase):
     def test_checks_named_in_the_checks_list_count(self):
         checks = [{"context": c, "app_id": 15368} for c in setup_check.REQUIRED + (PROJECT_TESTS,)]
         lines = setup_check.protection_lines(REPO, fake(protection=(
-            200, {"required_status_checks": {"contexts": [], "checks": checks}, "required_pull_request_reviews": {}})))
+            200, {"required_status_checks": {"contexts": [], "checks": checks}, "required_pull_request_reviews": {},
+                  "enforce_admins": {"enabled": True}})))
         self.assertEqual(failed(lines), [])
 
     def test_the_kit_checks_alone_leave_the_project_tests_unrequired(self):
         contexts = list(setup_check.REQUIRED + setup_check.OPTIONAL)
         lines = setup_check.protection_lines(REPO, fake(protection=(
-            200, {"required_status_checks": {"contexts": contexts}, "required_pull_request_reviews": {}})))
+            200, {"required_status_checks": {"contexts": contexts}, "required_pull_request_reviews": {},
+                  "enforce_admins": {"enabled": True}})))
         self.assertEqual(failed(lines), ["main requires the project's tests: no required check beyond the kit's"])
 
     def test_a_setting_that_cannot_be_read_fails_and_says_why(self):
