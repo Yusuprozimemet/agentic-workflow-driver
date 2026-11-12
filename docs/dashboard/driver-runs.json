@@ -1,10 +1,11 @@
 {
-"counted":"2026-11-12T13:04:25+01:00",
+"counted":"2026-11-13T00:28:47+01:00",
 "level_2":{"run":0,"of":15},
 "steps":[
 {"step":"Day 13 Track A: C13.1–C13.3, C13.8–C13.9: `bearing/cli.py`, `tests/test_stderr.py`","day":13,"prefix":"day-13/track-a","sessions":[{"session":"a6f2d88b-f440-421b-8d1a-863e2e925f2c","start":"2026-11-10T23:16:41Z","end":"2026-11-10T23:31:48Z","cost":0.896,"denials":1,"fixes":0,"crashed":false}],"fixes":0,"crashes":0,"pr":90,"merged":"2026-11-10T23:32:54Z","parks":[],"ended":"merged"},
 {"step":"Day 13 Track B: C13.4–C13.6: `bearing/cli.py`, `tests/test_ingest_limit.py`","day":13,"prefix":"day-13/track-b","sessions":[{"session":"0106d415-fedd-4137-a29a-7cd97104e66b","start":"2026-11-10T23:35:00Z","end":"2026-11-10T23:44:40Z","cost":0.7278,"denials":0,"fixes":0,"crashed":false}],"fixes":0,"crashes":0,"pr":91,"merged":"2026-11-10T23:46:18Z","parks":[],"ended":"merged"},
 {"step":"Day 13: the closing PR","day":13,"prefix":"day-13/close-the-day","sessions":[{"session":"8bef3bb2-7739-40b8-875e-4552641818d1","start":"2026-11-10T23:47:55Z","end":null,"cost":0.0,"denials":0,"fixes":0,"crashed":true},{"session":"66eeef24-3658-4b65-96c0-47beff5fb4e2","start":"2026-11-11T00:00:59Z","end":"2026-11-11T00:20:40Z","cost":1.1593,"denials":0,"fixes":0,"crashed":false}],"fixes":0,"crashes":1,"pr":96,"merged":"2026-11-11T00:31:46Z","parks":[{"at":"2026-11-10T23:56:17Z","line":"park: the run log names session `8bef3bb2-7739-40b8-875e-4552641818d1` for this step, with no end","by":"fault"}],"ended":"parked"},
-{"step":"Every day is done.","day":null,"prefix":null,"sessions":[],"fixes":0,"crashes":0,"pr":null,"merged":null,"parks":[{"at":"2026-11-11T00:33:55Z","line":"park: every day is done","by":"maintainer"}],"ended":"parked"}
+{"step":"Every day is done.","day":null,"prefix":null,"sessions":[],"fixes":0,"crashes":0,"pr":null,"merged":null,"parks":[{"at":"2026-11-11T00:33:55Z","line":"park: every day is done","by":"maintainer"}],"ended":"parked"},
+{"step":"Day 14 Track A: C14.1–C14.3: `bearing/ingest/text.py`, `tests/test_sentences.py`","day":14,"prefix":"day-14/track-a","sessions":[{"session":"2d6771a4-63cb-4a41-b0ef-3da00a7fc3fb","start":"2026-11-12T23:14:39Z","end":"2026-11-12T23:21:05Z","cost":0.5558,"denials":1,"fixes":0,"crashed":false}],"fixes":0,"crashes":0,"pr":101,"merged":null,"parks":[],"ended":"open"}
 ]
 }
