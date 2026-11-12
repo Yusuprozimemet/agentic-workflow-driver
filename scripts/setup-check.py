@@ -4,8 +4,8 @@
     python scripts/setup-check.py --kit                  # the kit itself: its placeholders stay
 
 The items are the README's "Starting a project from it": on `main`, a pull request before merging
-and each check in REQUIRED required by name (classic branch protection or a ruleset, either
-counts), and one more required check, the project's own tests; the repository variable
+with no one allowed to bypass the rules, and each check in REQUIRED required by name (classic
+branch protection or a ruleset, either counts), and one more required check, the project's own tests; the repository variable
 TRACK_RED_RUNNER set to a runner track-red.py knows, or a command holding `{test}`; GitHub Pages built by GitHub Actions; and no
 `<!-- PROJECT` placeholder left in a tracked Markdown file outside kit/ (in backticks, a placeholder
 is named, not left). The `PROJECT:` comments in code are notes that stay, and are not counted.
@@ -66,6 +66,32 @@ def unreadable(what, status, body):
     return [("FAIL", f"{what}: cannot read: {reason}")]
 
 
+def bypass_line(repo, gh, classic, rules):
+    """One line: no one may bypass the rules on `main`. Classic enforce_admins says so; so does a
+    ruleset whose bypass_actors is empty. The rulesets are read only when classic protection does
+    not say so already."""
+    ok = ("ok", "main: no one may bypass the rules")
+    if (classic.get("enforce_admins") or {}).get("enabled"):
+        return ok
+    unreadable_lines, hidden_lines = [], []
+    for rule in rules or []:
+        ruleset_id = rule.get("ruleset_id")
+        if rule.get("type") != "pull_request" or ruleset_id is None:
+            continue
+        status, body = gh(f"repos/{repo}/rulesets/{ruleset_id}")
+        if status != 200:
+            unreadable_lines.append(unreadable(f"main's ruleset {ruleset_id}", status, body)[0])
+        elif "bypass_actors" not in body:
+            hidden_lines.append(("FAIL", f"main's ruleset {ruleset_id}: cannot read: bypass_actors not shown (needs admin)"))
+        elif not body["bypass_actors"]:
+            return ok
+    if unreadable_lines:
+        return unreadable_lines[0]
+    if hidden_lines:
+        return hidden_lines[0]
+    return ("FAIL", 'main: administrators may bypass the rules; turn on "Do not allow bypassing the above settings"')
+
+
 def protection_lines(repo, gh):
     """Pull request before merging and the required checks on `main`, from both kinds of rule."""
     what = "branch protection on main"
@@ -87,6 +113,7 @@ def protection_lines(repo, gh):
             required |= {c["context"] for c in rule["parameters"]["required_status_checks"]}
     lines = [("ok" if pull_request else "FAIL", "main: a pull request before merging"
               + ("" if pull_request else ": not required"))]
+    lines.append(bypass_line(repo, gh, classic, rules))
     for name in REQUIRED:
         lines.append(("ok", f'main requires "{name}"') if name in required
                      else ("FAIL", f'main requires "{name}": not required'))
