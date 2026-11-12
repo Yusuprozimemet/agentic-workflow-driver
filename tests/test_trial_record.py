@@ -125,7 +125,10 @@ class TrialRecordTest(unittest.TestCase):
         cost = self.section("Cost")
         cost_lines = cost.split("\n")
         self.assertTrue(status._cost(records) in cost_lines, msg="cost line missing from Cost")
-        self.assertTrue(status._level_2(records) in cost_lines, msg="level 2 line missing")
+        self.assertEqual(
+            status._level_2(records),
+            "level 2: 0 of 15 pull requests in a row merged without a change asked",
+        )
         steps = self.section("Steps").split("\n")
         for line in status._steps(records):
             self.assertTrue(line in steps, msg="steps line missing from Steps")

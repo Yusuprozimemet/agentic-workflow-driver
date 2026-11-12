@@ -176,7 +176,7 @@ class WriteTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             out = os.path.join(root, "driver-runs.json")
             # merged() gives no "changed"; Level 2 counts a merge only when it says the head did not change.
-            records = [start("s1", 0), end("s1", 20), dict(merged(30), changed=False), park(31, step=TRACK_B)]
+            records = [dict(start("s1", 0), container="driver-s1"), end("s1", 20, outcome="opened: #12 from `b12`"), dict(merged(30), changed=False), park(31, step=TRACK_B)]
             lines = [json.dumps(r) + "\n" for r in records]
             code, said, _ = self.run_main(root, lines, "--out", out)
             with open(out, "rb") as f:

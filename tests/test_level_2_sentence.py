@@ -44,7 +44,14 @@ class Level2SentenceTest(unittest.TestCase):
         self.assertEqual(parks[0]["line"], line)
         park = parks[0]
         merged = [{"event": "merged", "pr": n, "changed": False} for n in (13, 14)]
+        # Both merges were opened in a container, so the count only stops on the park.
+        sessions = [
+            {"event": "start", "session": "s13", "step": "Step A", "container": "driver-s13"},
+            {"event": "end", "session": "s13", "outcome": "opened: #13 from `b13`"},
+            {"event": "start", "session": "s14", "step": "Step A", "container": "driver-s14"},
+            {"event": "end", "session": "s14", "outcome": "opened: #14 from `b14`"},
+        ]
         # The park line is the newest, so the count stops on it before any merge.
-        self.assertEqual(status.level_2_run(merged + [park]), 0)
+        self.assertEqual(status.level_2_run(sessions + merged + [park]), 0)
         # The park line is the oldest, so both merges count before the count reaches it.
-        self.assertEqual(status.level_2_run([park] + merged), 2)
+        self.assertEqual(status.level_2_run(sessions + [park] + merged), 2)
