@@ -222,7 +222,13 @@ def run_session(command, prompt, args, project, number, record):
     proc = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=os.path.realpath(project)
     )
-    runlog.pid(args.state, record["session"], proc.pid, lock.now().strftime(lock.STAMP))
+    runlog.pid(
+        args.state,
+        record["session"],
+        proc.pid,
+        lock.now().strftime(lock.STAMP),
+        container=record.get("container"),
+    )
     deadline = time.monotonic() + args.session_minutes * 60
     data = prompt.encode("utf-8")
     while True:
@@ -505,12 +511,27 @@ def begin(args, home, project, config, step, session):
     # The settings are written afresh, and the start line is in the log before the session runs.
     settings_path = driver_settings.write(args.state, home)
     path = shutil.which(args.claude)
-    version = livecheck.version(path)
+    boxed = "container_image" in config
+    if boxed:
+        # The session runs in a container named for it: its Claude Code is the image's, and its
+        # settings and rules are the copies the container mounts.
+        image = config["container_image"]
+        record["container"] = f"driver-{session}"
+        driver_settings.write(args.state, home, inside=True)
+        version = livecheck.version(*image_claude(args.docker, image))
+    else:
+        version = livecheck.version(path)
     runlog.start(
-        args.state, sentence, classify(sentence).prefix, session, version, issue=record["issue"]
+        args.state,
+        sentence,
+        classify(sentence).prefix,
+        session,
+        version,
+        issue=record["issue"],
+        container=record.get("container"),
     )
     command = [
-        path,
+        "claude" if boxed else path,
         "-p",
         "--model",
         args.model,
@@ -522,12 +543,25 @@ def begin(args, home, project, config, step, session):
         "auto",
         "--strict-mcp-config",
         "--settings",
-        settings_path,
+        "/state/container-settings.json" if boxed else settings_path,
         "--append-system-prompt-file",
-        os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
+        "/driver/rules/session.md"
+        if boxed
+        else os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
         "--session-id",
         session,
     ]
+    if boxed:
+        command = box.command(
+            args.docker,
+            image,
+            config["container_secrets"],
+            home,
+            args.state,
+            project,
+            record["container"],
+            command,
+        )
     # The prompt is on stdin, not in an argument: cmd.exe drops a newline and what follows it.
     prompt = (
         f"Next step: {sentence}\n"
@@ -536,10 +570,22 @@ def begin(args, home, project, config, step, session):
     return record, command, prompt, None
 
 
-def limit_reset(session):
+def transcripts(args, record):
+    # The folder the session's CLI keeps its transcript in, when the session runs in a container:
+    # the container's config folder is <state>/claude. None reads the PC's own folder.
+    if record.get("container"):
+        return os.path.join(args.state, "claude")
+    return None
+
+
+def limit_reset(session, folder=None):
     # The resetsAt of the session's transcript when its last assistant record is the usage limit,
     # else None. The CLI writes the transcript, one JSON object per line, under its config folder.
-    config = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+    config = folder
+    if config is None:
+        config = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(
+            os.path.expanduser("~"), ".claude"
+        )
     pattern = os.path.join(glob.escape(config), "projects", "*", f"{session}.jsonl")
     for path in glob.glob(pattern):
         try:
@@ -627,7 +673,7 @@ def usage_limit(command, args, project, record, out, reset):
     if halted:
         say(halted, 1)
         return halted, 1
-    if limit_reset(session) is not None:
+    if limit_reset(session, transcripts(args, record)) is not None:
         line, code = f"park: the usage limit was reached (session `{session}`)", 1
     else:
         line, code = outcome(out, returncode, session, project, args.gh, record["step"])
@@ -652,7 +698,7 @@ def one_session(command, prompt, args, project, record):
         return halted, 1
     out = stdout.decode("utf-8", errors="replace")
     # A session that hit the usage limit is waited for and resumed, or parked, before its outcome.
-    reset = limit_reset(record["session"])
+    reset = limit_reset(record["session"], transcripts(args, record))
     if reset is not None:
         return usage_limit(command, args, project, record, out, reset)
     line, code = outcome(out, returncode, record["session"], project, args.gh, record["step"])

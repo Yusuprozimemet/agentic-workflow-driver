@@ -22,7 +22,7 @@ def stamp():
     return datetime.datetime.now(datetime.UTC).strftime(STAMP)
 
 
-def start(state, step, prefix, session, claude, issue=None):
+def start(state, step, prefix, session, claude, issue=None, container=None):
     record = {
         "event": "start",
         "at": stamp(),
@@ -35,6 +35,9 @@ def start(state, step, prefix, session, claude, issue=None):
     # its keys; issue_cost reads it to show the run's issue what the run has cost.
     if issue is not None:
         record["issue"] = issue
+    # The container goes after the issue, last, and only when the session runs in one.
+    if container is not None:
+        record["container"] = container
     append(state, record)
 
 
@@ -88,12 +91,14 @@ def fix(state, session, pr, n):
     append(state, {"event": "fix", "at": stamp(), "session": session, "pr": pr, "n": n})
 
 
-def pid(state, session, pid, started):
+def pid(state, session, pid, started, container=None):
     # Written right after the process starts, a first session or a resume: live_session reads it
     # after a crash, with lock.lives, so a reused pid counts as gone.
-    append(
-        state, {"event": "pid", "at": stamp(), "session": session, "pid": pid, "started": started}
-    )
+    record = {"event": "pid", "at": stamp(), "session": session, "pid": pid, "started": started}
+    # container goes last, and only when the session runs in one, as start's issue does.
+    if container is not None:
+        record["container"] = container
+    append(state, record)
 
 
 def append(state, record):

@@ -11,6 +11,8 @@ from pathlib import Path
 # The fake program: it records its arguments in calls.jsonl beside it, then answers from fake.json
 # beside it. A missing key prints nothing and exits 0; a `run` with no matching tail does the same;
 # a `run` entry with `answers` gives its answers in turn: the n-th run with its tail gets the n-th.
+# An answer may hold `files`, a dict of absolute host path -> text: the fake writes each (parents
+# created, as bytes) before it prints, as a session writes its transcript into the mounted state.
 # Any other first argument exits 99.
 FAKE = """import json
 import sys
@@ -41,6 +43,9 @@ elif args[:1] == ["run"]:
         answer = run
 else:
     sys.exit(99)
+for path, text in answer.get("files", {}).items():
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_bytes(text.encode("utf-8"))
 sys.stdout.write(answer.get("stdout", ""))
 sys.stderr.write(answer.get("stderr", ""))
 sys.exit(answer.get("code", 0))
