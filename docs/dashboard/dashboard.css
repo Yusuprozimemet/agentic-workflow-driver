@@ -479,3 +479,24 @@ button.pg-day.on { font-weight: 700; color: var(--ink); }
 .pg-ladder td.s3 { background: var(--s3); color: var(--on-s34); } .pg-ladder td.s4 { background: var(--s4); color: var(--on-s34); }
 .pg-ladder tr.due th { color: var(--repair); font-weight: 600; } .pg-ladder tr.rule th { color: var(--muted); font-style: italic; }
 @media (prefers-reduced-motion: no-preference) { .dim, .how-step, .how-row { transition: opacity .15s, background .12s; } }
+
+/* the quality score, under the "Now" line */
+.quality { padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
+.q-top { display: flex; flex-wrap: wrap; gap: 14px 36px; align-items: center; }
+.q-num { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.q-num b { font: 700 64px/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.q-num small { font-size: 12px; color: var(--muted); }
+.q-rows { flex: 1 1 420px; min-width: 0; display: grid; gap: 2px; }
+.q-row { display: grid; grid-template-columns: minmax(120px, 210px) minmax(60px, 1fr) 28px minmax(0, 120px); gap: 12px; align-items: center; padding: 4px 6px; border-radius: 5px; color: var(--ink); text-decoration: none; font-size: 13px; }
+.q-row:hover, .q-row:focus-visible { background: var(--wash); }
+.q-row b { font-family: var(--mono); font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+.q-where { font-size: 12px; color: var(--link); text-decoration: underline; }
+.q-low { font-size: 11px; color: var(--ink-2); border: 1px solid var(--repair); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+.q-bar { display: block; height: 8px; background: var(--wash); border-radius: 4px; overflow: hidden; }
+.q-bar i { display: block; height: 100%; background: var(--bar); border-radius: 4px; }
+.quality .limit { margin: 10px 0 4px; }
+.days button .dq { margin-left: 7px; font: 500 12px var(--mono); opacity: .75; font-variant-numeric: tabular-nums; }
+.ab-score { flex: 0 0 74px; display: flex; align-items: center; gap: 6px; }
+.ab-score b { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
+.ab-score .q-bar { flex: 1; height: 6px; }
+@media (max-width: 560px) { .q-row { grid-template-columns: 1fr 28px; } .q-row .q-bar { grid-column: 1 / -1; grid-row: 2; } .q-where { grid-column: 1 / -1; } }

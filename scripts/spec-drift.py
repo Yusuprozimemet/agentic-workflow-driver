@@ -75,6 +75,7 @@ from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
+from spec_drift_score import quality_score
 
 
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
@@ -107,7 +108,7 @@ CAVEATS = [
 # (load_cache) and counts as the script edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
            "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
-           "spec_drift_plan.py")
+           "spec_drift_plan.py", "spec_drift_score.py")
 
 
 def load_cache(path):
@@ -252,6 +253,7 @@ def main():
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
                               phases=phases(plan), stops=stops(plan)))
+        real["score"] = quality_score(real)
         if args.build:
             # The re-check rows are on the data branch, every other file the panel quotes on main.
             how_read = lambda path: (data_text("replay-history.json") or "") if path == HOW_REPLAY else blobs.read(head, path)  # noqa: E731
