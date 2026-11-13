@@ -653,6 +653,10 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   row unchanged, so `BoxRecoveryTest.test_stopped_container_parks` passed on `main` and "Track
   tests seen red" failed Track D2's PR (#155) on it. That half is now C10.32, `hold`; #155 breaks
   it once ("Recovery waited on a stopped container").
+- **Defect** D10.26 — found: evidence replay · cause: spec · made: Day 10 · C10.19 named
+  "`tests.test_once_run`'s first case" and "`tests.test_on`'s", which the replay reads as tests
+  `test_once_run` and `test_on` of a class `tests` and fails "not defined"; the close's
+  rehearsal (#160) caught it, and C10.19 now names the files by path, its meaning unchanged.
 - **Hand-off** H10.1 → Day 12: `live-check` runs on the PC's Claude Code; the image is only
   checked to be at a version it listed (C10.9). Whether the level 2 merge needs `live-check` run in
   the image is Day 12's call.
@@ -712,10 +716,6 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   passed on this machine with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322`.
 - Track G opened bearing #101 from the container and left it open for the maintainer; its record
   is `docs/trial/day-10.md`.
-- **Defect** D10.26 — found: evidence replay · cause: spec · made: Day 10 · C10.19 named
-  "`tests.test_once_run`'s first case" and "`tests.test_on`'s", which the replay reads as tests
-  `test_once_run` and `test_on` of a class `tests` and fails "not defined"; the close names the
-  files by path, the meaning unchanged.
 - The blind relabel (`scripts/relabel.py`), run again after D10.26, agreed on 26 of 26 stages,
   24 of 26 causes and 26 of 26 `made:`. Kept: D10.18 `implementation`, as the test reads the
   driver's exit code before the driver has ended, which the rater read as unclear; D10.19
