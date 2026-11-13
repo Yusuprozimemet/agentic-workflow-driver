@@ -138,6 +138,35 @@ def started(state, session):
     return None
 
 
+def comment_state(state, session):
+    # The heartbeat comment's id and whether its stale comment was made, from the session's comment file. It is
+    # a file, not a variable of run_session, because a resumed session runs run_session again and must edit the
+    # same comment. A missing, unreadable or non-object file is no comment yet.
+    try:
+        with open(os.path.join(state, "sessions", f"{session}.comment.json"), "rb") as comment:
+            data = json.loads(comment.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return None, False
+    if not isinstance(data, dict):
+        return None, False
+    comment_id = data.get("id")
+    if isinstance(comment_id, bool) or not isinstance(comment_id, int):
+        comment_id = None
+    return comment_id, data.get("stale") is True
+
+
+def keep_comment(state, session, comment_id, stale):
+    # Written as bytes, as comment_state reads it. A file that cannot be written is skipped: the next poll
+    # finds the comment again, or makes it again.
+    path = os.path.join(state, "sessions", f"{session}.comment.json")
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as comment:
+            comment.write(json.dumps({"id": comment_id, "stale": stale}).encode("utf-8"))
+    except OSError:
+        pass
+
+
 def beat(state, session, step, begun):
     # Writes heartbeat.json beside the run's files, so that a reader sees the session's last event and the
     # time of this poll, even while the session is quiet. The file is written under a temporary name and

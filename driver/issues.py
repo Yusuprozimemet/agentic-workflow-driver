@@ -236,6 +236,25 @@ def heartbeat(project, gh, number, comment_id, body):
     return comment_id
 
 
+def stale_line(session, minutes):
+    return (
+        f"stale: session `{session}` has sent no event for {minutes:g} minutes; it is not stopped"
+    )
+
+
+def stale_comment(project, gh, number, session, minutes):
+    # One comment on the run's issue that says a session has gone quiet. It does not stop the session: the
+    # maintainer decides. A failed call returns False, and the next poll tries again.
+    code, _ = _write(
+        project,
+        gh,
+        ["issue", "comment", str(number), "--body-file", "-"],
+        stale_line(session, minutes),
+        timeout=10,
+    )
+    return code == 0
+
+
 def park_body(project, line, sentence, session):
     # What a park's issue holds (Day 7, H05.4): the session, the branch and last commit, and the
     # paths the tree holds uncommitted, so the maintainer sees what the park left. A git that fails
