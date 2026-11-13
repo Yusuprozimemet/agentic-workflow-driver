@@ -322,7 +322,7 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       with the files unedited.
 - [ ] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
       neither key, `--once` and `on` run with a `--docker` that records every call and exits 1,
-      reach the outcomes of `tests.test_once_run`'s first case and `tests.test_on`'s first case,
+      reach the outcomes of the first case in `tests/test_once_run.py` and in `tests/test_on.py`,
       and the fake records no call. True since Track A added `--docker`; Track D1 adds the test
       and breaks it once (D10.12).
       Test: `BoxSessionTest.test_no_keys_no_docker`.
@@ -552,6 +552,10 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   row unchanged, so `BoxRecoveryTest.test_stopped_container_parks` passed on `main` and "Track
   tests seen red" failed Track D2's PR (#155) on it. That half is now C10.32, `hold`; #155 breaks
   it once ("Recovery waited on a stopped container").
+- **Defect** D10.26 — found: evidence replay · cause: spec · made: Day 10 · C10.19 named
+  "`tests.test_once_run`'s first case" and "`tests.test_on`'s", which the replay reads as tests
+  `test_once_run` and `test_on` of a class `tests` and fails "not defined"; the close's
+  rehearsal (#160) caught it, and C10.19 now names the files by path, its meaning unchanged.
 - **Hand-off** H10.1 → Day 12: `live-check` runs on the PC's Claude Code; the image is only
   checked to be at a version it listed (C10.9). Whether the level 2 merge needs `live-check` run in
   the image is Day 12's call.
