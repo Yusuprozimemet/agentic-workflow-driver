@@ -1542,11 +1542,39 @@ function draw(M, DATA) {
   document.addEventListener("keydown", e => { if (e.key === "Escape") resets.forEach(r => r()); });
 }
 
+/* ---------- light or dark: the system's choice until the reader picks one ---------- */
+// The theme a press of the switch sets: the opposite of what shows now, which is the reader's
+// saved choice, or the system's when there is none.
+function flipTheme(saved, systemDark) {
+  const shown = saved === "dark" || saved === "light" ? saved : systemDark ? "dark" : "light";
+  return shown === "dark" ? "light" : "dark";
+}
+
+function themeToggle() {
+  const root = document.documentElement, button = document.getElementById("theme");
+  if (!button) return;
+  const system = matchMedia("(prefers-color-scheme: dark)");
+  let saved = null;
+  try { saved = localStorage.getItem("theme"); } catch (e) { /* storage blocked: follow the system */ }
+  const show = () => {
+    if (saved === "dark" || saved === "light") root.dataset.theme = saved; else delete root.dataset.theme;
+    button.setAttribute("aria-pressed", String(flipTheme(saved, system.matches) === "light"));
+  };
+  button.addEventListener("click", () => {
+    saved = flipTheme(saved, system.matches);
+    try { localStorage.setItem("theme", saved); } catch (e) { /* kept for this visit only */ }
+    show();
+  });
+  system.addEventListener("change", show);
+  show();
+}
+
 function boot(DATA) {
   draw(model(DATA), DATA);
 }
 
 function start() {
+  themeToggle();
   if (window.SPEC_DRIFT) return boot(window.SPEC_DRIFT);
   document.getElementById("now").textContent = "The data did not load. Build the page with python scripts/spec-drift.py --build dashboard.html; if this is the built page, it was published without its data line.";
 }

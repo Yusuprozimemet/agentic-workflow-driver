@@ -48,6 +48,11 @@ h1, h2, h3, p, ul { margin: 0; }
 /* ---------- the header ---------- */
 header { display: flex; flex-direction: column; gap: 8px; }
 .eyebrow { font: 400 12px/1.4 var(--mono); color: var(--muted); }
+/* the light or dark switch: follows the system until the reader picks one */
+.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.theme { font: 500 12px/1 var(--sans); color: var(--ink-2); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.theme:hover { border-color: var(--axis); } .theme:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.theme[aria-pressed="true"] { background: var(--wash); color: var(--ink); }
 h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .lede { color: var(--muted); max-width: 760px; }
 /* the words the page uses, said once: a Day is the plan's step, a date is the calendar's */

@@ -45,6 +45,13 @@ console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.t
   banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]), quality: shown(els.quality) }));
 """
 
+# flipTheme() on each [saved, systemDark] pair of the list from stdin.
+FLIP = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(c => flipTheme(c[0], c[1]))", ctx)));
+"""
+
 # tagOf() on each value of the list from stdin.
 TAGS = r"""
 const fs = require("fs"), vm = require("vm");
@@ -858,6 +865,17 @@ class BootTest(unittest.TestCase):
         out = boot(data(clock=clock, driver_runs=dict(source="run log", counted="2026-01-02T13:00:00Z", steps=steps,
                                                        parks=[an_issue(21, "2026-01-02T09:00:00Z")])))
         self.assertEqual((out["error"], out["logged"]), (None, []))
+
+
+class ThemeTest(unittest.TestCase):
+    def test_the_switch_flips_what_shows_the_saved_choice_first_then_the_systems(self):
+        cases = [[None, False], [None, True], ["dark", False], ["light", True], ["junk", True]]
+        self.assertEqual(node(FLIP, cases), ["dark", "light", "light", "dark", "light"])
+
+    def test_the_header_has_the_switch_and_the_page_wires_it_before_it_draws(self):
+        self.assertIn('<button type="button" class="theme" id="theme" aria-pressed="false">Dark mode</button>', read("index.html"))
+        start = re.search(r"function start\(\) \{(.*?)\n\}", read("dashboard.js"), re.S).group(1)
+        self.assertEqual(start.strip().splitlines()[0], "themeToggle();")
 
 
 class PageFilesTest(unittest.TestCase):
