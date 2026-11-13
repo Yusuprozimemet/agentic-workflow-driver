@@ -89,6 +89,12 @@ that changes behaviour in force without a `Replaces:` line is a finding.
     A break whose find is a line an earlier or later track of the day rewrites stops applying
     at that track (D07.39, D08.82): say which, so the track that rewrites it records the break
     again.
+12. **The `Plan:` lines** (from Day 11; `specs/README.md`, "Rules"). Run
+    `python scripts/plan-links.py`. Then, for each criterion, read the commitments it names in
+    `specs/plan/promises.json`: is each `Plan:` line true (does the criterion deliver or guard
+    what that commitment says, not only share a word with it), is a `Plan: none` really none,
+    and does any criterion contradict a commitment, its own or another? A commitment whose
+    `owner_day` is this day that no criterion names is a finding too.
 
 ## How to work
 
@@ -121,6 +127,10 @@ Tracks walked in order
 
 Assumed of the outside
 - <claim>: <command> → <what it printed, and the version> | NOT RUN: <who runs it, before which track>
+
+Plan lines
+- <criterion>: <its Plan: line> → true | WRONG: <why> | CONTRADICTS <commitment>: <how>
+- owner Day NN, named by no criterion: <commitment IDs> | none
 
 Suggested track order and Track 0: <if different from the table>
 Not checked, and why: <short list>

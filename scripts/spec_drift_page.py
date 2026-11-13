@@ -482,7 +482,7 @@ def how_excerpts_of(read, promise):
         day_criteria=(spec_path, criteria_count),
         claim=(spec_path, lambda: field(r"\*\*(?:new|hold)\*\* — (.*?)^\s*Red today:")),
         red_today=(spec_path, lambda: field(r"^\s*Red today: (.*?)^\s*Test:")),
-        test=(spec_path, lambda: field(r"^\s*Test: (.*?)^\s*Evidence:")),
+        test=(spec_path, lambda: field(r"^\s*Test: (.*?)^\s*(?:Plan:|Evidence:)")),
         evidence=(spec_path, evidence),
         seen_red=(spec_path, lambda: field(r"^\s*(seen red\b.*?)$")),
         tick=(spec_path, lambda: passage(block, r"^(- \[[ x]\] \S+ \*\*\w+\*\*)")),

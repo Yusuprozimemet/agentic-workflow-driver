@@ -25,8 +25,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       fails on the code as it is, e.g. "the grep finds two">.
       Test: `ExampleTest.test_new_behavior`.
       Replaces: <earlier ID, only if this changes behaviour it holds> — was: <old behaviour>
+      Plan: <commitment ID> "<words quoted from its text in specs/plan/promises.json>"; <another ID> "<its words>"
       Evidence: <test> (#n), seen red first on `<sha>`'s code.
 - [ ] CNN.2 **hold** — <true before the change and must stay true after it>.
+      Plan: none — <why it serves no commitment of plan.md>
       broken: <what was broken> → <what the check reported>
 
 ## Verify
