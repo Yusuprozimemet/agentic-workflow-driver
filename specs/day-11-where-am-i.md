@@ -1,6 +1,6 @@
 # Day 11 — Where am I, while a session runs: the stream, the events, the heartbeat, `status --watch`, the estimate, the comments
 
-**Phase:** 2 · **Depends on:** Day 10 · **Expected PRs:** 9 (the spec change, Tracks A, B, C, D, E1, E2, F, the close)
+**Phase:** 2 · **Depends on:** Day 10 · **Expected PRs:** 10 (the spec change, Tracks A, B, C, D, E1, a second spec change (D11.19), E2, F, the close)
 
 ## Goal
 While a session runs, the maintainer can tell a session at work from one that hangs, on the PC
@@ -150,7 +150,7 @@ runs").
 | C | | `<state>/heartbeat.json` at the start and at each poll: C11.10 |
 | D | | `driver.status.progress`, the estimate, `status`'s lines and `status --watch`: C11.11–C11.15 |
 | E1 | | The heartbeat comment edited in place; the fake `gh`'s switches: C11.16, C11.18, C11.20 |
-| E2 | | The stale comment, `stale_minutes`, the resumed session's comment: C11.17, C11.19 |
+| E2 | | The stale comment, `stale_minutes`, the resumed session's comment: C11.17, C11.19, C11.23 |
 | F | | Live: the image's Claude Code takes `stream-json --verbose`: C11.21 |
 
 In order: A, B, C, D, E1, E2, F. B rewrites `run_session`, which A leaves alone; C and E1 add
@@ -320,15 +320,20 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 - [ ] C11.17 **new** — As C11.16 with `stale_minutes` 0.02 in `driver.json`: exactly one more
       `issue comment` on the run's issue, whose body is "stale: session `<uuid>`
       has sent no event for 0.02 minutes; it is not stopped"; the session is not killed and the
-      step's outcome is as without. With `stale_minutes` absent (10): the heartbeat comment and
-      no stale comment. With `<state>/sessions/<uuid>.comment.json` holding
+      step's outcome is as without. With `<state>/sessions/<uuid>.comment.json` holding
       `{"id": 99, "stale": true}` before the first poll, written by the fake's `do`, which knows
       the state folder and the session (a resumed session's), the first poll edits comment 99 and no stale comment is made. Red
       today: no comment.
-      Test: `PhoneTest.test_stale_comment_once`, `PhoneTest.test_not_stale_before_stale_minutes`,
+      Test: `PhoneTest.test_stale_comment_once`,
       `PhoneTest.test_resumed_session_keeps_its_comment`.
       Plan: N34 "when no event has come for stale_minutes (10 by default, in driver.json), one new
       comment says so, once per session; a stale session is reported, not killed"
+- [ ] C11.23 **hold** — As C11.16 with `stale_minutes` absent from `driver.json` (10): exactly
+      one heartbeat comment (a body starting "step: ") and no comment starting "stale: " on the
+      run's issue: true since Track E1 (no stale comment exists) and after Track E2 (four seconds
+      is under 10 minutes). Track E2 adds the test and breaks it once (the default made 0.001).
+      Test: `PhoneTest.test_not_stale_before_stale_minutes`.
+      Plan: N34 "stale_minutes (10 by default, in driver.json)"
 - [ ] C11.18 **new** — With the fake `gh` failing `issue comment` and `api` (exit 1), a session
       spanning several polls ends with the same outcome and the same stdout as with them
       working, and the next poll tries the comment again (two or more `issue comment` calls
@@ -413,6 +418,7 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
   - C11.15, Track D: the progress lines printed with no live session.
   - C11.20, Track E1: the heartbeat comment made at the session's start.
   - C11.22, Track A: `result` returning the last JSON object whatever its `type`.
+  - C11.23, Track E2: `stale_minutes` 0.001 when absent from `driver.json`.
   - C11.21, Track F: `--verbose` left out of the test's command.
 - H09.2's text (Day 9) asks for the session's "`--output-format json` result": from this day
   there is none; Day 14 reads it as the `result` event.
@@ -456,3 +462,4 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
 - **Defect** D11.16 — found: auditor · cause: spec · made: Day 11 · C11.17's resumed case wrote `<uuid>.comment.json` "before the run", which a subprocess test cannot, the uuid being made by the driver (fixed in this PR: the fake's `do` writes it).
 - **Defect** D11.17 — found: auditor · cause: spec · made: Day 11 · In scope cited C07.17 and C07.18, both already replaced (by C08.10 and C10.24/C10.25, and C08.2) (fixed in this PR).
 - **Defect** D11.18 — found: auditor · cause: spec · made: Day 11 · C11.18's `Plan:` line quoted N34's "a stale session is reported, not killed", which C11.17 checks, not a failed comment (fixed in this PR: `Plan: none`).
+- **Defect** D11.19 — found: seen red · cause: spec · made: Day 11 · C11.17, tagged `new`, named `test_not_stale_before_stale_minutes`, whose checks (one heartbeat comment, no stale comment) Track E1 made true before Track E2 began; CI's "Track tests seen red" failed Track E2's PR #176 on it (fixed in a second spec-change PR: the case moved to C11.23, a hold, broken once in Track E2).
