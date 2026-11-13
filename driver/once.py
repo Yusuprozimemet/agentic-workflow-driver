@@ -13,7 +13,9 @@ close it to let the driver go on. While the session runs, --once reads the proje
 killed, and the step parks with a park line. A session whose transcript's last assistant record is
 the usage limit waits for the reset and is resumed once, or parks when the reset is more than
 --limit-hours away (Day 9). A halt file found when a session returns, its own or a resumed one,
-ends the step with a halt line before its outcome is read, and with no end line."""
+ends the step with a halt line before its outcome is read, and with no end line. The session's
+stdout is read line by line on a reader thread, and each line's time and kind are appended to
+`<state>/sessions/<session>.events.jsonl`."""
 
 import glob
 import json
@@ -22,6 +24,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from collections import namedtuple
@@ -202,7 +205,7 @@ def end_container(proc, docker, name):
         pass
 
 
-def kill_session(proc, docker=None, name=None):
+def kill_session(proc, docker=None, name=None, reader=None):
     # Kills the session's tree. Not killpg: the session stays in the driver's own process group so
     # that `halt` still kills it (Day 3, "The tree"), and killing that group here would kill the
     # driver before it can park.
@@ -219,15 +222,31 @@ def kill_session(proc, docker=None, name=None):
             except ProcessLookupError:
                 pass
     # A process that escaped the kill and still holds the output pipe must not hang the driver.
-    try:
-        proc.communicate(timeout=10)
-    except subprocess.TimeoutExpired:
-        pass
+    if reader is not None:
+        reader.join(10)
+    else:
+        try:
+            proc.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def read_stdout(proc, lines, state, session):
+    # The only reader of the session's stdout, on its own thread: each line is kept for the outcome and
+    # named in the events file. A line the events file cannot take is read on all the same, so that
+    # the pipe is always drained.
+    for line in iter(proc.stdout.readline, b""):
+        lines.append(line)
+        try:
+            stream.append(state, session, line)
+        except OSError:
+            pass
 
 
 def run_session(command, prompt, args, project, number, record):
     # Returns (stdout, return code), PAST when the session ran past --session-minutes, or None when a
-    # STOP issue stopped the session. The prompt goes on stdin once; each --poll seconds the project's
+    # STOP issue stopped the session. The reader thread takes the session's stdout line by line, and
+    # the prompt goes on stdin once, after the reader has started. Each --poll seconds the project's
     # issues are read while the session runs, and the bound is checked at each poll.
     proc = subprocess.Popen(
         command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=os.path.realpath(project)
@@ -239,21 +258,32 @@ def run_session(command, prompt, args, project, number, record):
         lock.now().strftime(lock.STAMP),
         container=record.get("container"),
     )
+    lines = []
+    reader = threading.Thread(
+        target=read_stdout, args=(proc, lines, args.state, record["session"]), daemon=True
+    )
+    reader.start()
     deadline = time.monotonic() + args.session_minutes * 60
-    data = prompt.encode("utf-8")
+    try:
+        proc.stdin.write(prompt.encode("utf-8"))
+        proc.stdin.close()
+    except OSError:
+        # A session that has already exited has closed its input: there is no prompt to send it.
+        pass
     while True:
-        try:
-            # The wait ends at the next poll or at the bound, whichever comes first.
-            out, _ = proc.communicate(
-                data, timeout=min(args.poll, max(0, deadline - time.monotonic()))
-            )
-            return out, proc.returncode
-        except subprocess.TimeoutExpired:
-            # Passing the input again raises ValueError, so later calls send none.
-            data = None
-            if time.monotonic() >= deadline:
-                kill_session(proc, args.docker, record.get("container"))
-                return PAST
+        # The wait ends at the next poll or at the bound, whichever comes first.
+        timeout = min(args.poll, max(0, deadline - time.monotonic()))
+        reader.join(timeout)
+        if not reader.is_alive():
+            # The reader ends with the session's stdout, so what is awaited next is the session's exit.
+            try:
+                proc.wait(timeout=timeout)
+                return b"".join(lines), proc.returncode
+            except subprocess.TimeoutExpired:
+                pass
+        if time.monotonic() >= deadline:
+            kill_session(proc, args.docker, record.get("container"), reader)
+            return PAST
         open_list, reason = issues.open_issues(project, args.gh)
         if reason:
             # A read that fails is skipped; the next poll reads again.
