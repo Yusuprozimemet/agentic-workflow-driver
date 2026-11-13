@@ -385,7 +385,7 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       broken: begin writing no issue on the start line → AssertionError: Tuples differ: (0, 1, False) != (0, 1, True) (#153)
 - [x] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
       neither key, `--once` and `on` run with a `--docker` that records every call and exits 1,
-      reach the outcomes of `tests.test_once_run`'s first case and `tests.test_on`'s first case,
+      reach the outcomes of the first case in `tests/test_once_run.py` and in `tests/test_on.py`,
       and the fake records no call. True since Track A added `--docker`; Track D1 adds the test
       and breaks it once (D10.12).
       Test: `BoxSessionTest.test_no_keys_no_docker`.
@@ -712,6 +712,10 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   passed on this machine with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322`.
 - Track G opened bearing #101 from the container and left it open for the maintainer; its record
   is `docs/trial/day-10.md`.
+- **Defect** D10.26 — found: evidence replay · cause: spec · made: Day 10 · C10.19 named
+  "`tests.test_once_run`'s first case" and "`tests.test_on`'s", which the replay reads as tests
+  `test_once_run` and `test_on` of a class `tests` and fails "not defined"; the close names the
+  files by path, the meaning unchanged.
 - The blind relabel (`scripts/relabel.py`) agreed on 25 of 25 stages, 23 of 25 causes and 24 of 25
   `made:`. Kept: D10.18 `implementation`, as the test reads the driver's exit code before the driver
   has ended, which the rater read as unclear; D10.19 `process`, since the brief, not the implementer,
