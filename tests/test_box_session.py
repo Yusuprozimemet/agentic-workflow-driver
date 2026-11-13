@@ -37,7 +37,7 @@ MODEL = "opus"
 
 
 def result(session):
-    # The session's stdout under --output-format json: one result object that names the session.
+    # The session's stdout under --output-format stream-json: one result line that names the session.
     return json.dumps(
         {"type": "result", "is_error": False, "result": "done", "session_id": session}
     )
@@ -142,7 +142,8 @@ class BoxSessionTest(OnCase, unittest.TestCase):
             "--model",
             MODEL,
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
             "--max-budget-usd",
             "5",
             "--permission-mode",
