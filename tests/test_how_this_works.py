@@ -40,12 +40,15 @@ TEMPLATE = "## Goal\n\n- [ ] CNN.1 a form\n- [ ] CNN.2 more\n"
 SEEN = "seen red: python -m unittest t on main → FAILED (errors=1) (#7)"
 
 
-def criterion(cid, tag="new", box="x", evidence="`T.test_a` (#7)", seen=SEEN, bug=None):
+def criterion(cid, tag="new", box="x", evidence="`T.test_a` (#7)", seen=SEEN, bug=None, plan=None):
     bug = f"{cid} bug" if bug is None else bug
     lines = [
         f"- [{box}] {cid} **{tag}** — does a thing.",
         "      Red today: it does not.",
         "      Test: `T.test_a`.",
+    ]
+    lines += [f"      {plan}"] if plan else []
+    lines += [
         f"      Evidence: {evidence}.",
     ]
     lines += [f"      {seen}"] if seen else []
@@ -148,6 +151,10 @@ class PickTest(unittest.TestCase):
         self.assertEqual(got["promise"]["text"]["id"], "C98.1")
         self.assertNotIn("text", got["recheck"])
         self.assertIn("missing or empty", got["recheck"]["missing"])
+
+    def test_the_test_excerpt_stops_before_a_plan_line(self):
+        read = world(newest=[criterion("C98.1", plan='Plan: P01 "parks when"')])
+        self.assertEqual(spec_drift.how_excerpts(read, [NEW, OLD])["test"]["text"], "`T.test_a`.")
 
     def test_either_wording_of_seen_red_counts(self):
         line = "seen red first on `main`'s code: `python x` → FAILED"

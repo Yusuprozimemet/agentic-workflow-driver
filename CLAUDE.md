@@ -31,7 +31,9 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    counted. Both only report. Fix what they find in a **spec-change PR** first (a **plan-change
    PR** when the code shows `plan.md` itself is wrong, which should be rare):
    `day-NN/spec-<slug>`, titled `Day NN spec change: <what was wrong>`. Every criterion is tagged
-   `new` (fails today; the spec says how) or `hold` (true today; broken on purpose once).
+   `new` (fails today; the spec says how) or `hold` (true today; broken on purpose once), and
+   from Day 11 carries a `Plan:` line, the commitments of `plan.md` it serves or `Plan: none`
+   (`specs/README.md`, "Rules"; `python scripts/plan-links.py` checks them).
 2. **One PR per track**, each branched from fresh `main` after the previous one merged. Never
    stack branches. `day-NN/track-<letter>-<slug>`, titled `Day NN track X: <what it does>`. A
    Track 0 holds the tests that must pass before and after the change, and lands first.

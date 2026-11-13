@@ -201,6 +201,17 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   old and the new behaviour, and `python scripts/behaviour-index.py` retires the old criterion
   once the new one is ticked; a `Replaces:` line without an ID or `— was:` fails it. Never edit
   the replaced criterion's file.
+- **From Day 11, each criterion names what of `plan.md` it serves.** `specs/plan/promises.json`
+  lists the plan's commitments (P01 to P69, N01 on), each with a quote that stands in
+  `plan.md`. Under each criterion, before its `Evidence:`, put one `Plan:` line:
+  `Plan: P27 "words quoted from P27"; N03 "words quoted from N03"`, each ID followed by words
+  copied literally from that commitment's `text` (or its `change`), or `Plan: none — <why>`
+  when it serves none. It may wrap onto indented lines. `python scripts/plan-links.py` (CI:
+  "Plan links quote the plan's words") fails a criterion of Day 11 or later with no `Plan:`
+  line, two of them, one in neither form, an unknown ID or a quote it cannot find. Days 1 to
+  10 are linked in `specs/plan/links-days-01-10.json` instead; their specs are not edited. A
+  `Plan:` line is criterion wording: write and change it in the spec-change PR. The dashboard's
+  plan graph will draw from these lines.
 - Changing a spec is normal. Change it in a PR *before* the work, not after.
   Criterion wording, tags and IDs change only in a spec-change PR on `day-NN/spec-<slug>`.
   CI's "Criteria keep their wording" job enforces this against the branch's merge base on

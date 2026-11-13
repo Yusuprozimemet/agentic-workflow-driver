@@ -14,7 +14,7 @@ SPEC.loader.exec_module(pl)
 
 PLAN = "# Plan\n\nThe driver parks when the next step\nis a stopping point.\n\nNothing merges by itself.\n"
 DAY1 = "## Acceptance criteria\n\n- [x] C01.1 **new** — parks at a stop\n- [x] C01.2 **hold** — guard\n"
-DAY11 = "## Acceptance criteria\n\n- [ ] C11.1 **new** — the reviewer\n"
+DAY11 = "## Acceptance criteria\n\n- [ ] C11.1 **new** — the reviewer\n      Plan: none\n"
 
 
 def promise(pid, quote, text, owner=1, rule=False, **more):
@@ -53,12 +53,46 @@ class PlanLinksTests(unittest.TestCase):
         with redirect_stdout(out):
             code = pl.main([])
         self.assertEqual(code, 0, out.getvalue())
-        self.assertRegex(out.getvalue(), r"^plan links: 97 commitments, 146 criteria, \d+ links, every quote found\n$")
+        self.assertRegex(out.getvalue(),
+                         r"^plan links: 97 commitments, 146 criteria, \d+ Plan: lines, \d+ links, every quote found\n$")
 
     def test_a_quote_wrapped_over_lines_in_plan_md_is_found(self):
         problems, summary = self.run_check()
         self.assertEqual(problems, [])
-        self.assertEqual(summary, "plan links: 2 commitments, 2 criteria, 1 links, every quote found")
+        self.assertEqual(summary, "plan links: 2 commitments, 2 criteria, 0 Plan: lines, 1 links, every quote found")
+
+    def day11(self, *plan_lines):
+        crit = "".join(f"      {line}\n" for line in plan_lines)
+        self.files["specs/day-11-reviewer.md"] = (
+            "## Acceptance criteria\n\n- [ ] C11.1 **new** — the reviewer. Red today: none.\n"
+            f"      Test: `ReviewTest.test_it`.\n{crit}      Evidence: x\n- [ ] C11.2 **hold** — guard.\n"
+            "      Plan: none\n\n## Verify\n")
+        return self.run_check()
+
+    def test_from_day_11_a_plan_line_links_its_criterion_and_its_quotes_are_checked(self):
+        problems, summary = self.day11('Plan: P01 "parks when the next step"; P02 "Nothing merges"')
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, "plan links: 2 commitments, 2 criteria, 2 Plan: lines, 3 links, every quote found")
+
+    def test_a_plan_line_may_wrap_and_may_be_none_with_a_reason(self):
+        self.assertEqual(self.day11('Plan: P01 "parks when the next',
+                                    'step is a stopping point"')[0], [])
+        self.assertEqual(self.day11("Plan: none — tooling the plan does not name")[0], [])
+
+    def test_from_day_11_a_criterion_with_no_plan_line_fails_and_day_10_needs_none(self):
+        problems, _ = self.day11()
+        self.assertEqual(problems, ["C11.1: no Plan: line (the commitments it serves, or Plan: none)"])
+
+    def test_a_plan_line_with_a_wrong_quote_or_id_fails(self):
+        problems, _ = self.day11('Plan: P01 "parks at once", P09 "x"')
+        self.assertEqual(problems, ['C11.1: quote not in P01: "parks at once"', "C11.1: no such commitment P09"])
+
+    def test_two_plan_lines_or_one_in_neither_form_fail(self):
+        self.assertEqual(self.day11("Plan: none", "Plan: none")[0], ["C11.1: more than one Plan: line"])
+        self.assertEqual(self.day11('Plan: P01 parks')[0],
+                         ['C11.1: a Plan: line is none, or ids each with a quote: "P01 parks"'])
+        self.assertEqual(self.day11('Plan: P01 "parks when" and more')[0],
+                         ['C11.1: a Plan: line is none, or ids each with a quote: "P01 "parks when" and more"'])
 
     def test_a_commitment_quote_missing_from_plan_md_fails(self):
         self.promises[0]["quote"] = "parks when the next step is a phase's end"

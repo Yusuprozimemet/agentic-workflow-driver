@@ -13,6 +13,11 @@ its `change`, the note a commitment the plan has since changed carries). They ar
 fresh readers both made on 2026-11-13, a reader's "..." cut to its longest piece; the ten
 closed specs are not edited.
 
+From Day 11 on, each criterion of a day spec says it in its own `Plan:` line instead
+(`specs/README.md`, "Rules"): `Plan: P27 "words from P27"; N03 "words from N03"`, or
+`Plan: none` (optionally `Plan: none — <why>`). A criterion with no `Plan:` line, two of them,
+or one in neither form fails, and its quotes are checked as the backfill's are.
+
 Whitespace (line wrapping in `plan.md`) is not compared. Prints one line per problem and
 exits 1, or one summary line and exits 0.
 """
@@ -24,10 +29,14 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROMISE_ID = re.compile(r"[PN]\d\d")
-CRITERION = re.compile(r"^- \[[ x]\] (C\d+\.\d+)\b", re.M)
+CRITERION = re.compile(r"^- \[[ x]\] (C\d+\.\d+)\b(.*?)(?=^- |^#|\Z)", re.M | re.S)
+PLAN_FIELD = re.compile(r"^[ \t]+Plan:(.*(?:\n[ \t]+(?![A-Za-z][\w -]*:)\S.*)*)", re.M)
+PLAN_LINK = re.compile(r'([PN]\d\d) "([^"]+)"')
+PLAN_NONE = re.compile(r"none(?: — .+)?")
 DAY_FILE = re.compile(r"day-(\d+)-[^/\\]+\.md")
 FIELDS = {"id", "short", "section", "owner_day", "rule_about_people", "quote", "text"}
 BACKFILL_DAYS = range(1, 11)
+PLAN_LINES_FROM = 11
 
 
 def flat(text):
@@ -40,13 +49,42 @@ def read(path):
 
 
 def spec_criteria(specs_dir):
-    """Each day spec's criterion ids, by Day."""
+    """Each day spec's criteria, by Day: (id, the criterion's lines)."""
     days = {}
     for name in sorted(os.listdir(specs_dir)):
         m = DAY_FILE.fullmatch(name)
         if m:
             days.setdefault(int(m.group(1)), []).extend(CRITERION.findall(read(os.path.join(specs_dir, name))))
     return days
+
+
+def link_problems(cid, pid, quote, texts, seen):
+    if pid not in texts:
+        return [f"{cid}: no such commitment {pid}"]
+    problems = [f"{cid}: {pid} linked twice"] if pid in seen else []
+    seen.add(pid)
+    if not quote or quote not in texts[pid]:
+        problems.append(f'{cid}: quote not in {pid}: "{quote}"')
+    return problems
+
+
+def plan_line(cid, block, texts):
+    """The problems with one criterion's `Plan:` line, and how many links it makes."""
+    fields = PLAN_FIELD.findall(block)
+    if not fields:
+        return [f"{cid}: no Plan: line (the commitments it serves, or Plan: none)"], 0
+    if len(fields) > 1:
+        return [f"{cid}: more than one Plan: line"], 0
+    value = flat(fields[0])
+    if PLAN_NONE.fullmatch(value):
+        return [], 0
+    linked = PLAN_LINK.findall(value)
+    if not linked or not re.fullmatch(r"[\s,;]*", PLAN_LINK.sub("", value)):
+        return [f'{cid}: a Plan: line is none, or ids each with a quote: "{value}"'], 0
+    problems, seen = [], set()
+    for pid, quote in linked:
+        problems += link_problems(cid, pid, flat(quote), texts, seen)
+    return problems, len(linked)
 
 
 def check(root):
@@ -79,27 +117,25 @@ def check(root):
         elif quote not in plan:
             problems.append(f'{pid}: quote not in plan.md: "{quote}"')
 
-    known = {c for ids in days.values() for c in ids}
+    known = {c for criteria in days.values() for c, _ in criteria}
     for cid, served in links.items():
         if cid not in known:
             problems.append(f"{cid}: no such criterion in specs/")
         seen = set()
         for link in served:
-            pid, quote = link.get("p"), flat(link.get("quote", ""))
-            if pid not in texts:
-                problems.append(f"{cid}: no such commitment {pid}")
-                continue
-            if pid in seen:
-                problems.append(f"{cid}: {pid} linked twice")
-            seen.add(pid)
-            if not quote or quote not in texts[pid]:
-                problems.append(f'{cid}: quote not in {pid}: "{quote}"')
+            problems += link_problems(cid, link.get("p"), flat(link.get("quote", "")), texts, seen)
     for day in BACKFILL_DAYS:
-        for cid in days.get(day, []):
+        for cid, _ in days.get(day, []):
             if cid not in links:
                 problems.append(f"{cid}: Day {day} criterion missing from the backfill")
-    count = sum(len(v) for v in links.values())
-    return problems, f"plan links: {len(texts)} commitments, {len(links)} criteria, {count} links, every quote found"
+    count, lines = sum(len(v) for v in links.values()), 0
+    for day in sorted(d for d in days if d >= PLAN_LINES_FROM):
+        for cid, block in days[day]:
+            found, made = plan_line(cid, block, texts)
+            problems += found
+            lines, count = lines + 1, count + made
+    return problems, (f"plan links: {len(texts)} commitments, {len(links)} criteria, "
+                      f"{lines} Plan: lines, {count} links, every quote found")
 
 
 def main(argv=None):
