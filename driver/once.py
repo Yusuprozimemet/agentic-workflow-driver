@@ -263,6 +263,8 @@ def run_session(command, prompt, args, project, number, record):
         target=read_stdout, args=(proc, lines, args.state, record["session"]), daemon=True
     )
     reader.start()
+    begun = stream.started(args.state, record["session"])
+    stream.beat(args.state, record["session"], record.get("step"), begun)
     deadline = time.monotonic() + args.session_minutes * 60
     try:
         proc.stdin.write(prompt.encode("utf-8"))
@@ -284,6 +286,7 @@ def run_session(command, prompt, args, project, number, record):
         if time.monotonic() >= deadline:
             kill_session(proc, args.docker, record.get("container"), reader)
             return PAST
+        stream.beat(args.state, record["session"], record.get("step"), begun)
         open_list, reason = issues.open_issues(project, args.gh)
         if reason:
             # A read that fails is skipped; the next poll reads again.

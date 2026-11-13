@@ -5,8 +5,9 @@ append keeps the session's events file as its lines are read (Day 11)."""
 
 import json
 import os
+import tempfile
 
-from driver import lock
+from driver import lock, runlog
 
 
 def result(text):
@@ -107,3 +108,57 @@ def append(state, session, line):
     os.makedirs(folder, exist_ok=True)
     with open(os.path.join(folder, f"{session}.events.jsonl"), "ab") as events:
         events.write((json.dumps(event) + "\n").encode("utf-8"))
+
+
+def last_event(state, session):
+    # The time of the session's newest event, or None when its events file is missing, empty, or ends in a
+    # line that is not a JSON object with a time. The file is read as bytes, as append writes it.
+    try:
+        with open(os.path.join(state, "sessions", f"{session}.events.jsonl"), "rb") as events:
+            lines = [line for line in events.read().split(b"\n") if line.strip()]
+    except OSError:
+        return None
+    if not lines:
+        return None
+    try:
+        data = json.loads(decoded(lines[-1]))
+    except ValueError:
+        return None
+    return data.get("at") if isinstance(data, dict) else None
+
+
+def started(state, session):
+    # The time of the session's start line in the run log, or None when there is none or the log cannot be read.
+    records, reason = runlog.read(state)
+    if reason or records is None:
+        return None
+    for record in records:
+        if record.get("event") == "start" and record.get("session") == session:
+            return record.get("at")
+    return None
+
+
+def beat(state, session, step, begun):
+    # Writes heartbeat.json beside the run's files, so that a reader sees the session's last event and the
+    # time of this poll, even while the session is quiet. The file is written under a temporary name and
+    # moved over the old one, so a reader never sees half of it. An OSError, a Windows reader holding the
+    # file included, skips this beat; the temporary file is removed, and heartbeat.json is never removed.
+    data = {
+        "session": session,
+        "step": step,
+        "started": begun,
+        "poll": lock.now().strftime(lock.STAMP),
+        "last_event": last_event(state, session),
+    }
+    temp = None
+    try:
+        handle, temp = tempfile.mkstemp(dir=state, prefix="heartbeat.", suffix=".tmp")
+        with os.fdopen(handle, "wb") as beating:
+            beating.write((json.dumps(data) + "\n").encode("utf-8"))
+        os.replace(temp, os.path.join(state, "heartbeat.json"))
+    except OSError:
+        if temp is not None:
+            try:
+                os.remove(temp)
+            except OSError:
+                pass
