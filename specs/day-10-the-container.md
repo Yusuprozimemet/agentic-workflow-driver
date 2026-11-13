@@ -193,7 +193,7 @@ Linux. They run Docker through `tests/fake_docker.py`, a fake `--docker` program
 its arguments and answers `version`, `image inspect`, `inspect`, `kill` and `run` as the test sets
 it; no test but C10.7, C10.14 and C10.30 needs Docker.
 
-- [ ] C10.1 **new** — `driver.config.load` on a config with every Day 2 key and
+- [x] C10.1 **new** — `driver.config.load` on a config with every Day 2 key and
       `"container_image": "img:1"` but no `container_secrets` returns `None` and the line
       "cannot start: <path> has container_image but no container_secrets"; with
       `container_secrets` and no `container_image`, "cannot start: <path> has container_secrets
@@ -203,24 +203,36 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       valid it returns the config with both keys as given and no lines.
       Red today: `load` ignores keys it does not know, so each case returns the config and no lines.
       Test: `ContainerConfigTest.test_container_keys_checked`.
-- [ ] C10.2 **new** — `driver.box.command("docker", "img:1", <secrets>, <home>, <state>,
+      Evidence: `ContainerConfigTest.test_container_keys_checked` (#149).
+      seen red: python -m unittest tests.test_box_config on main → AssertionError: Lists differ: [] != ["cannot start: <path>'s container_secrets must be an absolute path"] (#149)
+      broken: a relative container_secrets accepted → AssertionError: Lists differ: [] != ["cannot start: <path>'s container_secrets must be an absolute path"] (#149)
+- [x] C10.2 **new** — `driver.box.command("docker", "img:1", <secrets>, <home>, <state>,
       <project>, "driver-s1", ["claude", "-p"])` returns exactly the list In scope gives, ending
       `"img:1", "claude", "-p"`; with `stdin=False`, the same without `"-i"`. It holds no
       `--privileged`, `-v` or `--volume`, no source but the six, and no source that is `<home>`
       itself.
       Red today: `driver/box.py` does not exist (ModuleNotFoundError).
       Test: `BoxCommandTest.test_the_mounts`.
-- [ ] C10.3 **new** — `driver.settings.write(<state>, <home>, inside=True)` writes
+      Evidence: `BoxCommandTest.test_the_mounts`; `--docker` in `BoxCommandTest.test_docker_flag` (#149).
+      seen red: python -m unittest tests.test_box_command.BoxCommandTest.test_the_mounts on main → FAILED (errors=1) (#149)
+      seen red: python -m unittest tests.test_box_command.BoxCommandTest.test_docker_flag on main → AssertionError: False is not true : run-steps.py --help names no --docker (#149)
+      broken: the state folder mounted writable → AssertionError: Lists differ: ['doc[374 chars]state', '--mount', 'type=bind,source=<state>/r[113 chars]'-p'] != ['doc[374 chars]state,readonly', '--mount', 'type=bind,source=[122 chars]'-p'] (#149)
+- [x] C10.3 **new** — `driver.settings.write(<state>, <home>, inside=True)` writes
       `<state>/container-settings.json` whose two hook commands are, as printed,
       `python "/driver/hooks/halt.py" "/state/halt" "/state/refusals"` and
       `python "/driver/hooks/guard.py" "/driver" "/state/refusals"`, with the matchers of
       `settings.json`, and returns its path; `<state>/settings.json` is not written by that call.
       Red today: `write` takes no `inside` (TypeError).
       Test: `BoxCommandTest.test_container_settings`.
-- [ ] C10.4 **hold** — A config with neither key loads, and sessions start, as before:
+      Evidence: `BoxCommandTest.test_container_settings` (#149).
+      seen red: python -m unittest tests.test_box_command.BoxCommandTest.test_container_settings on main → FAILED (errors=1) (#149)
+      broken: the container settings written to settings.json → AssertionError: 'settings.json' != 'container-settings.json' (#149)
+- [x] C10.4 **hold** — A config with neither key loads, and sessions start, as before:
       `python -m unittest tests.test_config tests.test_hooks tests.test_once_run` passes with the
       files unedited.
-- [ ] C10.5 **new** — `docker/Dockerfile` holds `FROM node:22-trixie-slim`, `ARG CLAUDE_VERSION`,
+      Evidence: the command above passes, the three files unedited since `495bf69` (#149).
+      broken: a config with neither container key refused → AssertionError: Tuples differ: (1, '') != (0, 'start: Day 01: read the spec against the code, then the spec-change PR\n') (#149)
+- [x] C10.5 **new** — `docker/Dockerfile` holds `FROM node:22-trixie-slim`, `ARG CLAUDE_VERSION`,
       `ARG GIT_NAME`, `ARG GIT_EMAIL`, an install of `@anthropic-ai/claude-code@${CLAUDE_VERSION}`,
       `/opt/venv`, `USER node`, and each of "safe.directory", "/work", "autocrlf", "filemode" and
       "gh auth git-credential"; and `docs/container.md` holds each of "docker build",
@@ -229,13 +241,20 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       settings"; `python scripts/check-links.py docs/container.md` exits 0.
       Red today: neither file exists.
       Test: `ImageFilesTest.test_dockerfile_and_doc`.
-- [ ] C10.6 **new** — Every mount `docs/container.md` shows is one of the six: each `source=` in
+      Evidence: `ImageFilesTest.test_dockerfile_and_doc`; `python scripts/check-links.py docs/container.md` exits 0 (#150).
+      seen red: python -m unittest tests.test_image_files.ImageFilesTest.test_dockerfile_and_doc on main → AssertionError: False is not true : docker/Dockerfile does not exist (#150)
+      broken: the image left running as root → AssertionError: False is not true : docker/Dockerfile does not hold 'USER node' (#150)
+- [x] C10.6 **new** — Every mount `docs/container.md` shows is one of the six: each `source=` in
       it is followed by one of `<project>`, `<home>/hooks`, `<home>/rules`, `<state>`,
       `<state>/refusals` and `<state>/claude`, and it holds no `-v ` and no `--volume`. Words that
       warn against a mount (the Docker socket, `--privileged`) are not checked.
       Red today: the file does not exist.
       Test: `ImageFilesTest.test_doc_mounts_the_six`.
-- [ ] C10.7 **new** — Live: the test first checks that `docker/Dockerfile` exists (before any
+      Evidence: `ImageFilesTest.test_doc_mounts_the_six` (#150).
+      seen red: python -m unittest tests.test_image_files.ImageFilesTest.test_doc_mounts_the_six on main → AssertionError: False is not true : docs/container.md does not exist (#150)
+      broken: the page mounts the driver's folder → AssertionError: False is not true : docs/container.md shows the unknown mount source '<home>' (#150)
+      broken: the page shows a -v mount → AssertionError: False is not true : docs/container.md shows a -v flag (#150)
+- [x] C10.7 **new** — Live: the test first checks that `docker/Dockerfile` exists (before any
       skip, so that on `main` it fails), then runs only when `DRIVER_CONTAINER_IMAGE` names a built
       image (skipped otherwise, as `DRIVER_LIVE_CLI` skips `tests/test_live_cli.py`): in that
       image, `python --version` prints "Python 3", `pip --version` exits 0,
@@ -244,7 +263,10 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `claude --version`'s first line starts with the image's tag after the colon.
       Red today: `docker/Dockerfile` does not exist: AssertionError before the skip.
       Test: `ImageLiveTest.test_image_has_its_tools`.
-- [ ] C10.8 **new** — With the container keys, `run-steps.py --once` driven in-process with the
+      Evidence: `ImageLiveTest.test_image_has_its_tools`, run with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322` on this machine (#150); CI skips its Docker part.
+      Live, so not replayed: CI and the replay have no image; a reader checked the live run and its break in #150: with `USER node` made `USER root`, the rebuilt image's `id -un` printed root and the test failed twice. That break is not replayable and has no manifest entry.
+      seen red: python -m unittest tests.test_image_live.ImageLiveTest.test_image_has_its_tools on main → AssertionError: False is not true : docker/Dockerfile does not exist (#150)
+- [x] C10.8 **new** — With the container keys, `run-steps.py --once` driven in-process with the
       fake `docker`: `version` exiting 1 with "Cannot connect to the Docker daemon" prints only
       "cannot start: Docker does not run: Cannot connect to the Docker daemon" on stderr and exits
       2; `image inspect` exiting 1 prints only "cannot start: the image `img:1` is not built;
@@ -254,7 +276,12 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       Red today: the keys are ignored; the PC's Claude Code is checked and a session starts.
       Test: `BoxPreflightTest.test_docker_down`, `BoxPreflightTest.test_no_image`,
       `BoxPreflightTest.test_no_secrets`.
-- [ ] C10.9 **new** — As C10.8, with Docker, the image and the secrets file there: the image's
+      Evidence: `BoxPreflightTest.test_docker_down`, `BoxPreflightTest.test_no_image`, `BoxPreflightTest.test_no_secrets` (#151).
+      seen red: python -m unittest tests.test_box_preflight on main → AssertionError: 0 != 2 (#151)
+      broken: Docker down not reported → AssertionError: Lists differ: ["cannot run a session: the image's claude[774 chars]ume"] != ['cannot start: Docker does not run: Canno[27 chars]mon'] (#151)
+      broken: the image not inspected → AssertionError: Lists differ: ["cannot run a session: the image's claude[774 chars]ume"] != ['cannot start: the image `img:1` is not b[29 chars]how'] (#151)
+      broken: the secrets file not checked → AssertionError: Lists differ: ["cannot run a session: the image's claude[774 chars]ume"] != ['cannot start: the secrets file `<secrets[14 chars]ist'] (#151)
+- [x] C10.9 **new** — As C10.8, with Docker, the image and the secrets file there: the image's
       `claude --version` printing "2.1.100" prints Day 2's line "cannot run a session: Claude Code
       2.1.100 is older than <the oldest>, the oldest the driver was checked on"; its `--help`
       lacking `--settings` prints "cannot run a session: the image's claude --help lists no
@@ -262,12 +289,21 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `live-checked.txt` prints the live check's line naming the image's version.
       Red today: as C10.8.
       Test: `BoxPreflightTest.test_image_cli_checked`, `BoxPreflightTest.test_on_live_check_reads_the_image`.
-- [ ] C10.10 **new** — `python hooks/probe.py <a temporary folder> <a missing folder>` prints
+      Evidence: `BoxPreflightTest.test_image_cli_checked`, `BoxPreflightTest.test_on_live_check_reads_the_image` (#151; their breaks recorded again in #152, which changed what they report).
+      seen red: python -m unittest tests.test_box_preflight on main → AssertionError: 0 != 2 (#151)
+      broken: the PC's claude checked in place of the image's → AssertionError: Lists differ: ["cannot start: the session's container cannot run the probe: exit 0"] != ["cannot run a session: the image's claude --help lists no --settings"] (#152)
+      broken: on's live check reads the PC's version → AssertionError: Lists differ: ["cannot start: the session's container ca[23 chars]t 0"] != ['cannot start: Claude Code `2.1.400 (Clau[65 chars]eck'] (#152)
+      broken: --once reads the live-check record → AssertionError: Tuples differ: (2, 0) != (0, 1) (#151)
+      broken: on skips the version check → AssertionError: Tuples differ: (0, "opened: #5 from `day-01/track-a-x`\no[707 chars]alse) != (2, '', ['cannot start: Claude Code `2.1.4[85 chars]alse) (#151)
+- [x] C10.10 **new** — `python hooks/probe.py <a temporary folder> <a missing folder>` prints
       "written <the first>" and "refused <the second>", in that order, exits 0, and leaves the
       temporary folder empty.
       Red today: `hooks/probe.py` does not exist.
       Test: `ProbeTest.test_written_and_refused`.
-- [ ] C10.11 **new** — With the container keys and the fake `docker`'s probe printing
+      Evidence: `ProbeTest.test_written_and_refused` (#152).
+      seen red: python -m unittest tests.test_probe tests.test_reach_live on main → AssertionError: False is not true : hooks/probe.py does not exist (#152)
+      broken: the probe prints written for a folder it cannot write (C10.10) → AssertionError: Tuples differ: (0, ['written <tmp>', 'written <tmp>/missing'], []) != (0, ['written <tmp>', 'refused <tmp>/missing'], []) (#152)
+- [x] C10.11 **new** — With the container keys and the fake `docker`'s probe printing
       `written /driver/hooks` and the expected line for the other five, `--once` prints "cannot
       start: the session's container can write `/driver/hooks`" on stderr and exits 2; no issue is
       opened or commented, the run log has no line, and no `run` named `driver-<uuid>` was asked of
@@ -275,7 +311,10 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       C10.2 and the inner command of In scope.
       Red today: no probe runs; the session starts.
       Test: `ReachCheckTest.test_writable_hooks_refuse`.
-- [ ] C10.12 **new** — As C10.11, the probe printing `refused /state/refusals`: "cannot start: the
+      Evidence: `ReachCheckTest.test_writable_hooks_refuse` (#152; its break recorded again in #153, where the session runs in the container).
+      seen red: python -m unittest tests.test_reach_check on main → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`\n') != (2, '') (all four tests fail on `main`: `FAILED (failures=5)`, the fifth a subtest) (#152)
+      broken: a written folder that must refuse not read (C10.11) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[59 chars])\n') != (2, '') (#153)
+- [x] C10.12 **new** — As C10.11, the probe printing `refused /state/refusals`: "cannot start: the
       session's container cannot write `/state/refusals`", exit 2; with `<state>/refusals` and
       `<state>/claude` missing before the run, both exist after it, though the probe made nothing.
       The probe exiting 1 with "python: not found" as its last stderr line: "cannot start: the
@@ -283,21 +322,32 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       exiting 0: the same line ending "exit 0".
       Red today: as C10.11.
       Test: `ReachCheckTest.test_unwritable_log_refuses`, `ReachCheckTest.test_probe_failure_refuses`.
-- [ ] C10.13 **new** — `on` checks before each step, not only the first: with two steps to take
+      Evidence: `ReachCheckTest.test_unwritable_log_refuses`, `ReachCheckTest.test_probe_failure_refuses` (#152; two breaks recorded again in #153).
+      seen red: python -m unittest tests.test_reach_check on main → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`\n') != (2, '') (all four tests fail on `main`: `FAILED (failures=5)`, the fifth a subtest) (#152)
+      broken: a refused folder that must write not read (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[63 chars], []) != (2, '', ["cannot start: the session's cont[34 chars]s`"]) (#153)
+      broken: the mounted folders not made before the probe (C10.12) → AssertionError: Tuples differ: ([], [False, False]) != ([], [True, True]) (#152)
+      broken: a probe that printed too few lines believed (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[63 chars], []) != (2, '', ["cannot start: the session's cont[32 chars] 0"]) (#153)
+- [x] C10.13 **new** — `on` checks before each step, not only the first: with two steps to take
       and the probe passing before the first and printing `written /state` before the second,
       `on` runs the first step's session, then prints "cannot start: the session's container can
       write `/state`" and exits 2, with no second `start` line, no second `run` named
       `driver-<uuid>`, and no comment on the run's issue for the second step.
       Red today: as C10.11.
       Test: `ReachCheckTest.test_on_checks_before_each_step`.
-- [ ] C10.14 **new** — Live: the test first checks that `hooks/probe.py` exists (before any skip,
+      Evidence: `ReachCheckTest.test_on_checks_before_each_step` (#152; its break recorded again in #153).
+      seen red: python -m unittest tests.test_reach_check on main → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`\n') != (2, '') (all four tests fail on `main`: `FAILED (failures=5)`, the fifth a subtest) (#152)
+      broken: on not checking the reach before a step (C10.13) → AssertionError: Tuples differ: (1, 2, 2, 2) != (2, 1, 1, 2) (#153)
+- [x] C10.14 **new** — Live: the test first checks that `hooks/probe.py` exists (before any skip,
       so that on `main` it fails), then, run only when `DRIVER_CONTAINER_IMAGE` is set, calls
       `driver.box.reach` with this repository's folders, a scratch state folder and a scratch
       clone as the project, and gets `None`: the probe printed `refused` for the first three and
       `written` for the last three.
       Red today: `hooks/probe.py` does not exist: AssertionError before the skip.
       Test: `ReachLiveTest.test_reach_in_the_container`.
-- [ ] C10.15 **new** — With the container keys, `driver.once.run` driven in-process on a fake
+      Evidence: `ReachLiveTest.test_reach_in_the_container`, run with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322` on this machine (#152); CI skips its Docker part.
+      Live, so not replayed: CI and the replay have no image; a reader checked the live run and its break in #152: with `/driver/hooks` mounted writable, the test failed twice with "cannot start: the session's container can write `/driver/hooks`". `break.py` refuses that report (a container path reads as absolute), so it has no manifest entry.
+      seen red: python -m unittest tests.test_probe tests.test_reach_live on main → AssertionError: False is not true : hooks/probe.py does not exist (#152)
+- [x] C10.15 **new** — With the container keys, `driver.once.run` driven in-process on a fake
       session that opens a pull request prints "opened: #5 from `day-01/track-a-x`" as without
       them; the fake `docker` was asked one `run` named `driver-<uuid>`, whose list is
       `driver.box.command(...)` around `claude -p` with today's flags, `--settings
@@ -306,7 +356,11 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `"container": "driver-<uuid>"`, and `start`'s `claude` is the image's version line.
       Red today: the session starts with the PC's `claude` and no `docker`; no `container` key.
       Test: `BoxSessionTest.test_session_runs_in_the_container`.
-- [ ] C10.16 **new** — As C10.15, on a fake whose first run ends at the usage limit, its
+      Evidence: `BoxSessionTest.test_session_runs_in_the_container` (#153).
+      seen red: python -m unittest tests.test_box_session.BoxSessionTest.test_session_runs_in_the_container on main → AssertionError: Tuples differ: (0, True, [{'args': ['-p', '--model', 'opus', '--out[783 chars]d>']) != (0, True, [], ['driver-probe-<uuid>', 'driver-<uuid>']) (#153)
+      broken: the start line's claude read from the PC, not the image → AssertionError: Lists differ: [('st[38 chars]'2.1.170 (Claude Code)'), ('pid', ['container'[21 chars]one)] != [('st[38 chars]'2.1.322 (Claude Code)'), ('pid', ['container'[21 chars]one)] (#153)
+      broken: the session's container not named for its session → AssertionError: Tuples differ: (0, True, [], ['driver-probe-<uuid>', 'driver-other-<uuid>']) != (0, True, [], ['driver-probe-<uuid>', 'driver-<uuid>']) (#153)
+- [x] C10.16 **new** — As C10.15, on a fake whose first run ends at the usage limit, its
       transcript written to `<state>/claude/projects/-work/<session>.jsonl`, and whose second run
       opens a pull request: the driver waits and resumes, the second `run` with `--resume` in
       place of `--session-id` inside the container's list and the same name; and a fix's resume
@@ -315,25 +369,41 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       starts no wait.
       Red today: as C10.15; and `limit_reset` reads only `CLAUDE_CONFIG_DIR`.
       Test: `BoxSessionTest.test_limit_read_from_the_state`, `BoxSessionTest.test_resumes_in_the_container`.
-- [ ] C10.17 **hold** — Without the container keys, the usage limit is read as Day 9 built it:
+      Evidence: `BoxSessionTest.test_limit_read_from_the_state`, `BoxSessionTest.test_resumes_in_the_container` (#153).
+      seen red: python -m unittest tests.test_box_session.BoxSessionTest.test_limit_read_from_the_state on main → AssertionError: Tuples differ: (0, False, True) != (0, True, True) (#153)
+      seen red: python -m unittest tests.test_box_session.BoxSessionTest.test_resumes_in_the_container on main → AssertionError: Tuples differ: (0, []) != (0, [[], []]) (#153)
+      broken: the usage limit read from CLAUDE_CONFIG_DIR with the container keys → AssertionError: Tuples differ: (0, False, True) != (0, True, True) (#153)
+- [x] C10.17 **hold** — Without the container keys, the usage limit is read as Day 9 built it:
       `python -m unittest tests.test_usage_limit` passes with the file unedited.
-- [ ] C10.18 **hold** — Without the container keys, the run log's lines keep their keys:
+      Evidence: the command above passes, `tests/test_usage_limit.py` unedited since `495bf69` (#153).
+      broken: the resumed session read as any outcome, not the limit again (C09.2) → AssertionError: Tuples differ: (1, 2, ['park: the session ended in an error: `unknown` (session `<uuid>`)'], 1) != (1, 2, ['park: the usage limit was reached (session `<uuid>`)'], 1) (#153)
+- [x] C10.18 **hold** — Without the container keys, the run log's lines keep their keys:
       `python -m unittest tests.test_runlog tests.test_runlog_fix tests.test_once_outcome` passes
       with the files unedited.
-- [ ] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
+      Evidence: the command above passes, the three files unedited since `495bf69` (#153).
+      broken: run_session writes no pid line → AssertionError: 1 != 0 (#153)
+      broken: begin writing no issue on the start line → AssertionError: Tuples differ: (0, 1, False) != (0, 1, True) (#153)
+- [x] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
       neither key, `--once` and `on` run with a `--docker` that records every call and exits 1,
       reach the outcomes of the first case in `tests/test_once_run.py` and in `tests/test_on.py`,
       and the fake records no call. True since Track A added `--docker`; Track D1 adds the test
       and breaks it once (D10.12).
       Test: `BoxSessionTest.test_no_keys_no_docker`.
-- [ ] C10.20 **new** — As C10.15, on a fake session that sleeps until the fake `docker` is asked
+      Evidence: `BoxSessionTest.test_no_keys_no_docker` (#153); the tag changed to `hold` in #154 (D10.12).
+      seen red: python -m unittest tests.test_box_session.BoxSessionTest.test_no_keys_no_docker on 495bf69 → FAILED (errors=1) (#153)
+      broken: docker asked without the container keys → AssertionError: Tuples differ: (0, True, [['--version']]) != (0, True, []) (#153)
+- [x] C10.20 **new** — As C10.15, on a fake session that sleeps until the fake `docker` is asked
       `kill driver-<uuid>`, then exits by itself: past `--session-minutes` the fake records that
       `kill`, its `run` records that it ended by itself (not by the tree kill), and the park line is
       as without the container; on an open STOP issue, the same, and the halt file names the STOP
       issue as without the container.
       Red today: no `docker kill` is asked; the session is ended by the tree kill.
       Test: `BoxKillTest.test_bound_kills_the_container`, `BoxKillTest.test_stop_kills_the_container`.
-- [ ] C10.21 **new** — `run-steps.py halt --docker <fake>` on a state with no lock whose run log's
+      Evidence: `BoxKillTest.test_bound_kills_the_container`, `BoxKillTest.test_stop_kills_the_container` (#155).
+      seen red: python -m unittest tests.test_box_kill tests.test_box_halt tests.test_box_recovery.BoxRecoveryTest.test_running_container_waits on main → AssertionError: Tuples differ: (1, False, False, False) != (0, True, True, False) (#155)
+      broken: the bound's kill left the container running → AssertionError: Tuples differ: (1, True, False, []) != (1, True, True, [{'ended': 'itself'}]) (#155)
+      broken: the STOP's kill left the container running → AssertionError: Tuples differ: (1, False, [], True) != (1, True, [{'ended': 'itself'}], True) (#155)
+- [x] C10.21 **new** — `run-steps.py halt --docker <fake>` on a state with no lock whose run log's
       newest `pid` line names `"container": "driver-s1"`, a pid that is gone, and no later `end`:
       with the fake's `kill` exiting 0, `halt` prints exactly "halt: set; killed container
       `driver-s1` of session `s1`" and exits 0, and asks no `inspect`; with `kill` failing "Error
@@ -342,17 +412,26 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       kill container `driver-s1`: permission denied" and then "halt: set; no driver is running".
       Red today: `halt` runs no `docker kill`; it prints "halt: set; no driver is running" alone.
       Test: `BoxHaltTest.test_halt_kills_the_container`, `BoxHaltTest.test_halt_container_gone`.
-- [ ] C10.22 **new** — Recovery waits on a running container: with the container keys, a run log
+      Evidence: `BoxHaltTest.test_halt_kills_the_container`, `BoxHaltTest.test_halt_container_gone` (#155).
+      seen red: python -m unittest tests.test_box_kill tests.test_box_halt tests.test_box_recovery.BoxRecoveryTest.test_running_container_waits on main → AssertionError: Tuples differ: (1, False, False, False) != (0, True, True, False) (#155)
+      broken: halt killed no container → AssertionError: Tuples differ: (0, ['halt: set; no driver is running'], []) != (0, ['halt: set; killed container `driver-s1` of session `[26 chars]1']]) (#155)
+      broken: halt said a container already gone → AssertionError: Tuples differ: (0, ['halt: set; could not kill container `driver-s1`: Err[120 chars]ng']) != (0, ['halt: set; no driver is running']) (#155)
+- [x] C10.22 **new** — Recovery waits on a running container: with the container keys, a run log
       whose newest `pid` line names `"container": "driver-s1"` and a pid that is gone, with the
       fake's `inspect` printing "true", makes `--once` print "wait: session `s1` is still running
       (container `driver-s1`)" and exit 0, starting nothing.
       Red today: a gone pid is a gone session; the crash park is printed.
       Test: `BoxRecoveryTest.test_running_container_waits`.
-- [ ] C10.23 **hold** — Without a `container` on the `pid` line, sessions are killed and Recovery
+      Evidence: `BoxRecoveryTest.test_running_container_waits` (#155).
+      seen red: python -m unittest tests.test_box_kill tests.test_box_halt tests.test_box_recovery.BoxRecoveryTest.test_running_container_waits on main → AssertionError: Tuples differ: (1, False, False, False) != (0, True, True, False) (#155)
+      broken: Recovery parked on a running container → AssertionError: Tuples differ: (1, False, False, False) != (0, True, True, False) (#155)
+- [x] C10.23 **hold** — Without a `container` on the `pid` line, sessions are killed and Recovery
       reads as before: `python -m unittest tests.test_session_bound tests.test_once_stop
       tests.test_halt tests.test_halt_race tests.test_once_halt tests.test_recovery_table
       tests.test_runlog_recovery` passes with the files unedited.
-- [ ] C10.24 **new** — `driver.status.level_2_run` over, oldest first, a container session `c1`
+      Evidence: the command above passes, the seven files unedited since `495bf69` (#155).
+      broken: the kill past the bound removed → AssertionError: True is not false : a process of the session still runs (#155)
+- [x] C10.24 **new** — `driver.status.level_2_run` over, oldest first, a container session `c1`
       (its `start` line with `container`) whose `end` says "opened: #5 from `x`", a PC session
       `p1` (no `container`) whose `end` says "opened: #6 from `y`", `merged` #6 (changed false),
       `merged` #5 (changed false), gives 1; with the two `merged` lines in the other order, 0; and
@@ -361,7 +440,10 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       Test: `Level2ContainerTest.test_only_container_sessions_count`.
       Replaces: C08.10 — was: a `merged` line with `changed` false counts whichever session opened its pull request, and a log of `merged` lines alone counts them.
       Replaces: C09.14 — was: `level_2_run` over two `merged` lines with `"changed": false` and no session lines gives 2.
-- [ ] C10.25 **hold** — The rest of C08.10 and C09.14 holds: `status` prints, under "refusals: 3",
+      Evidence: `Level2ContainerTest.test_only_container_sessions_count` (#157).
+      seen red: python -m unittest tests.test_level_2_container on main → AssertionError: 2 != 1 (#157)
+      broken: level_2_run counts a merge whatever session opened it, container or not → AssertionError: 2 != 1 (#157)
+- [x] C10.25 **hold** — The rest of C08.10 and C09.14 holds: `status` prints, under "refusals: 3",
       "  2 Bash: {"command": "git push --force"}" and "  1 Edit: {}"; after the `cost` line,
       "level 2: <k> of 15 pull requests in a row merged without a change asked", 0 for a log with
       no `merged` line; a `closed` line, a `merged` line with `changed` `null` or absent, and
@@ -369,7 +451,9 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `tests/test_level_2_sentence.py` and `scripts/test_driver_runs.py` pass with their logs given
       a container `start` and an "opened" `end` line for each counted `merged` pull request, and
       no other edit; `tests/test_status.py` passes unedited.
-- [ ] C10.26 **new** — `status` on `docs/trial/run.jsonl` (the Day 8 trial's log, its sessions run
+      Evidence: `StatusTrialTest.test_count_ends`, `Level2SentenceTest`, `python scripts/test_driver_runs.py` and `tests/test_status.py` pass, the last unedited since `495bf69` (#157).
+      broken: a closed line no longer ends the level 2 count → AssertionError: 'level 2: 3 of 15 pull requests in a row merged without a change asked' != 'level 2: 1 of 15 pull requests in a row merged without a change asked' (#157)
+- [x] C10.26 **new** — `status` on `docs/trial/run.jsonl` (the Day 8 trial's log, its sessions run
       on the PC) prints "level 2: 0 of 15 pull requests in a row merged without a change asked";
       `docs/trial/day-08.md` is not edited, and its `cost` line is still the one `status` gives.
       `TrialRecordTest.test_cost_line_is_status` compares the `cost` line and checks the level 2
@@ -377,28 +461,39 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       Red today: `status` prints "level 2: 3 of 15 ...".
       Test: `TrialRecordTest.test_cost_line_is_status`.
       Replaces: C08.12 — was: the record's `cost` and level 2 lines are both those `status` gives on the copy of the run log ("level 2: 3 of 15").
-- [ ] C10.27 **new** — `setup_check.protection_lines` with classic protection whose
+      Evidence: `TrialRecordTest.test_cost_line_is_status` (#157); `docs/trial/day-08.md` unedited since `495bf69`.
+      seen red: python -m unittest tests.test_trial_record.TrialRecordTest.test_cost_line_is_status on main → AssertionError: 'level 2: 3 of 15 pull requests in a row merged without a change asked' != 'level 2: 0 of 15 pull requests in a row merged without a change asked' (#157)
+      broken: level_2_run skips the container check → AssertionError: 'level 2: 3 of 15 pull requests in a row merged without a change asked' != 'level 2: 0 of 15 pull requests in a row merged without a change asked' (#157)
+- [x] C10.27 **new** — `setup_check.protection_lines` with classic protection whose
       `enforce_admins.enabled` is false and no rules gives
       `("FAIL", 'main: administrators may bypass the rules; turn on "Do not allow bypassing the above settings"')`
       right after the pull request line; with it true, `("ok", "main: no one may bypass the
       rules")` there; with main unprotected (404) and no rules, the FAIL line.
       Red today: no line names bypassing; the list is one line shorter.
       Test: `BypassTest.test_classic_enforce_admins`.
-- [ ] C10.28 **new** — With no classic protection (404) and a `pull_request` rule with
+      Evidence: `BypassTest.test_classic_enforce_admins` (#158).
+      seen red: python -m unittest tests.test_setup_bypass on main → AssertionError: 10 != 11 (#158)
+      broken: classic enforce_admins ignored → AssertionError: Tuples differ: ('FAIL', 'main: administrators may bypass t[58 chars]gs"') != ('ok', 'main: no one may bypass the rules') (#158)
+- [x] C10.28 **new** — With no classic protection (404) and a `pull_request` rule with
       `"ruleset_id": 7`: `repos/<repo>/rulesets/7` giving `"bypass_actors": []` gives the ok line;
       one actor, the FAIL line; no `bypass_actors` key, `("FAIL", "main's ruleset 7: cannot read:
       bypass_actors not shown (needs admin)")`; a 403, `("FAIL", "main's ruleset 7: cannot read:
       no permission (needs admin)")`.
       Red today: as C10.27.
       Test: `BypassTest.test_ruleset_bypass_actors`.
-- [ ] C10.29 **hold** — The other lines stay: `python scripts/test_setup_check.py` passes with
+      Evidence: `BypassTest.test_ruleset_bypass_actors` (#158).
+      seen red: python -m unittest tests.test_setup_bypass on main → AssertionError: 10 != 11 (#158)
+      broken: ruleset bypass_actors read the other way → AssertionError: Tuples differ: ('ok', 'main: no one may bypass the rules') != ('FAIL', 'main: administrators may bypass t[58 chars]gs"') (#158)
+- [x] C10.29 **hold** — The other lines stay: `python scripts/test_setup_check.py` passes with
       only these edits, in the seven tests the bypass line reaches: its fake's protection answers
       given `"enforce_admins": {"enabled": true}`; `fake()`'s `keys` given the path
       `repos/<repo>/rulesets/<id>` and its ruleset test a `ruleset_id` and an answer with
       `"bypass_actors": []`; and `test_an_unprotected_main_fails_each_required_check_by_name`'s
       count `len(setup_check.REQUIRED) + 2` made `+ 3`. `tests.yml` does not run it;
       `spec-drift-tests.yml` runs every `scripts/test_*.py`.
-- [ ] C10.30 **new** — Live: one step of the trial's project ran in the container. In
+      Evidence: the command above passes with the seven tests' edits alone (#158); broken once at the close, which #158 had not done (D10.21).
+      broken: the bypass line put in place of the pull request line → AssertionError: 10 != 11
+- [x] C10.30 **new** — Live: one step of the trial's project ran in the container. In
       `docs/trial/day-10.md`: the run log's `start`, `pid` and `end` lines with
       `"container": "driver-<session>"`; the `end` line's outcome "opened: #<n> from `<branch>`"
       and its `cost_usd`; the pull request's URL and its head commit's author name, the image's
@@ -406,20 +501,26 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       and `git status --short` in the project's checkout on the PC, empty after it.
       Red today: no session has run in the container; `docs/trial/day-10.md` does not exist.
       Test: `TrialTenTest.test_record_names_the_container_run` (reads the record's lines).
-- [ ] C10.31 **hold** — The files Days 8 to 10 do not change are unchanged since `495bf69`:
+      Evidence: `TrialTenTest.test_record_names_the_container_run` (#159): bearing #101, opened from the container, its head commit's author `Driver session`.
+      seen red: python -m unittest tests.test_trial_ten on main → AssertionError: docs/trial/day-10.md does not exist (#159)
+      broken: the record's head commit author set to the PC's user → AssertionError: 'Yusuprozimemet' != 'Driver session' (#159)
+- [x] C10.31 **hold** — The files Days 8 to 10 do not change are unchanged since `495bf69`:
       Verify's diff prints nothing. Its list is C08.1's with `driver/settings.py` and `hooks`
       taken out (Day 9's Tracks B1 and B2 edited `driver/settings.py`, `hooks/guard.py` and
       `hooks/halt.py` and added `hooks/hook_log.py`; Tracks A and C2 here edit `settings.py` and
       add `hooks/probe.py`), and `driver/config.py` (Track A) and `driver/preflight.py` (Track C1)
       taken out.
       broken: a byte added to driver/decide.py → import re (#148)
+      Evidence: `git -c core.safecrlf=false diff --exit-code 495bf69` over Verify's list prints nothing on `main` at `03bb9e9` (#148).
       Replaces: C08.1 — was: the files Day 8 does not change are unchanged since `f9f43fd`, over a list that holds `driver/settings.py`, `driver/config.py`, `driver/preflight.py` and `hooks`.
-- [ ] C10.32 **hold** — Recovery parks on a stopped container as on a gone pid: with the container
+- [x] C10.32 **hold** — Recovery parks on a stopped container as on a gone pid: with the container
       keys, the run log of C10.22, and the fake's `inspect` printing "false" or exiting 1 with
       "error: no such object: driver-s1", `--once` prints Day 7's crash park, "park: the run log
       names session `s1` for this step, with no end", exits 1 and prints no wait line. True on
       `main` since Day 7; Track D2 adds the test and breaks it once (D10.13).
       Test: `BoxRecoveryTest.test_stopped_container_parks`.
+      Evidence: `BoxRecoveryTest.test_stopped_container_parks` (#155); split from C10.22 and tagged `hold` in #156 (D10.13).
+      broken: Recovery waited on a stopped container → AssertionError: Tuples differ: (0, False, ['wait: session `s1` is still running (container `driver-s1`)']) != (1, True, []) (#155)
 
 ## Verify
 ```bash
@@ -562,3 +663,62 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
 - **Hand-off** H10.2 → Day 13: the container's transcripts are in `<state>/claude/projects/-work/`,
   which `scripts/token-usage.py` and `scripts/publish-counts.py` do not read; the level 2 record's
   cost needs them counted, and `plan.md`'s "Unverified" item on it stays open until then.
+- **Defect** D10.14 — found: review · cause: implementation · made: Day 10 · the implementer's
+  `setUp` in `tests/test_box_command.py` imported `driver.box` for every test, so on `main` the
+  settings and `--docker` tests failed on the missing module, not on their own red; the import
+  moved into the one test that uses it (#149).
+- **Defect** D10.15 — found: break on purpose · cause: implementation · made: Day 10 · the mounts
+  test built its expected paths with `os.path.join`, so a break's report held `\` on Windows and
+  `/` on Linux, which CI's replay would not match; the comparison now writes `/` (#149).
+- **Defect** D10.16 — found: break on purpose · cause: implementation · made: Day 10 · the first
+  settings break's report held the container path `/driver/hooks`, which `scripts/break.py`
+  refuses as absolute; the break now renames the file, and the assertion compares the name (#149).
+- **Defect** D10.17 — found: break on purpose · cause: environment · made: none · same-as: D05.5 ·
+  Git Bash rewrote `--find 'target=/state,...'` and `--find "source=<state>/claude,..."` into
+  Windows paths, so breaks in #149 and #150 found nothing until run with `MSYS_NO_PATHCONV=1`.
+- **Defect** D10.18 — found: Track A · cause: implementation · made: Day 09 ·
+  `UsageLimitTest.test_far_reset_parks` fails on and off under `scripts/test-parallel.py`, the
+  driver's exit code still `None` when the test reads it: once each in #149, #150, #152, #155 and #157, each
+  time passing alone and under `--repeat`. No file of Day 10 touches its path.
+- **Defect** D10.19 — found: break on purpose · cause: process · made: Day 10 · Track B's brief let
+  the file test use `assertIn` and `assertNotIn`, which print the whole file into the failure, so
+  `scripts/break.py` refused the first two reports (absolute paths from the Dockerfile's text); the
+  test now asserts with its message alone (#150).
+- **Defect** D10.20 — found: break on purpose · cause: implementation · made: Day 10 · C10.11's
+  test first failed on a line holding `/driver/hooks`, and C10.13's on one holding the session's
+  uuid, both of which `scripts/break.py` refuses; the tests now compare the exit code and counts
+  first (#152).
+- **Defect** D10.21 — found: close · cause: process · made: Day 10 · C10.29, a `hold`, was never
+  broken on purpose: #158 broke C10.27 and C10.28 only. The close broke it once ("the bypass line
+  put in place of the pull request line") and added it to the manifest.
+- **Defect** D10.22 — found: seen red · cause: implementation · made: Day 10 · C10.19's test
+  imported `driver.box` at the top of the module, so on `495bf69` it failed on the import, not on
+  the spec's `SystemExit: 2`; the import moved into the one test that uses it (#153).
+- **Defect** D10.23 — found: Track E · cause: spec · made: Day 10 · In scope says a counted
+  session's outcome "starts 'opened: #<pr> '", with a trailing space, which `scripts/test_driver_runs.py`'s
+  "opened: #12" end line does not have; the code matches `opened: #(\d+)` and compares the number,
+  as `driver/loop.py` reads it, which still tells #5 from #50 (#157, a departure recorded there).
+- **Defect** D10.24 — found: self · cause: process · made: Day 10 · Track G's first `--once` was
+  refused, "the driver's repository has changes: `tests/test_trial_ten.py`": the track's test was
+  left uncommitted in the driver's folder; it was stashed and the run started again (#159).
+- **Defect** D10.25 — found: self · cause: process · made: Day 10 · the first draft of
+  `docs/trial/day-10.md` said the `end` line's one refusal was bearing's read guard on a Read with
+  no range; the transcript shows the Read had `limit` 200 and returned the file, so the record now
+  says the CLI counted a denial for a call that ran, cause unknown (#159).
+- #153 rewrote three of Day 7's and Day 9's breaks' finds (`ruff format` split the `begin` call once
+  `container=` was added) and recorded them again under their names: "run_session writes no pid
+  line", "begin writing no issue on the start line" and "the resumed session read as any outcome,
+  not the limit again (C09.2)". Day 7's and Day 9's manifests keep their finds, which replay at
+  their own closing commits. #152 and #153 likewise recorded again the C1 and C2 breaks whose
+  reports had changed; the criteria above carry the newest report of each, and the manifest each
+  name once.
+- C10.7 and C10.14 are live: their Docker part skips in CI and in the replay. At the close both
+  passed on this machine with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322`.
+- Track G opened bearing #101 from the container and left it open for the maintainer; its record
+  is `docs/trial/day-10.md`.
+- The blind relabel (`scripts/relabel.py`), run again after D10.26, agreed on 26 of 26 stages,
+  24 of 26 causes and 26 of 26 `made:`. Kept: D10.18 `implementation`, as the test reads the
+  driver's exit code before the driver has ended, which the rater read as unclear; D10.19
+  `process`, since the brief, not the implementer, allowed the assertions that print the whole
+  file (as D09.22 and D09.23). The first run, on 25, also read D10.17 as `made: Day 10`; kept
+  `none`, as Git Bash's path conversion is the machine's (as D05.5).
