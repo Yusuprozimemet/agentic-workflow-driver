@@ -546,12 +546,14 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
 - Every Day 11 track break's find matches once on `main` but #175's "a failed heartbeat comment never tried again", whose find #176 rewrote and recorded again under that name with the same report: the manifest holds #176's. #177 recorded C11.23's break as "(C11.17)" before the case moved; #176's record under "(C11.23)" is the manifest's.
 - Tracks D and E1 recorded no break of C11.15 and C11.20, which the Notes above left to them; #169's breaks of both, run on the code before the day, still find their lines once and are the ones recorded.
 - C11.21 is live: its Docker part skips in CI and in the replay. `usage` repeating on each content block of a message (the Note above) stays unknown: the live session's one `assistant` line held one `text` block (#178).
-- The blind relabel (`scripts/relabel.py`), run again after two changes, agreed on 31 of 31 stages,
-  27 of 31 causes and 30 of 31 `made:`. Changed on the first run's disagreements: D11.25 from
-  `found: Track E2` to `Day 11 review`, since Track E1's test had merged when Track E2 found it;
-  D11.31's cause from `spec` to `implementation`, since #171 moved the test without recording the
-  departure. Kept: D11.22 `environment` and `made: none`, Git Bash's path conversion being the
-  machine's (as D10.17); D11.24 `process`, the window being the brief's, not the implementer's (as
-  D10.19); D11.27 `process`, the shell doing as written, the command being the slip; D11.29
-  `implementation`, as D10.18 (the test reads the driver's exit before the driver has ended).
+- The blind relabel (`scripts/relabel.py`), run on 31 entries and again on 32 after D11.32, agreed
+  the second time on 31 of 32 stages, 27 of 32 causes and 31 of 32 `made:`. After the first run,
+  D11.25 changed from `found: Track E2` to `Day 11 review` (Track E1's test had merged when Track E2
+  found it) and D11.31's cause from `spec` to `implementation` (#171 moved the test without
+  recording the departure). The second run read both the other way, D11.25 before the merge and
+  D11.31 `process`: kept, for the reasons just given. Kept as well: D11.22 `environment` and `made:
+  none`, Git Bash's path conversion being the machine's (as D10.17); D11.24 `process`, the window
+  being the brief's, not the implementer's (as D10.19); D11.27 `process`, the shell doing as
+  written, the command being the slip; D11.29 `implementation`, as D10.18 (the test reads the
+  driver's exit before the driver has ended), which the rater read as unclear.
 - Still for the maintainer, as plan-change matters: `plan.md` says the session id is read from the output ("Where am I, while a session runs"; "What to build", item 2), `plan.md:130`'s "the JSON result", `plan.md:630`'s "Days 1 to 9 have specs", and P60's `--output-format json`.
