@@ -29,7 +29,10 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # (a string printed as it is, anything else as JSON), one per call, the last repeated. An answer's
 # `closes` lists the issue numbers it closes when it is given, so that a test can close the run's
 # issue at an exact call. `pr_code` fails every `pr list` call, as `issue_code` does its calls. An
-# answer's `err` is written to stderr when it has one.
+# answer's `err` is written to stderr when it has one. `comment_id` is the number that
+# `issue comment` prints after `#issuecomment-` (1 when not given), and `comment_code` fails
+# every `issue comment` and `api` call when it is not 0. An `api` call exits 0 once its stdin
+# is recorded, as a PATCH of a comment does.
 FAKE = """import json
 import sys
 import time
@@ -57,7 +60,7 @@ def step(name):
     sys.exit(answer["code"])
 
 
-if "--body-file" in args and args[args.index("--body-file") + 1] == "-":
+if any(flag in args and args[args.index(flag) + 1] == "-" for flag in ("--body-file", "--input")):
     # Read before any exit below, so that a failed call does not leave its stdin unread.
     body = sys.stdin.buffer.read().decode("utf-8")
     with (folder / "bodies.jsonl").open("ab") as bodies:
@@ -66,6 +69,8 @@ if args[0] == "issue" and spec.get("sleep_on") == args[1]:
     time.sleep(spec.get("sleep", 0))
 if spec["code"] != 0:
     sys.exit(spec["code"])
+if spec.get("comment_code", 0) != 0 and (args[:2] == ["issue", "comment"] or args[0] == "api"):
+    sys.exit(spec["comment_code"])
 if args[0] in ("issue", "label") and spec.get("issue_code", 0) != 0:
     sys.exit(spec["issue_code"])
 if args[:2] == ["run", "list"]:
@@ -123,7 +128,7 @@ if args[:2] in (["issue", "comment"], ["issue", "close"]):
                 issue["state"] = "closed"
         (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
         sys.exit(0)
-    print(f"https://github.com/me/project/issues/{args[2]}#issuecomment-1")
+    print(f"https://github.com/me/project/issues/{args[2]}#issuecomment-{spec.get('comment_id', 1)}")
     sys.exit(0)
 if args[:2] == ["pr", "checks"]:
     step("checks")
@@ -131,6 +136,8 @@ if args[:2] == ["pr", "view"]:
     step("views")
 if args[:2] == ["run", "view"]:
     step("logs")
+if args[0] == "api":
+    sys.exit(0)
 sys.exit(99)
 """
 
@@ -146,6 +153,8 @@ def fake_gh(
     views=None,
     logs=None,
     run_steps=None,
+    comment_id=1,
+    comment_code=0,
 ):
     spec = {
         "runs": runs or [],
@@ -157,6 +166,8 @@ def fake_gh(
         "views": views or [],
         "logs": logs or [],
         "run_steps": run_steps or [],
+        "comment_id": comment_id,
+        "comment_code": comment_code,
     }
     # Files are written as bytes: on Windows, text mode would add a carriage return to each line.
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))

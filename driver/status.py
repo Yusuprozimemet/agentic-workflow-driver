@@ -156,6 +156,12 @@ def progress(records, session, events, now):
     return [_running(records, session, now), _last_event(events, now), _tokens(events)]
 
 
+def live_lines(state, session):
+    # The progress lines a live session's heartbeat comment shows, as `status` shows them.
+    records, _ = runlog.read(state)
+    return progress(records or [], session, _events(state, session), lock.now())
+
+
 def _running(records, session, now):
     start = next(
         (r for r in records if r.get("event") == "start" and r.get("session") == session), None
