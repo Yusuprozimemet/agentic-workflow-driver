@@ -321,7 +321,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       no `progress`.
       Test: `ProgressTest.test_estimate_edges`.
       Plan: N33 "fewer than three, no estimate"
-      Evidence: `ProgressTest.test_estimate_edges` passes on `main` at `6f51a22` (#173); the same seen-red run as C11.11's, `tests.test_progress` on `main` → FAILED (errors=8) (#173).
+      Evidence: `ProgressTest.test_estimate_edges` passes on `main` at `6f51a22` (#173); seen red in the same run as C11.11's:
+      seen red: python -m unittest tests.test_progress on main → FAILED (errors=8) (#173)
       broken: an even median rounded up → AssertionError: 'running: 12m05s (estimate 20m01s, the median of 4 earlier track sessions)' != 'running: 12m05s (estimate 20m00s, the median of 4 earlier track sessions)' (#173)
       broken: a spec session counted in a track estimate → AssertionError: 'running: 12m05s (estimate 15m00s, the median of 4 earlier track sessions)' != 'running: 12m05s (estimate 20m00s, the median of 3 earlier track sessions)' (#173)
 - [x] C11.13 **new** — `run-steps.py status` with a live session (a `pid` line of a running
@@ -344,7 +345,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `StatusWatchTest.test_watch_with_nothing_running`,
       `StatusWatchTest.test_watch_creates_nothing`.
       Plan: N32 "status --watch prints status again at each poll until the session ends"
-      Evidence: `StatusWatchTest.test_watch_until_the_session_ends`, `StatusWatchTest.test_watch_with_nothing_running` and `StatusWatchTest.test_watch_creates_nothing` pass on `main` at `6f51a22` (#173); the same seen-red run as C11.13's, `tests.test_status_watch` on `main` → AssertionError: 0 != 1 (#173).
+      Evidence: `StatusWatchTest.test_watch_until_the_session_ends`, `StatusWatchTest.test_watch_with_nothing_running` and `StatusWatchTest.test_watch_creates_nothing` pass on `main` at `6f51a22` (#173); seen red in the same run as C11.13's:
+      seen red: python -m unittest tests.test_status_watch on main → AssertionError: 0 != 1 (#173)
       broken: status --watch stops after its first block → AssertionError: [] is not true : status --watch printed nothing after its first block (#173)
 - [x] C11.15 **hold** — `status` with no live session prints what it printed before:
       `tests/test_status.py`, `tests/test_status_trial.py` and `tests/test_level_2_sentence.py`
@@ -429,6 +431,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N30 "The driver runs claude -p with --output-format stream-json --verbose"
       Evidence: `StreamLiveTest.test_image_takes_stream_json`, run with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322` and `DRIVER_CONTAINER_SECRETS` set on this machine, passes (#178), and again on `main` at `6f51a22` at the close; CI skips its Docker part.
       Live, so not replayed: CI and the replay have no image; a reader checked the live run and its break in #178: with `--verbose` left out of the test's command, the test failed twice with "AssertionError: 1 != 0 : exit 1" and the CLI's "requires --verbose" error. A replayed break would only skip, so it has no manifest entry (as C10.7).
+      broken: none → live, so not replayed: with `--verbose` left out of the test's command it failed twice on this PC (#178); CI and the replay have no image
 
 ## Verify
 ```bash
@@ -542,10 +545,11 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
 - **Defect** D11.30 — found: close · cause: process · made: Day 11 · Track B rewrote the finds of three earlier breaks in `run_session` (Day 6's "the bound never reached", Day 10's "the bound's kill left the container running" and "the kill past the bound removed"), which the Tracks section told it to record again, and did not; #172 then said Track B had. The close ran the three through `break.py` on the new code, with the same reports as their days, and they are in this day's manifest, under C11.8.
 - **Defect** D11.31 — found: close · cause: implementation · made: Day 11 · "Where the tests live" put `StreamKindTest` in `tests/test_stream.py`; #171 put it in `tests/test_events.py`, a departure it did not record (the sentence fixed at the close).
 - **Defect** D11.32 — found: close · cause: implementation · made: Day 11 · `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool` (C11.10) failed once in the close's full run, on its check that `last_event` is the same in both reads and is the `init` line's `at`; it passed 3 of 3 run alone, and #176's full run also saw `test_heartbeat.py` fail once. A likely cause, not checked: under load the first read, 0.5 seconds after the `init` line, can come before the first poll's beat, when the file is still the one written at the start. Not fixed; no day owns it.
+- **Defect** D11.33 — found: evidence replay · cause: process · made: Day 11 · the close's first draft failed its rehearsal on three criteria: C11.12's and C11.14's Evidence named the seen-red run as `tests.test_progress` and `tests.test_status_watch` in backticks, which the replay reads as test names ("not defined"), and C11.21, a live `hold`, had its break as a sentence with no `broken:` line. Fixed before the PR: the seen-red lines copied, and `broken: none → <why>` under C11.21.
 - At the close, on `main` at `6f51a22`: Verify's tests ran 110, OK, with `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` set, so `StreamLiveTest` ran rather than skipped; both `git diff`s print nothing; the C11.9 grep finds none. Under `python scripts/test-parallel.py --repeat 10` (ten copies at once, eight workers), `test_phone.py` failed 8 of 10, each time `test_heartbeat_comment_edited_in_place` on its "last event: system init" check (D11.25), and `test_usage_limit.py` failed 8 of 10, each time `test_far_reset_parks` (D11.29), which passed 50 of 50 so at Day 10's close: both fail more often the heavier the load, and neither has a day that owns it.
 - Every Day 11 track break's find matches once on `main` but #175's "a failed heartbeat comment never tried again", whose find #176 rewrote and recorded again under that name with the same report: the manifest holds #176's. #177 recorded C11.23's break as "(C11.17)" before the case moved; #176's record under "(C11.23)" is the manifest's.
 - Tracks D and E1 recorded no break of C11.15 and C11.20, which the Notes above left to them; #169's breaks of both, run on the code before the day, still find their lines once and are the ones recorded.
-- C11.21 is the first `hold` that is live: its break cannot replay, so `specs/README.md` has it written as a sentence, and the dashboard, which reads a red only from a seen-red or `broken:` line, flags it "No seen-red or broken line" (a scratch merge of this branch, `spec-drift.py --out`). Day 10's live criteria were `new`, with seen-red lines. Left for the maintainer: whether a live hold's sentence should count on the dashboard.
+- C11.21 is the first `hold` that is live: its break cannot replay, and the close's first draft wrote it as a sentence alone, which the rehearsal failed ("a hold criterion with no broken: line") and the dashboard flagged "No seen-red or broken line". It now carries `broken: none → <why>`, as Day 3's live hold did.
 - C11.21 is live: its Docker part skips in CI and in the replay. `usage` repeating on each content block of a message (the Note above) stays unknown: the live session's one `assistant` line held one `text` block (#178).
 - The blind relabel (`scripts/relabel.py`), run on 31 entries and again on 32 after D11.32, agreed
   the second time on 31 of 32 stages, 27 of 32 causes and 31 of 32 `made:`. After the first run,
