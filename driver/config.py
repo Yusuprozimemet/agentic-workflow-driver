@@ -1,7 +1,9 @@
 """The driver's config, the JSON file run-steps.py reads for the project when --project is not given.
 load() checks the whole file and returns every problem as one line, so a person fixes them in one
 pass. The optional container_image and container_secrets come as a pair, and a session's container
-needs both. Plain stdlib: the file is read as UTF-8 bytes, and a problem is never raised."""
+needs both. The optional stale_minutes, a number above 0 (10 when absent), is how long a session may
+go without an event before the run's issue says so. Plain stdlib: the file is read as UTF-8 bytes, and
+a problem is never raised."""
 
 import json
 import os
@@ -60,6 +62,9 @@ def problems(path, config):
         lines.append(f"cannot start: {path}'s container_image must be an image name")
     if secrets and not is_abs_path(config["container_secrets"]):
         lines.append(f"cannot start: {path}'s container_secrets must be an absolute path")
+    # Absent is fine: the driver then uses 10 minutes, as once.run sets it.
+    if "stale_minutes" in config and not is_budget(config["stale_minutes"]):
+        lines.append(f"cannot start: {path}'s stale_minutes must be a number above 0")
     return lines
 
 

@@ -243,6 +243,18 @@ def read_stdout(proc, lines, state, session):
             pass
 
 
+def quiet_for(state, session, begun):
+    # The seconds from the session's newest event, or from its start when it has none, to now. When neither
+    # time reads, the session is not quiet: 0 seconds, so no stale comment.
+    now = lock.now()
+    for stamp in (stream.last_event(state, session), begun):
+        try:
+            return (now - lock.stamp_time(stamp)).total_seconds()
+        except (TypeError, ValueError):
+            pass
+    return 0
+
+
 def run_session(command, prompt, args, project, number, record):
     # Returns (stdout, return code), PAST when the session ran past --session-minutes, or None when a
     # STOP issue stopped the session. The reader thread takes the session's stdout line by line, and
@@ -272,7 +284,6 @@ def run_session(command, prompt, args, project, number, record):
     except OSError:
         # A session that has already exited has closed its input: there is no prompt to send it.
         pass
-    comment_id = None
     while True:
         # The wait ends at the next poll or at the bound, whichever comes first.
         timeout = min(args.poll, max(0, deadline - time.monotonic()))
@@ -296,12 +307,21 @@ def run_session(command, prompt, args, project, number, record):
         if stops:
             stop_session(proc, args, project, number, record, stops[0])
             return None
-        # The heartbeat is made at a poll that read the issues, so a session that ends before its
-        # first poll leaves no comment on the run's issue.
+        # The heartbeat and the stale check are made at a poll that read the issues, so a session that ends
+        # before its first poll leaves no comment on the run's issue. The comment's id and stale flag are read
+        # from the session's file at each poll, and kept there only when one of them changed.
         body = issues.heartbeat_body(
             record.get("step"), record["session"], status.live_lines(args.state, record["session"])
         )
-        comment_id = issues.heartbeat(project, args.gh, number, comment_id, body)
+        comment_id, stale = stream.comment_state(args.state, record["session"])
+        new_id = issues.heartbeat(project, args.gh, number, comment_id, body)
+        minutes = getattr(args, "stale_minutes", 10)
+        now_stale = stale or (
+            quiet_for(args.state, record["session"], begun) >= minutes * 60
+            and issues.stale_comment(project, args.gh, number, record["session"], minutes)
+        )
+        if (new_id, now_stale) != (comment_id, stale):
+            stream.keep_comment(args.state, record["session"], new_id, now_stale)
 
 
 # kind is "start", "running" (a live session), "wait", "park" or "end"; ready() says which, and why.
@@ -351,6 +371,7 @@ def run(args, home, read_facts, body=None):
     config, lines = load_config(args.config)
     if lines:
         return refuse(lines)
+    args.stale_minutes = config.get("stale_minutes", 10)
     # The config is read even when --project is given: later tracks need its budget_usd.
     project = args.project if args.project is not None else config["project"]
     refusal = lock.take(args.state)

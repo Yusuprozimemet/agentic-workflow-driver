@@ -1,7 +1,8 @@
-"""The phone's heartbeat comment (Day 11, Track E1): a --once run that is in a session at a poll edits one
-comment on the run's issue in place, and a comment that fails is tried again at the next poll. Each case runs
-a fake claude that prints its init line and sleeps for four seconds, with the driver's --poll at 0.3 seconds
-or at 30, and reads the bodies the fake gh recorded. No report here names a pid, uuid or path."""
+"""The phone's heartbeat comment (Day 11, Track E1) and its stale comment (Track E2): a --once run that is in a
+session at a poll edits one comment on the run's issue in place, and a comment that fails is tried again at the
+next poll. A session quiet for stale_minutes gets one stale comment, and a resumed session keeps its comment.
+Each case runs a fake claude that prints its init line and sleeps for four seconds, with the driver's --poll at
+0.3 seconds or at 30, and reads the bodies the fake gh recorded. No report here names a pid, uuid or path."""
 
 import json
 import os
@@ -43,13 +44,19 @@ def line_at(lines, prefix):
 class PhoneTest(unittest.TestCase):
     setUp = outcome.OutcomeTest.setUp
 
-    def live_run(self, poll, comment_id=None, comment_code=None):
+    def live_run(self, poll, comment_id=None, comment_code=None, stale_minutes=None, before=""):
         # One --once run whose session prints its init line and sleeps for four seconds: it ends before a
         # poll of 30 seconds, and is in progress at each poll of 0.3 seconds. The fake gh's comment id and
-        # its comment failure code are set in its fake.json, as build leaves them.
-        do = f"print({json.dumps(SYSTEM)!r}, flush=True)\nimport time; time.sleep(4)\n"
+        # its comment failure code are set in its fake.json, as build leaves them. before is Python run at
+        # the start of the fake claude, before its init line; stale_minutes is set in driver.json.
+        do = f"{before}print({json.dumps(SYSTEM)!r}, flush=True)\nimport time; time.sleep(4)\n"
         folder = Path(tempfile.mkdtemp(dir=self.root))
         flags = build(folder, drift=drift_of(DASHED), do=do)
+        if stale_minutes is not None:
+            config_file = folder / "driver.json"
+            config = json.loads(config_file.read_bytes())
+            config["stale_minutes"] = stale_minutes
+            config_file.write_bytes(json.dumps(config).encode("utf-8"))
         gh_file = folder / "gh" / "fake.json"
         spec = json.loads(gh_file.read_bytes())
         if comment_id is not None:
@@ -134,4 +141,62 @@ class PhoneTest(unittest.TestCase):
             checks,
             (True,) * len(checks),
             "a failed heartbeat comment was not skipped and tried again",
+        )
+
+    def test_stale_comment_once(self):
+        # C11.17: a session quiet for stale_minutes gets one stale comment on the run's issue, and the run
+        # goes on as the run without it does. The reference run has no stale_minutes, so no stale comment.
+        _, stale, start, number, bodies = self.live_run(0.3, stale_minutes=0.02)
+        _, reference, _, _, _ = self.live_run(0.3)
+        comments = [
+            record
+            for record in bodies
+            if record["args"] == ["issue", "comment", str(number), "--body-file", "-"]
+        ]
+        expected = f"stale: session `{start.get('session')}` has sent no event for 0.02 minutes; it is not stopped"
+        checks = (
+            len([record for record in comments if record["body"].strip() == expected]) == 1,
+            len([record for record in comments if record["body"].startswith("step: ")]) == 1,
+            stale.returncode == reference.returncode,
+            stale.stdout == reference.stdout,
+        )
+        self.assertEqual(checks, (True,) * len(checks), "no single stale comment")
+
+    def test_not_stale_before_stale_minutes(self):
+        # C11.17: with stale_minutes absent the limit is 10 minutes, so a session of four seconds gets its
+        # heartbeat comment and no stale comment.
+        _, _, _, number, bodies = self.live_run(0.3)
+        comments = [
+            record
+            for record in bodies
+            if record["args"] == ["issue", "comment", str(number), "--body-file", "-"]
+        ]
+        checks = (
+            len([record for record in comments if record["body"].startswith("step: ")]) == 1,
+            not any(record["body"].startswith("stale: ") for record in comments),
+        )
+        self.assertEqual(checks, (True,) * len(checks), "a stale comment before stale_minutes")
+
+    def test_resumed_session_keeps_its_comment(self):
+        # C11.17: the session's comment file already holds comment 99 and a stale flag, as a session that
+        # ran before and went quiet leaves it. The first poll edits comment 99 and makes no comment.
+        before = (
+            'sid = args[args.index("--session-id") + 1]\n'
+            'comment = state / "sessions" / f"{sid}.comment.json"\n'
+            "comment.parent.mkdir(parents=True, exist_ok=True)\n"
+            'comment.write_bytes(b\'{"id": 99, "stale": true}\')\n'
+        )
+        _, _, _, number, bodies = self.live_run(1.0, stale_minutes=0.02, before=before)
+        comments = [
+            record
+            for record in bodies
+            if record["args"] == ["issue", "comment", str(number), "--body-file", "-"]
+        ]
+        checks = (
+            not any(record["body"].startswith("step: ") for record in comments),
+            any(record["args"] == PATCH for record in bodies),
+            not any(record["body"].startswith("stale: ") for record in comments),
+        )
+        self.assertEqual(
+            checks, (True,) * len(checks), "a resumed session did not keep its comment"
         )
