@@ -1,6 +1,7 @@
 """The driver reads and writes the project's issues through gh: the parks, the run's issue, the
 phone's STOP (Day 5). Each call is one gh call, a failed one is a reason, never a guess."""
 
+import json
 import os
 import re
 import shutil
@@ -9,6 +10,8 @@ import subprocess
 
 from driver import home, lock, runlog
 from driver.github import _gh
+
+CLOSE_LINE = "Close this issue to turn the driver off after this step."
 
 
 def open_issues(project, gh):
@@ -169,7 +172,7 @@ def open_run(project, gh, step, session, issues, state=None):
     # Given the state, the body shows what the run has cost so far, $0.00 on a new issue.
     if state is not None:
         body += f"cost so far: ${runlog.issue_cost(state, number):.2f}\n"
-    body += "\nClose this issue to turn the driver off after this step.\n"
+    body += f"\n{CLOSE_LINE}\n"
     if number is not None:
         code = _comment(project, gh, number, body)
         if code != 0:
@@ -194,6 +197,43 @@ def close(project, gh, number, comment, timeout=None):
     if code != 0:
         return f"gh issue close exited {code}"
     return None
+
+
+def heartbeat_body(step, session, lines):
+    # The comment a live session's run edits in place: the step and session, the run's own
+    # wording, then the progress lines the session shows at a poll.
+    return f"step: {step}\nsession: {session}\n\n{CLOSE_LINE}\n" + "".join(
+        line + "\n" for line in lines
+    )
+
+
+def heartbeat(project, gh, number, comment_id, body):
+    # The first beat posts a comment and keeps its id; each later beat edits that comment, so the
+    # issue holds one heartbeat, not one per poll. A failed call is skipped: the next poll tries
+    # again, and a beat that has no id yet is posted again.
+    if comment_id is None:
+        code, out = _write(
+            project, gh, ["issue", "comment", str(number), "--body-file", "-"], body, timeout=10
+        )
+        match = re.search(r"#issuecomment-(\d+)", out)
+        if code != 0 or match is None:
+            return None
+        return int(match.group(1))
+    _write(
+        project,
+        gh,
+        [
+            "api",
+            "--method",
+            "PATCH",
+            f"repos/{{owner}}/{{repo}}/issues/comments/{comment_id}",
+            "--input",
+            "-",
+        ],
+        json.dumps({"body": body}),
+        timeout=10,
+    )
+    return comment_id
 
 
 def park_body(project, line, sentence, session):

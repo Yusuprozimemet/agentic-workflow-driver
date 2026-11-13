@@ -29,7 +29,7 @@ import time
 import uuid
 from collections import namedtuple
 
-from driver import box, github, issues, livecheck, lock, runlog, stream, tree
+from driver import box, github, issues, livecheck, lock, runlog, status, stream, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -272,6 +272,7 @@ def run_session(command, prompt, args, project, number, record):
     except OSError:
         # A session that has already exited has closed its input: there is no prompt to send it.
         pass
+    comment_id = None
     while True:
         # The wait ends at the next poll or at the bound, whichever comes first.
         timeout = min(args.poll, max(0, deadline - time.monotonic()))
@@ -295,6 +296,12 @@ def run_session(command, prompt, args, project, number, record):
         if stops:
             stop_session(proc, args, project, number, record, stops[0])
             return None
+        # The heartbeat is made at a poll that read the issues, so a session that ends before its
+        # first poll leaves no comment on the run's issue.
+        body = issues.heartbeat_body(
+            record.get("step"), record["session"], status.live_lines(args.state, record["session"])
+        )
+        comment_id = issues.heartbeat(project, args.gh, number, comment_id, body)
 
 
 # kind is "start", "running" (a live session), "wait", "park" or "end"; ready() says which, and why.

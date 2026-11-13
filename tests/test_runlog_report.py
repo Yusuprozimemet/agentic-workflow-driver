@@ -130,8 +130,9 @@ class RunIssueCostTest(OnCase, unittest.TestCase):
     def test_second_step_comment(self):
         self.build_paid("second_comment")
         code, _, _ = self.on()
-        # The run's issue is commented on for the second step; the close comment has no "step: ".
-        steps = [body for body in self.comments() if "step: " in body]
+        # The run's issue is commented on for the second step; the close comment and a session's
+        # heartbeat comments (Day 11) have no "cost so far: ".
+        steps = [body for body in self.comments() if "cost so far: " in body]
         self.assertEqual((code, len(steps), "cost so far: $1.50" in steps[0]), (0, 1, True))
 
     def test_other_issue_not_counted(self):
