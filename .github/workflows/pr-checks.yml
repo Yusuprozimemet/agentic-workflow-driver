@@ -182,6 +182,17 @@ jobs:
       - run: python scripts/test_behaviour_index.py
       - run: python scripts/behaviour-index.py
 
+  plan-links:
+    name: "Plan links quote the plan's words"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/test_plan_links.py
+      - run: python scripts/plan-links.py
+
   names:
     name: Branch, title, commits and Jira keys agree
     runs-on: ubuntu-latest
