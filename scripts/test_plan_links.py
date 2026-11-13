@@ -54,7 +54,7 @@ class PlanLinksTests(unittest.TestCase):
             code = pl.main([])
         self.assertEqual(code, 0, out.getvalue())
         self.assertRegex(out.getvalue(),
-                         r"^plan links: 97 commitments, 146 criteria, \d+ Plan: lines, \d+ links, every quote found\n$")
+                         r"^plan links: 103 commitments, 146 criteria, \d+ Plan: lines, \d+ links, every quote found\n$")
 
     def test_a_quote_wrapped_over_lines_in_plan_md_is_found(self):
         problems, summary = self.run_check()

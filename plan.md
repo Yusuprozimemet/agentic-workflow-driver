@@ -246,7 +246,7 @@ stateDiagram-v2
 | Mode: on | `python run-steps.py on` | | the driver takes the next step; refused while a manual branch is unmerged or a halt is set |
 | Mode: off | `python run-steps.py off` | close the run's issue | the current step finishes its PR, then the driver exits; nothing new starts |
 | Emergency stop | `python run-steps.py halt` | open an issue whose title starts with `STOP` | everything stops now, see below |
-| Where am I | `python run-steps.py status` | the run's issue | mode, level, the step in progress, its cost so far |
+| Where am I | `python run-steps.py status`, or `status --watch` while a session runs | the run's issue, and its heartbeat comment | mode, level, the step in progress, its cost so far; while a session runs, how long it has run, its last event and how long ago (from Day 11, "Where am I, while a session runs") |
 
 **What a halt does**, in this order:
 
@@ -268,6 +268,42 @@ stateDiagram-v2
   Reverting is the maintainer's decision, by hand, in manual mode.
 - The halt file is a plain file: with the driver itself broken, creating it by hand still stops
   the sessions' tool calls.
+
+### Where am I, while a session runs
+
+Up to Day 10 a running session is a black box: the driver waits for it in `communicate()`, and
+`claude -p --output-format json` prints one object, at the end. Until then `status` names the
+step and shows its cost as $0.00, and nothing tells a session at work from one that hangs. Day 11
+makes it visible, in this order, the cheapest first:
+
+1. **A heartbeat.** At each poll (`--poll`, 30 seconds by default) the driver rewrites
+   `<state>/heartbeat.json`: the session, its step, when it started, the time of the poll, and
+   the time of the session's last event. The run log keeps one line per event; the heartbeat is
+   overwritten, not appended.
+2. **The session's events.** The driver runs `claude -p` with `--output-format stream-json
+   --verbose` (on 2.1.322 `-p` refuses `stream-json` without `--verbose`, checked on 2026-11-13)
+   and reads its standard output line by line on a reader thread. Each event's time and kind (a
+   tool's name, a reply, the result) is appended to `<state>/sessions/<session>.events.jsonl`,
+   on the host and written by the driver, never from inside the container. The `result` event
+   stays the record: cost, session id and `permission_denials` are read from it as they are from
+   the JSON object today, and a step whose stream ends with no `result` is what a session that
+   printed nothing is today. A line that does not parse is counted, not fatal. The poll, the
+   `STOP` issue and `--session-minutes` work as they do now: the main thread waits on the reader
+   with the poll as its timeout.
+3. **`status --watch`.** It prints `status` again at each poll until the session ends: the step,
+   how long it has run, its last event and how long ago, and the tokens the events have reported
+   so far. The cost stays the `result`'s; nothing estimates it in dollars.
+4. **An estimate, with its n.** Beside how long the session has run, the median length of the run
+   log's earlier sessions of the same kind (spec, track, close), and how many it is the median
+   of. Fewer than three: no estimate.
+5. **On the phone.** One comment on the run's issue per session, edited in place at each poll
+   with the same lines as `status --watch`; an edit does not notify. When no event has come for
+   `stale_minutes` (10 by default, in `driver.json`), one new comment says so, once per session,
+   and that one notifies. A stale session is reported, not killed: `--session-minutes` and the
+   `STOP` issue still decide that.
+
+Nothing here writes to the project or its GitHub beyond the run's issue, and nothing reads a
+transcript. A page in a browser may come later, read-only, from the same files.
 
 ## The loop
 
@@ -534,7 +570,8 @@ is built until the trial at level 1 has been read.
      --output-format json --max-budget-usd <n> --permission-mode auto --strict-mcp-config
      --settings <the driver's>
      --append-system-prompt-file <the driver's rules>`. `--strict-mcp-config` is there so that no
-     connector of the maintainer's claude.ai account loads in a session nobody watches;
+     connector of the maintainer's claude.ai account loads in a session nobody watches. From
+     Day 11 `--output-format stream-json --verbose` in place of `json` (item 6);
    - writes the step, its branch prefix and the session's id (`--session-id`) to the run log
      before the session starts ("Recovery");
    - finds the step's PR on GitHub by its branch, not in the session's text;
@@ -562,15 +599,19 @@ repository.
 
 **After the trial, if the driver stays**
 
-6. **The reviewer.** Its brief is in the driver's repository and reaches the session with
+6. **Where am I, while a session runs**: the heartbeat, the session's events read line by line,
+   `status --watch`, the estimate with its n, and the heartbeat comment on the run's issue ("Where
+   am I, while a session runs"). Built first after the trial: the maintainer asked for it after
+   watching the Day 8 trial's sessions, and the level 2 days are easier to watch with it.
+7. **The reviewer.** Its brief is in the driver's repository and reaches the session with
    `--agents` and `--agent`; the kit's `auditor-guard.py` does not list it. The driver's settings
    refuse it a git command that changes a repository and a `gh` command that is not a read. The
    driver takes HEAD, the refs, the stash and `git status` before and after it and parks on a
    difference: `auditor-guard.py` makes that comparison at `SubagentStop`, which a top-level
    session does not fire.
-7. **The level 2 merge**: the path check against the human-only list, then
+8. **The level 2 merge**: the path check against the human-only list, then
    `gh pr merge --match-head-commit <sha>`, the commit the checks and the reviewer saw.
-8. **Level 3**: the next phase starts when the plan-auditor names no plan change.
+9. **Level 3**: the next phase starts when the plan-auditor names no plan change.
 
 **In the kit**, as ordinary `tooling/` pull requests. Each serves manual mode, and the driver
 runs without them:
@@ -637,11 +678,18 @@ and the container's correction above it).
   project and `<state>/refusals` can; the usage limit is read from the container's Claude Code
   folder (H09.1); `status`'s level 2 count reads only container sessions. Apart, in its own
   track: `setup-check.py` reports "do not allow bypassing".
-- Day 11: the reviewer ("What to build", item 6).
-- Day 12: the level 2 merge (item 7): the path check, the check of the driver's own repository
+- Day 11: where am I, while a session runs ("What to build", item 6): the heartbeat; the
+  session's events from `stream-json`, read line by line on the host; `status --watch`; the
+  estimate with its n; the heartbeat comment and the one stale comment on the run's issue. Its
+  tests: a long tool that prints nothing keeps the heartbeat going and is not stale before
+  `stale_minutes`; a `STOP` issue still stops the session within a poll; `--session-minutes`
+  ending a session mid-line keeps the events read so far; the `result` event's cost is the one
+  recorded, whatever the events said; the image's Claude Code takes `stream-json --verbose`.
+- Day 12: the reviewer (item 7).
+- Day 13: the level 2 merge (item 8): the path check, the check of the driver's own repository
   before each merge, `gh pr merge --match-head-commit <sha>`; its spec carries `Replaces: C07.1`.
   It refuses to merge unless the three conditions hold.
-- Day 13: the trial's record at level 2: what merged without the maintainer, what parked, what
+- Day 14: the trial's record at level 2: what merged without the maintainer, what parked, what
   the reviewer found, what it cost beside the baseline and beside level 1.
 - **Done when:** the level 2 trial's day closed with its evidence replay green, and the record
   names every merge the driver made, every park and every refusal.
@@ -654,13 +702,32 @@ and the container's correction above it).
 - **Day 8 (the level 1 trial's record) is a stopping point.** The plan-auditor reads the whole
   plan against the code, and Phase 2 is specified only once the maintainer lifts the stop.
   Lifted by "Course correction after Phase 1".
-- **Day 13 (the level 2 trial's record) is a stopping point.** The same reading, before Phase 3.
+- **Day 14 (the level 2 trial's record) is a stopping point.** The same reading, before Phase 3.
 
 ## Course corrections
 
 <!-- Added by plan-change PRs, newest first: what a stopping point or audit found, and what the
 maintainer chose. Empty at the start. A stop's decisions go under their own heading,
 "## Course correction after Phase N", N the stop item's phase: that heading lifts the stop. -->
+
+### 2026-11-13: live session progress is Day 11; the reviewer, the merge and the trial move up one
+
+The Day 8 trial's sessions ran for minutes with nothing to show for them: `status` named the
+step and a cost of $0.00, and a session at work looked like one that hangs. The maintainer asked
+for a progress display after it, agreed on 2026-11-12 to build it after Day 10's close, and chose
+on 2026-11-13 to put it first in what is left of Phase 2, so the reviewer, the merge and the
+level 2 trial are built and watched with it: "Where am I, while a session runs" and Day 11.
+
+- **The days move up one:** the reviewer is Day 12, the level 2 merge Day 13, the level 2
+  trial's record Day 14 and the stopping point with it; Phase 3 is numbered from 15.
+- **Hand-offs follow their work, not their number.** The closed specs are not edited: H10.1
+  (`live-check` run in the image) goes to Day 13, the merge; H09.2 (the usage limit met by a
+  headless session) and H10.2 (the container's sessions in the record) go to Day 14, the record.
+  Where Days 9 and 10 name "Day 11", they mean the reviewer, now Day 12. The commitments'
+  `owner_day` in `specs/plan/promises.json` move with them.
+- **Nothing is estimated in dollars.** Only the `result` event carries the cost; the events give
+  tokens and times. The estimate is of time, with its n, and none under three sessions.
+- **Not in this change:** a page in a browser. It may come later, read-only, from the same files.
 
 ### 2026-11-11: the sessions run in a container, not as a second Windows account
 
@@ -720,8 +787,8 @@ The phases are broken into day specs in [`specs/`](specs/). Read
 
 1. Phase 0: Days 1-2.
 2. Phase 1: Days 3-8. **Stop and evaluate.**
-3. Phase 2: Days 9-13. **Stop and evaluate.**
-4. Phase 3: numbered from 14.
+3. Phase 2: Days 9-14. **Stop and evaluate.**
+4. Phase 3: numbered from 15.
 
 ## Removing it
 
@@ -840,3 +907,6 @@ Still not shown:
   `GH_TOKEN`, with the image's credential helper and commit identity, lets a session commit, push
   and open a pull request; that `token-usage.py` counts the transcripts of the container's Claude
   Code folder; and a whole step there, not a one-word reply. Day 10's first live run shows them.
+- That the image's Claude Code takes `--output-format stream-json --verbose` with `-p` and ends
+  the stream with the same `result` the JSON output gives: seen on the PC's 2.1.322 only, and
+  only its refusal without `--verbose`. Day 11 checks it in the image.
