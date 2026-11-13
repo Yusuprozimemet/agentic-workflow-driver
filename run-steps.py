@@ -11,7 +11,7 @@ process tree when its lock names a live process, then reports on the run's issue
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
 file. live-check [--state] [--claude] [--python] runs the driver's own tests on the installed Claude
 Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
-refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; it takes no lock and writes nothing. --once
+refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] [--watch [--poll]] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; with --watch it prints again every --poll seconds until no session is live; it takes no lock and writes nothing. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] [--limit-hours] does one step's checks in order:
 halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
 evidence run, then the run log;
@@ -106,6 +106,11 @@ def main(argv=None) -> int:
         help="seconds between reads of the project's issues during a session or a wait",
     )
     parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="with status: print it again every --poll seconds until no session is live",
+    )
+    parser.add_argument(
         "--wait-minutes",
         type=float,
         default=30,
@@ -154,7 +159,9 @@ def main(argv=None) -> int:
     if args.command == "off":
         return switches.off(args.project, args.gh)
     if args.command == "status":
-        return status.run(args.project, args.gh, args.state)
+        return status.run(
+            args.project, args.gh, args.state, watch=args.poll if args.watch else None
+        )
     if args.command == "preflight":
         lines, _ = kit_lines(args.project)
         lines += cli_lines(args.claude)
