@@ -45,6 +45,13 @@ console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.t
   banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]), quality: shown(els.quality) }));
 """
 
+# flipTheme() on each [saved, systemDark] pair of the list from stdin.
+FLIP = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(c => flipTheme(c[0], c[1]))", ctx)));
+"""
+
 # tagOf() on each value of the list from stdin.
 TAGS = r"""
 const fs = require("fs"), vm = require("vm");
@@ -789,6 +796,19 @@ class ModelTest(unittest.TestCase):
         self.assertIn("1 criterion has no Plan: line yet and is not drawn: C3.2.", g["read"]["b"])
         self.assertEqual(g["ladder"]["rows"][0]["cells"], [2, 0, 1])
 
+    def test_graph_12_hands_its_drawings_each_quote_note_rewrite_and_why_unnamed(self):
+        plan = dict(self.PLAN, said={"C1.2": ["one quote", "an added quote"]},
+                    commitments=[dict(c, note="Now two.") if c["id"] == "P02" else c for c in self.PLAN["commitments"]])
+        ch = model(data(plan=plan, criteria_index=self.CRIT)).get("g12", {}).get("chart", {})
+        c12 = next((c for c in ch.get("C", []) if c["id"] == "C1.2"), {})
+        self.assertEqual((c12.get("kind"), c12.get("links")), ("ref", [dict(p="P01", quote="one quote"), dict(p="N01", quote="an added quote")]))
+        self.assertEqual([(c["id"], c["kind"]) for c in ch.get("C", []) if not c["links"]], [("C2.2", "unplanned"), ("C2.3", "guard")])
+        self.assertEqual([(p["id"], p["status"], p["note"]) for p in ch.get("ref", [])][:2], [("P01", "kept", ""), ("P02", "changed", "Now two.")])
+        self.assertEqual([p["id"] for p in ch.get("added", [])], ["N01"])
+        # The rewrite after Day 1 sits above the row of Day 2, the second row.
+        self.assertEqual(ch.get("rw"), [1])
+        self.assertEqual(ch.get("un"), {"P02": dict(kind="due", when="Day 2"), "P03": dict(kind="standing", when=""), "P04": dict(kind="later", when="Day 3")})
+
     def test_graph_12_without_a_promise_file_says_so_under_not_measured(self):
         got = model(data(criteria_index=self.CRIT))
         self.assertIn(["Whether the specs follow the plan", got["g12"].get("empty")], got.get("notMeasured", []))
@@ -845,6 +865,17 @@ class BootTest(unittest.TestCase):
         out = boot(data(clock=clock, driver_runs=dict(source="run log", counted="2026-01-02T13:00:00Z", steps=steps,
                                                        parks=[an_issue(21, "2026-01-02T09:00:00Z")])))
         self.assertEqual((out["error"], out["logged"]), (None, []))
+
+
+class ThemeTest(unittest.TestCase):
+    def test_the_switch_flips_what_shows_the_saved_choice_first_then_the_systems(self):
+        cases = [[None, False], [None, True], ["dark", False], ["light", True], ["junk", True]]
+        self.assertEqual(node(FLIP, cases), ["dark", "light", "light", "dark", "light"])
+
+    def test_the_header_has_the_switch_and_the_page_wires_it_before_it_draws(self):
+        self.assertIn('<button type="button" class="theme" id="theme" aria-pressed="false">Dark mode</button>', read("index.html"))
+        start = re.search(r"function start\(\) \{(.*?)\n\}", read("dashboard.js"), re.S).group(1)
+        self.assertEqual(start.strip().splitlines()[0], "themeToggle();")
 
 
 class PageFilesTest(unittest.TestCase):

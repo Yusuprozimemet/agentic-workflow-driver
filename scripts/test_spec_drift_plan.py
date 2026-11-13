@@ -61,6 +61,15 @@ class PlanDataTest(unittest.TestCase):
         self.assertEqual(links, {"C01.1": ["P01"], "C11.1": ["P27", "N03"], "C11.2": []})
         self.assertEqual((quotes, unlined), (3, ["C01.2", "C11.3"]))
 
+    def test_each_link_keeps_its_quote_for_the_page(self):
+        self.fake_git(["specs/day-01-start.md", "specs/day-11-next.md"])
+        blobs = Blobs({"specs/day-01-start.md": "- [x] C01.1 **new** — x.\n", "specs/day-11-next.md": DAY_11})
+        said = {}
+        sp.criterion_links("head", blobs, {"C01.1": [dict(p="P01", quote="q")]}, said)
+        self.assertEqual(said["C01.1"], ["q"])
+        self.assertEqual(said["C11.1"], ["a quote", "another quote"])
+        self.assertEqual(said["C11.2"], [])
+
     def test_a_rewrite_sits_after_the_last_day_begun_before_it(self):
         self.fake_git([], ["bbbbbbb000", "ddddddd000", "0rigin000"])
         rows = [dict(sha="0rigin0", pr=None, own_day=None), dict(sha="aaaaaaa", pr=1, own_day=1),
@@ -80,6 +89,10 @@ class PlanDataTest(unittest.TestCase):
         got = sp.plan_graph("head", Blobs({sp.PROMISES: json.dumps(promises)}), [])
         self.assertEqual([(c["id"], c["owner_day"], c["rule"], c["change"]) for c in got["commitments"]],
                          [("P01", None, True, None), ("P02", 3, False, "changed"), ("N01", 4, False, None)])
+        self.assertEqual([c["note"] for c in got["commitments"]], ["", "", ""])
+        promises[1]["change"] = "Now two."
+        got = sp.plan_graph("head", Blobs({sp.PROMISES: json.dumps(promises)}), [])
+        self.assertEqual(got["commitments"][1]["note"], "Now two.")
 
 
 if __name__ == "__main__":

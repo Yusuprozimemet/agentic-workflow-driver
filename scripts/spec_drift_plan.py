@@ -30,22 +30,29 @@ def _json(text):
         return None
 
 
-def plan_line_links(block):
-    """The commitments one criterion's `Plan:` line names: a list (empty for `Plan: none`), or None with no line."""
+def plan_line_pairs(block):
+    """The (commitment, quote) pairs one criterion's `Plan:` line names: a list (empty for `Plan: none`), or None
+    with no line."""
     fields = plan_links.PLAN_FIELD.findall(block)
     if len(fields) != 1:
         return None
     value = plan_links.flat(fields[0])
     if plan_links.PLAN_NONE.fullmatch(value):
         return []
-    found = plan_links.PLAN_LINK.findall(value)
-    return [pid for pid, _ in found] if found else None
+    return plan_links.PLAN_LINK.findall(value) or None
 
 
-def criterion_links(head, blobs, backfill):
+def plan_line_links(block):
+    """The commitments one criterion's `Plan:` line names: a list (empty for `Plan: none`), or None with no line."""
+    pairs = plan_line_pairs(block)
+    return None if pairs is None else [pid for pid, _ in pairs]
+
+
+def criterion_links(head, blobs, backfill, said=None):
     """Every criterion of every day spec at `head`, with the commitments it says it serves: the backfill for the
     Days it covers, the criterion's own `Plan:` line from Day 11 on. A criterion with no readable line is left
-    out, and listed apart. Returns (links, quotes, unlined)."""
+    out, and listed apart. Returns (links, quotes, unlined); `said`, when given, is filled with each criterion's
+    quotes in the order of its links, for the page to show the line as written."""
     links, quotes, unlined = {}, 0, []
     for name in run("git", "ls-tree", "--name-only", head, "specs/").split():
         m = plan_links.DAY_FILE.fullmatch(os.path.basename(name))
@@ -54,16 +61,18 @@ def criterion_links(head, blobs, backfill):
         day = int(m.group(1))
         for cid, block in plan_links.CRITERION.findall(blobs.read(head, name)):
             if day in plan_links.BACKFILL_DAYS:
-                served = [x.get("p") for x in backfill[cid] if isinstance(x, dict)] if cid in backfill else None
+                pairs = [(x.get("p"), x.get("quote", "")) for x in backfill[cid] if isinstance(x, dict)] if cid in backfill else None
             elif day >= plan_links.PLAN_LINES_FROM:
-                served = plan_line_links(block)
+                pairs = plan_line_pairs(block)
             else:
-                served = None
-            if served is None:
+                pairs = None
+            if pairs is None:
                 unlined.append(cid)
                 continue
-            links[cid] = served
-            quotes += len(served)
+            links[cid] = [pid for pid, _ in pairs]
+            if said is not None:
+                said[cid] = [quote for _, quote in pairs]
+            quotes += len(pairs)
     return links, quotes, sorted(unlined)
 
 
@@ -87,11 +96,12 @@ def plan_graph(head, blobs, rows):
     if not isinstance(promises, list):
         return None
     backfill = _json(blobs.read(head, BACKFILL))
-    links, quotes, unlined = criterion_links(head, blobs, backfill if isinstance(backfill, dict) else {})
+    said = {}
+    links, quotes, unlined = criterion_links(head, blobs, backfill if isinstance(backfill, dict) else {}, said)
     commitments = [dict(id=p.get("id"), short=p.get("short", ""), section=p.get("section", ""),
                         owner_day=p.get("owner_day"), rule=bool(p.get("rule_about_people")),
                         change=p.get("first_plan") if p.get("first_plan") in ("changed", "reworded") else None,
-                        text=p.get("text", ""))
+                        text=p.get("text", ""), note=p.get("change", ""))
                    for p in promises if isinstance(p, dict) and p.get("id")]
-    return dict(reference=REFERENCE, commitments=commitments, links=links, quotes=quotes, unlined=unlined,
+    return dict(reference=REFERENCE, commitments=commitments, links=links, said=said, quotes=quotes, unlined=unlined,
                 rewrites=plan_rewrites(head, rows))

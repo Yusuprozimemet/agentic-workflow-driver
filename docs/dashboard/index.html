@@ -14,7 +14,10 @@
 <div class="wrap">
 
   <header>
-    <p class="eyebrow" id="eyebrow"></p>
+    <div class="top">
+      <p class="eyebrow" id="eyebrow"></p>
+      <button type="button" class="theme" id="theme" aria-pressed="false">Dark mode</button>
+    </div>
     <h1>A script that runs AI coding work one step at a time</h1>
     <p class="lede">The whole project in twelve graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
     <dl class="words" id="words">
@@ -133,16 +136,31 @@
       <ul class="pg-how">
         <li><b>Commitment:</b> one thing <code>plan.md</code> says the driver will do or the people will keep, listed with a number in <code>specs/plan/promises.json</code>. P01 to P69 come from the plan as approved on 6 Nov; N01 onwards were added by later plan changes. (The page says "promise" for a spec's criterion, so the plan's are called commitments here.)</li>
         <li><b>The long bar</b> at the bottom is the plan, one stripe per commitment in the plan's own order, with its chapter headings under it. The darker a stripe, the more criteria name it; a white one is named by none; a hatched one is a rule about people, which no test can check; an amber-striped one was due by a Day that has closed and no criterion names it.</li>
-        <li><b>The rows</b> above the bar are the Days. A mark in a row means a criterion of that Day names the commitment straight below it. Blue is a commitment of the approved plan, light blue one added later. The third block holds the criteria that name none: amber for new work the plan does not ask for, grey for safety checks that only confirm earlier work still holds.</li>
+        <li><b>The rows</b> above the bar are the Days. A mark in a row means a criterion of that Day names the commitment straight below it. Blue is a commitment of the approved plan, red-orange one added later. The third block holds the criteria that name none: amber for new work the plan does not ask for, grey for safety checks that only confirm earlier work still holds. The short bars at the right count each Day's criteria by those four kinds.</li>
         <li><b>A dashed line</b> between two Days: <code>plan.md</code> was rewritten there, so the Days below wrote against the new plan. A ▲ under a stripe: the plan later changed that commitment; △: reworded, same meaning.</li>
         <li><b>Where the marks come from:</b> from Day 11 each criterion carries a <code>Plan:</code> line naming the commitments it serves and quoting their words; Days 1 to 10 are backfilled in <code>specs/plan/links-days-01-10.json</code>. <code>scripts/plan-links.py</code> checks every quote on every pull request. The link is the spec author's own claim: the check proves the words exist, not that the criterion really tests them.</li>
-        <li>Point at a stripe for the commitment and the criteria that name it, at a Day's name for its counts. "Show only" keeps the stripes of one kind.</li>
+        <li>Point at a stripe for its commitment; click it to read the commitment and every criterion that names it, with its quote, in the box under the graph. Click a Day's name to see that Day alone, and a "Show only" button to keep the stripes of one kind.</li>
       </ul>
     </details>
-    <div class="legend" id="g12-key"></div>
-    <div id="g12-plot"></div>
-    <div class="readout" id="g12-read" aria-live="polite"></div>
-    <details class="exact"><summary>The ladder: each commitment against each Day</summary><div id="g12-ladder"></div></details>
+    <div class="pc-fig">
+      <div id="g12-plot"></div>
+      <div id="g12-tip" class="pc-tip" hidden></div>
+      <div id="g12-panel" class="pc-panel" aria-live="polite"></div>
+    </div>
+    <div class="readout" id="g12-read" hidden></div>
+    <details class="exact"><summary>The ladder: where on the plan each Day lands</summary>
+      <div class="pc-fig">
+        <p class="pc-howto">The left lane is the ladder: the original plan's commitments, in the plan's order. "Today" is the plan as it stands now. Each numbered lane is a Day. A band level with a commitment means a criterion of that Day names it. Point at a row for the full commitment and its criteria.</p>
+        <div class="pc-legend">
+          <span><i class="pc-sw" style="background:var(--ink-2)"></i>Commitment, same as the original</span>
+          <span><i class="pc-sw" style="background:var(--c-out)"></i>Commitment the plan changed or added later</span>
+          <span><i class="pc-sw" style="background:var(--c-in)"></i>A Day's criteria (darker: more of them)</span>
+          <span><i class="pc-dot"></i>No criterion names it</span>
+        </div>
+        <div id="g12-ladder"></div>
+        <div id="g12-ltip" class="pc-tip" hidden></div>
+      </div>
+    </details>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g12-table"></table></div></details>
   </section>
 

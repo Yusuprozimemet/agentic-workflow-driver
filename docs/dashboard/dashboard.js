@@ -760,7 +760,22 @@ function model(DATA) {
         `${comma(quotes)} quotes, each found word for word in its commitment by \`scripts/plan-links.py\` on every pull request.`,
         (PL.unlined || []).length ? `${plural(PL.unlined.length, "criterion has", "criteria have")} no Plan: line yet and ${PL.unlined.length === 1 ? "is" : "are"} not drawn: ${PL.unlined.join(", ")}.` : ""].filter(Boolean) };
     const ladder = { days: dayList, rows: cols.map(c => ({ key: c.key, name: c.t, cells: dayList.map(d => (by[c.key] || []).filter(x => x.day === d).length), c })) };
-    return { say: `One stripe per commitment of \`plan.md\`, in the plan's order, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
+    // What the two drawings read, in the by-script mockup's own shapes: the commitments by arm, every criterion with
+    // its links and their quotes, the rows a rewrite sits above, and why each unnamed commitment is unnamed.
+    const quoteOf = PL.said || {}, cut = s => s.length > 220 ? `${s.slice(0, 219)}…` : s;
+    const toP = p => ({ id: p.id, short: p.short, sec: p.section, promise: p.text, status: p.change || "kept", note: p.note || "" });
+    const un = {};
+    PL.commitments.forEach(p => { if ((by[p.id] || []).length) return;
+      const owner = p.owner_day;
+      un[p.id] = p.rule ? { kind: "standing", when: "" } : owner != null && owner <= closedTo ? { kind: "due", when: `Day ${owner}` }
+        : owner != null ? { kind: "later", when: `Day ${owner}` } : null;
+      if (!un[p.id]) delete un[p.id]; });
+    const chart = { days: dayList, quotes,
+      ref: PL.commitments.filter(p => p.id[0] === "P").map(toP), added: PL.commitments.filter(p => p.id[0] !== "P").map(toP),
+      C: crit.map(c => ({ id: c.id, day: c.day, tag: c.tag, what: cut(plain(c.plain || c.claim || "")),
+        kind: { first: "ref", added: "later" }[kindOf(c)] || kindOf(c), links: links[c.id].map((p, k) => ({ p, quote: (quoteOf[c.id] || [])[k] || "" })) })),
+      rw: [...after].map(a => dayList.findIndex(d => d > a)).filter(i => i > 0).sort((a, b) => a - b), un };
+    return { chart, say:`One stripe per commitment of \`plan.md\`, in the plan's order, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
       all, arms: [["p", `The plan as approved · ${P0.length}`], ["n", `Added later · ${N0.length}`], ["o", `Criteria no commitment asks for · ${off.length}`]].filter(([a]) => all.some(c => c.arm === a)),
       sections: groups("p"), rows, filters, quotes, read, ladder,
       table: { head: ["Commitment", "Section", "Owner Day", "Criteria", "Days", "State"],
@@ -930,6 +945,289 @@ function h(tag, attrs, ...kids) {
 
 // A name a spec or a note put in backticks is drawn as code; the rest stays text.
 const rich = s => String(s).split("`").map((part, i) => i % 2 ? h("code", null, part) : part);
+
+/* Graph 12's two drawings, ported from the by-script mockup: the plan as one banded bar with a row per Day above
+   it, and the ladder of commitments with a lane per Day. Same layout, marks and colours (the --c-* tokens on
+   #g12); only the data is the page's. */
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svgEl = (svg, n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || svg).appendChild(e); return e; };
+const tipAt = (tip, fig, ev, w) => {
+  const b = fig.getBoundingClientRect(); let px = ev.clientX - b.left + 14; if (px + w + 10 > b.width) px = ev.clientX - b.left - w - 14;
+  tip.style.left = Math.max(4, px) + "px"; tip.style.top = (ev.clientY - b.top + 16) + "px";
+};
+const PC_WORD = { kept: "kept", reworded: "reworded, same commitment", changed: "changed", dropped: "dropped" };
+const PC_KNAME = { unplanned: "new work that no commitment asks for", guard: "safety check: keeps earlier work intact, builds nothing" };
+
+function planBar(m, box, tip, panel, forDays, resets) {
+  const G = m.chart, C = G.C, UN = G.un;
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "pc-svg"); svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `The plan drawn as one banded bar: ${G.ref.length} commitments of the original plan, then ${G.added.length} added later, then the criteria that name none. One row per Day above it marks the commitments each Day's criteria name.`);
+  const el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
+  const UKIND = { later: "No criterion yet: the plan gives this to a later Day", standing: "No criterion: a rule about people, which no test can check", due: "Should be covered by now: no criterion checks it" };
+  const USW = { later: "empty", standing: "st", due: "due" };
+  const KFILL = { unplanned: "var(--c-unpl)", guard: "var(--c-guard)" };
+  const PN = {}; G.ref.forEach(p => PN[p.id] = p); G.added.forEach(p => PN[p.id] = p);
+
+  // one slot per band: the first plan's commitments, the added ones, then the criteria that name none
+  const slots = [];
+  const mk = (arm, p, fill) => {
+    const per = {};
+    C.forEach(c => c.links.forEach(l => { if (l.p === p.id) (per[c.day] = per[c.day] || []).push({ c, l }); }));
+    slots.push({ arm, id: p.id, short: p.short, p, per, fill, n: Object.values(per).flat().length });
+  };
+  G.ref.forEach(p => mk("ref", p, "var(--c-in)"));
+  G.added.forEach(p => mk("add", p, "var(--c-out)"));
+  ["unplanned", "guard"].forEach(k => C.filter(c => c.kind === k).forEach(c => slots.push({ arm: "off", id: c.id, short: c.what, c, per: { [c.day]: [{ c }] }, fill: KFILL[k], n: 0 })));
+
+  const X0 = 62, U = 5, CEN = 12, GAP = 20, T0 = 26, RH = 13, CH = 26, RW = G.rw,
+    rowY = i => T0 + i * RH + 6 * RW.filter(d => d <= i).length, CY = rowY(G.days.length) + 6;
+  const arms = {}; let x = X0, prev = null;
+  slots.forEach(s => {
+    if (prev && s.arm !== prev) x += prev === "ref" ? CEN : GAP;
+    if (!arms[s.arm]) arms[s.arm] = { x0: x, n: 0 };
+    s.x = x; x += U; arms[s.arm].x1 = x; arms[s.arm].n++; prev = s.arm;
+  });
+  const SW = 2.5, W = x + 128, SX = x + 40, maxN = Math.max(1, ...slots.filter(s => s.arm === "ref").map(s => s.n));
+  const mid = a => (arms[a].x0 + arms[a].x1) / 2;
+  if (arms.ref) el("text", { x: mid("ref"), y: 14, "text-anchor": "middle", class: "strong" }, `The original plan · ${arms.ref.n} commitments`);
+  if (arms.add) el("text", { x: mid("add"), y: 14, "text-anchor": "middle", class: "strong" }, `Added later · ${arms.add.n}`);
+  if (arms.off) el("text", { x: mid("off"), y: 14, "text-anchor": "middle", class: "strong" }, `Criteria no commitment asks for · ${arms.off.n}`);
+  el("text", { x: SX - 18, y: 14, class: "strong" }, "Criteria per Day");
+  RW.forEach(d => el("line", { x1: X0, x2: SX + 84, y1: rowY(d) - 3, y2: rowY(d) - 3, stroke: "var(--c-out)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
+  el("text", { x: W - 6, y: CY + CH + 20, "text-anchor": "end", class: "strong" }, `Quotes checked · ${comma(G.quotes)}`);
+  el("text", { x: W - 6, y: CY + CH + 34, "text-anchor": "end", class: "faint" }, "each one found in its commitment's text");
+  el("text", { x: W - 6, y: CY + CH + 47, "text-anchor": "end", class: "faint" }, "checked again on every pull request");
+
+  let sel = null;
+  const rowEls = {}, KORD = [["ref", "var(--c-in)"], ["later", "var(--c-out)"], ["unplanned", "var(--c-unpl)"], ["guard", "var(--c-guard)"]];
+  G.days.forEach((d, i) => {
+    const y = rowY(i), g = el("g", { class: "trk" }); rowEls[d] = g; forDays(g, [d]);
+    const hitr = el("rect", { class: "dhit", x: 2, y, width: X0 - 6, height: RH, rx: 3, tabindex: 0, role: "button", "aria-label": `Day ${d}: show only this Day` }, null, g);
+    el("text", { class: "dlab", x: X0 - 8, y: y + 10.5, "text-anchor": "end" }, "Day " + d, g);
+    Object.values(arms).forEach(a => el("rect", { x: a.x0, y: y + 1, width: a.x1 - a.x0, height: RH - 2, rx: 2, fill: "var(--c-grid)", "fill-opacity": .4 }, null, g));
+    slots.forEach(s => {
+      const l = s.per[d]; if (!l) return;
+      const k = s.arm === "off" ? 1 : l.length;
+      const a = { x: s.x + .75, y: y + 2, width: U - 1.5, height: RH - 4, rx: 1.2, fill: s.fill, "fill-opacity": Math.min(.4 + k * .3, 1) };
+      if (s.arm === "off" && s.c.kind === "guard") { a.stroke = "var(--muted)"; a["stroke-width"] = .75; }
+      el("rect", a, null, g);
+    });
+    const cs = C.filter(c => c.day === d);
+    el("text", { x: SX - 5, y: y + 10.5, "text-anchor": "end", class: "num" }, cs.length, g);
+    let sx = SX;
+    KORD.forEach(([k, f]) => {
+      const n = cs.filter(c => c.kind === k).length; if (!n) return;
+      const a = { x: sx, y: y + 3, width: n * SW, height: RH - 6, fill: f }; if (k === "guard") { a.stroke = "var(--muted)"; a["stroke-width"] = .5; }
+      el("rect", a, null, g); sx += n * SW;
+    });
+    const pick = () => { sel = sel && sel.day === d ? null : { day: d }; draw(); };
+    hitr.addEventListener("click", pick);
+    hitr.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } });
+  });
+
+  // the bar itself: two arms pinched together, and the loose piece
+  const defs = el("defs", {}), gb = {};
+  const pat = (id, rot, col, w, step) => { const q = el("pattern", { id, width: step, height: step, patternUnits: "userSpaceOnUse", patternTransform: `rotate(${rot})` }, null, defs); el("rect", { x: 0, y: 0, width: step, height: w, fill: col }, null, q); };
+  pat("g12-due", 45, "var(--c-unpl)", 2, 4.5); pat("g12-st", 0, "var(--muted)", 1, 4);
+  Object.keys(arms).forEach(a => {
+    const r = { x: arms[a].x0, y: CY, width: arms[a].x1 - arms[a].x0, height: CH, rx: a === "off" ? 7 : 11 };
+    el("rect", r, null, el("clipPath", { id: "g12-cp-" + a }, null, defs));
+    gb[a] = el("g", { "clip-path": `url(#g12-cp-${a})` });
+    el("rect", Object.assign({ fill: "var(--card)" }, r), null, gb[a]);
+  });
+  slots.forEach(s => {
+    let fill = s.fill, op = 1;
+    if (s.arm !== "off") {
+      s.u = s.n ? null : UN[s.id]; const k = s.u && s.u.kind;
+      if (s.arm === "ref") { fill = s.n ? "var(--ink)" : k === "due" ? "url(#g12-due)" : k === "standing" ? "url(#g12-st)" : "var(--card)"; op = s.n ? .14 + .86 * Math.sqrt(s.n / maxN) : 1; }
+      else if (k === "due" || k === "standing") fill = `url(#g12-${k === "due" ? "due" : "st"})`;
+      else op = s.n ? Math.min(.55 + .2 * s.n, 1) : .13;
+    }
+    s.band = el("rect", { class: "band", x: s.x, y: CY, width: U, height: CH, fill, "fill-opacity": op, stroke: "var(--card)", "stroke-width": .6 }, null, gb[s.arm]);
+    const cx = s.x + U / 2;
+    if (s.arm === "ref" && s.p.status === "changed") el("path", { d: `M${cx} ${CY + CH + 2} l-3 5.5 h6 z`, fill: "var(--c-out)" });
+    if (s.arm === "ref" && s.p.status === "reworded") el("path", { d: `M${cx} ${CY + CH + 2.5} l-2.6 5 h5.2 z`, fill: "var(--card)", stroke: "var(--c-out)", "stroke-width": 1 });
+  });
+  Object.keys(arms).forEach(a => el("rect", { x: arms[a].x0, y: CY, width: arms[a].x1 - arms[a].x0, height: CH, rx: a === "off" ? 7 : 11, fill: "none", stroke: "var(--c-line)", "stroke-width": 1 }));
+  if (arms.ref && arms.add) {
+    const ca = arms.ref.x1 - 1, cb = arms.add.x0 + 1, cm = (ca + cb) / 2, cy = CY + CH / 2;
+    el("polygon", { points: `${ca},${CY + 5} ${cm},${cy - 2} ${cb},${CY + 5} ${cb},${CY + CH - 5} ${cm},${cy + 2} ${ca},${CY + CH - 5}`, fill: "var(--muted)" });
+  }
+
+  // the plan's sections under the first arm
+  const secs = [];
+  slots.filter(s => s.arm === "ref").forEach(s => { const l = secs[secs.length - 1]; if (l && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ name: s.p.sec, x0: s.x, x1: s.x + U }); });
+  for (let i = secs.length - 1; i > 0; i--) if (secs[i].x1 - secs[i].x0 === U && secs[i - 1].x1 - secs[i - 1].x0 === U) { secs[i - 1].name += " · " + secs[i].name; secs[i - 1].x1 = secs[i].x1; secs.splice(i, 1); }
+  let lastX = -99, longest = 0; const by = CY + CH + 21, ly = by + 12;
+  secs.forEach(s => {
+    const c = (s.x0 + s.x1) / 2, lx = Math.max(c, lastX + 19); lastX = lx; longest = Math.max(longest, s.name.length);
+    el("line", { x1: s.x0 + 1, x2: s.x1 - 1, y1: by, y2: by, stroke: "var(--muted)", "stroke-width": 1.5 });
+    el("line", { x1: c, x2: lx, y1: by + 1, y2: ly - 5, stroke: "var(--muted)", "stroke-width": .75 });
+    el("text", { x: lx, y: ly, class: "faint", style: "font-size:10.5px", transform: `rotate(45 ${lx} ${ly})` }, s.name);
+  });
+  const H = Math.ceil(ly + longest * 5 * .71 + 8);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  // what needs a look: each chip is a set of bands
+  const FILT = [
+    ["due", "Should be covered by now, is not", s => s.arm !== "off" && s.u && s.u.kind === "due", "The promise file gives this commitment to a Day that is closed, and no criterion names it."],
+    ["none", "No criterion yet", s => s.arm !== "off" && !s.n, "No Plan: line names this commitment."],
+    ["thin", "Held by a single criterion", s => s.arm !== "off" && s.n === 1, "One criterion is all that names this commitment."],
+    ["changed", "Rewritten by the plan later", s => s.arm === "ref" && s.p.status === "changed", "The plan rewrote this commitment after some Days had already built on the old wording."]];
+  const chips = FILT.map(([k, name, f]) => {
+    const b = h("button", { type: "button", class: "pc-chip", "aria-pressed": "false" }, `${name} `, h("b", null, String(slots.filter(f).length)));
+    b.addEventListener("click", () => { sel = sel && sel.filt === k ? null : { filt: k }; draw(); });
+    return b;
+  });
+
+  // hover and click, one column per band; the tip and the panel are built as nodes, data put in as text
+  const fig = tip.parentElement;
+  const selbox = el("rect", { y: T0 - 2, width: U + 2, height: CY + CH - T0 + 4, rx: 2, fill: "none", stroke: "var(--ink)", "stroke-width": 1.5, "pointer-events": "none", visibility: "hidden" });
+  const state = s => s.arm === "off" ? `Day ${s.c.day} · ${PC_KNAME[s.c.kind]}`
+    : s.n ? `${s.n} ${s.n === 1 ? "criterion names it" : "criteria name it"}`
+    : s.u ? UKIND[s.u.kind] + (s.u.when && s.u.kind !== "standing" ? ` (${s.u.when})` : "")
+    : s.arm === "add" ? "No criterion names it"
+    : "No criterion names it; the promise file gives it no owner Day";
+  slots.forEach(s => {
+    const r = el("rect", { class: "chit", x: s.x, y: T0 - 2, width: U, height: CY + CH - T0 + 4 });
+    r.addEventListener("pointermove", ev => {
+      const change = s.arm === "ref" && s.p.status === "changed" ? "The plan changed it later" : s.arm === "ref" && s.p.status === "reworded" ? "The plan reworded it later, same commitment" : null;
+      tip.replaceChildren(h("b", null, s.id), ` · ${s.short}`, h("br"), state(s), change ? h("br") : "", change || "");
+      tip.hidden = false; tipAt(tip, fig, ev, 300);
+    });
+    r.addEventListener("pointerleave", () => { tip.hidden = true; });
+    r.addEventListener("click", () => { sel = sel && sel.slot === s ? null : { slot: s }; draw(); });
+  });
+
+  const lk = l => h("span", null, h("i", null, l.p), PN[l.p] ? PN[l.p].short : "");
+  const critRow = c => h("div", { class: "pc-crit" }, h("span", { class: "cid" }, c.id), h("span", { class: "what" }, c.what),
+    c.links.length ? h("span", { class: "pr" }, c.links.map(lk)) : null);
+  const goTo = (q, ...kids) => { const b = h("button", { type: "button" }, h("i", null, q.id), q.short, ...kids); b.addEventListener("click", () => { sel = { slot: q }; draw(); }); return b; };
+  const KL = [["ref", "var(--c-in)", "Name a commitment of the original plan"], ["later", "var(--c-out)", "Name only commitments added later"], ["unplanned", "var(--c-unpl)", "New work no commitment asks for"], ["guard", "var(--c-guard)", "Safety checks"]];
+  const sub = (...k) => h("div", { class: "sub" }, ...k), grp = (...k) => h("div", { class: "grp" }, ...k), ptext = (...k) => h("p", { class: "ptext" }, ...k);
+  function draw() {
+    const d = sel && sel.day, s = sel && sel.slot, fk = sel && sel.filt, F = fk && FILT.find(f => f[0] === fk);
+    Object.entries(rowEls).forEach(([k, g]) => { g.style.opacity = d && +k !== d ? .18 : 1; g.classList.toggle("sel", +k === d); });
+    slots.forEach(t => { t.band.style.opacity = d && !t.per[d] ? .1 : F && !F[2](t) ? .1 : 1; });
+    FILT.forEach((f, i) => chips[i].setAttribute("aria-pressed", String(f[0] === fk)));
+    selbox.setAttribute("visibility", s ? "visible" : "hidden"); if (s) selbox.setAttribute("x", s.x - 1);
+    const t = [];
+    if (F) {
+      const l = slots.filter(F[2]);
+      t.push(h("h3", null, `${F[1]} · ${l.length}`), sub(`${F[3]} Click one to read it.`), h("div", { class: "pc-plist" }, l.map(q => goTo(q))));
+    } else if (d) {
+      const cs = C.filter(c => c.day === d), cnt = k => cs.filter(c => c.kind === k).length, on = a => slots.filter(q => q.arm === a && q.per[d]);
+      const ls = cs.flatMap(c => c.links);
+      t.push(h("h3", null, `Day ${d}: ${cs.length} criteria`), sub(`This Day's Plan: lines make ${ls.length} links to commitments, and every quote is found in its commitment. ${cnt("ref")} criteria serve the original plan, ${cnt("later")} only commitments added later, ${cnt("unplanned")} are new work no commitment asks for, ${cnt("guard")} are safety checks.`));
+      [["ref", "Commitments of the original plan"], ["add", "Commitments added later"]].forEach(([a, name]) => {
+        const l = on(a); if (!l.length) return;
+        t.push(grp(`${name} · ${l.length}`), h("div", { class: "pc-plist" }, l.map(q => goTo(q, h("b", null, String(q.per[d].length))))));
+      });
+      KL.forEach(([k, f, name]) => { const l = cs.filter(c => c.kind === k); if (!l.length) return; t.push(grp(h("i", { class: "pc-sw", style: `background:${f}` }), `${name} · ${l.length}`), l.map(critRow)); });
+    } else if (s && s.arm === "off") {
+      const c = s.c;
+      t.push(h("h3", null, `${c.id} · Day ${c.day}`), sub(`${PC_KNAME[c.kind]} · tagged ${c.tag}`), ptext(c.what), ptext(h("code", null, "Plan: none")));
+    } else if (s) {
+      t.push(h("h3", null, `${s.id} · ${s.short}`), sub((s.arm === "ref" ? `${s.p.sec} · the plan today: ${PC_WORD[s.p.status] || s.p.status}` : `Added by a later plan change, under "${s.p.sec}"`) + ` · ${state(s)}`), ptext(s.p.promise));
+      if (s.p.note) t.push(ptext(h("b", null, "What changed:"), ` ${s.p.note}`));
+      const ds = Object.keys(s.per).map(Number).sort((a, b) => a - b);
+      ds.forEach(k => t.push(grp(`Day ${k} · ${s.per[k].length}`), s.per[k].map(q => h("div", { class: "pc-crit" }, h("span", { class: "cid" }, q.c.id), h("span", { class: "what" }, q.c.what),
+        q.l.quote ? h("span", { class: "why" }, h("code", null, `Plan: ${s.id} "${q.l.quote}"`), " · the quote is in the commitment") : null))));
+      if (!ds.length && s.u) t.push(grp(h("i", { class: `pc-sw ${USW[s.u.kind]}` }), UKIND[s.u.kind] + (s.u.when ? ` · ${s.u.when}` : "")),
+        ptext("From two fields of the promise file: the Day the plan gives the commitment to, and a flag for rules about people. The script compares that Day with the Days that are closed."));
+      else if (!ds.length) t.push(sub("No Plan: line names this commitment." + (s.arm === "ref" ? " The promise file gives it no owner Day yet, so the script cannot say whether it is late." : "")));
+    } else t.push(h("h3", null, rich(m.read.t)), m.read.b.map(b => sub(rich(b))), sub("Click a button above, a stripe, or a Day's name."));
+    panel.replaceChildren(...t.flat());
+  }
+  box.replaceChildren(h("div", { class: "pc-chiprow" }, h("span", { class: "pc-lg" }, "Show only"), chips), legendBar(), h("div", { class: "scroll-x" }, svg));
+  resets.push(() => { sel = null; draw(); });
+  draw();
+}
+
+// The bar's legend, as the mockup has it: four labelled rows.
+function legendBar() {
+  const sw = (cls, style) => h("i", { class: `pc-sw ${cls || ""}`, style: style || null });
+  const row = (label, items) => h("div", { class: "pc-legend" }, h("span", { class: "pc-lg" }, label), items.map(([k, t]) => h("span", null, k, t)));
+  const tri = (fill) => { const s = document.createElementNS(SVG_NS, "svg"); s.setAttribute("class", "pc-glyph"); s.setAttribute("viewBox", "0 0 12 10"); s.setAttribute("width", "12"); s.setAttribute("height", "10");
+    svgEl(s, "path", { d: "M6 1.5 L10.5 9 H1.5 Z", fill: fill ? "var(--c-out)" : "none", stroke: "var(--c-out)", "stroke-width": 1.2 }); return s; };
+  const dash = () => { const s = document.createElementNS(SVG_NS, "svg"); s.setAttribute("class", "pc-glyph"); s.setAttribute("viewBox", "0 0 24 10"); s.setAttribute("width", "24"); s.setAttribute("height", "10");
+    svgEl(s, "line", { x1: 0, x2: 24, y1: 5, y2: 5, stroke: "var(--c-out)", "stroke-dasharray": "4 3" }); return s; };
+  return h("div", null,
+    row("The long bar", [[h("i", { class: "pc-grad" }), "one stripe per commitment: the darker, the more criteria name it"], [sw("empty"), "no criterion names it"],
+      [sw("st"), "a rule about people, which no test can check"], [sw("due"), "should be covered by now, and is not"]]),
+    row("Marks in a row", [[sw("", "background:var(--c-in)"), "a criterion of this Day names a commitment of the original plan"], [sw("", "background:var(--c-out)"), "names one added later"],
+      [sw("", "background:var(--c-unpl)"), "new work, Plan: none"], [sw("", "background:var(--c-guard);border:1px solid var(--muted)"), "safety check, Plan: none"]]),
+    row("Signs under the bar", [[tri(true), "the plan later rewrote this commitment"], [tri(false), "reworded only, same meaning"]]),
+    row("Dashed line", [[dash(), "the plan was rewritten between these two Days"]]));
+}
+
+function planLadder(G, box, tip) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "pc-svg"); svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `The original plan's ${G.ref.length} commitments as a ladder, today's plan and each Day as lanes beside it, and zones underneath for commitments added later and for criteria that name none.`);
+  const el = (n, a, txt) => svgEl(svg, n, a, txt);
+  const nd = G.days.length, RH = 13, LAD = 158, PLN = 204, D0 = 256, DW = 26, TX = D0 + nd * DW + 24, W = TX + 280;
+  const dayX = d => D0 + G.days.indexOf(d) * DW;
+  const lanes = [[LAD, 40], [PLN, 40]].concat(G.days.map(d => [dayX(d), DW - 4]));
+  const bg = lanes.map(([x, w]) => el("rect", { x, y: 36, width: w, height: 10, rx: 4, fill: "var(--c-grid)", "fill-opacity": .45 }));
+  el("text", { x: LAD + 20, y: 28, "text-anchor": "middle", class: "strong" }, "Ladder");
+  el("text", { x: PLN + 20, y: 28, "text-anchor": "middle", class: "strong" }, "Today");
+  el("text", { x: D0 + (nd / 2) * DW - 2, y: 12, "text-anchor": "middle", class: "faint" }, "Day");
+  G.days.forEach(d => el("text", { x: dayX(d) + (DW - 4) / 2, y: 28, "text-anchor": "middle", class: "num strong" }, d));
+  const fig = tip.parentElement;
+  const hit = (y, hh, lines) => {
+    const r = el("rect", { x: 0, y, width: W, height: hh, class: "hit" });
+    r.addEventListener("pointermove", ev => { tip.replaceChildren(...lines.flatMap((l, i) => i ? [h("br"), l] : [l]).flat()); tip.hidden = false; tipAt(tip, fig, ev, 340); });
+    r.addEventListener("pointerleave", () => { tip.hidden = true; });
+  };
+  const band = (x, w, y, fill, op) => el("rect", { x: x + 3, y: y - 2.5, width: w - 6, height: 5, rx: 2, fill, "fill-opacity": op == null ? 1 : op });
+  const label = (y, id, text) => { el("text", { x: TX, y: y + 4, class: "num faint" }, id); el("text", { x: TX + 34, y: y + 4, style: "font-size:11px" }, text); };
+  const served = id => { const per = {}; G.C.forEach(c => { if (c.links.some(l => l.p === id)) (per[c.day] = per[c.day] || []).push(c); }); return per; };
+
+  let y = 50, sec = null;
+  G.ref.forEach(p => {
+    if (p.sec !== sec) { y += sec === null ? 0 : 9; sec = p.sec; el("text", { x: 150, y: y + 4, "text-anchor": "end", class: "faint", style: "font-size:10px" }, sec.length > 27 ? sec.slice(0, 26) + "…" : sec); }
+    band(LAD, 40, y, "var(--ink-2)");
+    if (p.status !== "dropped") band(PLN, 40, y, p.status === "changed" ? "var(--c-out)" : "var(--ink-2)", p.status === "reworded" ? .45 : 1);
+    const per = served(p.id), ds = Object.keys(per).map(Number).sort((a, b) => a - b);
+    ds.forEach(d => band(dayX(d), DW - 4, y, "var(--c-in)", Math.min(.5 + per[d].length * .17, 1)));
+    if (!ds.length) el("circle", { cx: D0 + nd * DW + 6, cy: y, r: 3, fill: "var(--card)", stroke: "var(--ink)", "stroke-width": 1.5 });
+    label(y, p.id, p.short);
+    hit(y - RH / 2, RH, [h("b", null, `${p.id} · ${p.short}`), p.promise, [h("b", null, "Plan today:"), ` ${PC_WORD[p.status] || p.status}${p.note ? ". " + p.note : ""}`],
+      ...(ds.length ? ds.map(d => [h("b", null, `Day ${d}:`), ` ${per[d].map(c => c.id).join(", ")}`]) : [h("b", null, "No criterion names it.")])]);
+    y += RH;
+  });
+  const zone = title => { y += 16; el("line", { x1: 0, x2: W, y1: y, y2: y, stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "4 4" }); y += 18; el("text", { x: 4, y, class: "strong" }, title); y += 16; };
+
+  zone("Off the ladder: commitments added by later plan changes");
+  el("text", { x: 4, y: y - 2, class: "faint" }, "A band here is a Day with a criterion that names the added commitment.");
+  y += 10;
+  G.added.forEach(a => {
+    band(PLN, 40, y, "var(--c-out)");
+    const per = served(a.id), cs = Object.values(per).flat();
+    Object.entries(per).forEach(([d, l]) => band(dayX(+d), DW - 4, y, "var(--c-in)", Math.min(.5 + l.length * .17, 1)));
+    label(y, a.id, a.short);
+    hit(y - RH / 2, RH, [h("b", null, `${a.id} · ${a.short}`), a.promise, `Added under "${a.sec}".`,
+      ...(cs.length ? cs.map(c => [h("b", null, c.id), ` (Day ${c.day}): ${c.what}`]) : ["No criterion names it."])]);
+    y += RH;
+  });
+
+  zone("Off the ladder: criteria that name no commitment");
+  G.C.filter(c => !c.links.length).forEach(c => {
+    band(dayX(c.day), DW - 4, y, "var(--c-in)", .85);
+    label(y, c.id.replace(/^C0?/, "C"), c.what.length > 44 ? c.what.slice(0, 43) + "…" : c.what);
+    hit(y - RH / 2, RH, [h("b", null, c.id), c.what, PC_KNAME[c.kind] || ""]);
+    y += RH;
+  });
+
+  zone("Against the ladder: criteria that contradict a commitment");
+  el("text", { x: TX, y: y + 4, style: "font-size:11px" }, "empty by design: no script can tell that a criterion contradicts a commitment"); y += RH;
+  y += 8;
+  bg.forEach(r => r.setAttribute("height", y - 36));
+  svg.setAttribute("viewBox", `0 0 ${W} ${y + 8}`);
+  box.replaceChildren(h("div", { class: "scroll-x" }, svg));
+}
 
 function draw(M, DATA) {
   const $ = id => document.getElementById(id);
@@ -1229,51 +1527,12 @@ function draw(M, DATA) {
           h("span", { class: "mono" }, `${r.alone} of ${r.n}`), r.open ? h("span", { class: "run-open" }, `${r.open} still open`) : null)))));
   });
 
-  /* Graph 12, drawn beside graph 6: the plan against the specs */
-  graph("g12", (m, mark) => {
+  /* Graph 12, drawn beside graph 6: the plan against the specs, as the by-script mockup draws it (SVG) */
+  graph("g12", m => {
     if (m.empty) { put("g12-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
     put("g12-say", rich(m.say));
-    key("g12-key", [["pg-sw s3", "Stripe: a commitment, darker when more criteria name it"], ["pg-sw s0", "No criterion names it"], ["pg-sw rule", "A rule about people"],
-      ["pg-sw due", "Due by a closed Day, named by none"], ["pg-sw first", "Mark: names a commitment of the plan as approved"], ["pg-sw added", "Names one added later"],
-      ["pg-sw unplanned", "New work, Plan: none"], ["pg-sw guard", "Safety check, Plan: none"], ["pg-tri", "The plan later changed it", "▲"], ["pg-tri", "Reworded only", "△"], ["pg-sw rewrite", "The plan was rewritten here"]]);
-    const W = 7, GAP = 14, armAt = new Map(m.arms.map(([a], k) => [a, k]));
-    const x = i => i * W + armAt.get(m.all[i].arm) * GAP, width = x(m.all.length - 1) + W;
-    const left = n => `left:${n}px`;
-    const cols = m.all.map(() => []);  // every node drawn in a column, for the filters
-    const track = (kids, cls) => h("div", { class: `pg-track ${cls || ""}`, style: `width:${width}px` }, kids);
-    const head = h("div", { class: "pg-row pg-head" }, h("div", { class: "pg-day" }),
-      track(m.arms.map(([a, label]) => { const is = m.all.map((c, i) => c.arm === a ? i : -1).filter(i => i >= 0);
-        return h("span", { class: "pg-arm", style: `${left(x(is[0]))};width:${x(is[is.length - 1]) - x(is[0]) + W}px` }, label); })),
-      h("div", { class: "pg-n" }, "Criteria"));
-    const most = Math.max(1, ...m.rows.map(r => r.n));
-    const rows = m.rows.map(r => forDays(h("div", { class: `pg-row${r.rewrite ? " rewrite" : ""}` },
-      mark(h("button", { type: "button", class: "pg-day" }, `Day ${r.day}`), r.read),
-      track(r.marks.map(k => { const node = h("i", { class: `pg-mark ${k.cls}`, style: left(x(k.i)) }); cols[k.i].push(node); return node; })),
-      h("div", { class: "pg-n" }, h("span", { class: "mono" }, String(r.n)), h("span", { class: "pg-strip", style: `width:${(60 * r.n / most).toFixed(1)}px` },
-        ["first", "added", "unplanned", "guard"].map(s => r.counts[s] > 0 ? h("i", { class: s, style: `flex:${r.counts[s]}` }) : null)))), [r.day]));
-    const bar = h("div", { class: "pg-row pg-barrow" }, h("div", { class: "pg-day" }, "The plan"),
-      track(m.all.map((c, i) => { const node = mark(h("button", { type: "button", style: left(x(i)),
-        class: `pg-stripe ${c.arm === "o" ? c.kind : `s${c.shade}`}${c.rule ? " rule" : ""}${c.due ? " due" : ""}` }), c); cols[i].push(node); return node; })),
-      h("div", { class: "pg-n" }));
-    const signs = h("div", { class: "pg-row pg-signs" }, h("div", { class: "pg-day" }),
-      track(m.all.map((c, i) => c.change && h("span", { class: "pg-tri", style: left(x(i) - 2) }, c.change === "reworded" ? "△" : "▲")).filter(Boolean)), h("div", { class: "pg-n" }));
-    const labels = h("div", { class: "pg-row pg-labels" }, h("div", { class: "pg-day" }),
-      track(m.sections.map(g => h("span", { class: "pg-sec", style: left(x(g.from)) }, g.label))), h("div", { class: "pg-n" }));
-    const plot = h("div", { class: "pg", style: `min-width:${width + 220}px` }, head, rows, bar, signs, labels);
-    const chips = m.filters.map(f => h("button", { type: "button", class: "pg-chip", "aria-pressed": "false" }, f.label, " ", h("b", null, String(f.n))));
-    const filter = k => {
-      const on = chips[k].getAttribute("aria-pressed") !== "true";
-      chips.forEach((c, j) => c.setAttribute("aria-pressed", on && j === k ? "true" : "false"));
-      m.all.forEach((c, i) => cols[i].forEach(n => n.classList.toggle("pg-dim", on && !c.is[m.filters[k].key])));
-    };
-    chips.forEach((c, k) => c.addEventListener("click", () => filter(k)));
-    put("g12-plot", h("div", { class: "pg-chips" }, h("span", null, "Show only:"), chips), h("div", { class: "scroll-x pg-scroll" }, plot),
-      h("p", { class: "pg-quotes mono" }, `Quotes checked · ${comma(m.quotes)}`));
-    // The ladder: each commitment down the side, each Day across, the cell its count of criteria.
-    put("g12-ladder", h("div", { class: "scroll-x" }, h("table", { class: "pg-ladder" },
-      h("thead", null, h("tr", null, h("th", null, "Commitment"), m.ladder.days.map(d => h("th", null, `D${d}`)))),
-      h("tbody", null, m.ladder.rows.map(r => h("tr", { class: r.c.due ? "due" : r.c.rule ? "rule" : "" }, h("th", null, r.name),
-        r.cells.map(n => h("td", { class: `s${n >= 7 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n ? 1 : 0}` }, n ? String(n) : ""))))))));
+    planBar(m, $("g12-plot"), $("g12-tip"), $("g12-panel"), forDays, resets);
+    planLadder(m.chart, $("g12-ladder"), $("g12-ltip"));
   });
 
   /* the foot of the page */
@@ -1283,11 +1542,39 @@ function draw(M, DATA) {
   document.addEventListener("keydown", e => { if (e.key === "Escape") resets.forEach(r => r()); });
 }
 
+/* ---------- light or dark: the system's choice until the reader picks one ---------- */
+// The theme a press of the switch sets: the opposite of what shows now, which is the reader's
+// saved choice, or the system's when there is none.
+function flipTheme(saved, systemDark) {
+  const shown = saved === "dark" || saved === "light" ? saved : systemDark ? "dark" : "light";
+  return shown === "dark" ? "light" : "dark";
+}
+
+function themeToggle() {
+  const root = document.documentElement, button = document.getElementById("theme");
+  if (!button) return;
+  const system = matchMedia("(prefers-color-scheme: dark)");
+  let saved = null;
+  try { saved = localStorage.getItem("theme"); } catch (e) { /* storage blocked: follow the system */ }
+  const show = () => {
+    if (saved === "dark" || saved === "light") root.dataset.theme = saved; else delete root.dataset.theme;
+    button.setAttribute("aria-pressed", String(flipTheme(saved, system.matches) === "light"));
+  };
+  button.addEventListener("click", () => {
+    saved = flipTheme(saved, system.matches);
+    try { localStorage.setItem("theme", saved); } catch (e) { /* kept for this visit only */ }
+    show();
+  });
+  system.addEventListener("change", show);
+  show();
+}
+
 function boot(DATA) {
   draw(model(DATA), DATA);
 }
 
 function start() {
+  themeToggle();
   if (window.SPEC_DRIFT) return boot(window.SPEC_DRIFT);
   document.getElementById("now").textContent = "The data did not load. Build the page with python scripts/spec-drift.py --build dashboard.html; if this is the built page, it was published without its data line.";
 }
