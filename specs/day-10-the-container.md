@@ -716,8 +716,9 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   "`tests.test_once_run`'s first case" and "`tests.test_on`'s", which the replay reads as tests
   `test_once_run` and `test_on` of a class `tests` and fails "not defined"; the close names the
   files by path, the meaning unchanged.
-- The blind relabel (`scripts/relabel.py`) agreed on 25 of 25 stages, 23 of 25 causes and 24 of 25
-  `made:`. Kept: D10.18 `implementation`, as the test reads the driver's exit code before the driver
-  has ended, which the rater read as unclear; D10.19 `process`, since the brief, not the implementer,
-  allowed the assertions that print the whole file (as D09.22 and D09.23); D10.17 `made: none`, as
-  Git Bash's path conversion is the machine's, not Day 10's work (as D05.5).
+- The blind relabel (`scripts/relabel.py`), run again after D10.26, agreed on 26 of 26 stages,
+  24 of 26 causes and 26 of 26 `made:`. Kept: D10.18 `implementation`, as the test reads the
+  driver's exit code before the driver has ended, which the rater read as unclear; D10.19
+  `process`, since the brief, not the implementer, allowed the assertions that print the whole
+  file (as D09.22 and D09.23). The first run, on 25, also read D10.17 as `made: Day 10`; kept
+  `none`, as Git Bash's path conversion is the machine's (as D05.5).
