@@ -74,6 +74,7 @@ from spec_drift_handoffs import *  # noqa: F403
 from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
+from spec_drift_plan import plan_graph
 
 
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
@@ -105,7 +106,8 @@ CAVEATS = [
 # The files this script is split into, beside it: a change to any of them starts the cache over
 # (load_cache) and counts as the script edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
-           "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py")
+           "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
+           "spec_drift_plan.py")
 
 
 def load_cache(path):
@@ -236,7 +238,7 @@ def main():
                     hand_offs=handoffs, look_ahead=look_ahead(snaps, days, index, order, blobs),
                     criteria_index=index, attention=attention, test_inventory=tests,
                     defect_recurrence=recurrence(days),
-                    user_stories=stories,
+                    user_stories=stories, plan=plan_graph(head, blobs, rows),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     other_groups=other_groups(rows),
                     vocab_size=vocab, tokens=tokens, refusals=refusals(),

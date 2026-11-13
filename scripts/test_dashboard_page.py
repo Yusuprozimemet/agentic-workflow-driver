@@ -1,4 +1,4 @@
-"""The dashboard page: what each of its eleven graphs draws and says, and what the page file must hold.
+"""The dashboard page: what each of its twelve graphs draws and says, and what the page file must hold.
 
 docs/dashboard/dashboard.js keeps its reading of the data in model(), which touches no document, so
 these tests run it in node on small made-up data and compare what comes out. The page itself is
@@ -743,6 +743,38 @@ class ModelTest(unittest.TestCase):
                           ("5", ["5 in the notebook"])])
         self.assertEqual((row.get("avg"), [w.get("name") for w in g.get("waiting", [])]), ([], []))
 
+    # Graph 12: Days 1 and 2 closed, Day 3 in progress; the plan rewritten after Day 1.
+    PLAN = dict(reference="x", quotes=5, unlined=["C3.2"], rewrites=[dict(pr=4, after_day=1)], commitments=[
+        dict(id="P01", short="One", section="A", owner_day=1, rule=False, change=None, text="One thing."),
+        dict(id="P02", short="Two", section="A", owner_day=2, rule=False, change="changed", text="Two things."),
+        dict(id="P03", short="People", section="B", owner_day=None, rule=True, change=None, text="A rule."),
+        dict(id="P04", short="Later", section="B", owner_day=3, rule=False, change=None, text="Not yet."),
+        dict(id="N01", short="Added", section="B", owner_day=2, rule=False, change=None, text="Added.")],
+        links={"C1.1": ["P01"], "C1.2": ["P01", "N01"], "C2.1": ["N01"], "C2.2": [], "C2.3": [], "C3.1": ["P01"]})
+    CRIT = [promise("C1.1"), promise("C1.2"), promise("C2.1"), promise("C2.2"), promise("C2.3", tag="hold"), promise("C3.1"), promise("C3.2")]
+
+    def test_graph_12_puts_each_commitment_and_each_day_where_its_plan_lines_say(self):
+        g = model(data(plan=self.PLAN, criteria_index=self.CRIT)).get("g12", {})
+        stripes = {c["key"]: (c["arm"], c["n"], c["shade"], c["due"], c["rule"]) for c in g.get("all", []) if c["arm"] != "o"}
+        self.assertEqual(stripes, {"P01": ("p", 3, 2, False, False), "P02": ("p", 0, 0, True, False), "P03": ("p", 0, 0, False, True),
+                                   "P04": ("p", 0, 0, False, False), "N01": ("n", 2, 2, False, False)})
+        # A criterion naming nothing has its own column: new work (amber) or a safety check (grey), by its tag.
+        self.assertEqual([(c["key"], c["kind"]) for c in g.get("all", []) if c["arm"] == "o"], [("C2.2", "unplanned"), ("C2.3", "guard")])
+        self.assertEqual([(r["day"], r["n"], r["counts"], r["rewrite"]) for r in g.get("rows", [])],
+                         [(1, 2, dict(first=2, added=0, unplanned=0, guard=0), True),
+                          (2, 3, dict(first=0, added=1, unplanned=1, guard=1), False),
+                          (3, 1, dict(first=1, added=0, unplanned=0, guard=0), False)])
+        self.assertEqual({f["key"]: f["n"] for f in g.get("filters", [])}, dict(due=1, none=2, single=0, changed=1))
+        self.assertEqual([s["label"] for s in g.get("sections", [])], ["A", "B"])
+        self.assertEqual(g.get("read", {}).get("t"), "1 of 4 commitments of the approved plan and 1 of 1 added later are named by a criterion")
+        self.assertIn("1 criterion has no Plan: line yet and is not drawn: C3.2.", g["read"]["b"])
+        self.assertEqual(g["ladder"]["rows"][0]["cells"], [2, 0, 1])
+
+    def test_graph_12_without_a_promise_file_says_so_under_not_measured(self):
+        got = model(data(criteria_index=self.CRIT))
+        self.assertIn(["Whether the specs follow the plan", got["g12"].get("empty")], got.get("notMeasured", []))
+        self.assertIsNotNone(got["g12"].get("empty"))
+
 
 @unittest.skipUnless(shutil.which("node"), "needs node to boot the page")
 class BootTest(unittest.TestCase):
@@ -830,14 +862,14 @@ class PageFilesTest(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", page)
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
-    def test_the_eleven_graphs_sit_in_order_under_five_group_headings(self):
+    def test_the_twelve_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in range(1, 12)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in (1, 2, 3, 4, 5, 12, 6, 7, 8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
+        group = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 12: 2, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
         for n, g in group.items():
             at = html.index(f'<section class="graph" id="g{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, f"graph {n}")
