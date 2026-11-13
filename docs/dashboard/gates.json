@@ -92,7 +92,7 @@
 {"date":"2026-11-13","day":10,"gate":"break on purpose","runs":6,"replies":11,"context":1464855,"output":8252,"cost":0.5634},
 {"date":"2026-11-13","day":10,"gate":"evidence replay","runs":7,"replies":11,"context":1573897,"output":5992,"cost":0.5102},
 {"date":"2026-11-13","day":10,"gate":"seen red","runs":2,"replies":3,"context":369590,"output":1453,"cost":0.1245},
-{"date":"2026-11-13","day":11,"gate":"break on purpose","runs":22,"replies":33,"context":3558528,"output":22545,"cost":1.3963},
+{"date":"2026-11-13","day":11,"gate":"break on purpose","runs":22,"replies":34,"context":3624268,"output":22842,"cost":1.4205},
 {"date":"2026-11-13","day":11,"gate":"hooks","runs":6,"replies":8,"context":195616,"output":1922,"cost":0.0092},
 {"date":"2026-11-13","day":11,"gate":"seen red","runs":15,"replies":21,"context":2299178,"output":13139,"cost":0.9738}
 ]
