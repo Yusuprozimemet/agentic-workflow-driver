@@ -30,6 +30,16 @@
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="demo-banner" id="data-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
+    <section class="quality" id="quality" aria-label="Quality of the work" hidden>
+      <div class="q-top">
+        <div class="q-num"><b id="q-n"></b><small id="q-of"></small></div>
+        <div class="q-rows" id="q-rows"></div>
+      </div>
+      <details class="exact"><summary>Exact numbers</summary>
+        <p class="limit">Five parts, each the plain average of the shares counted under it, combined by their geometric mean with no weights, so one weak part pulls the score down more than an average would. Only finished Days count. A part opens the graph that explains it; each Day's score is on its button, each ability's on graph 5. The recipe is <code>scripts/spec_drift_score.py</code>.</p>
+        <div class="scroll-x"><table id="q-table"></table></div>
+      </details>
+    </section>
     <details class="attention" id="attention" hidden>
       <summary id="attention-n">Needs attention</summary>
       <p class="limit">What the build could not confirm, in the order it found it. An item names the promise or the Day it is about.</p>
@@ -104,7 +114,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 5 · joins graphs 3 and 4</p>
       <h2>Which abilities can I rely on?</h2>
-      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the Day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew.</p>
+      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the Day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew. The number after a name is the ability's quality score.</p>
     </div>
     <div class="ab" id="g5-plot"></div>
     <div class="readout" id="g5-read" aria-live="polite"></div>

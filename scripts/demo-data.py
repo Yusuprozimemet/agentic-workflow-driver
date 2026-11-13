@@ -5,6 +5,11 @@ written out here, so the same call gives the same dict every time.
     python scripts/demo-data.py      # prints the dict as JSON
 """
 import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from spec_drift_score import quality_score  # noqa: E402
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -399,7 +404,7 @@ def demo():
                              note="estimate from list prices, not billed spend; example data, usage charges not counted"))
     runs = [dict(sha=f"{n:07x}", conclusion="success", date=f"2026-10-{20 - n:02d}",
                  url=f"https://github.com/example/{PROJECT}/actions/runs/{1000 + n}") for n in range(3)]
-    return dict(
+    out = dict(
         now=dict(generated="2026-10-29T10:00+00:00", head=HEAD[:7], last_pr=merged[-1]["pr"], current_day=6,
                  next_step="Waiting on #118 Day 06 close: receipts", stop_after=None,
                  unwritten=dict(day=CLOSE_DAY, phase=3, title="The close-out day"),
@@ -475,6 +480,8 @@ def demo():
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",
                                   chance_draws=1000),
                   break_line_from_pr=0, project=PROJECT, phases=PHASES, stops=[]))
+    out["score"] = quality_score(out)
+    return out
 
 
 if __name__ == "__main__":

@@ -226,7 +226,7 @@ function model(DATA) {
     const groupsOf = list => [...new Set(list.map(t => t.day))].sort((a, b) => a - b).map(day => ({ day, tiles: list.filter(t => t.day === day) }));
     const rows = named.map(a => {
       const mine = P.tiles.filter(t => t.abilities[0] === a.key), own = stories.filter(s => s.ability === a.key), c = P.counted(mine);
-      return { name: a.name, tiles: mine, groups: groupsOf(mine), prs: own.length, proven: P.n(mine, "proven"), counted: c,
+      return { key: a.key, name: a.name, tiles: mine, groups: groupsOf(mine), prs: own.length, proven: P.n(mine, "proven"), counted: c,
         note: mine.length ? "" : own.length && own.every(s => s.day == null) ? "No promise covers this ability. Its pull requests are work outside the Day specs." : "No promise covers this ability yet.",
         count: (mine.length ? (c ? `${P.n(mine, "proven")} of ${c} proven` : plural(mine.length, "promise", "promises")) + " · " : "") + plural(own.length, "pull request", "pull requests") };
     });
@@ -777,9 +777,22 @@ function model(DATA) {
       clock.empty && ["Where a date's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
 
+  // The quality score: scripts/spec_drift_score.py computes it from this same data; the page only draws it.
+  function quality() {
+    const S = DATA.score;
+    if (!S || !S.all) return null;
+    const view = (x, label) => x && { label, n: Math.round(x.score),
+      parts: x.parts.map(p => ({ key: p.key, name: p.name, graph: p.graph, n: Math.round(p.pct), low: p.key === x.low })),
+      rows: x.parts.flatMap(p => p.counts.map(c => [p.name, c.name, c.m ? `${c.n} of ${c.m}` : c.note, Math.round(c.pct)])) };
+    return { all: view(S.all, "the finished Days"),
+      days: Object.fromEntries(Object.entries(S.days || {}).map(([d, x]) => [d, view(x, `Day ${d}`)])),
+      abilities: Object.fromEntries(Object.entries(S.abilities || {}).filter(([, x]) => x)
+        .map(([k, x]) => [k, { n: Math.round(x.score), parts: x.parts.map(p => `${p.name.toLowerCase()} ${Math.round(p.pct)}`).join(" · ") }])) };
+  }
+
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), g3: safe(abilityGraph), g4: P.error ? P : P.board, g5: P.error ? P : safe(() => reliedGraph(P)), g6: safe(mergeGraph), g7: safe(sieveGraph),
+    attention: attention(), quality: safe(quality), g3: safe(abilityGraph), g4: P.error ? P : P.board, g5: P.error ? P : safe(() => reliedGraph(P)), g6: safe(mergeGraph), g7: safe(sieveGraph),
     g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -969,11 +982,27 @@ function draw(M, DATA) {
   put("attention-n", `Needs attention: ${plural(A.total, "item", "items")}`);
   put("attention-list", A.groups.map(g => h("li", null, h("b", null, `${g.label} (${g.ids.length})`), " ", g.detail ? [rich(g.detail), ": "] : null, g.ids.join(", "))));
 
+  /* the quality score: the finished Days', or the chosen Day's */
+  const Q = M.quality && !M.quality.error ? M.quality : null;
+  const bar = n => h("span", { class: "q-bar" }, h("i", { style: `width:${n}%` }));
+  const showScore = day => {
+    $("quality").hidden = !Q;
+    if (!Q) return;
+    const v = day == null ? Q.all : Q.days[day];
+    put("q-n", v ? String(v.n) : "–");
+    put("q-of", v ? `quality of ${v.label}, out of 100` : `Day ${day} has no score: it is not finished`);
+    put("q-rows", v ? v.parts.map(p => h("a", { class: "q-row", href: `#${p.graph}` }, h("span", { class: "q-name" }, p.name, p.low && h("span", { class: "q-low" }, "lowest")),
+      bar(p.n), h("b", null, String(p.n)), h("span", { class: "q-where" }, `graph ${p.graph.slice(1)}`))) : []);
+    table("q-table", { head: ["Part", "What is counted", "Count", "Share"], rows: v ? v.rows : [] });
+  };
+  showScore(null);
+  const dq = v => v && h("b", { class: "dq" }, String(v.n));
+
   /* the day buttons: one day lit in every graph */
   let lit = null;
-  const onDay = [];  // what else happens when a day is picked: graph 10 turns to that day's last date
+  const onDay = [showScore];  // what else happens when a day is picked: the score turns to it, graph 10 to its last date
   const relight = () => marks.forEach(node => node.classList.toggle("dim", lit !== null && !node.dataset.days.split(" ").includes(String(lit))));
-  const chips = [null, ...M.days.map(d => d.day)].map(day => h("button", { type: "button", "aria-pressed": day === null ? "true" : "false" }, day === null ? "All Days" : `Day ${day}`));
+  const chips = [null, ...M.days.map(d => d.day)].map(day => h("button", { type: "button", "aria-pressed": day === null ? "true" : "false" }, day === null ? ["All Days", Q && dq(Q.all)] : [`Day ${day}`, Q && dq(Q.days[day])]));
   chips.forEach((chip, i) => chip.addEventListener("click", () => {
     lit = i ? M.days[i - 1].day : null;
     chips.forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
@@ -1055,6 +1084,7 @@ function draw(M, DATA) {
   /* Graph 5 */
   graph("g5", (m, mark) => {
     put("g5-plot", m.rows.map(r => h("div", { class: "ab-row" }, h("div", { class: "ab-name" }, r.name),
+      Q && Q.abilities[r.key] && h("div", { class: "ab-score", title: Q.abilities[r.key].parts }, h("b", null, String(Q.abilities[r.key].n)), bar(Q.abilities[r.key].n)),
       h("div", { class: "ab-groups" }, r.groups.map(g => forDays(h("div", { class: "ab-group" }, h("span", { class: "mono" }, `D${g.day}`),
         h("div", { class: "tiles" }, g.tiles.map(t => tile(t, mark)))), [g.day])), r.note && h("span", { class: "ab-note" }, r.note)),
       h("div", { class: "ab-count" }, r.count))));

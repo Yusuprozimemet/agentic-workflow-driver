@@ -42,7 +42,7 @@ let error = null;
 try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
 const shown = el => el ? { hidden: el.hidden, text: el.textContent } : null;
 console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.textContent : null,
-  banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]) }));
+  banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]), quality: shown(els.quality) }));
 """
 
 # tagOf() on each value of the list from stdin.
@@ -743,6 +743,25 @@ class ModelTest(unittest.TestCase):
                           ("5", ["5 in the notebook"])])
         self.assertEqual((row.get("avg"), [w.get("name") for w in g.get("waiting", [])]), ([], []))
 
+    # The quality score, as scripts/spec_drift_score.py writes it: the page rounds it and links each part.
+    PART = lambda key, pct, counts: dict(key=key, name=key.title(), graph="g4", pct=pct, counts=counts)  # noqa: E731
+    SCORE = dict(all=dict(score=89.8, low="proof", parts=[
+        PART("plan", 92.5, [dict(name="Named", n=9, m=10, pct=90.0, note="")]),
+        PART("proof", 74.0, [dict(name="Seen", n=74, m=100, pct=74.0, note=""), dict(name="Cost", n=None, m=None, pct=74.0, note="2 against 1")])]),
+        days={"1": dict(score=91.6, low="plan", parts=[PART("plan", 91.6, [])])},
+        abilities={"a": dict(score=81.4, low="proof", parts=[PART("plan", 90.0, []), PART("proof", 72.3, [])]), "b": None})
+
+    def test_the_quality_score_is_rounded_and_counted_for_the_whole_each_day_and_each_ability(self):
+        q = model(data(score=self.SCORE)).get("quality") or {}
+        whole = q.get("all") or {}
+        self.assertEqual((whole.get("label"), whole.get("n")), ("the finished Days", 90))
+        self.assertEqual([(p["key"], p["n"], p["low"], p["graph"]) for p in whole.get("parts", [])],
+                         [("plan", 93, False, "g4"), ("proof", 74, True, "g4")])
+        self.assertEqual(whole.get("rows"), [["Plan", "Named", "9 of 10", 90], ["Proof", "Seen", "74 of 100", 74], ["Proof", "Cost", "2 against 1", 74]])
+        self.assertEqual(((q.get("days") or {}).get("1") or {}).get("label"), "Day 1")
+        self.assertEqual(q.get("abilities"), {"a": dict(n=81, parts="plan 90 · proof 72")})
+        self.assertIsNone(model(data()).get("quality"))
+
     # Graph 12: Days 1 and 2 closed, Day 3 in progress; the plan rewritten after Day 1.
     PLAN = dict(reference="x", quotes=5, unlined=["C3.2"], rewrites=[dict(pr=4, after_day=1)], commitments=[
         dict(id="P01", short="One", section="A", owner_day=1, rule=False, change=None, text="One thing."),
@@ -787,6 +806,11 @@ class BootTest(unittest.TestCase):
         self.assertEqual((out["error"], out["logged"]), (None, []))
         self.assertEqual(out["eyebrow"], "toy · read from git and GitHub on 3 Jan 2026 at 09:30 · commit abcdef1")
         self.assertTrue(out["banner"]["hidden"])
+
+    def test_the_quality_score_shows_under_the_now_line_only_when_the_data_has_one(self):
+        self.assertEqual(boot(data())["quality"]["hidden"], True)
+        out = boot(data(score=ModelTest.SCORE))
+        self.assertEqual((out["error"], out["logged"], out["quality"]["hidden"]), (None, [], False))
 
     def test_the_data_branch_or_a_file_on_it_missing_is_said_on_the_page(self):
         names = ["token-usage.json", "refusals.json", "gates.json", "sessions.json", "counted.json", "driver-runs.json",
