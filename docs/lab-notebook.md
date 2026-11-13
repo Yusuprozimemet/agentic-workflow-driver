@@ -270,7 +270,7 @@ change (#79), Track 0 (#85) and Tracks A to H (#88, #89, #95, #100, #101, #104, 
 - **Breaks:** 42 in the manifest, 41 copied from the PRs' `manifest:` lines and one made at the close:
   C10.29, a `hold`, had not been broken (D10.21). The live breaks of C10.7 and C10.14 are written as
   sentences: CI has no image.
-- **Flaky test:** `UsageLimitTest.test_far_reset_parks` failed once each in three tracks' full runs
+- **Flaky test:** `UsageLimitTest.test_far_reset_parks` failed once each in five tracks' full runs
   (D10.18, an escape from Day 09); 50 of 50 under `--repeat 10` at the close.
 - **Defects:** 26. The auditors 10, the dashboard 1, seen red 3, breaks on purpose 5, review 1, the tracks
   2, self 2, the close 1, the close's rehearsal 1. Causes: spec 15, implementation 6, process 4, environment 1. Escapes: 2 from

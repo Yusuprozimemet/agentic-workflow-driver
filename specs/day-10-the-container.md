@@ -674,7 +674,7 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   Windows paths, so breaks in #149 and #150 found nothing until run with `MSYS_NO_PATHCONV=1`.
 - **Defect** D10.18 — found: Track A · cause: implementation · made: Day 09 ·
   `UsageLimitTest.test_far_reset_parks` fails on and off under `scripts/test-parallel.py`, the
-  driver's exit code still `None` when the test reads it: once each in #149, #150 and #152, each
+  driver's exit code still `None` when the test reads it: once each in #149, #150, #152, #155 and #157, each
   time passing alone and under `--repeat`. No file of Day 10 touches its path.
 - **Defect** D10.19 — found: break on purpose · cause: process · made: Day 10 · Track B's brief let
   the file test use `assertIn` and `assertNotIn`, which print the whole file into the failure, so
