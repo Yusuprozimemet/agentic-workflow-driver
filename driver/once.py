@@ -26,7 +26,7 @@ import time
 import uuid
 from collections import namedtuple
 
-from driver import box, github, issues, livecheck, lock, runlog, tree
+from driver import box, github, issues, livecheck, lock, runlog, stream, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -41,18 +41,9 @@ def refuse(lines):  # exit-2 lines go to stderr, as the preflight's do
     return 2
 
 
-def parsed(out):
-    # The session's stdout is one JSON object under --output-format json; anything else is None.
-    try:
-        data = json.loads(out)
-    except ValueError:
-        return None
-    return data if isinstance(data, dict) else None
-
-
 def outcome(out, returncode, session, project, gh, sentence):
     # Returns (line, code): the first rule that applies to the session's stdout, as the spec's table.
-    data = parsed(out)
+    data = stream.result(out)
     if data is None:
         return (
             f"park: the session ended without a result (exit {returncode}; session `{session}`)",
@@ -145,7 +136,7 @@ def refusal(entry):
 
 def write_end(state, session, line, out):
     # The cost and the refusals are the session's own counts; a reply that is not JSON has neither.
-    data = parsed(out) or {}
+    data = stream.result(out) or {}
     denials = data.get("permission_denials")
     refused = None
     if isinstance(denials, list) and denials:
@@ -577,7 +568,8 @@ def begin(args, home, project, config, step, session):
         "--model",
         args.model,
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--max-budget-usd",
         str(config["budget_usd"]),
         "--permission-mode",
