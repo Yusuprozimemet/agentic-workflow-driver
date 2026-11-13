@@ -438,11 +438,11 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       a log of one `merged` line for #9 (changed false) and no session lines gives 0.
       Red today: every `merged` line with `changed` false counts: 2, 2 and 1.
       Test: `Level2ContainerTest.test_only_container_sessions_count`.
+      Replaces: C08.10 — was: a `merged` line with `changed` false counts whichever session opened its pull request, and a log of `merged` lines alone counts them.
+      Replaces: C09.14 — was: `level_2_run` over two `merged` lines with `"changed": false` and no session lines gives 2.
       Evidence: `Level2ContainerTest.test_only_container_sessions_count` (#157).
       seen red: python -m unittest tests.test_level_2_container on main → AssertionError: 2 != 1 (#157)
       broken: level_2_run counts a merge whatever session opened it, container or not → AssertionError: 2 != 1 (#157)
-      Replaces: C08.10 — was: a `merged` line with `changed` false counts whichever session opened its pull request, and a log of `merged` lines alone counts them.
-      Replaces: C09.14 — was: `level_2_run` over two `merged` lines with `"changed": false` and no session lines gives 2.
 - [x] C10.25 **hold** — The rest of C08.10 and C09.14 holds: `status` prints, under "refusals: 3",
       "  2 Bash: {"command": "git push --force"}" and "  1 Edit: {}"; after the `cost` line,
       "level 2: <k> of 15 pull requests in a row merged without a change asked", 0 for a log with
@@ -460,10 +460,10 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       line against this criterion's.
       Red today: `status` prints "level 2: 3 of 15 ...".
       Test: `TrialRecordTest.test_cost_line_is_status`.
+      Replaces: C08.12 — was: the record's `cost` and level 2 lines are both those `status` gives on the copy of the run log ("level 2: 3 of 15").
       Evidence: `TrialRecordTest.test_cost_line_is_status` (#157); `docs/trial/day-08.md` unedited since `495bf69`.
       seen red: python -m unittest tests.test_trial_record.TrialRecordTest.test_cost_line_is_status on main → AssertionError: 'level 2: 3 of 15 pull requests in a row merged without a change asked' != 'level 2: 0 of 15 pull requests in a row merged without a change asked' (#157)
       broken: level_2_run skips the container check → AssertionError: 'level 2: 3 of 15 pull requests in a row merged without a change asked' != 'level 2: 0 of 15 pull requests in a row merged without a change asked' (#157)
-      Replaces: C08.12 — was: the record's `cost` and level 2 lines are both those `status` gives on the copy of the run log ("level 2: 3 of 15").
 - [x] C10.27 **new** — `setup_check.protection_lines` with classic protection whose
       `enforce_admins.enabled` is false and no rules gives
       `("FAIL", 'main: administrators may bypass the rules; turn on "Do not allow bypassing the above settings"')`
