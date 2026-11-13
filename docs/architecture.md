@@ -40,7 +40,7 @@ flowchart TB
         RL[relabel.py]
         GD[auditor-guard.py]
         SD["spec-drift.py, token-usage.py"]
-        CHK["pr-names, invariants,<br/>criteria-wording, behaviour-index,<br/>check-links, service-wiring"]
+        CHK["pr-names, invariants,<br/>criteria-wording, behaviour-index,<br/>plan-links, check-links, service-wiring"]
     end
 
     subgraph GH["GitHub"]
@@ -308,7 +308,8 @@ flowchart LR
     PR --> J6["Branch, title, commits and keys agree<br/>pr-names.py"]
     PR --> J7["Track tests seen red<br/>track-red.py"]
     PR --> J8["Criteria keep their wording<br/>criteria-wording.py"]
-    J1 & J2 & J3 & J4 & J5 & J6 & J7 & J8 --> RESULTS["CI results"]
+    PR --> J9["Plan links quote the plan's words<br/>plan-links.py"]
+    J1 & J2 & J3 & J4 & J5 & J6 & J7 & J8 & J9 --> RESULTS["CI results"]
     RESULTS --> BP{"checks required by<br/>branch protection"}
     BP -- green --> MERGE["the maintainer may merge"]
 ```
