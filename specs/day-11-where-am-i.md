@@ -551,14 +551,16 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
 - Tracks D and E1 recorded no break of C11.15 and C11.20, which the Notes above left to them; #169's breaks of both, run on the code before the day, still find their lines once and are the ones recorded.
 - C11.21 is the first `hold` that is live: its break cannot replay, and the close's first draft wrote it as a sentence alone, which the rehearsal failed ("a hold criterion with no broken: line") and the dashboard flagged "No seen-red or broken line". It now carries `broken: none → <why>`, as Day 3's live hold did.
 - C11.21 is live: its Docker part skips in CI and in the replay. `usage` repeating on each content block of a message (the Note above) stays unknown: the live session's one `assistant` line held one `text` block (#178).
-- The blind relabel (`scripts/relabel.py`), run on 31 entries and again on 32 after D11.32, agreed
-  the second time on 31 of 32 stages, 27 of 32 causes and 31 of 32 `made:`. After the first run,
-  D11.25 changed from `found: Track E2` to `Day 11 review` (Track E1's test had merged when Track E2
-  found it) and D11.31's cause from `spec` to `implementation` (#171 moved the test without
-  recording the departure). The second run read both the other way, D11.25 before the merge and
-  D11.31 `process`: kept, for the reasons just given. Kept as well: D11.22 `environment` and `made:
-  none`, Git Bash's path conversion being the machine's (as D10.17); D11.24 `process`, the window
-  being the brief's, not the implementer's (as D10.19); D11.27 `process`, the shell doing as
-  written, the command being the slip; D11.29 `implementation`, as D10.18 (the test reads the
-  driver's exit before the driver has ended), which the rater read as unclear.
+- The blind relabel (`scripts/relabel.py`) ran three times, on 31 entries, on 32 after D11.32 and on
+  33 after D11.33; the last whole run agreed on 32 of 33 stages, 28 of 33 causes and 32 of 33
+  `made:`. After the first run, D11.25 changed from `found: Track E2` to `Day 11 review` (Track E1's
+  test had merged when Track E2 found it) and D11.31's cause from `spec` to `implementation` (#171
+  moved the test without recording the departure); the later runs read D11.31 as `process`: kept,
+  the departure being in the code. Kept as well: D11.33 `evidence replay`, which `specs/README.md`
+  gives the close's rehearsal (as D10.26), where the rater read before the merge; D11.22
+  `environment` and `made: none`, Git Bash's path conversion being the machine's (as D10.17);
+  D11.24 `process`, the window being the brief's, not the implementer's (as D10.19); D11.27
+  `process`, the shell doing as written, the command being the slip; D11.29 `implementation`, as
+  D10.18 (the test reads the driver's exit before the driver has ended), which the rater read as
+  unclear.
 - Still for the maintainer, as plan-change matters: `plan.md` says the session id is read from the output ("Where am I, while a session runs"; "What to build", item 2), `plan.md:130`'s "the JSON result", `plan.md:630`'s "Days 1 to 9 have specs", and P60's `--output-format json`.
