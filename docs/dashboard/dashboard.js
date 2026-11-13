@@ -708,20 +708,80 @@ function model(DATA) {
         rows: rows.map(r => [r.label, ...r.cells.map(c => c.length), r.open, r.fixes, r.crashes, r.parks, r.minutes, `${r.alone} of ${r.n}`]) } };
   }
 
-  function notMeasured(yard, clock, run) {
+  // The plan graph: one stripe per commitment of plan.md (specs/plan/promises.json), one row per Day, a mark where a
+  // criterion of that Day names the commitment in its Plan: line (Days 1 to 10: the backfill). Nothing here is a reader's.
+  function planGraph() {
+    const PL = DATA.plan;
+    if (!PL || !(PL.commitments || []).length) return { empty: "this project keeps no `specs/plan/promises.json`, so no criterion can name what the plan commits to.",
+      read: { t: "Not measured yet", b: [] }, table: { head: [], rows: [] } };
+    const links = PL.links || {}, crit = (DATA.criteria_index || []).filter(c => c.id in links);
+    const closedTo = Math.max(0, ...days.filter(finished).map(d => d.day));
+    const kindOf = c => { const l = links[c.id]; return l.some(p => p[0] === "P") ? "first" : l.length ? "added" : c.tag === "hold" ? "guard" : "unplanned"; };
+    const KIND = { first: "names a commitment of the plan as approved", added: "names only commitments added later", unplanned: "new work, Plan: none", guard: "safety check, Plan: none" };
+    const by = {}; crit.forEach(c => links[c.id].forEach(p => (by[p] = by[p] || []).push(c)));
+    const shade = n => n >= 7 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n ? 1 : 0;
+    const said = c => `${c.id} ${plain(c.plain || c.claim || "")}`;
+    const byDay = list => [...new Set(list.map(c => c.day))].sort((a, b) => a - b).map(d => `Day ${d}: ${list.filter(c => c.day === d).map(c => c.id).join(", ")}`);
+    const cols = PL.commitments.map(p => {
+      const served = by[p.id] || [], n = served.length, due = !p.rule && p.owner_day != null && p.owner_day <= closedTo && !n;
+      const state = p.rule ? "a rule about people, which no test can check" : due ? `due by Day ${p.owner_day}, and no criterion names it`
+        : n ? plural(n, "criterion names it", "criteria name it") : p.owner_day != null ? `owned by Day ${p.owner_day}, not reached yet` : "no criterion names it";
+      return { arm: p.id[0] === "P" ? "p" : "n", key: p.id, section: p.section, shade: shade(n), n, rule: p.rule, due, change: p.change,
+        days: [...new Set(served.map(c => c.day))],
+        is: { due, none: !n && !p.rule, single: n === 1, changed: !!p.change },
+        t: `${p.id} · ${p.short}`, b: [`${p.section} · ${p.change ? `the plan ${p.change === "reworded" ? "reworded" : "later changed"} it` : p.id[0] === "P" ? "as approved" : "added by a later plan change"} · ${state}.`,
+          p.text, ...byDay(served), ...served.map(said)] };
+    });
+    const off = crit.filter(c => !links[c.id].length).sort((a, b) => a.day - b.day || a.id.localeCompare(b.id, "en", { numeric: true }))
+      .map(c => ({ arm: "o", key: c.id, kind: kindOf(c), days: [c.day], is: {}, t: `${c.id} · ${KIND[kindOf(c)]}`,
+        b: [`Day ${c.day}, tagged ${c.tag}. Its Plan: line names no commitment${kindOf(c) === "guard" ? ": it checks that earlier work still holds" : ": work the plan does not ask for"}.`, plain(c.plain || c.claim || "")] }));
+    const all = [...cols, ...off], at = new Map(all.map((c, i) => [c.key, i]));
+    const groups = arm => all.reduce((g, c, i) => { if (c.arm !== arm) return g; const last = g[g.length - 1];
+      if (last && last.label === c.section) last.to = i; else g.push({ label: c.section, from: i, to: i }); return g; }, []);
+    const after = new Set((PL.rewrites || []).map(r => r.after_day));
+    const dayList = [...new Set(crit.map(c => c.day))].sort((a, b) => a - b);
+    const rows = dayList.map(d => {
+      const mine = crit.filter(c => c.day === d), k = s => mine.filter(c => kindOf(c) === s).length;
+      const marks = [];
+      mine.forEach(c => { const l = links[c.id];
+        if (!l.length) marks.push({ i: at.get(c.id), cls: kindOf(c) });
+        l.forEach(p => at.has(p) && marks.push({ i: at.get(p), cls: p[0] === "P" ? "first" : "added" })); });
+      const counts = { first: k("first"), added: k("added"), unplanned: k("unplanned"), guard: k("guard") };
+      return { day: d, n: mine.length, counts, marks, rewrite: after.has(d),
+        read: { t: `Day ${d} · ${plural(mine.length, "criterion", "criteria")}`, b: [`${counts.first} name a commitment of the plan as approved, ${counts.added} only commitments added later, ${counts.unplanned} are new work the plan does not ask for, ${counts.guard} are safety checks.`,
+          after.has(d) ? "The plan was rewritten after this Day's spec merged: the Days below wrote against the new plan." : ""].filter(Boolean) } };
+    });
+    const P0 = cols.filter(c => c.arm === "p"), N0 = cols.filter(c => c.arm === "n");
+    const filters = [["due", "Should be covered by now, is not"], ["none", "No criterion yet"], ["single", "Held by a single criterion"], ["changed", "Rewritten by the plan later"]]
+      .map(([key, label]) => ({ key, label, n: cols.filter(c => c.is[key]).length }));
+    const served = list => list.filter(c => c.n).length, quotes = PL.quotes || 0;
+    const read = { t: `${served(P0)} of ${P0.length} commitments of the approved plan and ${served(N0)} of ${N0.length} added later are named by a criterion`,
+      b: [`${plural(crit.length, "criterion", "criteria")} over ${plural(dayList.length, "Day", "Days")}; ${plural(off.length, "names", "name")} no commitment. ${filters[0].n ? `${plural(filters[0].n, "commitment is", "commitments are")} due by a closed Day and named by none.` : "Every commitment due by a closed Day is named."}`,
+        `${comma(quotes)} quotes, each found word for word in its commitment by \`scripts/plan-links.py\` on every pull request.`,
+        (PL.unlined || []).length ? `${plural(PL.unlined.length, "criterion has", "criteria have")} no Plan: line yet and ${PL.unlined.length === 1 ? "is" : "are"} not drawn: ${PL.unlined.join(", ")}.` : ""].filter(Boolean) };
+    const ladder = { days: dayList, rows: cols.map(c => ({ key: c.key, name: c.t, cells: dayList.map(d => (by[c.key] || []).filter(x => x.day === d).length), c })) };
+    return { say: `One stripe per commitment of \`plan.md\`, in the plan's order, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
+      all, arms: [["p", `The plan as approved · ${P0.length}`], ["n", `Added later · ${N0.length}`], ["o", `Criteria no commitment asks for · ${off.length}`]].filter(([a]) => all.some(c => c.arm === a)),
+      sections: groups("p"), rows, filters, quotes, read, ladder,
+      table: { head: ["Commitment", "Section", "Owner Day", "Criteria", "Days", "State"],
+        rows: cols.map(c => [c.t, c.section, c.rule ? "rule about people" : PL.commitments[at.get(c.key)].owner_day ?? "", c.n, c.days.sort((a, b) => a - b).join(", "), c.b[0].split(" · ").pop().replace(/\.$/, "")]) } };
+  }
+
+  function notMeasured(yard, clock, run, plan) {
     const I = DATA.infra || {};
     return [!I.latest && !(I.runs || []).length && ["Infrastructure checks", "no run is recorded, so nothing is drawn."],
       !DATA.deployment && ["The live deployment", "no run is recorded, so nothing is drawn."],
       ...((yard.waiting || []).map(w => [w.name, `${w.why}.`])),
       run.empty && ["Whether it runs without a person", run.empty],
+      plan.empty && ["Whether the specs follow the plan", plan.empty],
       clock.empty && ["Where a date's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
 
-  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph);
+  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), g3: safe(abilityGraph), g4: P.error ? P : P.board, g5: P.error ? P : safe(() => reliedGraph(P)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
-    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11) };
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
+    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
 
 /* ---------- how this works: one promise, followed through its steps ---------- */
@@ -1137,6 +1197,53 @@ function draw(M, DATA) {
           o.col === "fixed" ? String(o.fixes) : null, o.wait != null ? h("i", { class: "run-tail", style: `width:${Math.min(160, o.wait).toFixed(1)}px` }) : null), o))))),
         h("div", { class: "run-share" }, h("span", { class: "run-bar" }, h("i", { style: `width:${r.share == null ? 0 : (100 * r.share).toFixed(1)}%` })),
           h("span", { class: "mono" }, `${r.alone} of ${r.n}`), r.open ? h("span", { class: "run-open" }, `${r.open} still open`) : null)))));
+  });
+
+  /* Graph 12, drawn beside graph 6: the plan against the specs */
+  graph("g12", (m, mark) => {
+    if (m.empty) { put("g12-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
+    put("g12-say", rich(m.say));
+    key("g12-key", [["pg-sw s3", "Stripe: a commitment, darker when more criteria name it"], ["pg-sw s0", "No criterion names it"], ["pg-sw rule", "A rule about people"],
+      ["pg-sw due", "Due by a closed Day, named by none"], ["pg-sw first", "Mark: names a commitment of the plan as approved"], ["pg-sw added", "Names one added later"],
+      ["pg-sw unplanned", "New work, Plan: none"], ["pg-sw guard", "Safety check, Plan: none"], ["pg-tri", "The plan later changed it", "▲"], ["pg-tri", "Reworded only", "△"], ["pg-sw rewrite", "The plan was rewritten here"]]);
+    const W = 7, GAP = 14, armAt = new Map(m.arms.map(([a], k) => [a, k]));
+    const x = i => i * W + armAt.get(m.all[i].arm) * GAP, width = x(m.all.length - 1) + W;
+    const left = n => `left:${n}px`;
+    const cols = m.all.map(() => []);  // every node drawn in a column, for the filters
+    const track = (kids, cls) => h("div", { class: `pg-track ${cls || ""}`, style: `width:${width}px` }, kids);
+    const head = h("div", { class: "pg-row pg-head" }, h("div", { class: "pg-day" }),
+      track(m.arms.map(([a, label]) => { const is = m.all.map((c, i) => c.arm === a ? i : -1).filter(i => i >= 0);
+        return h("span", { class: "pg-arm", style: `${left(x(is[0]))};width:${x(is[is.length - 1]) - x(is[0]) + W}px` }, label); })),
+      h("div", { class: "pg-n" }, "Criteria"));
+    const most = Math.max(1, ...m.rows.map(r => r.n));
+    const rows = m.rows.map(r => forDays(h("div", { class: `pg-row${r.rewrite ? " rewrite" : ""}` },
+      mark(h("button", { type: "button", class: "pg-day" }, `Day ${r.day}`), r.read),
+      track(r.marks.map(k => { const node = h("i", { class: `pg-mark ${k.cls}`, style: left(x(k.i)) }); cols[k.i].push(node); return node; })),
+      h("div", { class: "pg-n" }, h("span", { class: "mono" }, String(r.n)), h("span", { class: "pg-strip", style: `width:${(60 * r.n / most).toFixed(1)}px` },
+        ["first", "added", "unplanned", "guard"].map(s => r.counts[s] > 0 ? h("i", { class: s, style: `flex:${r.counts[s]}` }) : null)))), [r.day]));
+    const bar = h("div", { class: "pg-row pg-barrow" }, h("div", { class: "pg-day" }, "The plan"),
+      track(m.all.map((c, i) => { const node = mark(h("button", { type: "button", style: left(x(i)),
+        class: `pg-stripe ${c.arm === "o" ? c.kind : `s${c.shade}`}${c.rule ? " rule" : ""}${c.due ? " due" : ""}` }), c); cols[i].push(node); return node; })),
+      h("div", { class: "pg-n" }));
+    const signs = h("div", { class: "pg-row pg-signs" }, h("div", { class: "pg-day" }),
+      track(m.all.map((c, i) => c.change && h("span", { class: "pg-tri", style: left(x(i) - 2) }, c.change === "reworded" ? "△" : "▲")).filter(Boolean)), h("div", { class: "pg-n" }));
+    const labels = h("div", { class: "pg-row pg-labels" }, h("div", { class: "pg-day" }),
+      track(m.sections.map(g => h("span", { class: "pg-sec", style: left(x(g.from)) }, g.label))), h("div", { class: "pg-n" }));
+    const plot = h("div", { class: "pg", style: `min-width:${width + 220}px` }, head, rows, bar, signs, labels);
+    const chips = m.filters.map(f => h("button", { type: "button", class: "pg-chip", "aria-pressed": "false" }, f.label, " ", h("b", null, String(f.n))));
+    const filter = k => {
+      const on = chips[k].getAttribute("aria-pressed") !== "true";
+      chips.forEach((c, j) => c.setAttribute("aria-pressed", on && j === k ? "true" : "false"));
+      m.all.forEach((c, i) => cols[i].forEach(n => n.classList.toggle("pg-dim", on && !c.is[m.filters[k].key])));
+    };
+    chips.forEach((c, k) => c.addEventListener("click", () => filter(k)));
+    put("g12-plot", h("div", { class: "pg-chips" }, h("span", null, "Show only:"), chips), h("div", { class: "scroll-x pg-scroll" }, plot),
+      h("p", { class: "pg-quotes mono" }, `Quotes checked · ${comma(m.quotes)}`));
+    // The ladder: each commitment down the side, each Day across, the cell its count of criteria.
+    put("g12-ladder", h("div", { class: "scroll-x" }, h("table", { class: "pg-ladder" },
+      h("thead", null, h("tr", null, h("th", null, "Commitment"), m.ladder.days.map(d => h("th", null, `D${d}`)))),
+      h("tbody", null, m.ladder.rows.map(r => h("tr", { class: r.c.due ? "due" : r.c.rule ? "rule" : "" }, h("th", null, r.name),
+        r.cells.map(n => h("td", { class: `s${n >= 7 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n ? 1 : 0}` }, n ? String(n) : ""))))))));
   });
 
   /* the foot of the page */

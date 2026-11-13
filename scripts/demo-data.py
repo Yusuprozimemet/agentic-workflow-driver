@@ -335,6 +335,32 @@ def driver_runs(rows, at):
     return dict(source="docs/dashboard/driver-runs.json", counted=at, steps=steps, parks=parks)
 
 
+def plan_links():
+    """A made-up plan for the shop: ten commitments approved first, three added by a later change, one a rule
+    about people; Day 4's criteria came after the plan was rewritten. One commitment is due and named by none."""
+    C = [("P01", "Shoppers browse without an account", "What to build", 1, False, None),
+         ("P02", "The list is paged", "What to build", 1, False, None),
+         ("P03", "A product page for every product", "What to build", 2, False, None),
+         ("P04", "Money is kept in cents", "What to build", 2, False, "reworded"),
+         ("P05", "The cart keeps its lines", "The cart", 3, False, None),
+         ("P06", "Totals are exact", "The cart", 4, False, "changed"),
+         ("P07", "A failed payment leaves no order", "Payment", 5, False, None),
+         ("P08", "Card numbers are never stored", "Payment", 5, False, None),
+         ("P09", "A receipt for every order", "Payment", 3, False, None),
+         ("P10", "The owner signs off each release", "Who does what", None, True, None),
+         ("N01", "Tax shown on its own line", "Payment", 6, False, None),
+         ("N02", "Free shipping over a threshold", "The cart", 4, False, None),
+         ("N03", "Delivery slots", "Delivery", 7, False, None)]
+    links = {"C1.1": ["P01"], "C1.2": ["P02"], "C1.3": [], "C2.1": ["P03"], "C2.2": ["P03"], "C2.3": ["P04"],
+             "C3.1": ["P05"], "C3.2": ["P05", "P06"], "C3.3": [], "C4.1": ["P06"], "C4.2": ["N02"], "C4.3": ["P04", "P06"],
+             "C5.1": ["P07"], "C5.2": [], "C5.3": ["P08"], "C6.1": ["N01"], "C6.2": ["N01"], "C6.3": []}
+    return dict(reference="demo", quotes=sum(len(v) for v in links.values()), links=links, unlined=[],
+                rewrites=[dict(pr=9, after_day=3)],
+                commitments=[dict(id=i, short=s, section=sec, owner_day=o, rule=r, change=ch, text=f"Made-up commitment: {s.lower()}.")
+                             for i, s, sec, o, r, ch in C])
+
+
+
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
@@ -439,7 +465,7 @@ def demo():
         conclusion=dict(reads=[dict(phase=1, text="**Read at the end of Phase 1.** Products and the cart work; "
                                                   "the checkout is next.")],
                         measured=[["Checkout abandonment", "31%"], ["Median page load", "1.2 s"]]),
-        yardsticks=yardsticks(),
+        yardsticks=yardsticks(), plan=plan_links(),
         clock=clock(rows), counted=dict(at=f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
         driver_runs=driver_runs(rows, f"{max(r['date'] for r in rows)}T18:00:00+02:00"),
         # every file of the data branch on record, so no missing-data banner shows beside the example one

@@ -21,7 +21,7 @@ import test_dashboard_page  # noqa: E402  (its harnesses run the page's model an
 spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
 demo_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(demo_data)
-GRAPHS = ("g1", "g3", "g4", "g5", "g6", "g7", "g8", "g9", "g2", "g10", "g11")
+GRAPHS = ("g1", "g3", "g4", "g5", "g6", "g7", "g8", "g9", "g2", "g10", "g11", "g12")
 REAL = dict(now=dict(current_day=None), rows=[], days=[])
 
 
@@ -66,7 +66,8 @@ class DemoData(unittest.TestCase):
                      g5=sum(len(r["tiles"]) for r in m["g5"]["rows"]), g6=len(m["g6"]["merges"]), g7=sum(len(r["dots"]) for r in m["g7"]["rows"]),
                      g8=len(m["g8"]["bars"]), g9=sum(b["total"] > 0 for b in m["g9"]["bars"]), g2=len(m["g2"]["rows"]),
                      g10=sum(len(lane["bars"]) for d in m["g10"]["dates"] for lane in d["lanes"]),
-                     g11=sum(len(c) for r in m["g11"]["rows"] for c in r["cells"]))
+                     g11=sum(len(c) for r in m["g11"]["rows"] for c in r["cells"]),
+                     g12=sum(len(r["marks"]) for r in m["g12"]["rows"]))
         self.assertEqual([g for g in GRAPHS if not marks[g]], [], marks)
         # Every lane of the clock has a bar on the date shown first but the parks, which were answered on
         # earlier dates; every lane has one on some date, and the day buttons can reach every demo day.

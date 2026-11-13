@@ -16,7 +16,7 @@
   <header>
     <p class="eyebrow" id="eyebrow"></p>
     <h1>A script that runs AI coding work one step at a time</h1>
-    <p class="lede">The whole project in eleven graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
+    <p class="lede">The whole project in twelve graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
     <dl class="words" id="words">
       <div><dt>Day</dt><dd>A numbered step of the plan, written as a spec before it is built. It is not a calendar day: <span id="words-took">several Days can fit in one date</span>.</dd></div>
       <div><dt>Date</dt><dd>A calendar date, on the maintainer's clock.</dd></div>
@@ -111,7 +111,30 @@
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g5-table"></table></div></details>
   </section>
 
-  <h2 class="chapter">Is the way of working sound?<small>spec against code, and what the checks catch</small></h2>
+  <h2 class="chapter">Is the way of working sound?<small>plan against spec, spec against code, and what the checks catch</small></h2>
+
+  <section class="graph" id="g12">
+    <div class="graph-head">
+      <p class="graph-n">Graph 12 · placed before graph 6: plan against spec, as 6 is spec against code</p>
+      <h2>Do the specs follow the plan?</h2>
+      <p class="graph-say" id="g12-say">One stripe per commitment of the plan, and one row per Day.</p>
+    </div>
+    <details class="exact"><summary>How to read it</summary>
+      <ul class="pg-how">
+        <li><b>Commitment:</b> one thing <code>plan.md</code> says the driver will do or the people will keep, listed with a number in <code>specs/plan/promises.json</code>. P01 to P69 come from the plan as approved on 6 Nov; N01 onwards were added by later plan changes. (The page says "promise" for a spec's criterion, so the plan's are called commitments here.)</li>
+        <li><b>The long bar</b> at the bottom is the plan, one stripe per commitment in the plan's own order, with its chapter headings under it. The darker a stripe, the more criteria name it; a white one is named by none; a hatched one is a rule about people, which no test can check; an amber-striped one was due by a Day that has closed and no criterion names it.</li>
+        <li><b>The rows</b> above the bar are the Days. A mark in a row means a criterion of that Day names the commitment straight below it. Blue is a commitment of the approved plan, light blue one added later. The third block holds the criteria that name none: amber for new work the plan does not ask for, grey for safety checks that only confirm earlier work still holds.</li>
+        <li><b>A dashed line</b> between two Days: <code>plan.md</code> was rewritten there, so the Days below wrote against the new plan. A ▲ under a stripe: the plan later changed that commitment; △: reworded, same meaning.</li>
+        <li><b>Where the marks come from:</b> from Day 11 each criterion carries a <code>Plan:</code> line naming the commitments it serves and quoting their words; Days 1 to 10 are backfilled in <code>specs/plan/links-days-01-10.json</code>. <code>scripts/plan-links.py</code> checks every quote on every pull request. The link is the spec author's own claim: the check proves the words exist, not that the criterion really tests them.</li>
+        <li>Point at a stripe for the commitment and the criteria that name it, at a Day's name for its counts. "Show only" keeps the stripes of one kind.</li>
+      </ul>
+    </details>
+    <div class="legend" id="g12-key"></div>
+    <div id="g12-plot"></div>
+    <div class="readout" id="g12-read" aria-live="polite"></div>
+    <details class="exact"><summary>The ladder: each commitment against each Day</summary><div id="g12-ladder"></div></details>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g12-table"></table></div></details>
+  </section>
 
   <section class="graph" id="g6">
     <div class="graph-head">
