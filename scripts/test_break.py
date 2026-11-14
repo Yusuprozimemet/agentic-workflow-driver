@@ -361,5 +361,85 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(count, 2)
 
 
+class RecordTest(unittest.TestCase):
+    """--record writes the entry into the break manifest, so the close copies nothing by hand."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.git("init", "-q", "-b", "day-12/track-a-guard")
+        self.original = b"class Guard {\r\n    boolean ok = true; // ok\r\n}\r\n"
+        with open(os.path.join(self.dir, "Guard.java"), "wb") as f:
+            f.write(self.original)
+        self.git("add", "Guard.java")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "guard")
+
+    def git(self, *args):
+        return subprocess.run(["git", *args], cwd=self.dir, capture_output=True, text=True, check=True).stdout.strip()
+
+    def run_break(self, *extra, what="the guard removed", find="// ok", replace="// broken"):
+        command = [sys.executable, "-c", "import sys; t = open('Guard.java').read(); "
+                   "sys.exit('AssertionError: expected ok but was broken') if 'broken' in t else print('1 passed')"]
+        return subprocess.run([sys.executable, SCRIPT, "--file", "Guard.java", "--find", find, "--replace",
+                               replace, "--what", what, *extra, "--", *command],
+                              capture_output=True, text=True, encoding="utf-8", cwd=self.dir)
+
+    def manifest(self, name="specs/breaks/day-12.json"):
+        with open(os.path.join(self.dir, name), encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_record_writes_the_entry_its_report_and_the_blob_into_the_day_s_manifest(self):
+        run = self.run_break("--record")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        [entry] = self.manifest()
+        self.assertEqual(entry["what"], "the guard removed")
+        self.assertEqual(entry["file"], "Guard.java")
+        self.assertEqual(entry["report"], "AssertionError: expected ok but was broken")
+        # the blob of the code the break ran on, as git holds it, not a commit that holds the record
+        self.assertTrue(entry["blob"] == self.git("rev-parse", "HEAD:Guard.java"), "the blob is not the file's")
+        self.assertIn("recorded: added in specs/breaks/day-12.json", run.stdout)
+
+    def test_a_second_record_with_the_same_what_replaces_it_and_keeps_the_others(self):
+        self.assertEqual(self.run_break("--record", what="another break", find="true").returncode, 0)
+        self.assertEqual(self.run_break("--record").returncode, 0)
+        with open(os.path.join(self.dir, "Guard.java"), "ab") as f:
+            f.write(b"// later\r\n")
+        run = self.run_break("--record")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("recorded: replaced in", run.stdout)
+        entries = self.manifest()
+        self.assertEqual([e["what"] for e in entries], ["another break", "the guard removed"])
+        self.assertNotEqual(entries[1]["blob"], self.git("rev-parse", "HEAD:Guard.java"))
+
+    def test_record_on_a_change_branch_writes_its_slug_s_manifest(self):
+        self.git("checkout", "-q", "-b", "change/guard-fix")
+        self.assertEqual(self.run_break("--record").returncode, 0)
+        self.assertEqual(len(self.manifest("specs/breaks/guard-fix.json")), 1)
+
+    def test_record_on_another_branch_needs_a_path_and_changes_nothing(self):
+        self.git("checkout", "-q", "-b", "tooling/guard")
+        run = self.run_break("--record")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("--record <path>", run.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "specs")))
+        run = self.run_break("--record", "specs/breaks/day-03.json")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(len(self.manifest("specs/breaks/day-03.json")), 1)
+
+    def test_record_with_no_entry_or_with_replay_is_refused_before_anything_runs(self):
+        os.mkdir(os.path.join(self.dir, "sub"))
+        for extra, why in ((("--record", "--cwd", "sub"), "--record has no entry to write"),
+                           (("--record", "--replay"), "--record with --replay")):
+            run = self.run_break(*extra)
+            self.assertEqual(run.returncode, 2, extra)
+            self.assertIn(why, run.stderr)
+            self.assertNotIn("broken:", run.stdout)
+            self.assertFalse(os.path.exists(os.path.join(self.dir, "specs")))
+
+    def test_a_check_that_cannot_see_the_break_records_nothing(self):
+        run = self.run_break("--record", find="class", replace="klass")
+        self.assertEqual(run.returncode, 1)
+        self.assertFalse(os.path.exists(os.path.join(self.dir, "specs")))
+
+
 if __name__ == "__main__":
     unittest.main()
