@@ -361,8 +361,8 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(count, 2)
 
 
-class RecordTest(unittest.TestCase):
-    """--record writes the entry into the break manifest, so the close copies nothing by hand."""
+class Repository(unittest.TestCase):
+    """A scratch repository on a Day 12 track, with one committed file to break."""
 
     def setUp(self):
         self.dir = tempfile.mkdtemp()
@@ -386,6 +386,10 @@ class RecordTest(unittest.TestCase):
     def manifest(self, name="specs/breaks/day-12.json"):
         with open(os.path.join(self.dir, name), encoding="utf-8") as f:
             return json.load(f)
+
+
+class RecordTest(Repository):
+    """--record writes the entry into the break manifest, so the close copies nothing by hand."""
 
     def test_record_writes_the_entry_its_report_and_the_blob_into_the_day_s_manifest(self):
         run = self.run_break("--record")
@@ -439,6 +443,89 @@ class RecordTest(unittest.TestCase):
         run = self.run_break("--record", find="class", replace="klass")
         self.assertEqual(run.returncode, 1)
         self.assertFalse(os.path.exists(os.path.join(self.dir, "specs")))
+
+
+class EarlierDayTest(Repository):
+    """A later PR re-records or retires an earlier Day's break: the Day's replay runs it at its close."""
+
+    def setUp(self):
+        super().setUp()
+        self.git("branch", "main")
+        self.path = os.path.join(self.dir, "specs", "breaks", "day-03.json")
+        os.makedirs(os.path.dirname(self.path))
+        self.entries = [{"what": "another break", "file": "Guard.java", "find": "true", "replace": "false",
+                         "command": ["x"], "report": "AssertionError: Windows wording", "blob": "b" * 40},
+                        {"what": "the guard removed", "file": "Guard.java", "find": "// ok", "replace": "// broken",
+                         "command": ["x"]}]
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self.entries, f)
+
+    def close_day_03(self):
+        self.git("checkout", "-q", "-b", "side")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "close")
+        self.git("checkout", "-q", "day-12/track-a-guard")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", "--no-ff", "-m",
+                 "Merge pull request #1 from me/day-03/close-the-day", "side")
+
+    def change_guard(self):
+        with open(os.path.join(self.dir, "Guard.java"), "wb") as f:
+            f.write(b"class Guard {\r\n    boolean ok = true; // fine\r\n}\r\n")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "the guard's comment changed")
+
+    def retire(self, *extra):
+        return subprocess.run([sys.executable, SCRIPT, "--retire", "specs/breaks/day-03.json", *extra],
+                              capture_output=True, text=True, encoding="utf-8", cwd=self.dir)
+
+    def test_retire_pins_the_entry_where_main_still_holds_its_find(self):
+        self.change_guard()
+        run = self.retire("--what", "the guard removed")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        main = self.git("rev-parse", "main")
+        self.assertIn(f"retired: the guard removed in specs/breaks/day-03.json, pinned at {main[:7]}", run.stdout)
+        self.assertEqual(self.manifest("specs/breaks/day-03.json"), [self.entries[0], {**self.entries[1], "at": main}])
+
+    def test_retire_refuses_a_commit_where_the_find_is_gone_or_a_name_not_recorded(self):
+        self.change_guard()
+        for extra, why in ((("--what", "the guard removed", "--at", "HEAD"), "the find occurs 0 times in Guard.java at"),
+                           (("--what", "no such break"), "'no such break' is recorded 0 times"),
+                           ((), "--retire needs --what")):
+            run = self.retire(*extra)
+            self.assertEqual(run.returncode, 2, extra)
+            self.assertIn(why, run.stderr)
+            self.assertEqual(self.manifest("specs/breaks/day-03.json"), self.entries)
+
+    def test_a_re_record_into_a_closed_day_needs_a_find_its_close_holds(self):
+        self.close_day_03()
+        with open(os.path.join(self.dir, "Guard.java"), "ab") as f:
+            f.write(b"// new guard\r\n")
+        run = self.run_break("--record", "specs/breaks/day-03.json", find="// new", replace="// broken")
+        self.assertEqual(run.returncode, 2, "a find Day 03's close lacks was recorded")
+        self.assertIn("Day 03 is closed and its replay runs this break at its close, where the find occurs 0 times "
+                      "in Guard.java at", run.stderr)
+        self.assertIn("break.py --retire specs/breaks/day-03.json", run.stderr)
+        self.assertEqual(self.manifest("specs/breaks/day-03.json"), self.entries)
+        run = self.run_break("--record", "specs/breaks/day-03.json")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("recorded: replaced in", run.stdout)
+
+    def test_take_reports_writes_linux_s_report_into_the_entry_it_names(self):
+        takes = os.path.join(self.dir, "linux-reports.json")
+        with open(takes, "w", encoding="utf-8") as f:
+            json.dump([{"manifest": "specs/breaks/day-03.json", "what": "another break",
+                        "report": "AssertionError: Linux wording"}], f)
+        run = subprocess.run([sys.executable, SCRIPT, "--take-reports", "linux-reports.json"],
+                             capture_output=True, text=True, encoding="utf-8", cwd=self.dir)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.manifest("specs/breaks/day-03.json"),
+                         [{**self.entries[0], "report": "AssertionError: Linux wording"}, self.entries[1]])
+        with open(takes, "w", encoding="utf-8") as f:
+            json.dump([{"manifest": "specs/breaks/day-03.json", "what": "another break", "report": "a"},
+                       {"manifest": "specs/breaks/day-03.json", "what": "no such break", "report": "b"}], f)
+        run = subprocess.run([sys.executable, SCRIPT, "--take-reports", "linux-reports.json"],
+                             capture_output=True, text=True, encoding="utf-8", cwd=self.dir)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("nothing taken: 'no such break' is recorded 0 times", run.stderr)
+        self.assertEqual(self.manifest("specs/breaks/day-03.json")[0]["report"], "AssertionError: Linux wording")
 
 
 if __name__ == "__main__":

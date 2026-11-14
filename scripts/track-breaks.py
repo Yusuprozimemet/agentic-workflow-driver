@@ -11,7 +11,12 @@ each entry runs through scripts/break.py --replay on the code checked out (in CI
 commit, on Linux), as scripts/evidence.py does at the close, and its report is compared with the
 recorded one. The day's earlier merged track PRs' entries run too, so a track that changes another's
 find fails, not the close; an entry in this PR's body with the same <what> replaces theirs: re-run
-the break on this PR's code and record its lines here.
+the break on this PR's code and record its lines here. From Day 12 a break is recorded with
+`break.py --record` into specs/breaks/day-NN.json, and each entry there with a report is replayed
+in place of a body's line of the same <what>: the record is the newer, and no one retyped it. The
+bodies stay read for the breaks of Days 1-11, recorded by hand. CI's Linux report is the one the
+close replays: with --reports <file>, each recorded entry Linux words otherwise is saved there, and
+CI keeps the file as the run's artifact for `break.py --take-reports` to write into the record.
 
 Earlier Days' breaks are checked too, on every branch: each `broken:` line of an in-force criterion
 (behaviour-index.py) of a closed Day, one whose break file sits in specs/breaks, other than the
@@ -19,8 +24,9 @@ branch's own Day. Their finds went stale unseen until the re-check after a merge
 longer applies" (ten of them, fixed in #184). Two tiers: each find must still occur once in its
 file (static, cheap), and the break runs only when the PR touches its file, its test module, its
 Day's break file or its Day's spec (`git diff --name-only <base>`). The fix for a stale one is in
-this PR: re-run the break with break.py and record its entry in specs/breaks/day-NN.json and its
-`broken:` line in the Day's spec, as #184 did.
+this PR, and its line names the command: re-record it (`break.py --record specs/breaks/day-NN.json`
+with a find that occurs once at the Day's close and here, as #184 did), or pin it where it last
+applied (`break.py --retire`); then `break-lines.py --spec` checks the Day's spec against the record.
 
 One line per break; exits 1 when one no longer applies or reports something else, 0 otherwise. A
 branch that is not a day's track has no PR body to replay; its earlier Days' breaks are checked.
@@ -30,6 +36,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -66,8 +73,21 @@ def entries(body):
     return found
 
 
-def replay(found, root="."):
-    """[(ok, line)] for each entry, run at root."""
+def recorded(day, root="."):
+    """{what: entry} of the Day's manifest entries break.py --record wrote (those with a report),
+    the day's earlier tracks' and this branch's alike, as the code checked out holds them."""
+    name = f"specs/breaks/day-{day}.json"
+    path = os.path.join(root, name)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        return {e["what"]: dict({k: v for k, v in e.items() if k != "blob"}, manifest=name)
+                for e in json.load(f) if "report" in e}
+
+
+def replay(found, root=".", takes=None):
+    """[(ok, line)] for each entry, run at root; takes, when given, gets {manifest, what, report} for
+    each recorded entry whose replay reported otherwise."""
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     out = []
     for what, entry in found.items():
@@ -77,12 +97,16 @@ def replay(found, root="."):
         if entry["report"] is None:
             out.append((False, f"no broken: line: {what}: paste it beside its manifest line"))
             continue
-        status, got = run_break({k: v for k, v in entry.items() if k not in ("report", "pr")}, root, env)
+        status, got = run_break({k: v for k, v in entry.items() if k not in ("report", "pr", "manifest")}, root, env)
         if status == "reported" and normal(got) == normal(entry["report"]):
             out.append((True, f"replays: {what}"))
         elif status == "reported":
+            take = ""
+            if takes is not None and "manifest" in entry:
+                takes.append({"manifest": entry["manifest"], "what": what, "report": got})
+                take = "; saved for break.py --take-reports"
             out.append((False, f"differs: {what}: recorded {PR_SUFFIX.sub('', entry['report'])!r}, "
-                               f"replayed {got!r}{' (from #' + str(entry['pr']) + ')' if 'pr' in entry else ''}"))
+                               f"replayed {got!r}{' (from #' + str(entry['pr']) + ')' if 'pr' in entry else ''}{take}"))
         else:
             out.append((False, f"{status}: {what}: {got}{' (from #' + str(entry['pr']) + ')' if 'pr' in entry else ''}"))
     return out
@@ -125,6 +149,17 @@ def stale(entry, root):
     with open(path, "rb") as f:
         count = f.read().count(entry["find"].encode())
     return None if count == 1 else f"the find occurs {count} times in {entry['file']}"
+
+
+def fixes(entry, day, spec):
+    """The two commands that fix a stale earlier Day's break, for its line to name."""
+    manifest, what = f"specs/breaks/day-{day}.json", shlex.quote(entry["what"])
+    expect = f" --expect-stdout {shlex.quote(entry['expect_stdout'])}" if "expect_stdout" in entry else ""
+    return (f"re-record it with a find that occurs once at Day {day}'s close and here, "
+            f"python scripts/break.py --record {manifest} --what {what} --file {entry['file']} --find <text> "
+            f"--replace <text>{expect} -- {shlex.join(entry['command'])}, or pin it where it last applied, "
+            f"python scripts/break.py --retire {manifest} --what {what}; "
+            f"then python scripts/break-lines.py --spec {spec}")
 
 
 def watched(entry, day, spec):
@@ -170,8 +205,7 @@ def check_earlier(items, changed, root="."):
             continue
         why = stale(entry, root)
         if why:
-            out.append((False, f"no longer applies: {label}: {why}: re-record it in this PR "
-                               f"(specs/breaks/day-{day}.json and {spec})"))
+            out.append((False, f"no longer applies: {label}: {why}: {fixes(entry, day, spec)}"))
             continue
         if not watched(entry, day, spec) & changed:
             out.append((True, f"applies: {label}"))
@@ -206,6 +240,8 @@ def main(argv=None):
     p.add_argument("--pr", type=int, help="this PR's number: read its body and the earlier ones with gh")
     p.add_argument("--base", help="what the PR's changes are diffed against (default: where HEAD left main)")
     p.add_argument("--specs", default="specs", help="the specs folder, for earlier Days' breaks")
+    p.add_argument("--reports", metavar="FILE",
+                   help="save each recorded entry's report this replay words otherwise, for break.py --take-reports")
     a = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     track = TRACK.match(a.branch)
@@ -224,9 +260,17 @@ def main(argv=None):
         for number, text in earlier:
             found.update({w: dict(e, pr=number) if number else e for w, e in entries(text).items()})
         found.update(entries(body))
-        results = replay(found)
+        found.update(recorded(track.group(1)))
+        takes = []
+        results = replay(found, takes=takes)
         for _, line in results:
             print(line)
+        if takes and a.reports:
+            with open(a.reports, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(takes, f, ensure_ascii=False, indent=1)
+            run = os.environ.get("GITHUB_RUN_ID", "<run-id>")
+            print(f"track-breaks: {len(takes)} recorded reports saved in {a.reports}; to take them into the record: "
+                  f"gh run download {run} -n linux-reports, then python scripts/break.py --take-reports {a.reports}")
         bad = sum(not ok for ok, _ in results)
         print(f"track-breaks: {len(results) - bad} of {len(results)} breaks replay on this code")
     own = DAY.match(a.branch)

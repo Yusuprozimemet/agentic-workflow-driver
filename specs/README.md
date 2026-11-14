@@ -256,7 +256,14 @@ which drops a level of backslashes, and check that each entry parses. A break ru
 the entry into the manifest itself (`specs/breaks/day-NN.json` on a `day-NN/` branch,
 `specs/breaks/<slug>.json` on `change/<slug>`, or the path given), with two more keys the
 replay ignores: `report`, the `broken:` line's report, and `blob`, the `git hash-object` of the
-file before the break. A second run with the same `what` replaces its entry. Optional
+file before the break. A second run with the same `what` replaces its entry. From Day 12 a
+track records each break so and commits the manifest with its code: `python scripts/break-lines.py`
+prints the `manifest:` and `broken:` lines of the entries the branch added, to paste into the PR
+body unretyped, and CI's "A track's breaks replay" runs the recorded entries in place of a body
+line of the same `what`. At the close, `python scripts/break-lines.py --spec specs/day-NN-slug.md`
+fails a spec `broken:` line with no entry, a name recorded twice, or a report other than the
+recorded one, and prints each recorded entry the spec does not cite as the line to put under its
+criterion; it runs nothing, which the rehearsal does. Optional
 `at` names the historical commit when the close no longer contains the text to edit;
 `passes: true` marks a near miss that must pass with the mutation in; `expect_stdout` holds
 the regex the break gave `break.py --expect-stdout`, for a check judged by what it prints
@@ -269,6 +276,31 @@ twice. The `broken:` line's report may end in a PR number in brackets, "(#12)", 
 else: the replay strips only that, so "(close, D10.19)" makes the line differ. A break that
 cannot replay (on another repository, or replaced by a later one) is written as a sentence
 that says why, not as a `broken:` line.
+
+**CI's Linux report is the one the record keeps.** When "A track's breaks replay" says a recorded
+entry `differs`, it saves Linux's report as the run's `linux-reports` artifact:
+`gh run download <run-id> -n linux-reports`, then `python scripts/break.py --take-reports
+linux-reports.json` writes each into its entry, and `break-lines.py` prints the lines again. Its
+output names both commands. Never retype a report into the record.
+
+**A later PR re-records or retires an earlier Day's break.** CI checks every closed Day's in-force
+break on every PR, and fails one whose find no longer occurs exactly once ("no longer applies";
+its line names both commands). The fix lands in the PR that moved the code:
+
+- **Re-record** when the break still makes sense on the new code: `break.py --record
+  specs/breaks/day-NN.json` under the same `--what` and command, with a find that occurs once both
+  here and at Day NN's close (the Day's replay runs the entry there; break.py refuses a find the
+  close lacks). The entry replaces the old one. If its report differs from the Day's `broken:`
+  line, change that line in the Day's spec too, and say so in the PR.
+- **Retire** when no find fits both: `break.py --retire specs/breaks/day-NN.json --what "<what>"`
+  pins the entry with `at`, the commit where HEAD left `main` (or `--at <commit>`), after checking
+  its find occurs once there. It runs nothing. The Day's replay runs it there, and track-breaks
+  reports it "pinned". The re-check after a merge still shows it as "break no longer applies":
+  this code has no break proving the test, and the dashboard says so. A later re-record replaces it.
+
+Either way, `python scripts/break-lines.py --spec specs/day-NN-slug.md` checks the Day's spec
+against the record, and the PR says which breaks it re-recorded or retired, and why. A break
+under a criterion a later Day replaced (`Replaces:`) is not checked, and needs neither.
 
 A box the close leaves unticked needs its reason under it, indented like the criterion's other
 lines: `Not proven: <why>`. The replay reports each unticked criterion as "not proven" and passes
