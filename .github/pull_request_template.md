@@ -21,8 +21,9 @@ Ability: [one of rehearse, stop, loop, park, recover, see, record]
      what you considered instead. "An AI wrote it" is not an answer here, and it
      will not be an answer in review either. Each break on purpose is one line of
      its own, `broken: <what> → <what it reported>`, or `broken: none → <why>`, with
-     the `manifest: {...}` line scripts/break.py printed above it: the close copies
-     that line into specs/breaks/day-NN.json. -->
+     the `manifest: {...}` line scripts/break.py printed above it. On a day-NN/ branch,
+     run the break with `break.py --record`, commit specs/breaks/day-NN.json, and paste
+     what `python scripts/break-lines.py` prints. -->
 
 ## Contract impact
 

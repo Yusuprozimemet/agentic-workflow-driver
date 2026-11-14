@@ -49,7 +49,9 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    counts the last whole run there) with a decision on each disagreement: the tag kept, and why, or changed in the Notes. Commit the break manifest
    `specs/breaks/day-NN.json` with the actual mutation arguments, the `manifest:` lines the
    track PRs recorded (format and example in
-   [`specs/README.md`](specs/README.md#evidence-at-the-close)). After this closing PR merges,
+   [`specs/README.md`](specs/README.md#evidence-at-the-close)); from Day 12 the tracks recorded
+   it already, and `python scripts/break-lines.py --spec specs/day-NN-slug.md` checks the spec's
+   `broken:` lines against it and prints the ones it lacks. After this closing PR merges,
    on fresh `main`, run
    `python scripts/evidence.py specs/day-NN-slug.md --ref main --json evidence.json` and retain
    the report for local runs. CI replays automatically after the merge; check its run in step 5.
@@ -202,6 +204,12 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   day's earlier tracks', on Linux on the PR's merge commit, and runs again when the body is
   edited: a report recorded on Windows, or a find this track rewrote, fails there and not at the
   close. Record the break again in this PR's body, under the same `<what>`, with CI's report.
+  On a `day-NN/` branch, run it with `break.py --record` instead, commit `specs/breaks/day-NN.json`
+  with the code, and paste what `python scripts/break-lines.py` prints: CI replays the record,
+  and a re-run replaces its entry. When CI's report differs from the recorded one, take it with
+  `break.py --take-reports` (CI's output names the artifact). When CI says an earlier Day's break
+  "no longer applies", re-record or retire it in this PR, as its line says
+  ([Evidence at the close](specs/README.md#evidence-at-the-close)).
 - The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
   split the PR along a line where each part stands alone. An `Oversized:` line in the
   description turns the failure into a warning. None yet. `main` is protected, so the check must

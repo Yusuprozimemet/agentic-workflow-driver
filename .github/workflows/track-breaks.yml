@@ -33,4 +33,10 @@ jobs:
           BRANCH: ${{ github.head_ref }}
           PR: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR" --base HEAD^1
+        run: python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR" --base HEAD^1 --reports linux-reports.json
+      # A recorded report Linux words otherwise: break.py --take-reports writes it into the record.
+      - uses: actions/upload-artifact@v4
+        if: failure() && hashFiles('linux-reports.json') != ''
+        with:
+          name: linux-reports
+          path: linux-reports.json

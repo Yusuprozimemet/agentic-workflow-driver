@@ -41,6 +41,18 @@ replaced in place, so a re-run re-records; the others are kept. A break that can
 (--cwd, a file outside the tree) is refused before anything changes, as is --record with --replay.
 Break-bookkeeping defects were 33 of Days 1-11's 73 process defects, most of them a copy by hand.
 
+A later PR whose code an earlier Day's break no longer fits (track-breaks.py: "no longer applies")
+re-records it or retires it (specs/README.md, "Evidence at the close"). A re-record is --record into
+that Day's manifest, under the same --what and command: a closed Day's replay runs the entry at the
+Day's close, so a find that does not occur once there as well is refused. When no find fits both,
+
+    python scripts/break.py --retire specs/breaks/day-NN.json --what "<what>" [--at <commit>]
+
+pins the entry with "at" where its find still occurs once, by default where HEAD left main, and
+runs nothing: the replay runs it there, and track-breaks reports it pinned. And when CI's Linux
+replay words a recorded report otherwise, `--take-reports <file>` writes the reports it saved
+(track-breaks.py --reports) into the record: Linux's report is the one the close replays.
+
 Each rule here is a defect the paper's record holds (docs/paper, Appendix F): an incremental compile
 that skipped a break (D23-027), breaks run through cmd.exe into WSL's bash that never started Maven
 (D26-056), `git checkout` over unstaged work (D21-007, D25-050), two breaks run together (D25-043).
@@ -233,6 +245,88 @@ def record(path, entry):
     return "added" if at is None else "replaced"
 
 
+def git_out(*args):
+    """git's stdout, or None when it fails."""
+    run = subprocess.run(["git", *args], capture_output=True)
+    return run.stdout if run.returncode == 0 else None
+
+
+def finds_at(commit, file, find):
+    """How often find occurs in file at commit, as committed; None when the file is not there."""
+    content = git_out("show", f"{commit}:{file}")
+    return None if content is None else content.count(find.encode("utf-8"))
+
+
+def times(count, file, commit):
+    return f"{file} is not at {commit[:7]}" if count is None else f"the find occurs {count} times in {file} at {commit[:7]}"
+
+
+def closed_day_misses(path, file, find):
+    """Why find cannot be recorded into a closed Day's manifest, or None: the Day's replay runs its
+    entries at the Day's close, so a re-recorded find must occur once there too."""
+    m = re.fullmatch(r"day-(\d+)\.json", os.path.basename(path))
+    if not m:
+        return None
+    import evidence  # the close's own rule for which commit closed a Day
+
+    close = evidence.close_commit(m.group(1), "HEAD")
+    if close is None or (count := finds_at(close, file, find)) == 1:
+        return None
+    return (f"Day {m.group(1)} is closed and its replay runs this break at its close, where {times(count, file, close)}: "
+            f"choose a find that occurs once there and here, or pin the old entry: break.py --retire {path} --what ...")
+
+
+def load_entries(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def one_entry(path, what):
+    """(entry, None), or (None, why not): the one entry of the manifest at path named what."""
+    if not os.path.isfile(path):
+        return None, f"{path} does not exist"
+    found = [e for e in load_entries(path) if e.get("what") == what]
+    if len(found) != 1:
+        return None, f"{what!r} is recorded {len(found)} times in {path}: name one entry, as the manifest holds it"
+    return found[0], None
+
+
+def retire(path, what, at=None):
+    """Pin an entry with "at", where its find still occurs once; nothing runs, no other entry changes."""
+    if not what:
+        return refuse("--retire needs --what, the break's name in the manifest")
+    entry, why = one_entry(path, what)
+    if entry is None:
+        return refuse(why)
+    ref = at or (git_out("merge-base", "main", "HEAD") or b"").decode().strip()
+    if not ref:
+        return refuse("there is no main to pin it at: name the commit, --at <commit>")
+    sha = (git_out("rev-parse", "--verify", "-q", f"{ref}^{{commit}}") or b"").decode().strip()
+    if not sha:
+        return refuse(f"{ref} is not a commit")
+    if (count := finds_at(sha, entry["file"], entry["find"])) != 1:
+        return refuse(f"{times(count, entry['file'], sha)}: pin it where it still applied, --at <commit>")
+    record(path, {**entry, "at": sha})
+    print(f"retired: {what} in {path}, pinned at {sha[:7]}: the replay runs it there")
+    return 0
+
+
+def take_reports(path):
+    """Write the reports CI's Linux replay saved into the entries they name; all are checked first."""
+    with open(path, encoding="utf-8") as f:
+        takes = json.load(f)
+    found = []
+    for take in takes:
+        entry, why = one_entry(take["manifest"], take["what"])
+        if entry is None:
+            return refuse(f"nothing taken: {why}")
+        found.append((take, entry))
+    for take, entry in found:
+        record(take["manifest"], {**entry, "report": take["report"]})
+        print(f"took: {take['what']}: {entry.get('report')!r} became {take['report']!r} in {take['manifest']}")
+    return 0
+
+
 def endings(find, replace, original):
     """A multi-line --find typed with LF, in a file checked out with CRLF: both in the file's endings.
     The manifest keeps them as typed, which an LF checkout (CI's) replays."""
@@ -257,10 +351,10 @@ def refuse(message):
 
 def main(args=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("--file", required=True)
-    p.add_argument("--find", required=True)
-    p.add_argument("--replace", required=True)
-    p.add_argument("--what", required=True, help="what was broken, for the broken: line")
+    p.add_argument("--file")
+    p.add_argument("--find")
+    p.add_argument("--replace")
+    p.add_argument("--what", help="what was broken, for the broken: line")
     p.add_argument("--cwd", help="where the check runs; --file must then sit in its tree")
     p.add_argument("--expect-stdout", metavar="REGEX",
                    help="the check's stdout without the break; the break is caught when it no longer matches")
@@ -270,13 +364,25 @@ def main(args=None):
     p.add_argument("--record", nargs="?", const="", metavar="PATH",
                    help="write the entry, its report and the file's blob into the break manifest: PATH, or the "
                    "branch's (specs/breaks/day-NN.json on day-NN/, specs/breaks/<slug>.json on change/<slug>)")
+    p.add_argument("--retire", metavar="MANIFEST",
+                   help="pin the entry named --what with \"at\" where its find still occurs once; runs nothing")
+    p.add_argument("--at", metavar="COMMIT", help="with --retire: the commit to pin at (default: where HEAD left main)")
+    p.add_argument("--take-reports", metavar="FILE",
+                   help="write the reports CI's Linux replay saved (track-breaks.py --reports) into the record")
     p.add_argument("command", nargs=argparse.REMAINDER, help="the check, with its options; a leading -- is dropped")
     a = p.parse_args(args)
+    sys.stdout.reconfigure(encoding="utf-8")  # the arrow; a Windows console's default is cp1252
+    if a.retire:
+        return retire(a.retire, a.what, a.at)
+    if a.take_reports:
+        return take_reports(a.take_reports)
+    missing = [f"--{name}" for name in ("file", "find", "replace", "what") if getattr(a, name) is None]
+    if missing:
+        p.error(f"the following arguments are required: {', '.join(missing)}")
     a.command = a.command[1:] if a.command[:1] == ["--"] else a.command
     elsewhere, a.cwd = a.cwd is not None, a.cwd or "."
     if not a.command:
         p.error("the command to run is required")
-    sys.stdout.reconfigure(encoding="utf-8")  # the arrow; a Windows console's default is cp1252
 
     if ARROW.search(a.what):
         return refuse("--what holds an arrow: spec-drift.py would end <what> there; write it without one")
@@ -296,7 +402,7 @@ def main(args=None):
         if entry_of(a) is None:
             return refuse(f"--record has no entry to write: {NO_ENTRY}")
         target, why = record_path(a.record)
-        if target is None:
+        if target is None or (why := closed_day_misses(target, entry_of(a)["file"], a.find)):
             return refuse(why)
     with open(a.file, "rb") as f:
         original = f.read()
