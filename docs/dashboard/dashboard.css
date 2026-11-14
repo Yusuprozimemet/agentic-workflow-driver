@@ -254,6 +254,70 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .dot.ring { box-shadow: 0 0 0 1.5px var(--well), 0 0 0 3.5px var(--ink); }
 .legend .dot.ring { box-shadow: 0 0 0 1.5px var(--card), 0 0 0 3.5px var(--ink); margin: 0 3px; width: 10px; height: 10px; }
 .sieve .dot.on { outline: 0; box-shadow: 0 0 0 2px var(--well), 0 0 0 4.5px var(--repair); }
+/* graph 7 as a pipeline: gate names on the left, the pipe in the middle, what each gate caught or stopped on the right.
+   Valves are in ink, not red: on this page red means broken. Trays are 16 dots wide, so a tray's height is to scale. */
+.pipeline { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.split { display: flex; height: 26px; border-radius: 6px; overflow: hidden; gap: 2px; }
+.split div { display: flex; align-items: center; justify-content: center; min-width: 0; overflow: hidden; white-space: nowrap; font: 600 11.5px var(--mono); color: var(--on-s34); background: var(--s4); }
+.split div:nth-child(2) { background: var(--s3); } .split div:nth-child(3) { background: var(--s2); color: var(--ink); } .split div:nth-child(4) { background: var(--s1); color: var(--ink); }
+.split-key { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; font-size: 11.5px; color: var(--ink-2); line-height: 1.3; }
+.split-key b { display: block; font: 600 12px var(--mono); color: var(--ink); }
+.pipe-body { position: relative; padding-left: 40px; display: flex; flex-direction: column; }
+.pipe-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1.15fr); align-items: stretch; }
+.pipe-row > * { min-width: 0; }
+.pipe { position: relative; display: flex; align-items: center; justify-content: center; }
+.pipe::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 22px; transform: translateX(-50%); background: var(--s1); border-left: 1px solid var(--s2); border-right: 1px solid var(--s2); }
+.pipe.two { flex-direction: column; justify-content: space-around; padding-block: 6px; }
+.pipe svg { position: relative; display: block; }
+.ends .pipe::before { top: 50%; }
+.ends.out .pipe::before { top: 0; bottom: 50%; }
+.end { text-align: right; padding: 10px 10px 10px 0; font-weight: 600; font-size: 13px; }
+.end-cap { position: relative; width: 32px; height: 7px; background: var(--s3); border-radius: 2px; }
+.pipe-stage { margin-top: 10px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; padding-block: 2px 8px; }
+.stage-head .t { padding: 8px 10px 4px; font-size: 12.5px; font-weight: 600; }
+.stage-head .n { padding: 8px 10px 4px; font: 400 11px/1.4 var(--mono); color: var(--muted); }
+.pipe-name { padding: 7px 10px; text-align: right; }
+.pipe-name .one + .one { margin-top: 10px; }
+.pipe-name button { all: unset; cursor: pointer; font: 600 12.5px/1.3 var(--mono); color: var(--ink); border-bottom: 1px dotted var(--axis); overflow-wrap: anywhere; }
+.pipe-name button:focus-visible { outline: 2px solid var(--repair); outline-offset: 2px; }
+.pipe-name button.on { border-bottom: 2px solid var(--repair); }
+.gate.kit .pipe-name button { color: var(--pending); }
+.gate.leak .pipe-name button { font-family: var(--sans); font-style: italic; }
+.pipe-name .sub { display: block; font: 400 11px var(--sans); color: var(--muted); margin-top: 1px; }
+.pipe-side { padding: 7px 0 7px 10px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.pipe-side .stop { font: 400 11.5px var(--mono); color: var(--muted); }
+.pipe-side .nc { font: italic 400 11.5px var(--sans); color: var(--pending); }
+.pipe-side .caught { font: 600 12px var(--mono); color: var(--ink); display: flex; align-items: center; gap: 6px; }
+.pipe-side .caught::before { content: ""; flex: none; width: 14px; border-top: 3px solid var(--s2); margin-left: -10px; }
+.leak .pipe-side .caught::before { border-top-style: dashed; border-top-width: 2px; }
+.pipe-side .wsplit { font-size: 11.5px; color: var(--muted); }
+.tray { width: calc(16 * 10px + 10px); max-width: 100%; box-sizing: border-box; background: var(--wash); border-radius: 5px; padding: 5px; display: flex; flex-wrap: wrap; gap: 2px; }
+.tray .dot { width: 8px; height: 8px; }
+.tray .dot.ring { box-shadow: 0 0 0 1.4px var(--ink); }
+.tray .dot.on { outline: 0; box-shadow: 0 0 0 2.4px var(--repair); }
+.valve .body { fill: var(--s4); }
+.valve .wheel { fill: none; stroke: var(--on-s34); stroke-width: 2.2; }
+.valve .hub { fill: var(--on-s34); }
+.valve.small .wheel { stroke-width: 1.8; }
+.valve.kit .body { fill: var(--hatch-a); } .valve.kit .wheel { stroke: var(--card); stroke-width: 1.8; }
+.valve .zig { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+/* the rail carries what got through a whole Day back to the top; the loop marks the stages each track PR passes */
+.rail { position: absolute; left: 6px; top: 22px; bottom: 22px; border-left: 1.5px dashed var(--axis); }
+.rail::before, .rail::after { content: ""; position: absolute; left: -1px; width: 10px; border-top: 1.5px dashed var(--axis); }
+.rail::before { top: -2px; } .rail::after { bottom: 0; }
+.rail span, .loop-label { position: absolute; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; font-size: 11px; color: var(--muted); background: var(--card); padding: 0 6px; z-index: 1; }
+.rail span { top: 84%; left: -1px; }
+.pipe-loop { position: relative; }
+.pipe-loop::before { content: ""; position: absolute; left: -18px; top: 18px; bottom: 18px; width: 10px; border: 1.5px dashed var(--axis); border-right: 0; border-radius: 8px 0 0 8px; }
+.pipe-loop::after { content: ""; position: absolute; left: -9px; top: 14px; border: 4px solid transparent; border-left-color: var(--axis); }
+.loop-label { top: 50%; left: -18px; }
+.by-day { margin-top: 6px; }
+.by-day summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.by-day[open] > .scroll-x { margin-top: 10px; }
+@media (max-width: 480px) {
+  .pipe-row { grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1.25fr); }
+  .tray { width: 100%; }
+}
 
 /* ---------- graphs 8 and 9: stacked bars over a baseline ---------- */
 .bar-plot { display: flex; flex-direction: column; gap: 8px; }
@@ -271,31 +335,42 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .bar-extra .mono div { font-size: 12px; font-weight: 400; }
 
 /* ---------- graph 2: the yardsticks ---------- */
-.yard { min-width: 720px; display: flex; flex-direction: column; }
-.yard-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
-.yard-row.head { border-top: 0; padding: 0 0 4px; font-size: 12px; font-weight: 600; }
-.yard-name { flex: 0 0 30%; font-size: 13px; line-height: 1.3; padding-right: 8px; }
-.yard-cells { flex: 1; min-width: 0; position: relative; display: flex; gap: 6px; }
-.yard-row.head .yard-cells div { flex: 1 1 0; min-width: 0; text-align: center; }
-.yard-cell { flex: 1 1 0; min-width: 0; height: 56px; padding: 0; border: 0; border-radius: 4px; background: transparent; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 2px; }
-.yard-cell.on { background: var(--hot); outline: 0; }
-.yard-cell b { font-size: 11px; font-weight: 600; position: relative; z-index: 1; padding: 0 3px; background: var(--card); }
-.yard-cell.on b { background: var(--hot); }
-.yard-cell span { display: block; width: 60%; max-width: 34px; background: var(--bar); border-radius: 3px 3px 0 0; }
-.yard-cell span.over { background: var(--repair); }
-.yard-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--ink); pointer-events: none; }
-.yard-note { flex: 0 0 130px; font-size: 11px; color: var(--muted); line-height: 1.3; }
+/* one bullet per yardstick: the well, every Day's range, the last Day's bar, the average's diamond, the kit's tick */
+.bullets { display: flex; flex-direction: column; }
+.b-row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 120px 8.5rem; gap: 14px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--line); border-radius: 4px; }
+.b-row > * { min-width: 0; }
+.b-row.on { background: var(--hot); outline: 0; }
+.b-row:focus-visible { outline: 2px solid var(--repair); outline-offset: 1px; }
+.b-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.b-name small { display: block; font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.b-bar { position: relative; height: 34px; }
+.b-bar span { position: absolute; display: block; }
+.b-bar .well { left: 0; right: 0; top: 10px; height: 14px; background: var(--wash); }
+.b-bar .range { top: 10px; height: 14px; background: var(--s1); }
+.b-bar .last { left: 0; top: 13px; height: 8px; background: var(--ink-2); }
+.b-bar .diamond { top: 12px; width: 10px; height: 10px; margin-left: -5px; box-sizing: border-box; transform: rotate(45deg); background: var(--card); border: 1.5px solid var(--ink); }
+.b-bar .kit { top: 3px; height: 28px; width: 2.5px; margin-left: -1.25px; background: var(--ink); }
+.b-spark { display: block; width: 100%; height: 34px; }
+.b-spark .trend { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+.b-spark .base { stroke: var(--axis); stroke-dasharray: 3 3; }
+.b-spark .pt { fill: var(--ink-2); } .b-spark .pt.last { fill: var(--ink); }
+.b-now { text-align: right; font: 600 18px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.b-now small { display: block; font: 400 11px var(--sans); color: var(--muted); margin-top: 3px; }
+.b-now .better { color: var(--proven); } .b-now .worse { color: var(--repair); }
+.b-row .yard-wait { grid-column: 2 / -1; }
+.b-sw { display: inline-block; flex: none; }
+.b-sw.range { width: 22px; height: 6px; background: var(--s1); }
+.b-sw.last { width: 22px; height: 8px; background: var(--ink-2); }
+.b-sw.diamond { width: 9px; height: 9px; margin: 0 2px; box-sizing: border-box; transform: rotate(45deg); background: var(--card); border: 1.5px solid var(--ink); }
+.b-sw.kit { width: 2.5px; height: 14px; background: var(--ink); }
+@media (max-width: 720px) {
+  .b-row { grid-template-columns: minmax(0, 1fr) 6.5rem; }
+  .b-row .b-bar { grid-column: 1 / -1; grid-row: 2; }
+  .b-row .b-spark { display: none; }
+}
 .yard-wait code { padding: 0 4px; border: 1px solid var(--axis); border-radius: 3px; background: var(--card); }
 .yard-wait { flex: 1; min-width: 0; min-height: 40px; border: 1px solid var(--axis); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--ink-2); display: flex; align-items: center;
   background: repeating-linear-gradient(45deg, var(--wash) 0 6px, var(--card) 6px 12px); overflow-wrap: anywhere; }
-/* the average so far, drawn over each row's columns on the bars' scale; the cells are 6px apart, so the svg runs half a gap past each end */
-.yard-avg { position: absolute; left: -3px; right: -3px; bottom: 0; width: calc(100% + 6px); height: 34px; pointer-events: none; overflow: visible; }
-.yard-avg path { fill: none; vector-effect: non-scaling-stroke; }
-.yard-avg .halo { stroke: var(--card); stroke-width: 5; }
-.yard-avg .line { stroke: var(--spec); stroke-width: 2; }
-.yard-avg .dots { stroke: var(--spec); stroke-width: 6; stroke-linecap: round; }
-.sw.avg { width: 18px; height: 2px; border-radius: 0; background: var(--spec); }
-.yard-avg-note { display: block; margin-top: 3px; color: var(--ink); font-weight: 600; }
 .yard-foot { margin: 2px 0 8px; font-size: 12px; color: var(--muted); }
 
 /* graph 10: one date on the clock, a lane per actor, a bar per stretch it was busy */

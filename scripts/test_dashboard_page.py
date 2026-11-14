@@ -375,6 +375,51 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["Times it stopped", "only fake projects."], got["notMeasured"])
         self.assertEqual(got["notMeasured"][-1][0], "Where a date's time goes, and who waits for whom")
 
+    def test_graph_2_draws_each_yardstick_as_a_bullet_on_its_own_scale_over_the_columns_days(self):
+        value = lambda day, v: dict(day=day, value=v, text="")
+        g = model(data(yardsticks=dict(days=[1, 2], problems=[], rows=[
+            dict(key="cost", name="Cost", unit="$", decimals=2, baseline=1.5, average=[2.0, 1.5, None],
+                 values=[value(1, 2.0), value(2, 1.0), value(14, 9.0)]),
+            dict(key="refusals", name="Refused", unit="", decimals=0, baseline=None, average=[4.0, 5.0],
+                 values=[value(1, 4), value(2, 6)])])))["g2"]
+        cost, ref = (r["bullet"] for r in g["rows"])
+        # Scale: the largest of the Days, the kit and the average, and a little more; Day 14 has no column, so it is left out.
+        top = 2.0 * 1.08
+        self.assertEqual([round(cost[k], 3) for k in ("lo", "hi", "last", "avg", "base")],
+                         [round(v / top, 3) for v in (1.0, 2.0, 1.0, 1.5, 1.5)])
+        self.assertEqual((cost["now"], cost["day"], cost["avgText"], cost["cmp"]), ("$1.00", 2, "$1.50", "better"))
+        self.assertEqual([p["day"] for p in cost["spark"]], [1, 2])
+        self.assertEqual(cost["b"], ["Every Day between $1.00 and $2.00, average so far $1.50; the kit with a person driving every step: $1.50. "
+                                     "The last Day was better than the average."])
+        # Refusals have no better direction: no colour, though the last Day is over the average.
+        self.assertEqual((ref["cmp"], ref["base"], ref["now"]), ("", None, "6"))
+
+    def test_graph_7_pipeline_puts_the_same_dots_at_their_gates_and_counts_the_stops(self):
+        defect = lambda i, found, cause: dict(id=i, found=found, cause=cause, made="Day 01", same_as=None, problem=None)
+        days = [a_day(1, defects=[defect("D1.1", "auditor", "spec"), defect("D1.2", "Track A", "implementation"),
+                                  defect("D1.3", "review", "process"), defect("D1.4", "close", "process")]), a_day(2, "active")]
+        g = model(data(days=days, refusals=[dict(date="2026-01-01", guard="read-guard", refused=3), dict(date="2026-01-02", guard="read-guard", refused=2),
+                                            dict(date="2026-01-02", guard="step-guard", refused=1)],
+                       verification=[dict(number=1, failed_in=["PR checks", "Tests"]), dict(number=2, failed_in=["PR checks"]), dict(number=3, failed_in=[])],
+                       rows=[dict(pr=None), dict(pr=1, day=1), dict(pr=2, day=1)]))["g7"]
+        P = g["pipe"]
+        self.assertEqual([s["name"] for s in P["stages"]], ["Before any code", "Writing a track, on this machine", "Hooks, in the session",
+                                                          "CI on every pull request", "You", "The close", "After the merge"])
+        gates = {n: x for s in P["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([o["id"] for o in gates["spec-auditor"]["dots"]], ["D1.1"])
+        self.assertEqual([o["id"] for o in gates["Noticed in the work"]["dots"]], ["D1.3", "D1.2"])  # by cause: process before implementation
+        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 1 · self 0 · review 1 · other 0")
+        # Both views hold the same dots: the pipeline cannot disagree with the rows by Day.
+        self.assertEqual(sorted(o["id"] for s in P["stages"] for x in s["gates"] if x["dots"] for o in x["dots"]), sorted(o["id"] for r in g["rows"] for o in r["dots"]))
+        self.assertEqual([gates[n]["stop"] for n in ("read-guard", "step-guard", "auditor-guard", "Tests", "Track breaks", "Your merge")],
+                         ["5 refused", "1 refused", "0 refused", "failed on 1 pull request", "failed on 0 pull requests", "2 pull requests merged"])
+        self.assertEqual([s["note"] for s in P["stages"]][2:4], ["6 refusals", "PR checks failed on 2 pull requests"])
+        self.assertEqual((gates["ruff"]["plain"], gates["Style check"]["plain"], gates["Compose and Prometheus"]["kind"]),
+                         ("not counted yet", "in the PR checks' count", "kit"))
+        self.assertEqual([(p["name"], p["n"], p["pct"]) for p in P["phases"]],
+                         [("Before any code", 1, 25), ("While writing", 2, 50), ("At the close", 1, 25), ("After the merge", 0, 0)])
+        self.assertEqual(P["gates"], 34)
+
     def test_graph_1_counts_the_promises_built_and_written_at_each_merge_and_what_is_left_before_the_stop(self):
         # The unnumbered hand-off counts in `open` but not in the numbered count the graph draws.
         col = lambda pr, built, got, written, open_numbered: dict(pr=pr, built=built, got=got, written=written,
