@@ -173,6 +173,30 @@ class BreakTest(unittest.TestCase):
         self.assertIn("the check did not run", run.stderr)
         self.assertEqual(self.contents(), self.original)
 
+    def test_a_python_break_that_does_not_compile_is_refused_before_anything_runs(self):
+        # Day 10's "run_session writes no pid line" left driver/once.py unparsable: its check failed at
+        # loading the code, and break.py recorded the setup error as a caught break.
+        source = os.path.join(self.dir, "guard.py")
+        original = b"def ok():\r\n    return True  # ok\r\n"
+        with open(source, "wb") as f:
+            f.write(original)
+        ran = os.path.join(self.dir, "ran")
+        loads = [sys.executable, "-c", f"open({ran!r}, 'a').close(); import runpy; runpy.run_path({source!r})"]
+        run = subprocess.run([sys.executable, SCRIPT, "--file", source, "--find", "return True", "--replace",
+                              "return (", "--what", "the guard removed", "--", *loads],
+                             capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual((run.returncode, run.stdout), (2, ""), run.stderr)
+        self.assertIn("does not compile (SyntaxError, line 2)", run.stderr)
+        self.assertFalse(os.path.exists(ran))
+        with open(source, "rb") as f:
+            self.assertEqual(f.read(), original)
+
+    def test_a_python_break_that_compiles_is_run(self):
+        script = load()
+        self.assertIsNone(script.does_not_load("g.py", b"x = 1\n", b"x = 2\n"))
+        self.assertIsNone(script.does_not_load("g.py", b"x = (\n", b"x = ((\n"))
+        self.assertIsNone(script.does_not_load("Guard.java", b"class G {}\n", b"class G {\n"))
+
     def test_expect_stdout_judges_the_check_by_its_output(self):
         # a pilot, Days 4 and 5: `grep -c` prints 0 and exits 1 when no test was edited.
         script = load()
