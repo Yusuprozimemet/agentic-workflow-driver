@@ -125,6 +125,10 @@ own specs: in this repository that session has read past its own errors more tha
 | the closing PR of Phase 3 (level 3: phases chain, the last phase `plan.md` names) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
 | every close, after the Notes are written | defect-rater, on `relabel.py`'s blind file | Does a reader who did not write the day tag its defects the same way? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
+| only when the maintainer asks for it by name | instrument-auditor | Starting from screenshots of the live page: do the dashboard's figures recount from git and GitHub, and do the tooling scripts still enforce the rules they were written for? |
+
+The instrument-auditor is manual only: no step of a day, no close, no phase end and no driver run
+starts it, and a session does not start it on its own initiative. Its report is advice.
 
 Both check hand-offs: what earlier days' Notes and test comments defer to a later day. Nothing
 else carries them forward, and that is where most gaps have come from.
@@ -134,7 +138,7 @@ Phase 3 (level 3: phases chain, the last phase `plan.md` names) has merged, besi
 the others' reports: their disagreement is part of the result.
 
 "Read-only" is enforced as far as a hook can: `.claude/settings.json` runs
-`scripts/auditor-guard.py` on every Bash command and every subagent's stop. For the five
+`scripts/auditor-guard.py` on every Bash command and every subagent's stop. For the six
 auditors with Bash it blocks a git command that changes a repository and a `gh` command that is
 not a read, and at the auditor's stop it compares HEAD, the refs, the stash and `git status` with
 what they were and sends the auditor back once if they changed; the main session and other agents
