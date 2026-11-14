@@ -683,6 +683,11 @@ class ModelTest(unittest.TestCase):
                                           "over the catches of the Days in the count: Day 2 had a pull request merge after it. "
                                           "The gates' runs and dollars are counted up to 12:00 on 2 Jan."])
 
+    def test_graph_7_puts_a_rehearsal_with_the_evidence_replay_not_the_work(self):
+        defect = dict(id="D1.1", found="rehearsal", cause="process", made="Day 01", same_as=None, problem=None)
+        g = model(data(days=[a_day(1, defects=[defect])]))["g7"]
+        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 0, 1])
+
     def test_graph_8_shares_a_dates_dollars_over_the_pull_requests_merged_before_the_count(self):
         # Counted at 12:00 on 2 Jan (11:00 UTC): #1 had merged, #2 merged an hour later that date and #3 two dates on.
         token = lambda agent, cost: dict(date="2026-01-02", agent=agent, cost=cost, replies=10, cut=0)

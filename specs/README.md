@@ -150,10 +150,16 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     are written (`- **Defect** D28.1 — found: …`). A short spec's Defect lines take none.
   - `found:` where, exactly one of `auditor`, `spec-change PR` (before any code); `review`,
     `seen red` (a new test that passed on `main`'s code), `break on purpose`, `self`, `Track <X>`
-    (before merge); `close`, `evidence replay` (the close's rehearsal or the replay after its
-    merge failed), `dashboard`, `Day <NN> review` (after the track merged: an escape). The
-    dashboard sets the defects each gate found (`auditor`, `seen red`, `break on purpose`,
-    `evidence replay`, and the hooks' refusals) beside the tokens it cost (`gates.json`).
+    (before merge); `close`, `rehearsal` (the close's rehearsal failed, before its merge),
+    `evidence replay` (the replay after its merge failed), `dashboard`, `Day <NN> review` (after
+    the track merged: an escape). The list is closed: `spec-drift.py` prints any other value as
+    "not on the list". It reads `self`, `review` and `Track <X>` as one stage, the work, and
+    before Day 12, when `evidence replay` named both replays, reads that value as "unsplit". It
+    counts, per Day, the Defect lines per criterion, the late ones (any stage after the two
+    before any code) and the escapes, and the blind rater's agreement per tag
+    (`defect_counts`). The dashboard sets the defects each gate found (`auditor`, `seen red`,
+    `break on purpose`, `evidence replay` with `rehearsal`, and the hooks' refusals) beside the
+    tokens it cost (`gates.json`).
   - `cause:` exactly one of `spec` (wrong, missing a case, or not meetable as written),
     `implementation` (the spec was right, the code did not do it), `process` (the workflow and
     the record around the code: branch names, Jira keys, a break run wrong, a track announced

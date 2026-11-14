@@ -368,7 +368,7 @@ function model(DATA) {
     const back = new Map((((DATA.defect_recurrence || {}).recurrences) || []).map(r => [r.id, r.same_as]));
     const rows = days.map(d => {
       const dots = (d.defects || []).map((x, i) => {
-        const gate = GATES.find(g => g.key === tagOf(x.found)) || GATES[3], cause = CAUSES.includes(tagOf(x.cause)) ? tagOf(x.cause) : "other";
+        const gate = GATES.find(g => g.key === tagOf(x.found).replace(/^rehearsal$/, "evidence replay")) || GATES[3], cause = CAUSES.includes(tagOf(x.cause)) ? tagOf(x.cause) : "other";
         const m = /^Day 0*(\d+)$/i.exec(x.made || ""), made = m ? +m[1] : null, escaped = made != null && made !== d.day;
         const where = escaped ? `Made on Day ${made} and caught on Day ${d.day}` + (made < d.day ? `: it escaped for ${plural(d.day - made, "Day", "Days")}.` : ".")
           : made != null ? `Made and caught on Day ${d.day}.` : /^none$/i.test(x.made || "") ? "Made outside any Day: in the plan, a tool or a machine."
