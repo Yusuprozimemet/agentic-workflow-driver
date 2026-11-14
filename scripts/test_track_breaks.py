@@ -188,6 +188,22 @@ class EarlierDaysTest(Scratch):
         self.assertIn("differs: the guard off (C01.1): recorded 'something else', "
                       "replayed 'AssertionError: the guard is off'", run.stdout)
 
+    def test_an_earlier_day_s_report_linux_words_otherwise_is_saved_for_the_record(self):
+        # #198 re-recorded a Day 10 break on a tooling/ branch: Linux replayed three of its Day's breaks
+        # otherwise, and the run kept no file for break.py --take-reports.
+        self.day(find="ok = True", report="AssertionError: the guard is off (Windows)")
+        self.write("guard.py", "ok = True\n\n")
+        run = subprocess.run([sys.executable, SCRIPT, "--branch", "tooling/catch-earlier", "--base", "HEAD",
+                              "--reports", "linux-reports.json"], cwd=self.dir, capture_output=True, text=True,
+                             encoding="utf-8", env=dict(os.environ, GITHUB_RUN_ID="77"))
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("replayed 'AssertionError: the guard is off'; saved for break.py --take-reports, and change "
+                      "its broken: line in specs/day-01-guard.md to match", run.stdout)
+        self.assertIn("gh run download 77 -n linux-reports", run.stdout)
+        with open(os.path.join(self.dir, "linux-reports.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f), [{"manifest": "specs/breaks/day-01.json", "what": "the guard off",
+                                             "report": "AssertionError: the guard is off"}])
+
     def test_the_branch_s_own_day_is_left_to_its_close(self):
         self.write("guard.py", "ok = True  # the guard\nok = True\n")
         run = self.run_branch(branch="day-01/close-the-day")
@@ -211,9 +227,10 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual((keep["with"]["path"], keep["with"]["name"]), ("linux-reports.json", "linux-reports"))
         self.assertIn("failure()", keep["if"])
         self.assertEqual(step["env"]["BRANCH"], "${{ github.head_ref }}")
-        # HEAD^1, main's side of the merge commit, is there only when the checkout fetches two commits.
+        # HEAD^1, main's side of the merge commit, and the older commits an earlier Day's break checks
+        # against (C10.31's 495bf69: "bad revision" at depth 2, in #198) are there with all of history.
         [checkout] = [s for s in workflow["jobs"]["track-breaks"]["steps"] if s.get("uses", "").startswith("actions/checkout")]
-        self.assertEqual(checkout["with"]["fetch-depth"], 2)
+        self.assertEqual(checkout["with"]["fetch-depth"], 0)
 
 
 if __name__ == "__main__":

@@ -191,7 +191,7 @@ def default_base(root="."):
 RAN = ("replays:", "differs:", "failed:", "error:")
 
 
-def check_earlier(items, changed, root="."):
+def check_earlier(items, changed, root=".", takes=None, specs="specs"):
     """[(ok, line)] for each earlier Day's break: the static check always, the run when changed touches it."""
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     out = []
@@ -217,7 +217,11 @@ def check_earlier(items, changed, root="."):
         if status == "reported" and normal(got) == normal(report):
             out.append((True, f"replays: {label}"))
         elif status == "reported":
-            out.append((False, f"differs: {label}: recorded {PR_SUFFIX.sub('', report)!r}, replayed {got!r}"))
+            take = ""
+            if takes is not None:
+                takes.append({"manifest": f"{specs}/breaks/day-{day}.json", "what": what, "report": got})
+                take = f"; saved for break.py --take-reports, and change its broken: line in {spec} to match"
+            out.append((False, f"differs: {label}: recorded {PR_SUFFIX.sub('', report)!r}, replayed {got!r}{take}"))
         else:
             out.append((False, f"{status}: {label}: {got}"))
     return out
@@ -245,7 +249,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
     track = TRACK.match(a.branch)
-    results = []
+    results, takes = [], []
     if not track:
         print(f"track-breaks: {a.branch} is not a day's track: no PR body to replay")
     else:
@@ -261,22 +265,24 @@ def main(argv=None):
             found.update({w: dict(e, pr=number) if number else e for w, e in entries(text).items()})
         found.update(entries(body))
         found.update(recorded(track.group(1)))
-        takes = []
         results = replay(found, takes=takes)
         for _, line in results:
             print(line)
-        if takes and a.reports:
-            with open(a.reports, "w", encoding="utf-8", newline="\n") as f:
-                json.dump(takes, f, ensure_ascii=False, indent=1)
-            run = os.environ.get("GITHUB_RUN_ID", "<run-id>")
-            print(f"track-breaks: {len(takes)} recorded reports saved in {a.reports}; to take them into the record: "
-                  f"gh run download {run} -n linux-reports, then python scripts/break.py --take-reports {a.reports}")
         bad = sum(not ok for ok, _ in results)
         print(f"track-breaks: {len(results) - bad} of {len(results)} breaks replay on this code")
     own = DAY.match(a.branch)
-    later = check_earlier(earlier_days(a.specs, own and own.group(1)), changed_since(a.base or default_base()))
+    later = check_earlier(earlier_days(a.specs, own and own.group(1)), changed_since(a.base or default_base()),
+                          takes=takes, specs=a.specs)
     for _, line in later:
         print(line)
+    # An earlier Day's entry Linux words otherwise is saved too: a tooling/ branch that re-records one
+    # runs its Day's breaks on Linux and had no file to take their reports from (#198).
+    if takes and a.reports:
+        with open(a.reports, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(takes, f, ensure_ascii=False, indent=1)
+        run = os.environ.get("GITHUB_RUN_ID", "<run-id>")
+        print(f"track-breaks: {len(takes)} recorded reports saved in {a.reports}; to take them into the record: "
+              f"gh run download {run} -n linux-reports, then python scripts/break.py --take-reports {a.reports}")
     late_bad = sum(not ok for ok, _ in later)
     ran = sum(line.startswith(RAN) for _, line in later)
     print(f"track-breaks: {len(later) - late_bad} of {len(later)} earlier Days' breaks still apply, "
