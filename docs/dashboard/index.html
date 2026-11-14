@@ -82,46 +82,32 @@
 
   <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, and the promises behind them</small></h2>
 
-  <div class="pair">
-    <section class="graph" id="g3">
-      <div class="graph-head">
-        <p class="graph-n">Graph 3</p>
-        <h2>What can the driver do, and when did it learn it?</h2>
-        <p class="graph-say">Each cell counts the merged pull requests that grew one ability in one Day. A darker cell means more of them.</p>
-      </div>
-      <div class="g3-plot" id="g3-plot"></div>
-      <div class="legend" id="g3-key"></div>
-      <div class="readout" id="g3-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g3-table"></table></div></details>
-    </section>
-
-    <section class="graph" id="g4">
-      <div class="graph-head">
-        <p class="graph-n">Graph 4</p>
-        <h2>Can we trust it?</h2>
-        <p class="graph-say" id="g4-say">One tile per promise the specs made, in the state the last re-check found it.</p>
-      </div>
-      <div class="legend" id="g4-key"></div>
-      <div class="board" id="g4-plot"></div>
-      <div>
-        <p class="graph-say small" id="g4-hist-say"></p>
-        <div class="strip" id="g4-hist"></div>
-      </div>
-      <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
-      <div class="readout" id="g4-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g4-table"></table></div></details>
-    </section>
-  </div>
-
-  <section class="graph" id="g5">
+  <section class="graph" id="g3">
+    <span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
     <div class="graph-head">
-      <p class="graph-n">Graph 5 · joins graphs 3 and 4</p>
-      <h2>Which abilities can I rely on?</h2>
-      <p class="graph-say">One row per ability. Its promises are the tiles, grouped by the Day that built them and coloured as in graph 4. A promise belongs to the ability its pull request grew. The number after a name is the ability's quality score.</p>
+      <p class="graph-n">Graphs 3–5</p>
+      <h2>What can the driver do, and can I rely on it?</h2>
+      <p class="graph-say">One line per ability. A line starts on the Day the ability was first built. Each station is that Day's merged pull requests for it, larger for more of them; the dots under a station are the promises they made, coloured by the state the last re-check found them in. A promise belongs to the ability its pull request grew. "Between Days" holds pull requests tagged with an ability outside any Day's spec: tooling and dashboard work, which grew it and made no promise. The ring at the end of a line is how many of its re-checked promises are proven. Lines are coloured only to tell them apart; state is only ever on the dots.</p>
     </div>
-    <div class="ab" id="g5-plot"></div>
-    <div class="readout" id="g5-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g5-table"></table></div></details>
+    <div class="legend" id="g3-key"></div>
+    <div class="scroll-x" id="g3-plot"></div>
+    <div class="trust" id="g3-trust">
+      <div>
+        <p class="graph-say small" id="g3-hist-say"></p>
+        <div class="strip" id="g3-hist"></div>
+      </div>
+      <p class="trust-n" id="g3-hist-n"></p>
+    </div>
+    <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
+    <div class="readout" id="g3-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary>
+      <p class="graph-say small">Pull requests, by ability and Day</p>
+      <div class="scroll-x"><table id="g3-table"></table></div>
+      <p class="graph-say small">Promises, by Day and state</p>
+      <div class="scroll-x"><table id="g4-table"></table></div>
+      <p class="graph-say small">Promises, by ability and state</p>
+      <div class="scroll-x"><table id="g5-table"></table></div>
+    </details>
   </section>
 
   <h2 class="chapter">Is the way of working sound?<small>plan against spec, spec against code, and what the checks catch</small></h2>

@@ -71,7 +71,7 @@ console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "
 
     def test_the_promise_board_links_to_the_steps_that_prove_a_promise(self):
         board = re.search(
-            r'<section class="graph" id="g4">.*?</section>', self.html, re.DOTALL
+            r'<section class="graph" id="g3">.*?</section>', self.html, re.DOTALL
         ).group(0)
         self.assertEqual(
             re.findall(r'<a href="#how-step-(\w+)" data-how="(\w+)">', board),
