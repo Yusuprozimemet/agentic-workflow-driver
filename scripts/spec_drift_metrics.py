@@ -144,9 +144,18 @@ def clock(prs, runs, sessions=None):
         if p.get("state") != "MERGED":
             continue
         on = on_branch.get(p["headRefName"], [])
-        checks = dict(start=min(r["createdAt"] for r in on), end=max(r.get("updatedAt") or r["createdAt"] for r in on),
+        # Nothing on a pull request is waited on after it merged: a run that sat queued until GitHub
+        # cancelled it days later (#147) ends at the merge, not at its cancellation.
+        merged = p.get("mergedAt")
+        ended = [dict(r, updatedAt=min(r.get("updatedAt") or r["createdAt"], merged) if merged else r.get("updatedAt"))
+                 for r in on if not merged or r["createdAt"] <= merged]
+        cancelled = sum(r.get("conclusion") == "cancelled" for r in on)
+        unfinished = sum(not r.get("conclusion") for r in on)
+        checks = dict(start=min(r["createdAt"] for r in ended), end=max(r.get("updatedAt") or r["createdAt"] for r in ended),
                       runs=len(on), failed=sum(r.get("conclusion") == "failure" for r in on),
-                      pushes=len({r.get("headSha") for r in on}), spans=run_spans(on)) if on else None
+                      pushes=len({r.get("headSha") for r in on}),
+                      **({"cancelled": cancelled} if cancelled else {}), **({"unfinished": unfinished} if unfinished else {}),
+                      spans=run_spans(ended)) if ended else None
         out.append(dict(number=p["number"], day=own_day(p), kind=kind(p["title"], day_branch(p)),
                         branch=p["headRefName"], opened=p.get("createdAt"), merged=p.get("mergedAt"), checks=checks))
     return dict(prs=out, sessions=page_json("sessions.json") if sessions is None else sessions)
