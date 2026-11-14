@@ -129,7 +129,7 @@ sequenceDiagram
     participant G as auditor-guard.py
     participant Git as repository
 
-    Note over G: acts only for the five auditors with Bash
+    Note over G: acts only for the six auditors with Bash
     A->>H: Bash "git commit ..." or "gh pr create"
     H->>G: pre (PreToolUse)
     G-->>A: exit 2, blocked
