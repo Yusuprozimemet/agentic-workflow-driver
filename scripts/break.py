@@ -24,7 +24,9 @@ failed when the regex no longer matches its stdout. break.py checks that the reg
 the break itself, and refuses one that matches any output: `^$` under re.M matches the empty end
 of every stdout that ends in a newline, so no break could be caught (D11.21); for "prints
 nothing", write `\\A\\Z`. A command that started but did not run the check (on
-Windows, `bash` can be WSL's: "execvpe(/bin/bash) failed") is refused, not recorded. <what> holds
+Windows, `bash` can be WSL's: "execvpe(/bin/bash) failed") is refused, not recorded, as is a break
+that leaves a Python file that compiled no longer compiling: its check fails at loading the code
+(`FAILED (errors=N)`), not at the behaviour. <what> holds
 no arrow: spec-drift.py reads the line up to its first one. A temporary directory in the report is
 written <tmp>, so no local path, a user name in it, reaches the PR.
 
@@ -143,6 +145,25 @@ def caught(returncode, stdout, expect=None):
     if expect is not None:
         return re.search(expect, stdout, re.M) is None
     return returncode != 0
+
+
+def does_not_load(path, original, broken):
+    """Why the broken Python file no longer compiles while the original does, or None. Such a check
+    fails at loading the code, a setup error (`FAILED (errors=N)`, or a subprocess's exit code), not
+    at the behaviour the break removes: Day 10's "run_session writes no pid line" was recorded so."""
+    if not path.endswith(".py"):
+        return None
+    try:
+        compile(original, path, "exec")
+    except (SyntaxError, ValueError):
+        return None
+    try:
+        compile(broken, path, "exec")
+    except (SyntaxError, ValueError) as e:
+        line = f", line {e.lineno}" if getattr(e, "lineno", None) else ""
+        return (f"the break leaves {os.path.basename(path)} that does not compile ({type(e).__name__}{line}): "
+                "the check would fail at loading it, not at the behaviour; break the behaviour instead")
+    return None
 
 
 def matches_anything(expect):
@@ -425,6 +446,8 @@ def main(args=None):
     if original.count(find) != 1:
         where = f" (lines {', '.join(map(str, lines_of(find, original)))})" if find in original else ""
         return refuse(f"--find occurs {original.count(find)} times in {a.file}{where}, want exactly once")
+    if why := does_not_load(a.file, original, original.replace(find, replace)):
+        return refuse(why)
     # A break's check that runs break.py itself (a break of break.py, or of evidence.py) takes the
     # lock its parent names, in a directory of its own: one under the same root would be refused.
     lock = os.environ.get("BREAK_LOCK") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", LOCK)

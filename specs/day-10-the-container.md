@@ -381,7 +381,7 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `python -m unittest tests.test_runlog tests.test_runlog_fix tests.test_once_outcome` passes
       with the files unedited.
       Evidence: the command above passes, the three files unedited since `495bf69` (#153).
-      broken: run_session writes no pid line → AssertionError: 1 != 0 (#153)
+      broken: run_session writes no pid line → AssertionError: Lists differ: ['start', 'end'] != ['start', 'pid', 'end'] (#153)
       broken: begin writing no issue on the start line → AssertionError: Tuples differ: (0, 1, False) != (0, 1, True) (#153)
 - [x] C10.19 **hold** — Without the container keys the driver never runs Docker: on a config with
       neither key, `--once` and `on` run with a `--docker` that records every call and exits 1,
