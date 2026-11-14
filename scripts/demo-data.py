@@ -209,11 +209,15 @@ DAY_ABILITIES = {1: ("rehearse",), 2: ("rehearse", "stop"), 3: ("stop",), 4: ("l
 # One made-up defect at each gate: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
 DEFECTS = (
     (1, "D1.1", "auditor", "spec", "Day 01", None),
+    (1, "D1.2", "spec-change PR", "process", "Day 01", None),
     (2, "D2.1", "Track A", "implementation", "Day 01", "D1.1"),
     (3, "D3.1", "seen red", "implementation", "Day 03", None),
     (4, "D4.1", "break on purpose", "process", "none", None),
     (5, "D5.1", "close", "spec", "Day 05", None),
+    (5, "D5.3", "rehearsal", "process", "Day 05", None),
     (5, "D5.2", "evidence replay", "environment", "none", None),
+    (5, "D5.4", "dashboard", "spec", "Day 05", None),
+    (5, "D5.5", "Day 04 review", "implementation", "Day 04", None),
 )
 # The newest re-check of each finished promise, so the board shows every state a tile can be in.
 RECHECKED = {
@@ -428,7 +432,7 @@ def demo():
             dict(key="tooling", label="Project tooling", when="On pull requests that touch a script", files=2, tests=12)]),
         defect_recurrence=dict(defects=len(DEFECTS), with_id=len(DEFECTS),
                                recurrences=[dict(id="D2.1", same_as="D1.1")], problems=[]),
-        gate_report=dict(defects=len(DEFECTS), elsewhere=2, gates=[
+        gate_report=dict(defects=len(DEFECTS), elsewhere=6, gates=[
             dict(gate=g, found=f, defects=sum(x[2] == f for x in DEFECTS), refused=r, runs=k, replies=3 * k,
                  context=90000 * k, output=1500 * k, cost=round(0.4 * k, 2),
                  causes={c: sum(x[2] == f and x[3] == c for x in DEFECTS)
