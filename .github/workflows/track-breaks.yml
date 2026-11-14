@@ -17,10 +17,11 @@ jobs:
     name: A track's breaks replay
     runs-on: ubuntu-latest
     steps:
-      # Two commits: HEAD^1, main's side of the merge, is what the PR's changes are diffed against.
+      # All of history: HEAD^1, main's side of the merge, is what the PR's changes are diffed against,
+      # and an earlier Day's break may check against an older commit (Day 10's C10.31 diffs from 495bf69).
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
