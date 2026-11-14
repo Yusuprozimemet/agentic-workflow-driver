@@ -171,7 +171,7 @@ its PR.
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 
-- [ ] C11.1 **new** — With every check passing, `--once` starts one session whose arguments,
+- [x] C11.1 **new** — With every check passing, `--once` starts one session whose arguments,
       after the program, are C05.8's (C04.9's) with `--output-format stream-json
       --verbose` in place of `--output-format json`, in that place, and nothing else changed,
       `--session-id <uuid>` still last; everything else C05.8 checks (the uuid of the `start` line, the prompt's two lines on stdin with the en dash as
@@ -186,7 +186,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Replaces: C10.15 — was: the container's inner `claude -p` carried today's flags,
       `--output-format json` among them.
       Plan: N30 "The driver runs claude -p with --output-format stream-json --verbose"
-- [ ] C11.2 **new** — `driver.stream.result` on a stdout of four lines, a `system` `init`
+      Evidence: `OnceTest.test_session_command` and `BoxSessionTest.test_session_runs_in_the_container` pass on `main` at `6f51a22`, after Track F (#170, #178); `tests/test_once.py`'s only change since `c8e5963` is the two flags.
+      seen red: python -m unittest tests.test_once.OnceTest.test_session_command tests.test_box_session.BoxSessionTest.test_session_runs_in_the_container on main → AssertionError: Lists differ: [['ru[581 chars]t', 'json', '--max-budget-usd', '5', '--permis[171 chars]d>']] != [['ru[581 chars]t', 'stream-json', '--verbose', '--max-budget-[191 chars]d>']] (#170)
+- [x] C11.2 **new** — `driver.stream.result` on a stdout of four lines, a `system` `init`
       event, an `assistant` event with `usage` `{"output_tokens": 900}`, a line `not json` and a
       `result` event with `total_cost_usd` 0.42 and two `permission_denials`, returns that
       `result` event, and on the same lines with a `result` of `total_cost_usd` 0.10 put before
@@ -198,25 +200,34 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `StreamResultTest.test_result_is_the_last_result_line`,
       `StreamResultTest.test_once_reads_the_result_event`.
       Plan: N31 "The result event stays the record"
-- [ ] C11.3 **new** — A fake printing `not json` then a `result` line ending in "PARK: needs a
+      Evidence: `StreamResultTest.test_result_is_the_last_result_line` and `StreamResultTest.test_once_reads_the_result_event` pass on `main` at `6f51a22` (#170).
+      seen red: python -m unittest tests.test_stream.StreamResultTest.test_result_is_the_last_result_line on main → FAILED (errors=1) (#170)
+      seen red: python -m unittest tests.test_stream.StreamResultTest.test_once_reads_the_result_event on main → AssertionError: Tuples differ: (1, 'park: the session ended without a result (exit 0; session `<uuid>`)') != (0, 'opened: #5 from `day-01/track-a-x`') (#170)
+- [x] C11.3 **new** — A fake printing `not json` then a `result` line ending in "PARK: needs a
       decision" parks "park: the session parked: needs a decision (session `<uuid>`)". Red today:
       it parks "park: the session ended without a result (exit 0; session `<uuid>`)".
       Test: `StreamResultTest.test_unparsed_line_skipped`.
       Plan: N31 "a line that does not parse is counted, not fatal"
-- [ ] C11.22 **hold** — A fake printing a `system` `init` and an `assistant` line and no
+      Evidence: `StreamResultTest.test_unparsed_line_skipped` passes on `main` at `6f51a22` (#170).
+      seen red: python -m unittest tests.test_stream.StreamResultTest.test_unparsed_line_skipped on main → AssertionError: Tuples differ: (1, 'park: the session ended without a result (exit 0; session `<uuid>`)') != (1, 'park: the session parked: needs a decision (session `<uuid>`)') (#170)
+- [x] C11.22 **hold** — A fake printing a `system` `init` and an `assistant` line and no
       `result`, exiting 0, parks "park: the session ended without a result (exit 0; session
       `<uuid>`)", and its `end` line has `cost_usd` null and `denials` 0: true today (two JSON
       lines are not one object) and after Track A (no `result` line). Track A adds the test and
       breaks it once.
       Test: `StreamResultTest.test_no_result_line`.
       Plan: N31 "a stream with no result is a session that printed nothing"
-- [ ] C11.4 **hold** — The outcome table and the run log hold: `tests/test_once_outcome.py`,
+      Evidence: `StreamResultTest.test_no_result_line` passes on `main` at `6f51a22` (#170).
+      broken: result returning the last JSON object whatever its type → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`') != (1, 'park: the session ended without a result (exit 0; session `<uuid>`)') (#170)
+- [x] C11.4 **hold** — The outcome table and the run log hold: `tests/test_once_outcome.py`,
       `tests/test_once_run.py`, `tests/test_usage_limit.py`, `tests/test_runlog.py`,
       `tests/test_runlog_end.py`, `tests/test_once_halt.py` and `tests/test_halt_race.py` pass
       unedited (`git diff --exit-code c8e5963` on them is empty), and C10.31's diff against
       `495bf69` stays empty: no new test goes in a file it lists.
       Plan: N31 "The result event stays the record"
-- [ ] C11.5 **new** — On a fake that prints, one line each, a `system` `init` event, an
+      Evidence: `git -c core.safecrlf=false diff --exit-code c8e5963` and `git -c core.safecrlf=false diff --exit-code 495bf69` over Verify's lists print nothing on `main` at `6f51a22`, and the seven files' tests pass there (#169, #178).
+      broken: the PARK line read from the first line of the reply → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`') != (1, 'park: the session parked: needs a decision (session `<uuid>`)') (#169)
+- [x] C11.5 **new** — On a fake that prints, one line each, a `system` `init` event, an
       `assistant` event whose content is a `tool_use` named `Bash` (`message.id` `m1`, `usage`
       input 10, cache creation 5, cache read 100, output 7), a `user` event, an `assistant` event
       with a `text` item (`m2`, input 3, output 20), a line `not json`, a blank line and a
@@ -227,7 +238,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `EventsTest.test_events_file`.
       Plan: N30 "reads its output line by line on a reader thread, and appends each event's time
       and kind to <state>/sessions/<session>.events.jsonl"
-- [ ] C11.6 **new** — `driver.stream.kind` on each case of In scope's list (a `system` event with
+      Evidence: `EventsTest.test_events_file` passes on `main` at `6f51a22` (#171).
+      seen red: python -m unittest tests.test_events.EventsTest.test_events_file on main → AssertionError: False is not true : the session has no events file (#171)
+      broken: a user event named "user", not "tool result" (C11.5) → AssertionError: Lists differ: ['system init', 'tool Bash', 'user', 'reply', 'unparsed', 'result'] != ['system init', 'tool Bash', 'tool result', 'reply', 'unparsed', 'result'] (#171)
+- [x] C11.6 **new** — `driver.stream.kind` on each case of In scope's list (a `system` event with
       subtype `init`; an `assistant` event with a `text` item then a `tool_use` named `Read`; an
       `assistant` event with only a `thinking` item; a `user` event; a `result` event;
       `{"type": "rate_limit_event"}`; `[1, 2]`; `{"no": "type"}`; `{"type": "assi`) returns
@@ -235,26 +249,41 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `unparsed`, `unparsed`, `unparsed`. Red today: `driver.stream.kind` does not exist.
       Test: `StreamKindTest.test_kinds`.
       Plan: N30 "appends each event's time and kind"
-- [ ] C11.7 **new** — `--session-minutes` ending a session mid-line keeps the events read so
+      Evidence: `StreamKindTest.test_kinds` passes on `main` at `6f51a22` (#171); it lives in `tests/test_events.py`, not `tests/test_stream.py` as Verify said (D11.31).
+      seen red: python -m unittest tests.test_events.StreamKindTest on main → FAILED (errors=1) (#171)
+      broken: an assistant event's tool_use item never named (C11.6) → AssertionError: Lists differ: ['system init', 'reply', 'assistant', 'tool result', 'resu[55 chars]sed'] != ['system init', 'tool Read', 'assistant', 'tool result', '[59 chars]sed'] (#171)
+- [x] C11.7 **new** — `--session-minutes` ending a session mid-line keeps the events read so
       far: a fake that prints a `system` `init` line, then `{"type": "assi` with no newline,
       flushes and sleeps, run with `--session-minutes 0.05 --poll 0.2`, parks "park: the session
       ran past 0.05 minutes (session `<uuid>`)" as today, and its events file's kinds are
       `system init`, `unparsed`. Red today: no events file.
       Test: `EventsTest.test_bound_keeps_events_read`.
       Plan: N31 "the poll, STOP and --session-minutes work as before"
-- [ ] C11.8 **hold** — A `STOP` issue still stops a session within a poll, a failed issues read
+      Evidence: `EventsTest.test_bound_keeps_events_read` passes on `main` at `6f51a22` (#171).
+      seen red: python -m unittest tests.test_events.EventsTest.test_bound_keeps_events_read on main → AssertionError: 0 != 1 : the run did not write one events file (#171)
+      broken: a partial last line dropped from the events file (C11.7) → AssertionError: Lists differ: ['system init'] != ['system init', 'unparsed'] (#171)
+- [x] C11.8 **hold** — A `STOP` issue still stops a session within a poll, a failed issues read
       is still skipped, and the bound still parks, with the session printing nothing:
       `tests/test_once_stop.py` and `tests/test_session_bound.py` pass unedited (in C11.4's
       `git diff`), on the reader's wait.
       Plan: P20 "from the phone (an issue whose title starts with `STOP`) it takes as long as the
       driver's poll of GitHub"
-- [ ] C11.9 **hold** — The container's mounts and command are Day 10's: `tests/test_box_command.py`
+      Evidence: `tests/test_once_stop.py` and `tests/test_session_bound.py` pass on `main` at `6f51a22`, unedited: `git -c core.safecrlf=false diff --exit-code c8e5963` over them prints nothing (#171).
+      broken: a STOP issue no longer stopping the session (C11.8) → AssertionError: the driver did not end within 10 s (#169)
+      broken: the issues read, and the bound, skipped at the reader's timeout (C11.8) → AssertionError: the driver did not end within 10 s (#171)
+      Recorded again at the close, since #171 rewrote their finds in `run_session` and did not (D11.30): Day 6's and Day 10's names, the reports as those days recorded them.
+      broken: the bound never reached → FAILED (errors=1)
+      broken: the bound's kill left the container running → AssertionError: Tuples differ: (1, True, False, []) != (1, True, True, [{'ended': 'itself'}])
+      broken: the kill past the bound removed → AssertionError: True is not false : a process of the session still runs
+- [x] C11.9 **hold** — The container's mounts and command are Day 10's: `tests/test_box_command.py`
       passes unedited (in C11.4's `git diff`), and no line of `driver/stream.py`, which holds the
       events writer (`append`), names `/state` or `/work`: `grep -nE '"/(state|work)'
       driver/stream.py` finds none (from Track B; before it the file has no writer). Its break
       runs with `--expect-stdout '^$'`.
       Plan: N30 "on the host and written by the driver, never from inside the container"
-- [ ] C11.10 **new** — A fake that prints a `system` `init` line, sleeps 4 seconds printing
+      Evidence: `grep -nE '"/(state|work)' driver/stream.py` finds none on `main` at `6f51a22`, and `tests/test_box_command.py` passes unedited (in C11.4's `git diff`) (#171). The break's check is a Python count of such lines with `--expect-stdout '^0$'`, not the spec's `'^$'` (D11.21).
+      broken: the events path given as "/state/sessions" in driver/stream.py (C11.9) → 1 (#171)
+- [x] C11.10 **new** — A fake that prints a `system` `init` line, sleeps 4 seconds printing
       nothing (a long tool), then prints a `result`, run with `--poll 0.3`, reads
       `<state>/heartbeat.json` 0.5 and 2.5 seconds after the events file first holds the `init`
       line, each read retried for up to a second when it fails (on Windows the driver's
@@ -265,7 +294,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool`.
       Plan: N29 "At each poll the driver rewrites <state>/heartbeat.json with the session, its
       step, when it started, the time of the poll and the time of the session's last event"
-- [ ] C11.11 **new** — `driver.status.progress` with `now` fixed: on a run log with three
+      Evidence: `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool` passes on `main` at `6f51a22` (#172).
+      seen red: python -m unittest tests.test_heartbeat on main → AssertionError: the session wrote no heartbeat (#172)
+      broken: the poll writes no heartbeat → AssertionError: Tuples differ: (True, True, True, True, True, True, False, False, True) != (True, True, True, True, True, True, True, True, True) (#172)
+- [x] C11.11 **new** — `driver.status.progress` with `now` fixed: on a run log with three
       earlier `track` sessions of 10m00s, 20m00s and 40m00s and a running `track` session started
       12m05s before `now`, whose events' last line is `tool Bash` 40 seconds before `now`, with
       `assistant` lines `m1` (in 115, out 7), `m1` again (in 115, out 9) and `m2` (in 3, out 20),
@@ -275,7 +307,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ProgressTest.test_progress_lines`.
       Plan: N33 "the median length of the run log's earlier sessions of the same kind, and its
       n"; N32 "how long it has run, its last event and how long ago, and the tokens so far"
-- [ ] C11.12 **new** — The estimate's edges: two earlier `track` sessions give `running: <d> (no
+      Evidence: `ProgressTest.test_progress_lines` passes on `main` at `6f51a22` (#173).
+      seen red: python -m unittest tests.test_progress on main → FAILED (errors=8) (#173)
+      broken: the median taken one below the middle → AssertionError: Lists differ: ['run[18 chars]mate 10m00s, the median of 3 earlier track ses[72 chars]out'] != ['run[18 chars]mate 20m00s, the median of 3 earlier track ses[72 chars]out'] (#173)
+      broken: every assistant line's tokens summed → AssertionError: Lists differ: ['run[78 chars] event: tool Bash, 0m40s ago', 'tokens so far: 233 in, 36 out'] != ['run[78 chars] event: tool Bash, 0m40s ago', 'tokens so far: 118 in, 29 out'] (#173)
+- [x] C11.12 **new** — The estimate's edges: two earlier `track` sessions give `running: <d> (no
       estimate: 2 earlier track sessions)`; four of 10, 20, 30 and 41 minutes give `estimate
       25m00s, the median of 4`, and of 10m00s, 20m00s, 20m01s and 41m00s `estimate 20m00s`
       (20m00.5s rounded down); a session with no `start` line gives `running: unknown (no start
@@ -285,14 +321,21 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       no `progress`.
       Test: `ProgressTest.test_estimate_edges`.
       Plan: N33 "fewer than three, no estimate"
-- [ ] C11.13 **new** — `run-steps.py status` with a live session (a `pid` line of a running
+      Evidence: `ProgressTest.test_estimate_edges` passes on `main` at `6f51a22` (#173); seen red in the same run as C11.11's:
+      seen red: python -m unittest tests.test_progress on main → FAILED (errors=8) (#173)
+      broken: an even median rounded up → AssertionError: 'running: 12m05s (estimate 20m01s, the median of 4 earlier track sessions)' != 'running: 12m05s (estimate 20m00s, the median of 4 earlier track sessions)' (#173)
+      broken: a spec session counted in a track estimate → AssertionError: 'running: 12m05s (estimate 15m00s, the median of 4 earlier track sessions)' != 'running: 12m05s (estimate 20m00s, the median of 3 earlier track sessions)' (#173)
+- [x] C11.13 **new** — `run-steps.py status` with a live session (a `pid` line of a running
       process, its `start` line and an events file) prints the three progress lines right after
       its "in progress:" line; the "in progress:" line still ends "cost so far $0.00". Red today:
       no progress lines.
       Test: `StatusWatchTest.test_status_shows_progress`.
       Plan: N32 "the step, how long it has run, its last event and how long ago, and the tokens so
       far; the cost stays the result's, never estimated in dollars"
-- [ ] C11.14 **new** — `run-steps.py status --watch --poll 0.5` with a live session (a process
+      Evidence: `StatusWatchTest.test_status_shows_progress` passes on `main` at `6f51a22` (#173).
+      seen red: python -m unittest tests.test_status_watch on main → AssertionError: 0 != 1 (#173)
+      broken: status prints no progress lines → AssertionError: False is not true : steps: (#173)
+- [x] C11.14 **new** — `run-steps.py status --watch --poll 0.5` with a live session (a process
       the test started) prints a first block naming it; the test ends the process once it has
       read that block; then `status --watch` prints another block, a blank line between, the
       last with "in progress: none", and exits 0; with no live session it prints one block and
@@ -302,12 +345,17 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `StatusWatchTest.test_watch_with_nothing_running`,
       `StatusWatchTest.test_watch_creates_nothing`.
       Plan: N32 "status --watch prints status again at each poll until the session ends"
-- [ ] C11.15 **hold** — `status` with no live session prints what it printed before:
+      Evidence: `StatusWatchTest.test_watch_until_the_session_ends`, `StatusWatchTest.test_watch_with_nothing_running` and `StatusWatchTest.test_watch_creates_nothing` pass on `main` at `6f51a22` (#173); seen red in the same run as C11.13's:
+      seen red: python -m unittest tests.test_status_watch on main → AssertionError: 0 != 1 (#173)
+      broken: status --watch stops after its first block → AssertionError: [] is not true : status --watch printed nothing after its first block (#173)
+- [x] C11.15 **hold** — `status` with no live session prints what it printed before:
       `tests/test_status.py`, `tests/test_status_trial.py` and `tests/test_level_2_sentence.py`
       pass unedited (in C11.4's `git diff`).
       Plan: P62 "`status` prints it: the mode, the level, the step in progress and its cost so
       far"
-- [ ] C11.16 **new** — A fake that prints `system` `init`, sleeps 4 seconds, then a `result`,
+      Evidence: `tests/test_status.py`, `tests/test_status_trial.py` and `tests/test_level_2_sentence.py` pass on `main` at `6f51a22`, unedited: `git -c core.safecrlf=false diff --exit-code c8e5963` over them prints nothing (#169, #173). Track D recorded no break of its own; #169's still applies (its find matches once).
+      broken: a progress line printed with no live session → AssertionError: Lists differ: ['mod[93 chars]e', 'running: unknown', 'steps: none', 'parks [156 chars]ked'] != ['mod[93 chars]e', 'steps: none', 'parks by reason: none', 'r[136 chars]ked'] (#169)
+- [x] C11.16 **new** — A fake that prints `system` `init`, sleeps 4 seconds, then a `result`,
       run with `--poll 0.3` and the fake `gh`'s `comment_id` 99: before the run's issue's closing
       comment, the fake `gh` records one `issue comment <the run's issue>` whose body's lines are
       "step: <the step>", "session: <uuid>", then lines starting `running: `, `last event: `,
@@ -317,7 +365,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       as without. Red today: no comment before the run's issue's closing one.
       Test: `PhoneTest.test_heartbeat_comment_edited_in_place`.
       Plan: N34 "One comment on the run's issue per session, edited in place at each poll"
-- [ ] C11.17 **new** — As C11.16 with `stale_minutes` 0.02 in `driver.json`: exactly one more
+      Evidence: `PhoneTest.test_heartbeat_comment_edited_in_place` passes on `main` at `6f51a22` (#175); it fails on and off under load (D11.25).
+      seen red: python -m unittest tests.test_phone.PhoneTest.test_heartbeat_comment_edited_in_place on main → AssertionError: Tuples differ: (False, False, False, False, True, False, True, True) != (True, True, True, True, True, True, True, True) (#175)
+      broken: a heartbeat that keeps no comment id → AssertionError: Tuples differ: (False, True, True, False, True, False, True, True) != (True, True, True, True, True, True, True, True) (#175)
+- [x] C11.17 **new** — As C11.16 with `stale_minutes` 0.02 in `driver.json`: exactly one more
       `issue comment` on the run's issue, whose body is "stale: session `<uuid>`
       has sent no event for 0.02 minutes; it is not stopped"; the session is not killed and the
       step's outcome is as without. With `<state>/sessions/<uuid>.comment.json` holding
@@ -328,32 +379,47 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `PhoneTest.test_resumed_session_keeps_its_comment`.
       Plan: N34 "when no event has come for stale_minutes (10 by default, in driver.json), one new
       comment says so, once per session; a stale session is reported, not killed"
-- [ ] C11.23 **hold** — As C11.16 with `stale_minutes` absent from `driver.json` (10): exactly
+      Evidence: `PhoneTest.test_stale_comment_once` and `PhoneTest.test_resumed_session_keeps_its_comment` pass on `main` at `6f51a22` (#176).
+      seen red: python -m unittest tests.test_phone.PhoneTest.test_stale_comment_once tests.test_phone.PhoneTest.test_resumed_session_keeps_its_comment on main → AssertionError: Tuples differ: (False, False, True) != (True, True, True) (#176)
+      broken: a quiet session never reported stale (C11.17) → AssertionError: Tuples differ: (False, True, True, True) != (True, True, True, True) (#176)
+      broken: a stale comment made at every poll (C11.17) → AssertionError: Tuples differ: (False, True, True, True) != (True, True, True, True) (#176)
+      broken: a resumed session's comment file not read (C11.17) → AssertionError: Tuples differ: (False, False, False) != (True, True, True) (#176)
+- [x] C11.23 **hold** — As C11.16 with `stale_minutes` absent from `driver.json` (10): exactly
       one heartbeat comment (a body starting "step: ") and no comment starting "stale: " on the
       run's issue: true since Track E1 (no stale comment exists) and after Track E2 (four seconds
       is under 10 minutes). Track E2 adds the test and breaks it once (the default made 0.001).
       Test: `PhoneTest.test_not_stale_before_stale_minutes`.
       Plan: N34 "stale_minutes (10 by default, in driver.json)"
-- [ ] C11.18 **new** — With the fake `gh` failing `issue comment` and `api` (exit 1), a session
+      Evidence: `PhoneTest.test_not_stale_before_stale_minutes` passes on `main` at `6f51a22` (#176, after spec change #177).
+      broken: stale_minutes 0.001 when absent from driver.json (C11.23) → AssertionError: Tuples differ: (True, False) != (True, True) (#176)
+- [x] C11.18 **new** — With the fake `gh` failing `issue comment` and `api` (exit 1), a session
       spanning several polls ends with the same outcome and the same stdout as with them
       working, and the next poll tries the comment again (two or more `issue comment` calls
       before the run's closing comment). Red today: no comment is tried.
       Test: `PhoneTest.test_failed_comment_skipped`.
       Plan: none — that a failed comment changes nothing is the driver's own care; `plan.md` says
       nothing of it
-- [ ] C11.19 **new** — `driver.config.load` on a config with every Day 2 key and `stale_minutes`
+      Evidence: `PhoneTest.test_failed_comment_skipped` passes on `main` at `6f51a22` (#175). The break was recorded in #175 and again in #176, which rewrote its find, with the same report.
+      seen red: python -m unittest tests.test_phone.PhoneTest.test_failed_comment_skipped on main → AssertionError: Tuples differ: (True, True, False) != (True, True, True) (#175)
+      broken: a failed heartbeat comment never tried again → AssertionError: Tuples differ: (True, True, False) != (True, True, True) (#176)
+- [x] C11.19 **new** — `driver.config.load` on a config with every Day 2 key and `stale_minutes`
       `"10"`, `0`, `-1` or `true` reports "cannot start: <path>'s stale_minutes must be a number
       above 0", one line; with 0.5 or absent it loads, and absent reads as 10 where the driver
       reads it. Red today: the config loads with each of them.
       Test: `StaleConfigTest.test_stale_minutes`.
       Plan: N34 "stale_minutes (10 by default, in driver.json)"
-- [ ] C11.20 **hold** — A session shorter than one poll makes no comment: `OnceTest`'s
+      Evidence: `StaleConfigTest.test_stale_minutes` passes on `main` at `6f51a22` (#176).
+      seen red: python -m unittest tests.test_stale_config on main → AssertionError: Tuples differ: (False, []) != (True, ["cannot start: <path>'s stale_minutes must be a number above 0"]) (#176)
+      broken: stale_minutes not checked in driver.json (C11.19) → AssertionError: Tuples differ: (False, []) != (True, ["cannot start: <path>'s stale_minutes must be a number above 0"]) (#176)
+- [x] C11.20 **hold** — A session shorter than one poll makes no comment: `OnceTest`'s
       `test_session_command` keeps its six `gh` calls (issue list, run list, issue create, pr
       list, issue comment, issue close), unedited in that part by Track A's edit; and C06.9's
       `OnTest.test_steps_per_night`, whose sessions span `--poll 0.01` polls, passes unedited
       (in C11.4's `git diff`).
       Plan: N34 "edited in place at each poll"
-- [ ] C11.21 **hold** — Live: with `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` set, runs
+      Evidence: `OnceTest.test_session_command` keeps its six `gh` calls (#170 changed only the two flags in `tests/test_once.py`), and `OnTest.test_steps_per_night` passes on `main` at `6f51a22`, unedited: `git -c core.safecrlf=false diff --exit-code c8e5963` over `tests/test_on.py` prints nothing (#169, #175). Track E1 recorded no break of its own; #169's still applies (its find matches once).
+      broken: a comment made at the session's start → AssertionError: Tuples differ: (True, True, True, True, True, True, False, False) != (True, True, True, True, True, True, True, True) (#169)
+- [x] C11.21 **hold** — Live: with `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` set, runs
       `docker run --rm -i --env-file <secrets> <image> claude -p --model haiku --output-format
       stream-json --verbose --max-budget-usd 0.05 --strict-mcp-config` with "Reply with the word
       ok." on stdin: exit 0; every non-blank line is a JSON object; the first's `type` is
@@ -363,6 +429,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       it once.
       Test: `StreamLiveTest.test_image_takes_stream_json`.
       Plan: N30 "The driver runs claude -p with --output-format stream-json --verbose"
+      Evidence: `StreamLiveTest.test_image_takes_stream_json`, run with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322` and `DRIVER_CONTAINER_SECRETS` set on this machine, passes (#178), and again on `main` at `6f51a22` at the close; CI skips its Docker part.
+      Live, so not replayed: CI and the replay have no image; a reader checked the live run and its break in #178: with `--verbose` left out of the test's command, the test failed twice with "AssertionError: 1 != 0 : exit 1" and the CLI's "requires --verbose" error. A replayed break would only skip, so it has no manifest entry (as C10.7).
+      broken: none → live, so not replayed: with `--verbose` left out of the test's command it failed twice on this PC (#178); CI and the replay have no image
 
 ## Verify
 ```bash
@@ -374,8 +443,8 @@ git -c core.safecrlf=false diff --exit-code 495bf69 -- tests/test_contract.py te
 `DRIVER_CONTAINER_SECRETS` are set; on this machine, with the image `driver.json` names built,
 run it with both set as well.
 
-Where the tests live: `StreamResultTest` and `StreamKindTest` in `tests/test_stream.py`;
-`EventsTest` in `tests/test_events.py`; `HeartbeatTest` in `tests/test_heartbeat.py`;
+Where the tests live: `StreamResultTest` in `tests/test_stream.py`; `StreamKindTest` and
+`EventsTest` in `tests/test_events.py` (D11.31); `HeartbeatTest` in `tests/test_heartbeat.py`;
 `ProgressTest` in `tests/test_progress.py`; `StatusWatchTest` in `tests/test_status_watch.py`;
 `PhoneTest` in `tests/test_phone.py`; `StaleConfigTest` in `tests/test_stale_config.py`;
 `StreamLiveTest` in `tests/test_stream_live.py`. The fake sessions print their lines through
@@ -463,3 +532,36 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
 - **Defect** D11.17 — found: auditor · cause: spec · made: Day 11 · In scope cited C07.17 and C07.18, both already replaced (by C08.10 and C10.24/C10.25, and C08.2) (fixed in this PR).
 - **Defect** D11.18 — found: auditor · cause: spec · made: Day 11 · C11.18's `Plan:` line quoted N34's "a stale session is reported, not killed", which C11.17 checks, not a failed comment (fixed in this PR: `Plan: none`).
 - **Defect** D11.19 — found: seen red · cause: spec · made: Day 11 · C11.17, tagged `new`, named `test_not_stale_before_stale_minutes`, whose checks (one heartbeat comment, no stale comment) Track E1 made true before Track E2 began; CI's "Track tests seen red" failed Track E2's PR #176 on it (fixed in a second spec-change PR: the case moved to C11.23, a hold, broken once in Track E2).
+- **Defect** D11.20 — found: Track E1 · cause: spec · made: Day 11 · the spec named only C06.9's test as spanning polls; C07.19's `RunIssueCostTest.test_second_step_comment` also found the second step's comment by "step: ", which the heartbeat comments carry under `on`, and failed with `(0, 3, False) != (0, 1, True)`. #175 finds it by "cost so far: " instead (a departure: C07.19's wording is unchanged and its file is in no Verify `git diff`).
+- **Defect** D11.21 — found: break on purpose · cause: spec · made: Day 11 · C11.9's break "runs with `--expect-stdout '^$'`", which cannot catch it: `break.py` matches with `re.M`, so `^$` matches the empty end of any output, and Git's MSYS `grep` started from Python loses the pattern's `"`. #171 used a Python count of such lines with `'^0$'` instead.
+- **Defect** D11.22 — found: break on purpose · cause: environment · made: none · same-as: D10.17 · Track B's first C11.9 break passed `"/state/sessions"` through Git Bash without `MSYS_NO_PATHCONV=1`, which rewrote it to a Windows path, and `break.py` refused the report as an absolute path (fixed before #171).
+- **Defect** D11.23 — found: break on purpose · cause: process · made: Day 11 · Track C's first break replaced the poll's `begun` with `None`, which nulled `started` rather than skipping the beat, so its name did not fit what it broke; not recorded, the beat's call itself broken instead (#172).
+- **Defect** D11.24 — found: self · cause: process · made: Day 11 · Track D's brief had `status --watch` re-read the live session after printing a block, a window in which the session can end; the implementer's test failed 3 of 3 and it added a sleep to the test. The fix went into `run`, which now uses the block's own reading (#173).
+- **Defect** D11.25 — found: Day 11 review · cause: implementation · made: Day 11 · `PhoneTest.test_heartbeat_comment_edited_in_place` fails on and off under load: eight copies at once failed 2 of 8 on Track E2's branch and 3 of 8 on `main`. The likely cause: a poll can fall after the `result` line is read and before the session exits, so the last edit shows "last event: result", not "last event: system init" (#176). Not fixed; no day owns it.
+- **Defect** D11.26 — found: self · cause: process · made: Day 11 · #175's body first rendered struck through: a bare `<s>` read as HTML. Fixed by backticks.
+- **Defect** D11.27 — found: self · cause: process · made: Day 11 · the first live `gh api` PATCH before Track E1 failed with HTTP 400: a Bash `printf` turned `\n` into newlines and broke the JSON. The Python call, as the driver makes it, exited 0 and edited the comment (scratch issue #174).
+- **Defect** D11.28 — found: self · cause: implementation · made: Day 11 · Track E2's implementer first built the comment file's folder with the expression that is the find of C11.9's break, so the find matched twice in `driver/stream.py`; caught by checking every Day manifest's finds before #176, which builds it from the file's own path.
+- **Defect** D11.29 — found: Track B · cause: implementation · made: Day 09 · same-as: D10.18 · `UsageLimitTest.test_far_reset_parks` failed again under load: 3 of 10 under `--repeat 10` on Track B's branch, then 10 of 10 there and on `main` (#171); once each in #175's and #176's full runs.
+- **Defect** D11.30 — found: close · cause: process · made: Day 11 · Track B rewrote the finds of three earlier breaks in `run_session` (Day 6's "the bound never reached", Day 10's "the bound's kill left the container running" and "the kill past the bound removed"), which the Tracks section told it to record again, and did not; #172 then said Track B had. The close ran the three through `break.py` on the new code, with the same reports as their days, and they are in this day's manifest, under C11.8.
+- **Defect** D11.31 — found: close · cause: implementation · made: Day 11 · "Where the tests live" put `StreamKindTest` in `tests/test_stream.py`; #171 put it in `tests/test_events.py`, a departure it did not record (the sentence fixed at the close).
+- **Defect** D11.32 — found: close · cause: implementation · made: Day 11 · `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool` (C11.10) failed once in the close's full run, on its check that `last_event` is the same in both reads and is the `init` line's `at`; it passed 3 of 3 run alone, and #176's full run also saw `test_heartbeat.py` fail once. A likely cause, not checked: under load the first read, 0.5 seconds after the `init` line, can come before the first poll's beat, when the file is still the one written at the start. Not fixed; no day owns it.
+- **Defect** D11.33 — found: evidence replay · cause: process · made: Day 11 · same-as: D10.26 · the close's first draft failed its rehearsal on three criteria: C11.12's and C11.14's Evidence named the seen-red run as `tests.test_progress` and `tests.test_status_watch` in backticks, which the replay reads as test names ("not defined"), and C11.21, a live `hold`, had its break as a sentence with no `broken:` line. Fixed before the PR: the seen-red lines copied, and `broken: none → <why>` under C11.21.
+- At the close, on `main` at `6f51a22`: Verify's tests ran 110, OK, with `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` set, so `StreamLiveTest` ran rather than skipped; both `git diff`s print nothing; the C11.9 grep finds none. Under `python scripts/test-parallel.py --repeat 10` (ten copies at once, eight workers), `test_phone.py` failed 8 of 10, each time `test_heartbeat_comment_edited_in_place` on its "last event: system init" check (D11.25), and `test_usage_limit.py` failed 8 of 10, each time `test_far_reset_parks` (D11.29), which passed 50 of 50 so at Day 10's close: both fail more often the heavier the load, and neither has a day that owns it.
+- The close's second rehearsal (`python scripts/close-evidence.py --rehearse day-11/close-the-day`) passed every criterion and break, and failed its Verify run, "exit 1", naming no test; the same command run again on the branch straight after ran 110 tests, OK. Which test failed is not known; D11.25, D11.29 and D11.32 are the day's known failures under load.
+- Every Day 11 track break's find matches once on `main` but #175's "a failed heartbeat comment never tried again", whose find #176 rewrote and recorded again under that name with the same report: the manifest holds #176's. #177 recorded C11.23's break as "(C11.17)" before the case moved; #176's record under "(C11.23)" is the manifest's.
+- Tracks D and E1 recorded no break of C11.15 and C11.20, which the Notes above left to them; #169's breaks of both, run on the code before the day, still find their lines once and are the ones recorded.
+- C11.21 is the first `hold` that is live: its break cannot replay, and the close's first draft wrote it as a sentence alone, which the rehearsal failed ("a hold criterion with no broken: line") and the dashboard flagged "No seen-red or broken line". It now carries `broken: none → <why>`, as Day 3's live hold did.
+- C11.21 is live: its Docker part skips in CI and in the replay. `usage` repeating on each content block of a message (the Note above) stays unknown: the live session's one `assistant` line held one `text` block (#178).
+- The blind relabel (`scripts/relabel.py`) ran three times, on 31 entries, on 32 after D11.32 and on
+  33 after D11.33; the last whole run agreed on 32 of 33 stages, 28 of 33 causes and 32 of 33
+  `made:`. After the first run, D11.25 changed from `found: Track E2` to `Day 11 review` (Track E1's
+  test had merged when Track E2 found it) and D11.31's cause from `spec` to `implementation` (#171
+  moved the test without recording the departure); the later runs read D11.31 as `process`: kept,
+  the departure being in the code. Kept as well: D11.33 `evidence replay`, which `specs/README.md`
+  gives the close's rehearsal (as D10.26), where the rater read before the merge; D11.22
+  `environment` and `made: none`, Git Bash's path conversion being the machine's (as D10.17);
+  D11.24 `process`, the window being the brief's, not the implementer's (as D10.19); D11.27
+  `process`, the shell doing as written, the command being the slip; D11.29 `implementation`, as
+  D10.18 (the test reads the driver's exit before the driver has ended), which the rater read as
+  unclear.
+- Still for the maintainer, as plan-change matters: `plan.md` says the session id is read from the output ("Where am I, while a session runs"; "What to build", item 2), `plan.md:130`'s "the JSON result", `plan.md:630`'s "Days 1 to 9 have specs", and P60's `--output-format json`.
