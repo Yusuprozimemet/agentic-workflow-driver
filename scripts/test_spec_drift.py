@@ -155,7 +155,7 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[2]["name_coverage"], 0.5)  # bar_table is only under specs/
 
     def test_a_spec_name_that_is_a_file_or_folder_in_the_code_is_in_the_code(self):
-        # On Bearing 36 of the 41 names missing at Day 12 were test files the specs cite by path.
+        # On Bearing 36 of the 41 names missing at its twelfth Day were test files the specs cite by path.
         rows = self.repo.merge({"plan.md": PLAN + "Tested in `tests/test_widget.py`, under `src/foo_parts/`.\n",
                                 "tests/test_widget.py": "def test_it():\n    pass\n",
                                 "src/foo_parts/a.txt": "x\n"}).rows()
