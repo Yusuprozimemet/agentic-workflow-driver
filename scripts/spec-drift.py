@@ -241,6 +241,7 @@ def main():
                     defect_recurrence=recurrence(days),
                     user_stories=stories, plan=plan_graph(head, blobs, rows),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
+                    defect_counts=defect_counts(days),
                     other_groups=other_groups(rows),
                     vocab_size=vocab, tokens=tokens, refusals=refusals(),
                     verification=verification(prs, runs),
@@ -277,6 +278,9 @@ def main():
         print(f"yardstick not counted: {p}")
     for g in real["gate_report"]["gates"]:
         print(gate_line(g))
+    print(defect_count_line(real["defect_counts"]))
+    for i in real["defect_counts"]["off_list"]:
+        print(f"defect found: not on the list: {i}")
 
 
 def gate_line(g):

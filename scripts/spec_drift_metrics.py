@@ -648,3 +648,58 @@ def gate_report(days, gates, refused):
     named = {f for _, f in GATES if f}
     return dict(gates=rows, defects=len(lines),
                 elsewhere=sum(tag(x.get("found")) not in named for x in lines))
+
+
+# The closed list of found: values (specs/README.md), read into stages. self, review and Track <X>
+# are one stage, the work. Until Day 12, evidence replay named both the close's rehearsal and the
+# replay after its merge: those lines are read as "unsplit", not rewritten. A value off the list
+# is in no stage, and reported.
+STAGES = ("auditor", "spec-change PR", "seen red", "break on purpose", "work", "close", "rehearsal",
+          "evidence replay", "unsplit", "dashboard", "Day review")
+EARLY = ("auditor", "spec-change PR")  # before any code: every other stage is a late catch
+SPLIT_FROM = 12
+
+
+def found_stage(value, day):
+    """The stage of a Defect line's found: on a Day, or None when the value is off the list."""
+    f = found_tag(value)
+    if f in ("self", "review") or re.fullmatch(r"track [a-z]\d*", f):
+        return "work"
+    if re.fullmatch(r"day \d+ review", f):
+        return "Day review"
+    if f == "evidence replay" and day < SPLIT_FROM:
+        return "unsplit"
+    return next((s for s in STAGES if s.lower() == f and s not in ("work", "unsplit", "Day review")), None)
+
+
+def defect_counts(days):
+    """Per Day: its Defect lines, by stage, per criterion, caught late (after a track started) and
+    escaped (made on another Day); the blind rater's agreement per tag; and the IDs off the found:
+    list. Totals over the Days with a Defect line."""
+    rows, rater, off = [], {}, []
+    for d in days:
+        lines = d.get("defects", [])
+        if not lines:
+            continue
+        stages = [found_stage(x.get("found"), d["day"]) for x in lines]
+        made = [re.fullmatch(r"day 0*(\d+)", (x.get("made") or "").strip().lower()) for x in lines]
+        criteria = (d.get("criteria") or {}).get("total") or 0
+        off += [x.get("id") or f"Day {d['day']}: {x.get('found')}" for x, s in zip(lines, stages) if s is None]
+        for tag, (agreed, of) in (d.get("relabel") or {}).items():
+            rater[tag] = [a + b for a, b in zip(rater.get(tag, [0, 0]), (agreed, of))]
+        rows.append(dict(day=d["day"], defects=len(lines), criteria=criteria,
+                         per_criterion=round(len(lines) / criteria, 2) if criteria else None,
+                         stages={s: stages.count(s) for s in STAGES if s in stages},
+                         late=sum(s is not None and s not in EARLY for s in stages),
+                         escapes=sum(bool(m) and int(m.group(1)) != d["day"] for m in made)))
+    total = {k: sum(r[k] for r in rows) for k in ("defects", "criteria", "late", "escapes")}
+    return dict(days=rows, rater=rater, off_list=off,
+                **total, per_criterion=round(total["defects"] / total["criteria"], 2) if total["criteria"] else None)
+
+
+def defect_count_line(c):
+    """The counts' line on the console, and the rater's agreement on cause: alone."""
+    cause = c["rater"].get("cause")
+    return (f"defect counts: {c['defects']} over {c['criteria']} criteria ({c['per_criterion']} each), "
+            f"{c['late']} caught late, {c['escapes']} escaped"
+            + (f", rater agreed on cause {cause[0]} of {cause[1]}" if cause else ""))

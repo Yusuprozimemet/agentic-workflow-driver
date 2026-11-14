@@ -906,6 +906,31 @@ class GateReportTest(unittest.TestCase):
         self.assertEqual(sd.gate_line(r["gates"][0]), "gate auditors: 2 defects, 0 runs, $0.00")
 
 
+class DefectCountTest(unittest.TestCase):
+    """The closed found: list read into stages, and the counts per Day (specs/README.md)."""
+
+    def test_stages_per_criterion_late_escapes_rater_and_values_off_the_list(self):
+        line = lambda i, found, made: f"- **Defect** {i} — found: {found} · cause: spec · made: {made} · x.\n"
+        day11 = "".join(line(f"D11.{n}", f, m) for n, (f, m) in enumerate([
+            ("auditor (spec-auditor)", "Day 11"), ("self", "Day 11"), ("Track C1", "Day 11"), ("review", "Day 11"),
+            ("evidence replay", "Day 10"), ("Day 12 review", "none")], 1))
+        day12 = "".join(line(f"D12.{n}", f, m) for n, (f, m) in enumerate([
+            ("evidence replay", "Day 12"), ("rehearsal", "Day 12"), ("spec-change PR", "Day 12"), ("work", "Day 12")], 1))
+        days = [dict(day=10, criteria=dict(total=3), defects=[]),
+                dict(day=11, criteria=dict(total=4), defects=sd.defect_lines(day11, 11),
+                     relabel=dict(stage=[5, 6], cause=[4, 6], made=[6, 6])),
+                dict(day=12, criteria=dict(total=0), defects=sd.defect_lines(day12, 12), relabel=dict(cause=[3, 4]))]
+        c = sd.defect_counts(days)
+        self.assertEqual([(r["day"], r["defects"], r["per_criterion"], r["late"], r["escapes"], r["stages"]) for r in c["days"]], [
+            (11, 6, 1.5, 5, 1, {"auditor": 1, "work": 3, "unsplit": 1, "Day review": 1}),
+            (12, 4, None, 2, 0, {"spec-change PR": 1, "rehearsal": 1, "evidence replay": 1})])
+        self.assertEqual((c["defects"], c["criteria"], c["per_criterion"], c["late"], c["escapes"]), (10, 4, 2.5, 7, 1))
+        self.assertEqual(c["rater"], dict(stage=[5, 6], cause=[7, 10], made=[6, 6]))
+        self.assertEqual(c["off_list"], ["D12.4"])
+        self.assertEqual(sd.defect_count_line(c), "defect counts: 10 over 4 criteria (2.5 each), 7 caught late, "
+                                                  "1 escaped, rater agreed on cause 7 of 10")
+
+
 class DefectTest(unittest.TestCase):
     """Defect lines' IDs, and the ones that repeat an earlier defect (specs/README.md)."""
 
