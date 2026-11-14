@@ -1,5 +1,5 @@
 {
-"counted":"2026-11-14T01:12:23+01:00",
+"counted":"2026-11-14T10:06:24+01:00",
 "level_2":{"run":0,"of":15},
 "steps":[
 {"step":"Day 13 Track A: C13.1–C13.3, C13.8–C13.9: `bearing/cli.py`, `tests/test_stderr.py`","day":13,"prefix":"day-13/track-a","sessions":[{"session":"a6f2d88b-f440-421b-8d1a-863e2e925f2c","start":"2026-11-10T23:16:41Z","end":"2026-11-10T23:31:48Z","cost":0.896,"denials":1,"fixes":0,"crashed":false}],"fixes":0,"crashes":0,"pr":90,"merged":"2026-11-10T23:32:54Z","parks":[],"ended":"merged"},
