@@ -713,7 +713,12 @@ function model(DATA) {
     // of them. Data written before the stretches were kept has only the first start and the last end.
     const spansOf = ch => ch.spans && ch.spans.length ? ch.spans : [[ch.start, ch.end, ch.failed]];
     const whole = ([a, b]) => (Date.parse(b) - Date.parse(a)) / 60000, kindOf = r => (RUNS.find(k => k[0] === r[2]) || RUNS[2])[0];
-    const runsSay = ch => `${plural(ch.runs, "workflow run", "workflow runs")}${ch.pushes ? ` over ${plural(ch.pushes, "push", "pushes")}` : ""}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}`;
+    // A run GitHub cancelled, or one still queued long after the merge, never passed: say so rather than "all passed".
+    const runsSay = ch => { const runs = `${plural(ch.runs, "workflow run", "workflow runs")}${ch.pushes ? ` over ${plural(ch.pushes, "push", "pushes")}` : ""}`;
+      if (!ch.cancelled && !ch.unfinished) return `${runs}${ch.failed ? `, ${ch.failed} of them failed.` : ", all passed."}`;
+      const passed = Math.max(0, ch.runs - (ch.failed || 0) - (ch.cancelled || 0) - (ch.unfinished || 0));
+      return `${runs}: ${andList([passed ? `${passed} passed` : "", ch.failed ? `${ch.failed} failed` : "", ch.cancelled ? `${ch.cancelled} cancelled` : "",
+        ch.unfinished ? `${ch.unfinished} never finished` : ""].filter(Boolean))}.`; };
     const out = dates.map(date => {
       const days = new Set(), lanes = [], busy = [], rows = [];
       // The minute of this date the sessions are counted up to: all of it, none of it, or part of it.

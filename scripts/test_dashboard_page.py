@@ -638,6 +638,15 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(lanes["Checks running"]["bars"][1]["b"], ["On this pull request in all: 9 workflow runs over 2 pushes, 1 of them failed."])
         self.assertEqual(lanes["Checks running"]["sub"], "on 1 pull request, running for 7 minutes, 1 with a failure")
 
+    def test_graph_10_does_not_call_cancelled_or_unfinished_runs_passed(self):
+        at = lambda hm: f"2026-01-02T{hm}Z"
+        checks = dict(start=at("09:01:00"), end=at("09:50:00"), runs=19, failed=0, pushes=3, cancelled=5, unfinished=7,
+                      spans=[[at("09:01:00"), at("09:50:00"), 0]])
+        clock = dict(sessions=[], prs=[dict(number=7, day=None, kind="other", branch="plan/x", opened=at("09:00:00"), merged=at("09:50:00"), checks=checks)])
+        lanes = {lane["name"]: lane for lane in model(data(clock=clock))["g10"]["dates"][0]["lanes"]}
+        self.assertEqual(lanes["Checks running"]["bars"][0]["b"],
+                         ["On this pull request in all: 19 workflow runs over 3 pushes: 7 passed, 5 cancelled and 7 never finished."])
+
     def test_graph_10_says_what_the_sessions_are_counted_up_to_and_claims_nothing_after_it(self):
         # The sessions were counted at 12:00 on 2 Jan; GitHub's pull requests go on. A lane empty after the count is not
         # counted yet, and the hours from the last session to a later check are not "nothing ran".

@@ -380,6 +380,21 @@ class SpecDriftTest(unittest.TestCase):
         # Without the sessions file, no sessions; nothing fails.
         self.assertIsInstance(sd.clock({}, [])["sessions"], list)
 
+    def test_the_clock_ends_a_prs_checks_at_its_merge_and_counts_the_runs_that_never_ran(self):
+        # PR #147's shape: the first push's runs sat queued until GitHub cancelled them two and a half days
+        # after the merge, the second push's never left the queue, the third push's ran and passed.
+        pr = dict(number=147, title="Sessions in a container", headRefName="plan/x", state="MERGED", body="",
+                  createdAt="2026-11-11T20:17:34Z", mergedAt="2026-11-11T21:09:31Z")
+        run = lambda sha, result, start, end: dict(headBranch="plan/x", headSha=sha, conclusion=result, workflowName="Tests",
+                                                   event="pull_request", createdAt=start, updatedAt=end)
+        runs = [run("a", "cancelled", "2026-11-11T20:17:38Z", "2026-11-14T05:25:15Z"),
+                run("b", "", "2026-11-11T20:35:48Z", "2026-11-11T20:35:48Z"),
+                run("c", "success", "2026-11-11T21:05:16Z", "2026-11-11T21:08:17Z")]
+        checks = sd.clock({147: pr}, runs, sessions=[])["prs"][0]["checks"]
+        # Nothing on a pull request is waited on after it merged: the queued runs end at the merge, not days later.
+        self.assertEqual(checks, dict(start="2026-11-11T20:17:38Z", end="2026-11-11T21:09:31Z", runs=3, failed=0, pushes=3,
+                                      cancelled=1, unfinished=1, spans=[["2026-11-11T20:17:38Z", "2026-11-11T21:09:31Z", 0]]))
+
     def test_the_clock_gives_area_work_no_day_even_when_its_branch_names_one(self):
         pr = dict(number=33, title="Status", headRefName="specs/status-day-05", state="MERGED", body="",
                   createdAt="2026-01-02T09:00:00Z", mergedAt="2026-01-02T10:00:00Z")
