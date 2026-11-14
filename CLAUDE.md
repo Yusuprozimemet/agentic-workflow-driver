@@ -79,7 +79,9 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
    (bearing D01.23, D01.24).
 6. **When a phase's last closing PR has merged,** in a new session after step 5, on fresh `main`: run the
    plan-auditor on the phase that just ended and on the next (at the end of Phase 3, the three end-of-phase auditors too), report, and stop. They never run inside the
-   closing PR: they read what merged.
+   closing PR: they read what merged. Beside their report, give the maintainer the phase-end table:
+   `python scripts/phase-table.py spec-drift.json --phase N` (and with no `--phase`, every phase). It
+   flags nothing; the maintainer reads it. Its "after the close" is not an escape (`made:` another Day).
 
 Tracks may run in a different order from the spec's table when one depends on another; say so in
 the PR.

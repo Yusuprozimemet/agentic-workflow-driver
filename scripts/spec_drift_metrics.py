@@ -703,3 +703,73 @@ def defect_count_line(c):
     return (f"defect counts: {c['defects']} over {c['criteria']} criteria ({c['per_criterion']} each), "
             f"{c['late']} caught late, {c['escapes']} escaped"
             + (f", rater agreed on cause {cause[0]} of {cause[1]}" if cause else ""))
+
+
+# The phase-end table (scripts/phase-table.py): the gates it asks whether each found anything, and the
+# stages counted as after the close. PHASE_GATES is apart from GATES, which gate_report reads.
+AFTER_CLOSE = ("evidence replay", "unsplit", "dashboard", "Day review")
+PHASE_GATES = ("auditor", "seen red", "break on purpose", "close", "rehearsal", "evidence replay")
+
+
+def tally_counts(counted):
+    """One tally over the counted Days it holds: the Defect lines by stage, caught late, escaped, found
+    after the close, and the gates that found none. A tally of Days all before SPLIT_FROM counts its
+    unsplit lines as evidence replay, and has no rehearsal gate to miss."""
+    ids = [d["day"] for d in counted]
+    lines = [(d["day"], x) for d in counted for x in d.get("defects", [])]
+    stages = [found_stage(x.get("found"), day) for day, x in lines]
+    made = [(x.get("made") or "").strip().lower() for _, x in lines]
+    escapes = 0
+    for (day, _), m in zip(lines, made):
+        mm = re.fullmatch(r"day 0*(\d+)", m)
+        escapes += bool(mm) and int(mm.group(1)) != day
+    after = [s in AFTER_CLOSE and m not in ("", "none") for s, m in zip(stages, made)]
+    found = collections.Counter(stages)
+    old = all(day < SPLIT_FROM for day in ids)
+    if old:
+        found["evidence replay"] += found["unsplit"]
+    silent = [g for g in PHASE_GATES if found[g] == 0 and not (old and g == "rehearsal")]
+    criteria = sum((d.get("criteria") or {}).get("total") or 0 for d in counted)
+    defects = len(lines)
+    return dict(criteria=criteria, defects=defects,
+                per_criterion=round(defects / criteria, 2) if criteria else None,
+                stages={s: stages.count(s) for s in STAGES if s in stages},
+                late=sum(s is not None and s not in EARLY for s in stages),
+                escapes=escapes, after_close=sum(after),
+                after_close_unsplit=sum(a and s == "unsplit" for a, s in zip(after, stages)),
+                silent=silent)
+
+
+def phase_table(days, prs, tokens, refusals):
+    """Per phase, and per counted Day inside one, the tally_counts and the cost. A phase's window starts
+    at the earliest PR opened for one of its Days, and a date belongs to the latest start on or before
+    it: a date before every start, or a phase with no PR, holds no cost or refusal. Day rows have none."""
+    phase_of = {d["day"]: d["phase"] for d in days}
+    starts = {}
+    for p in prs:
+        ph = phase_of.get(p.get("day"))
+        if ph is not None:
+            starts[ph] = min(starts.get(ph, p["opened"][:10]), p["opened"][:10])
+
+    def owner(date):
+        return max(((s, ph) for ph, s in starts.items() if s <= date), default=(None, None))[1]
+
+    def cost(ids):
+        return round(sum((t["cost"] for t in tokens if t["day"] in ids), 0.0), 2)
+
+    ordered = sorted(days, key=lambda d: d["day"])
+    phase_rows, day_rows = [], []
+    for ph in sorted({d["phase"] for d in days}):
+        mine = {d["day"] for d in ordered if d["phase"] == ph}
+        counted = [d for d in ordered if d["phase"] == ph and d.get("defects")]
+        guards = collections.Counter()
+        for r in refusals:
+            if owner(r["date"][:10]) == ph:
+                guards[r["guard"]] += r["refused"]
+        between = sum((t["cost"] for t in tokens if t["day"] is None and owner(t["date"][:10]) == ph), 0.0)
+        phase_rows.append(dict(phase=ph, days=[d["day"] for d in counted], **tally_counts(counted),
+                               cost_days=cost(mine), cost_between=round(between, 2),
+                               refusals=dict(sorted(guards.items()))))
+        day_rows += [dict(day=d["day"], phase=ph, **tally_counts([d]), cost_days=cost({d["day"]}),
+                          cost_between=None, refusals=None) for d in counted]
+    return dict(phases=phase_rows, days=day_rows)
