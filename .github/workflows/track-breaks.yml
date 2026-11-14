@@ -2,7 +2,8 @@ name: Track breaks
 
 # A track PR's breaks, and the day's earlier tracks', replayed on Linux on the PR's merge commit, as
 # the close's replay will (scripts/track-breaks.py). `edited` too: the fix for a line that does not
-# replay is a new line in the PR body, and the check runs again on it. Any other branch passes.
+# replay is a new line in the PR body, and the check runs again on it. On every branch, track or not,
+# each closed Day's in-force breaks must still apply, and they run when the PR touches them.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -16,7 +17,10 @@ jobs:
     name: A track's breaks replay
     runs-on: ubuntu-latest
     steps:
+      # Two commits: HEAD^1, main's side of the merge, is what the PR's changes are diffed against.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -29,4 +33,4 @@ jobs:
           BRANCH: ${{ github.head_ref }}
           PR: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
-        run: python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR"
+        run: python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR" --base HEAD^1
