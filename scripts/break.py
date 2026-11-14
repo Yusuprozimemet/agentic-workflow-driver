@@ -21,7 +21,9 @@ the record for the PR (specs/README.md): `broken: <what> → <what the check rep
 the break's entry for the close's break manifest, `manifest: {...}`. A check judged
 by what it prints, not its exit code (`grep -c` exits 1 at a count of 0), takes --expect-stdout: it
 failed when the regex no longer matches its stdout. break.py checks that the regex matches without
-the break itself. A command that started but did not run the check (on
+the break itself, and refuses one that matches any output: `^$` under re.M matches the empty end
+of every stdout that ends in a newline, so no break could be caught (D11.21); for "prints
+nothing", write `\\A\\Z`. A command that started but did not run the check (on
 Windows, `bash` can be WSL's: "execvpe(/bin/bash) failed") is refused, not recorded. <what> holds
 no arrow: spec-drift.py reads the line up to its first one. A temporary directory in the report is
 written <tmp>, so no local path, a user name in it, reaches the PR.
@@ -141,6 +143,13 @@ def caught(returncode, stdout, expect=None):
     if expect is not None:
         return re.search(expect, stdout, re.M) is None
     return returncode != 0
+
+
+def matches_anything(expect):
+    """Whether the regex matches the empty output and outputs that say something, the way caught()
+    reads them, each ending in a newline as a printed line does: then the check's stdout could
+    never stop matching."""
+    return all(re.search(expect, out, re.M) for out in ("", "1 broken\n", "AssertionError: broken\n"))
 
 
 def argv_for(command, cwd):
@@ -392,6 +401,9 @@ def main(args=None):
         re.compile(a.expect_stdout or "")
     except re.error as e:
         return refuse(f"--expect-stdout is not a regex: {e}")
+    if a.expect_stdout is not None and matches_anything(a.expect_stdout):
+        return refuse(f"--expect-stdout {a.expect_stdout!r} matches any output, so no break could be caught; "
+                      "for a check that prints nothing, write \\A\\Z")
     if elsewhere and not in_tree(a.file, a.cwd):
         return refuse(f"--file {a.file} is outside the tree --cwd {a.cwd} runs the check in ({tree(a.cwd)}): "
                       "the break would not be in the code the check runs; name the file in that tree")
