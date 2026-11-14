@@ -316,7 +316,7 @@ function model(DATA) {
         : { t: `${n(tiles, "proven")} of the ${all} promises re-checked are proven; ${n(tiles, "broken") ? plural(n(tiles, "broken"), "is broken", "are broken") : "none is broken"}`,
           b: [`${n(tiles, "unproven")} ${n(tiles, "unproven") === 1 ? "passes but is" : "pass but are"} not yet proven, ${plural(n(tiles, "repair"), "needs", "need")} repair and ${n(tiles, "skipped")} cannot be checked on this computer.`
             + (rest.length ? ` ${rest.join("; ").replace(/^./, c => c.toUpperCase())}.` : "")
-            + (newest ? ` Last re-check: pull request #${newest.pr}${age(newest.pr)}. It is run by hand, so it can lag behind the newest change.` : "")] },
+            + (newest ? ` Last re-check: pull request #${newest.pr}${age(newest.pr)}. It runs after every merge to main, so it trails the newest merge while it runs; an older Day is re-checked at each close and when its breaks are re-recorded.` : "")] },
       table: { head: ["Day", ...Object.values(STATES).map(s => s.word), "All"],
         rows: rows.map(r => [`Day ${r.day}`, ...Object.keys(STATES).map(s => n(r.tiles, s)), r.tiles.length]) } };
     return { tiles, n, counted, board };
@@ -1052,7 +1052,7 @@ function drawHow(DATA, tally) {
     : `<p>All ${plural(tally.total, "promise", "promises")} at their latest re-check:</p>`
       + `<div class="how-bar" role="img" aria-label="${tally.counts.map(([s, n]) => `${n} ${lower(STATES[s].word)}`).join(", ")}">${tally.counts.map(([s, n]) => `<i class="tile ${s}" style="--n:${n}"></i>`).join("")}</div>`
       + `<div class="how-barkey">${tally.counts.map(([s, n]) => `<span><i class="tile ${s}">${STATES[s].glyph || ""}</i><div><b>${n}</b> ${esc(STATES[s].word)}: ${esc(STATES[s].means)}</div></span>`).join("")}</div>`
-      + `<p>${bad ? `${plural(bad, "promise needs", "promises need")} attention.` : "None is broken."} This check is run by hand, so it can lag behind the newest change.</p>`;
+      + `<p>${bad ? `${plural(bad, "promise needs", "promises need")} attention.` : "None is broken."} It runs after every merge to main, so it trails the newest merge while it runs; an older Day is re-checked at each close and when its breaks are re-recorded.</p>`;
 
   const STEPS = [
     { id: "goal", kind: "doc", name: "The goal", line: "What we want built, in phases", gate: "<b>plan-auditor</b>, at a phase's start and end, asks: do the Days still add up to the goal?",

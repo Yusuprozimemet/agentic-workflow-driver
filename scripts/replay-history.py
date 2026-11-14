@@ -9,7 +9,11 @@ row for this platform yet, at a scratch worktree of that merge:
 
 - a closing merge samples every in-force criterion (behaviour-index.py) of the days closed by then;
 - a `day-NN/...` merge samples Day NN's criteria, once Day NN has closed (till then it waits);
-- any other merge samples the criteria of the last day closed before it.
+- any other merge samples the criteria of the last day closed before it;
+- and a merge that changes a closed day's specs/breaks/day-NN.json samples that day's criteria too.
+
+A merge with rows for this platform is sampled again only for the days it lacks, never for a
+closing merge's: a break re-recorded after the closing re-check is re-checked once.
 
 Each `broken:` line under a sampled criterion re-runs through break.py from specs/breaks/day-NN.json,
 which runs the check clean first; a criterion with no `broken:` line runs its named tests clean. The
@@ -104,17 +108,35 @@ def closes(ref):
     return out
 
 
-def sampled_days(n, subject, closed):
-    """The days whose criteria a merge at position n samples, and "all" or "day"; None to wait."""
+def manifest_days(sha):
+    """The days whose specs/breaks/day-NN.json the merge sha changed, against its first parent."""
+    out = git("diff", "--name-only", f"{sha}^1", sha, "--", "specs/breaks").split()
+    return {m.group(1) for p in out if (m := re.match(r"specs/breaks/day-(\d{2})\.json$", p))}
+
+
+def sampled_days(n, subject, closed, changed):
+    """The days whose criteria a merge at position n samples, and "all" or "day"; None to wait.
+    changed: the days whose breaks manifest the merge changed; a closed one is sampled too."""
     done = sorted(d for d, at in closed.items() if at <= n)
     if any(at == n for at in closed.values()):
         return done, "all"
     m = DAY_BRANCH.match(subject)
     if m:
         day = m.group(1) or m.group(2)
-        return ([day], "day") if day in closed else None
-    before = [d for d in done if closed[d] < n]
-    return before[-1:], "day"
+        if day not in closed:
+            return None
+        days = {day}
+    else:
+        days = set([d for d in done if closed[d] < n][-1:])
+    return sorted(days | {d for d in changed if d in closed and closed[d] < n}), "day"
+
+
+def still_to_sample(days, mode, measured):
+    """The days a merge still needs, given the days it has rows for on this platform: a closing
+    merge ("all") with any row is done; any other gets the days it lacks."""
+    if mode == "all" and measured:
+        return []
+    return [d for d in days if d not in measured]
 
 
 def checks(specs, days):
@@ -321,13 +343,16 @@ def main(argv=None):
     since = git("rev-parse", since).strip()[:12]
     rows = [upgrade(r) for r in old["rows"]]
     known = {r["key"]: r for r in rows if "key" in r and "reused_from" not in r}
-    done = {(r["n"], r["platform"]) for r in rows}
+    done = {}
+    for r in rows:
+        done.setdefault((r["n"], r["platform"]), set()).add(r["day"])
     closed = closes(a.ref)
     for n, sha, subject in merges(a.ref, since):
-        days = sampled_days(n, subject, closed)
-        if (n, PLATFORM) in done or not days or not days[0]:
+        days = sampled_days(n, subject, closed, manifest_days(sha))
+        todo = days and still_to_sample(days[0], days[1], done.get((n, PLATFORM), set()))
+        if not todo:
             continue
-        new = sample(n, sha, subject, days[1], checks(a.specs, days[0]), known, closed, a.jobs)
+        new = sample(n, sha, subject, days[1], checks(a.specs, todo), known, closed, a.jobs)
         print(f"{sha[:7]} {days[1]} {len(new)} checks: " + ", ".join(
             f"{s} {c}" for s in STATES if (c := sum(r["state"] == s for r in new))), flush=True)
         rows += new
