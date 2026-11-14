@@ -10,6 +10,7 @@
   --proven: #1baf7a; --unproven: #d3efe2; --unproven-2: #a9dfc6; --repair: #cf7d12; --broken: #c22f2f; --on-broken: #ffffff;
   --pending: #8a919d; --hatch-a: #b4bbc6; --hatch-b: #eef1f5;
   --s1: #dfe4eb; --s2: #aab2bf; --s3: #5b6372; --s4: #262b34; --on-s12: #0e1116; --on-s34: #ffffff;
+  --l1: #2a78d6; --l2: #b03fa6; --l3: #3b4250; --l4: #6b4fd8; --l5: #0f8fa3; --l6: #8a5a2b; --l7: #7a7f2a;
   --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
 }
@@ -23,6 +24,7 @@
     --proven: #199e70; --unproven: #173a2e; --unproven-2: #2c6b54; --repair: #d98a1f; --broken: #e66767; --on-broken: #0b0b0b;
     --pending: #6b7280; --hatch-a: #4a515c; --hatch-b: #1f232b;
     --s1: #2a303a; --s2: #4a515c; --s3: #8a919d; --s4: #dfe4eb; --on-s12: #eef0f3; --on-s34: #0e1116;
+    --l1: #5a9ef0; --l2: #d06bc6; --l3: #c9ced6; --l4: #9a85f0; --l5: #3bb8cc; --l6: #c08a55; --l7: #b5ba55;
   }
 }
 :root[data-theme="dark"] {
@@ -34,6 +36,7 @@
   --proven: #199e70; --unproven: #173a2e; --unproven-2: #2c6b54; --repair: #d98a1f; --broken: #e66767; --on-broken: #0b0b0b;
   --pending: #6b7280; --hatch-a: #4a515c; --hatch-b: #1f232b;
   --s1: #2a303a; --s2: #4a515c; --s3: #8a919d; --s4: #dfe4eb; --on-s12: #eef0f3; --on-s34: #0e1116;
+  --l1: #5a9ef0; --l2: #d06bc6; --l3: #c9ced6; --l4: #9a85f0; --l5: #3bb8cc; --l6: #c08a55; --l7: #b5ba55;
 }
 
 * { box-sizing: border-box; }
@@ -97,8 +100,8 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 
 /* swatches the keys share with the marks */
 .sw { width: 14px; height: 14px; border-radius: 3px; }
-.sw.s1, .g3-cell.s1 { background: var(--s1); color: var(--on-s12); } .sw.s2, .g3-cell.s2 { background: var(--s2); color: var(--on-s12); }
-.sw.s3, .g3-cell.s3 { background: var(--s3); color: var(--on-s34); } .sw.s4, .g3-cell.s4 { background: var(--s4); color: var(--on-s34); }
+.sw.s1 { background: var(--s1); color: var(--on-s12); } .sw.s2 { background: var(--s2); color: var(--on-s12); }
+.sw.s3 { background: var(--s3); color: var(--on-s34); } .sw.s4 { background: var(--s4); color: var(--on-s34); }
 .sw.main, .seg.main { background: var(--bar); } .sw.rest, .seg.rest { background: var(--bar-2); } .sw.over { background: var(--repair); }
 .sw.spec, .seg.spec { background: var(--spec); } .sw.prod, .seg.prod { background: var(--code); }
 .sw.day, .seg.day { background: var(--spec); } .sw.out, .seg.out { background: var(--code); }
@@ -111,16 +114,6 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .chapter small { margin-left: 10px; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 13px; }
 
 /* ---------- graph 1: how far to the next stop ---------- */
-.ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.rung { border: 1px solid var(--axis); border-radius: 8px; padding: 8px 10px; font-size: 13px; color: var(--ink-2); min-width: 0; }
-.rung b { display: block; color: var(--ink); }
-.rung small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
-.rung.now { background: var(--ink); border-color: var(--ink); color: var(--card); }
-.rung.now b, .rung.now small { color: var(--card); }
-.rung.wait { border-style: dashed; }
-.rung .run { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
-.rung .run i { height: 10px; border-radius: 2px; background: var(--s1); }
-.rung .run i.on { background: var(--proven); }
 .sw.built { width: 18px; height: 2px; border-radius: 0; background: var(--ink); }
 .sw.written { width: 18px; height: 0; border-radius: 0; background: none; border-top: 2px dashed var(--ink-2); }
 .sw.handoff { width: 6px; height: 12px; border-radius: 2px 2px 0 0; background: var(--other); }
@@ -164,17 +157,8 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .g1-later { flex: none; box-sizing: border-box; width: 96px; height: 280px; padding: 8px; background: var(--wash); border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
 
 /* ---------- graph 3: ability by day ---------- */
-.g3-plot { display: flex; flex-direction: column; gap: 3px; }
-.g3-row { display: flex; gap: 3px; align-items: center; }
-.g3-name { flex: 0 0 36%; font-size: 13px; line-height: 1.25; padding-right: 6px; }
-.g3-row.head .g3-name, .g3-h { font-size: 12px; color: var(--muted); }
-.g3-cells { flex: 1; min-width: 0; display: flex; gap: 3px; }
-.g3-h { flex: 1 1 0; min-width: 0; text-align: center; font-weight: 600; color: var(--ink); white-space: nowrap; }
-.g3-h.mark { font-weight: 400; color: var(--muted); }
-.g3-cell { flex: 1 1 0; min-width: 0; height: 34px; padding: 0; border: 0; border-radius: 4px; font-size: 12px; font-weight: 600; background: transparent; color: var(--muted); }
-.g3-cell.on { outline-offset: -2px; }
 
-/* ---------- a promise's tile, in graphs 4 and 5 and their keys ---------- */
+/* ---------- a promise's tile, on graphs 3–5's map, the walk-through and their keys ---------- */
 .tile { width: 24px; height: 24px; padding: 0; border-radius: 4px; border: 1.5px solid var(--pending); background: transparent; color: var(--muted);
   font: 700 13px/1 var(--sans); font-style: normal; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .legend .tile, .how-barkey .tile { width: 14px; height: 14px; border-radius: 3px; font-size: 10px; }
@@ -188,12 +172,55 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .tile.open, .tile.unchecked { border-style: dotted; }
 .tiles { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* ---------- graph 4: the promise board and the trust strip ---------- */
-.board { display: flex; flex-direction: column; gap: 6px; }
-.board-row { display: flex; gap: 10px; align-items: center; }
-.board-day { flex: 0 0 42px; font-size: 12px; font-weight: 600; }
-.board-row .tiles { flex: 1; min-width: 0; }
-.board-count { flex: 0 0 auto; font-size: 12px; color: var(--muted); text-align: right; }
+/* ---------- graph 1: the levels, as cards saying who starts and who merges ---------- */
+.ladder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.level { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--card); min-width: 0; }
+.level .lv { font: 600 11px var(--mono); color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.level b { font-size: 14px; line-height: 1.25; }
+.level p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.35; }
+.level small { font: 400 11.5px var(--mono); color: var(--muted); }
+.level.done { background: var(--wash); }
+.level.now { border: 2px solid var(--spec); }
+.level.now .lv { color: var(--spec); }
+.level.wait { border-style: dashed; }
+.who { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 11px; color: var(--muted); }
+.who i { font-style: normal; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--axis); }
+.who i.maintainer { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.level .track { display: block; height: 6px; background: var(--wash); border-radius: 3px; overflow: hidden; }
+.level .track i { display: block; height: 100%; background: var(--spec); }
+
+/* ---------- graphs 3–5: the line map ---------- */
+.anchor { display: block; height: 0; }
+.map { display: flex; flex-direction: column; }
+.map-row { display: grid; column-gap: 0; align-items: start; border-top: 1px solid var(--line); padding: 8px 0 6px; }
+.map-row.head { border-top: 0; padding-top: 0; }
+.map-row > * { grid-row: 1; min-width: 0; }
+.map-name { grid-column: 1; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; line-height: 1.25; min-height: 24px; padding-right: 8px; }
+.map-badge { flex: none; width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.legend .map-badge { width: 22px; height: 6px; border-radius: 3px; background: var(--l1); }
+.map-h { text-align: center; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.map-h small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; min-height: 14px; }
+.map-group { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; padding: 10px 0 2px; }
+.map-cell { position: relative; padding-top: 30px; min-height: 30px; }
+.map-seg { position: absolute; top: 9px; height: 6px; }
+.map-seg.between { left: 22%; right: 22%; border-radius: 3px; opacity: .55; }
+.station { position: absolute; top: 12px; left: 50%; transform: translate(-50%, -50%); padding: 0; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--card);
+  color: var(--ink); font: 600 10px/1 var(--mono); display: inline-flex; align-items: center; justify-content: center; z-index: 1; }
+.station.small { width: 9px; height: 9px; border-width: 2px; }
+.legend .station { position: static; transform: none; width: 13px; height: 13px; display: inline-block; }
+.station.on { outline-offset: 2px; }
+.map-dots { display: grid; grid-template-columns: repeat(5, 9px); gap: 2px; justify-content: center; }
+.map-dots .tile { width: 9px; height: 9px; border-radius: 50%; border-width: 1.2px; font-size: 0; }
+.map-ring { display: flex; align-items: center; gap: 6px; padding: 0 0 0 10px; border: 0; background: transparent; color: var(--ink);
+  font: 600 11.5px var(--mono); white-space: nowrap; min-height: 24px; }
+.ring { width: 26px; height: 26px; flex: none; }
+.ring-track { fill: none; stroke: var(--wash); stroke-width: 5; }
+.ring-arc { fill: none; stroke: var(--proven); stroke-width: 5; }
+.trust { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
+.trust-n { margin: 0; font: 600 18px var(--mono); text-align: right; }
+.trust-n small { display: block; font: 400 11px var(--sans); color: var(--muted); }
+
+/* ---------- the trust strip, under graphs 3–5's map ---------- */
 .strip { display: flex; gap: 1px; align-items: flex-end; height: 54px; border-bottom: 1px solid var(--axis); }
 .strip-col { flex: 1 1 0; min-width: 0; height: 54px; padding: 0; border: 0; background: transparent; display: flex; flex-direction: column; justify-content: flex-end; gap: 1px; }
 .strip-col.on { background: var(--hot); outline: 0; }
@@ -202,15 +229,6 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .strip-col .broken { background: var(--broken); } .strip-col .skipped { background: var(--hatch-a); }
 
 /* ---------- graph 5: abilities and their promises ---------- */
-.ab-row { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
-.ab-name { flex: 0 0 230px; font-size: 13px; font-weight: 600; }
-.ab-groups { flex: 1 1 320px; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
-.ab-group { display: flex; align-items: center; gap: 5px; }
-.ab-group .mono { font-size: 11px; color: var(--muted); }
-.ab-group .tiles { gap: 3px; }
-.ab-group .tile { width: 22px; height: 22px; font-size: 12px; }
-.ab-note { font-size: 12px; color: var(--muted); }
-.ab-count { flex: 0 0 200px; font-size: 12px; color: var(--ink-2); text-align: right; }
 
 /* ---------- graph 6: the merge timeline ---------- */
 .g6 { display: flex; gap: 8px; }
@@ -502,11 +520,6 @@ footer { font-size: 12.5px; color: var(--muted); }
   h1 { font-size: 24px; }
   .graph, .fold { padding: 16px 14px; }
   .pair > .graph { flex-basis: 100%; }
-  .g3-name { flex-basis: 30%; font-size: 12px; }
-  .g3-h { font-size: 10.5px; }
-  .ab-name, .ab-count { flex: 1 1 100%; text-align: left; }
-  .board-row { flex-wrap: wrap; }
-  .board-count { flex: 1 1 100%; text-align: left; }
   .bars, .bar-labels, .bar-extra .mono { gap: 2px; }
 }
 /* ---------- graph 12: the plan against the specs, drawn as the by-script mockup draws it ----------
@@ -590,7 +603,4 @@ footer { font-size: 12.5px; color: var(--muted); }
 .q-bar i { display: block; height: 100%; background: var(--bar); border-radius: 4px; }
 .quality .limit { margin: 10px 0 4px; }
 .days button .dq { margin-left: 7px; font: 500 12px var(--mono); opacity: .75; font-variant-numeric: tabular-nums; }
-.ab-score { flex: 0 0 74px; display: flex; align-items: center; gap: 6px; }
-.ab-score b { font: 500 13px var(--mono); font-variant-numeric: tabular-nums; }
-.ab-score .q-bar { flex: 1; height: 6px; }
 @media (max-width: 560px) { .q-row { grid-template-columns: 1fr 28px; } .q-row .q-bar { grid-column: 1 / -1; grid-row: 2; } .q-where { grid-column: 1 / -1; } }

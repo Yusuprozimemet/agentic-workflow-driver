@@ -187,12 +187,12 @@ function model(DATA) {
     const cols = [...days.map(d => ({ day: d.day, label: String(d.day), mark: finished(d) ? "✓" : d.day === current ? "now" : "" })),
       { day: null, label: "No Day", mark: "" }];
     const colOf = s => days.some(d => d.day === s.day) ? s.day : null;
-    const rows = rowsOf.map(a => ({ name: a.name, cells: cols.map(c => {
+    const rows = rowsOf.map(a => ({ key: a.key, name: a.name, role: a.role || null, cells: cols.map(c => {
       const prs = stories.filter(s => keyOf(s) === a.key && colOf(s) === c.day).map(s => s.number).sort((x, y) => x - y), n = prs.length;
       const b = n ? `${plural(n, "merged pull request", "merged pull requests")} grew this ability ${c.day == null
           ? "between the Days, as tooling and dashboard work, not as a Day's track" : `on Day ${c.day}`}: ${prs.map(p => "#" + p).join(", ")}.`
         : c.day == null ? "Every pull request for this ability belongs to a Day." : `No pull request grew this ability on Day ${c.day}.`;
-      return { day: c.day, n, level: n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0, t: `${a.name} · ${c.day == null ? "outside any Day" : `Day ${c.day}`}`, b: [b] };
+      return { day: c.day, n, prs, level: n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0, t: `${a.name} · ${c.day == null ? "outside any Day" : `Day ${c.day}`}`, b: [b] };
     }) }));
     const H = DATA.hand_offs || [], mine = H.filter(h => h.to === current), later = H.filter(h => current != null && h.to > current);
     const notes = [mine.length && `${mine.filter(h => h.picked).length} of the ${plural(mine.length, "note", "notes")} earlier Days left for Day ${current} ${mine.length === 1 ? "was" : "were"} picked up`,
@@ -296,6 +296,29 @@ function model(DATA) {
       read: { t: ranked.length && ranked[0].proven ? `“${ranked[0].name}” is the best proven: ${ranked[0].proven} of its ${plural(ranked[0].counted, "re-checked promise", "re-checked promises")}` : "No ability has a proven promise yet", b: [b.join(" ")].filter(Boolean) },
       table: { head: ["Ability", "Promises", ...cols.map(s => STATES[s].word), "Pull requests"],
         rows: rows.map(r => [r.name, r.tiles.length, ...cols.map(s => P.n(r.tiles, s)), r.prs]) } };
+  }
+
+  /* Graphs 3 to 5, joined: one line per ability. Its stations are graph 3's cells, its dots the promises reliedGraph(P)
+     puts under it and its ring that row's proven of re-checked, so the map cannot disagree with them. `first` is the
+     column its line starts at; `colour` numbers the line's colour, 0 for a row with no ability. */
+  function mapGraph(A, P, R) {
+    const broke = P.error || R.error || null, cols = A.cols;
+    const relied = new Map(broke ? [] : R.rows.filter(r => !r.loose).map(r => [r.key, r]));
+    const ORDER = ["proven", "unproven", "repair", "broken", "skipped", "open", "building", "replaced", "unchecked"];
+    const tally = t => ORDER.map(s => [s, t.filter(x => x.status === s).length]).filter(([, k]) => k).map(([s, k]) => `${k} ${lower(STATES[s].word)}`).join(", ");
+    const line = (a, r, colour) => {
+      const tiles = r ? r.tiles : [];
+      const cells = a.cells.map(c => {
+        const t = tiles.filter(x => c.day == null ? !cols.some(k => k.day === x.day) : x.day === c.day).sort((u, v) => ORDER.indexOf(u.status) - ORDER.indexOf(v.status));
+        return { day: c.day, n: c.n, tiles: t, t: c.t, b: [...c.b, t.length ? `They made ${plural(t.length, "promise", "promises")}: ${tally(t)}.` : ""].filter(Boolean) };
+      });
+      const first = cells.findIndex(c => c.day != null && (c.n || c.tiles.length));
+      return { key: a.key, name: a.name, role: a.role || null, colour, first, cells,
+        ring: { proven: r ? r.proven : 0, counted: r ? r.counted : 0, t: a.name, b: [r ? r.count : plural(sum(a.cells, c => c.n), "pull request", "pull requests"), r && r.note].filter(Boolean) } };
+    };
+    const lines = A.rows.map((a, k) => line(a, relied.get(a.key), a.key == null ? 0 : (k % 7) + 1));
+    if (!broke) R.rows.filter(r => r.loose).forEach(r => lines.push(line({ key: null, name: r.name, cells: cols.map(c => ({ day: c.day, n: 0, t: "", b: [] })) }, r, 0)));
+    return { cols, lines, broke: broke && String(broke) };
   }
 
   /* Graph 6: every merge, with the gap it left, how long it was open, and whether a check failed on it */
@@ -603,16 +626,18 @@ function model(DATA) {
     // The ladder starts at the project's own count when the driver's count holds steps; Level 2 is drawn when its count is in.
     const DR = DATA.driver_runs || {}, steps = DR.steps, L2 = DR.level_2 || {};
     const counted2 = typeof L2.run === "number" && typeof L2.of === "number";
-    const rung2 = counted2 ? { cls: "", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: `${L2.run} of ${L2.of} in a row`, run: L2.run, of: L2.of }
-      : { cls: "wait", name: "Level 2 · the driver merges", need: "15 pull requests in a row with no change asked.", state: "Not counted yet" };
-    const rung3 = { cls: "wait", name: "Level 3 · phases chain", need: "One whole phase at level 2 with no escape.", state: counted2 ? "Waits on level 2" : "Not counted yet" };
+    // Each level card says who holds the wheel: `who` pairs a person ("maintainer" or "driver") with what they do.
+    const lv0 = { lv: "Level 0", name: "The maintainer starts each step and merges", who: [["maintainer", "starts"], ["maintainer", "merges"]] };
+    const lv1 = { lv: "Level 1", name: "The driver starts each step", who: [["driver", "starts"], ["maintainer", "merges"]] };
+    const lv2 = { lv: "Level 2", name: "The driver merges", who: [["driver", "starts"], ["driver", "merges"]], need: "15 pull requests in a row with no change asked." };
+    const rung2 = counted2 ? { ...lv2, cls: "", state: `${L2.run} of ${L2.of} in a row`, run: L2.run, of: L2.of } : { ...lv2, cls: "wait", state: "Not counted yet" };
+    const rung3 = { lv: "Level 3", name: "Phases chain", who: [["driver", "runs whole phases"]], need: "One whole phase at level 2 with no escape.",
+      cls: "wait", state: counted2 ? "Waits on level 2" : "Not counted yet" };
     const ladder = Array.isArray(steps) && steps.length ? [
-      { cls: "", name: "Level 0 · the maintainer starts", need: "The maintainer starts each step and merges.", state: "Passed at the Day 8 trial" },
-      { cls: "now", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: `Where the trial's project is: ${plural(steps.length, "step", "steps")} run` },
+      { ...lv0, cls: "", state: "Passed at the Day 8 trial" },
+      { ...lv1, cls: "now", state: `Where the trial's project is: ${plural(steps.length, "step", "steps")} run` },
       rung2, rung3]
-      : [{ cls: "now", name: "Level 0 · today", need: "The maintainer starts each step and merges.", state: "Where the project is" },
-        { cls: "", name: "Level 1 · the maintainer merges", need: "The driver starts each step.", state: "Enters at the Day 8 trial" },
-        rung2, rung3];
+      : [{ ...lv0, cls: "now", state: "Where the project is" }, { ...lv1, cls: "", state: "Enters at the Day 8 trial" }, rung2, rung3];
     const ticks = [], every = pMax > 120 ? 40 : 20;
     for (let t = 0; t <= pMax; t += every) ticks.push({ label: String(t), y: 1 - t / pMax });
     return { merges, ahead: aheadOut, unknown, stop, pMax, hMax, ticks, bands, barTicks: [{ label: String(hMax / 2), h: 0.5 }, { label: String(hMax), h: 1 }],
@@ -899,8 +924,9 @@ function model(DATA) {
   }
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph);
+  const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g3: safe(abilityGraph), g4: P.error ? P : P.board, g5: P.error ? P : safe(() => reliedGraph(P)), g6: safe(mergeGraph), g7: safe(sieveGraph),
+    attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
     g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -1354,7 +1380,6 @@ function draw(M, DATA) {
     if (m.error) return failed(m.error);
     try { fn(m, reader(g, m.read)); table(`${g}-table`, m.table); } catch (e) { failed(String((e && e.message) || e)); }
   }
-  const tile = (t, mark) => mark(h("button", { type: "button", class: `tile ${t.status}` }, t.glyph), t);
   const px = n => `${n.toFixed(1)}px`;
 
   /* the header */
@@ -1444,41 +1469,69 @@ function draw(M, DATA) {
       h("div", { class: "g1-main" }, h("div", { class: "g1-lane" }, bands, area), after)));
     $("g1-say").textContent = m.say;
     key("g1-key", m.key);
-    // A rung with a count (Level 2) draws one square per pull request in the run: the ones merged so far are lit.
-    put("g1-ladder", m.ladder.map(r => h("div", { class: `rung ${r.cls}` }, h("b", null, r.name), r.need,
-      typeof r.of === "number" && h("span", { class: "run", "aria-hidden": "true" }, Array.from({ length: r.of }, (_, k) => h("i", { class: k < r.run ? "on" : "" }))),
+    // One card per level: who starts and who merges at it. The levels below the one marked "now" are passed;
+    // a level with a count (Level 2) draws how far its run has got, as a bar.
+    const at = m.ladder.findIndex(r => r.cls === "now");
+    put("g1-ladder", m.ladder.map((r, i) => h("div", { class: `level ${r.cls}${i < at ? " done" : ""}` },
+      h("span", { class: "lv" }, r.lv + (r.cls === "now" ? " · now" : "")), h("b", null, r.name),
+      h("span", { class: "who" }, (r.who || []).map(([by, does]) => [h("i", { class: by }, by), ` ${does} `])),
+      r.need && h("p", null, r.need),
+      typeof r.of === "number" && h("span", { class: "track", role: "img", "aria-label": `${r.run} of ${r.of}` }, h("i", { style: `width:${Math.max(2, 100 * r.run / Math.max(1, r.of)).toFixed(1)}%` })),
       h("small", null, r.state))));
   });
 
-  /* Graph 3 */
+  /* Graphs 3 to 5, joined: the line map mapGraph() laid out, and the trust strip (graph 4's history) under it */
   graph("g3", (m, mark) => {
-    const line = (name, cells, cls) => h("div", { class: `g3-row ${cls || ""}` }, h("div", { class: "g3-name" }, name), h("div", { class: "g3-cells" }, cells));
-    const col = c => c.day == null ? [] : [c.day];
-    put("g3-plot", line("Day", m.cols.map(c => forDays(h("div", { class: "g3-h" }, c.label), col(c))), "head"),
-      line("Closed", m.cols.map(c => forDays(h("div", { class: "g3-h mark" }, c.mark), col(c))), "head"),
-      m.rows.map(r => line(r.name, r.cells.map(c => forDays(mark(h("button", { type: "button", class: `g3-cell s${c.level}` }, c.n ? String(c.n) : "·"), c), col(c))))));
-    key("g3-key", [["", "Pull requests:"], ["sw s1", "1–2"], ["sw s2", "3–5"], ["sw s3", "6–9"], ["sw s4", "10 or more"]]);
-  });
-
-  /* Graph 4 */
-  graph("g4", (m, mark) => {
-    $("g4-say").textContent = m.say;
-    key("g4-key", m.key.map(k => [`tile ${k.status}`, k.text, k.glyph]));
-    put("g4-plot", m.rows.map(r => forDays(h("div", { class: "board-row" }, h("div", { class: "board-day" }, `Day ${r.day}`),
-      h("div", { class: "tiles" }, r.tiles.map(t => tile(t, mark))), h("div", { class: "board-count" }, r.count)), [r.day])));
-    $("g4-hist-say").textContent = m.histSay;
-    put("g4-hist", m.hist.map(x => mark(h("button", { type: "button", class: "strip-col" },
-      ["skipped", "broken", "repair", "unproven", "proven"].map(s => h("span", { class: s, style: `height:${px(x.counts[s] * 48 / m.histMax)}` }))), x)));
-    $("g4-hist").hidden = !m.hist.length;
-  });
-
-  /* Graph 5 */
-  graph("g5", (m, mark) => {
-    put("g5-plot", m.rows.map(r => h("div", { class: "ab-row" }, h("div", { class: "ab-name" }, r.name),
-      Q && Q.abilities[r.key] && h("div", { class: "ab-score", title: Q.abilities[r.key].parts }, h("b", null, String(Q.abilities[r.key].n)), bar(Q.abilities[r.key].n)),
-      h("div", { class: "ab-groups" }, r.groups.map(g => forDays(h("div", { class: "ab-group" }, h("span", { class: "mono" }, `D${g.day}`),
-        h("div", { class: "tiles" }, g.tiles.map(t => tile(t, mark)))), [g.day])), r.note && h("span", { class: "ab-note" }, r.note)),
-      h("div", { class: "ab-count" }, r.count))));
+    const B = M.g4, R = M.g5, L = M.map;
+    if (L.error) throw new Error(L.error);
+    if (L.broke) console.error(`g3: the promises could not be read: ${L.broke}`);
+    const n = L.cols.length, lastDay = n - 2, grid = `grid-template-columns:minmax(10rem, 14rem) repeat(${n}, minmax(52px, 1fr)) 6.5rem`;
+    const ROLE = { rung: "Needed to climb the levels", rail: "Rails: needed at every level" };
+    const NS = "http://www.w3.org/2000/svg", svg = (tag, a) => { const e = document.createElementNS(NS, tag); Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v)); return e; };
+    const ring = ({ proven, counted }) => {
+      const s = svg("svg", { viewBox: "0 0 30 30", class: "ring", "aria-hidden": "true" }), C = 2 * Math.PI * 11;
+      s.append(svg("circle", { cx: 15, cy: 15, r: 11, class: "ring-track" }));
+      if (counted) s.append(svg("circle", { cx: 15, cy: 15, r: 11, class: "ring-arc", "stroke-dasharray": `${(C * proven / counted).toFixed(2)} ${C.toFixed(2)}`, transform: "rotate(-90 15 15)" }));
+      return s;
+    };
+    const row = a => {
+      const colour = a.colour ? `var(--l${a.colour})` : "var(--axis)";
+      const kids = [h("div", { class: "map-name" }, h("i", { class: "map-badge", style: `background:${colour}` }), a.name)];
+      a.cells.forEach((c, i) => {
+        const size = 2 * (5 + Math.sqrt(c.n) * 1.7);
+        const cell = h("div", { class: "map-cell", style: `grid-column:${i + 2}` },
+          a.first >= 0 && c.day != null && i >= a.first && h("span", { class: "map-seg", style: `left:${i === a.first ? "50%" : "0"};right:${i === lastDay ? "50%" : "0"};background:${colour}` }),
+          c.day == null && c.n > 0 && h("span", { class: "map-seg between", style: `background:${colour}` }),
+          c.n ? mark(h("button", { type: "button", class: "station", style: `width:${px(size)};height:${px(size)}` }, size >= 16 ? String(c.n) : ""), c)
+            : c.tiles.length ? h("span", { class: "station small" }) : null,
+          c.tiles.length > 0 && h("div", { class: "map-dots" }, c.tiles.map(x => mark(h("button", { type: "button", class: `tile ${x.status}` }), x))));
+        kids.push(c.day == null ? cell : forDays(cell, [c.day]));
+      });
+      kids.push(mark(h("button", { type: "button", class: "map-ring", style: `grid-column:${n + 2}` }, ring(a.ring),
+        h("span", null, a.ring.counted ? `${a.ring.proven} of ${a.ring.counted}` : "none yet")), a.ring));
+      return h("div", { class: "map-row", style: grid }, kids);
+    };
+    const rows = [h("div", { class: "map-row head", style: grid }, h("div", { class: "map-name" }),
+      L.cols.map((c, i) => { const x = h("div", { class: "map-h", style: `grid-column:${i + 2}` }, c.day == null ? "Between Days" : `Day ${c.day}`, h("small", null, c.mark)); return c.day == null ? x : forDays(x, [c.day]); }),
+      h("div", { class: "map-h", style: `grid-column:${n + 2}` }, "Proven"))];
+    let role = null;
+    L.lines.forEach(a => {
+      if (a.role && a.role !== role) { role = a.role; rows.push(h("div", { class: "map-group" }, ROLE[role] || role)); }
+      rows.push(row(a));
+    });
+    put("g3-plot", h("div", { class: "map", style: `min-width:${Math.max(720, 230 + 56 * n + 110)}px` }, rows, L.broke && h("p", { class: "load-error" }, `The promises could not be drawn: ${L.broke}`)));
+    key("g3-key", [...(L.broke ? [] : B.key.map(k => [`tile ${k.status}`, k.text, k.glyph])), ["station", "A Day's pull requests for the ability"], ["map-badge", "An ability's line, from the Day it was first built"]]);
+    $("g3-hist-say").textContent = L.broke ? "" : B.histSay;
+    put("g3-hist", L.broke ? [] : B.hist.map(x => mark(h("button", { type: "button", class: "strip-col" },
+      ["skipped", "broken", "repair", "unproven", "proven"].map(s => h("span", { class: s, style: `height:${px(x.counts[s] * 48 / B.histMax)}` }))), x)));
+    const last = !L.broke && B.hist[B.hist.length - 1];
+    put("g3-hist-n", last ? [String(last.counts.proven), " of ", String(last.total), h("small", null, `proven, over ${plural(B.hist.length, "re-check", "re-checks")}`)] : []);
+    $("g3-trust").hidden = !last;
+    if (!L.broke) {
+      mark.base({ t: B.read.t, b: [...B.read.b, `${R.read.t}.`, ...R.read.b, ...m.read.b] });
+      table("g4-table", B.table);
+      table("g5-table", R.table);
+    }
   });
 
   /* Graph 6 */

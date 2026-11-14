@@ -163,6 +163,8 @@ class ModelTest(unittest.TestCase):
         self.assertEqual((first["t"], first["b"], first["level"]),
                          ("Runs · Day 1", ["2 merged pull requests grew this ability on Day 1: #1, #2."], 1))
         self.assertEqual(g["rows"][1]["cells"][0]["b"], ["No pull request grew this ability on Day 1."])
+        # The line map draws a station from a cell's pull requests and a line per ability key.
+        self.assertEqual((g["rows"][0]["key"], first["prs"], g["rows"][0]["cells"][3]["prs"]), ("a", [1, 2], [4]))
         self.assertEqual(g["read"]["t"], "5 merged pull requests, each tagged with the ability it grew")
         self.assertEqual(g["read"]["b"], ["Days 1 to 2 are closed and Day 3 is in progress. 1 of the 2 notes earlier Days left for Day 3 "
                                           "were picked up; 2 more wait for Day 4, 1 of them numbered. The plan stops for the maintainer after Day 3."])
@@ -216,6 +218,31 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["read"]["t"], "“Stops” is the best proven: 1 of its 1 re-checked promise")
         self.assertEqual(g["read"]["b"], ["“Runs” has none proven yet. 1 promise touches more than one ability and is drawn under the one "
                                           "most of its pull requests grew, the first named when they tie."])
+
+    def test_the_line_map_puts_graph_3s_stations_graph_5s_dots_and_its_rings_on_one_line_per_ability(self):
+        story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
+        got = model(data(**PROMISES, user_stories=dict(ABILITIES, stories=[story(1, 1, "a"), story(2, 1, "b"), story(3, 2, "a"), story(4, None, "b")])))
+        m = got["map"]
+        self.assertIsNone(m["broke"])
+        self.assertEqual([c["day"] for c in m["cols"]], [1, 2, 3, None])
+        # Per line: its colour, the column its line starts at, each column's pull requests and promise dots, its ring.
+        self.assertEqual([(x["name"], x["role"], x["colour"], x["first"], [(c["n"], [t["id"] for t in c["tiles"]]) for c in x["cells"]],
+                           (x["ring"]["proven"], x["ring"]["counted"])) for x in m["lines"]], [
+            ("Runs", "rung", 1, 0, [(1, ["C1.1"]), (1, ["C2.1"]), (0, []), (0, [])], (0, 2)),
+            ("Stops", "rung", 2, 0, [(1, ["C1.2"]), (0, []), (0, []), (1, [])], (1, 1)),
+            ("Not tied to an ability yet", None, 0, 0, [(0, ["C1.4", "C1.3", "C1.5"]), (0, ["C2.2", "C2.3"]), (0, ["C3.1"]), (0, [])], (0, 0))])
+        # The dots are sorted by state, proven first, and are graph 4's own tiles; a station says what its promises are.
+        board = {t["id"]: t for r in got["g4"]["rows"] for t in r["tiles"]}
+        untied = m["lines"][2]["cells"][0]["tiles"]
+        self.assertEqual(untied, [board[t["id"]] for t in untied])
+        self.assertEqual(m["lines"][0]["cells"][0]["b"], ["1 merged pull request grew this ability on Day 1: #1.", "They made 1 promise: 1 broken."])
+        self.assertEqual(m["lines"][1]["ring"]["b"], ["1 of 1 proven · 2 pull requests"])
+
+    def test_the_line_map_still_draws_its_lines_when_the_promises_cannot_be_read(self):
+        m = model(data(criteria_index=[None], user_stories=dict(ABILITIES, stories=[dict(number=1, day=1, ability="a", title="t")])))["map"]
+        self.assertTrue(m["broke"])
+        self.assertEqual([(x["name"], [c["n"] for c in x["cells"]], [c["tiles"] for c in x["cells"]]) for x in m["lines"]],
+                         [("Runs", [1, 0, 0, 0], [[], [], [], []]), ("Stops", [0, 0, 0, 0], [[], [], [], []])])
 
     def test_graph_5_ties_an_open_days_built_promise_to_the_pull_request_that_built_it(self):
         story = dict(number=7, day=3, ability="b", title="t")
@@ -474,6 +501,11 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(ladder[1].get("state"), "Where the trial's project is: 4 steps run")
         self.assertEqual((ladder[2].get("state"), ladder[2].get("run"), ladder[2].get("of")), ("3 of 15 in a row", 3, 15))
         self.assertEqual(ladder[3].get("state"), "Waits on level 2")
+        # Each level card says who starts and who merges at it.
+        self.assertEqual([r.get("lv") for r in ladder], ["Level 0", "Level 1", "Level 2", "Level 3"])
+        self.assertEqual([r.get("who") for r in ladder[:3]], [[["maintainer", "starts"], ["maintainer", "merges"]],
+                                                              [["driver", "starts"], ["maintainer", "merges"]],
+                                                              [["driver", "starts"], ["driver", "merges"]]])
 
     def test_graph_1_ladder_without_a_driver_count_stays_at_level_0(self):
         g = model(data())["g1"]
@@ -901,7 +933,7 @@ class BootTest(unittest.TestCase):
         out = boot(data(criteria_index=[None]))
         self.assertIsNone(out["error"])
         # The walk-through reads the same list of promises, so it says so too; the other six graphs drew.
-        self.assertEqual([line.split(":")[0] for line in out["logged"]], ["g4", "g5", "how this works"])
+        self.assertEqual([line.split(":")[0] for line in out["logged"]], ["g3", "how this works"])
 
     def test_the_page_draws_the_driver_runs_without_an_error(self):
         clock = dict(prs=[], sessions=[{"date": "2026-01-02", "day": 2, "agent": "main", "from": "2026-01-02T08:00:00+01:00",
@@ -923,23 +955,37 @@ class ThemeTest(unittest.TestCase):
         self.assertEqual(start.strip().splitlines()[0], "themeToggle();")
 
 
+# The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id.
+CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
     def test_every_graph_has_its_plot_its_readout_and_its_exact_numbers_folded_under_it(self):
         html = read("index.html")
-        for n in range(1, 12):
+        for n in CARDS:
             section = re.search(rf'<section class="graph" id="g{n}">.*?</section>', html, re.S)
             self.assertIsNotNone(section, f"graph {n}")
             order = [section.group(0).index(f'id="g{n}-{part}"') for part in ("plot", "read", "table")]
             self.assertEqual(order, sorted(order), f"graph {n}")
-            self.assertRegex(section.group(0), rf'<details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g{n}-table">')
+            self.assertRegex(section.group(0), rf'<details class="exact"><summary>Exact numbers</summary>\s*(<p [^>]*>[^<]*</p>\s*)?<div class="scroll-x"><table id="g{n}-table">')
             self.assertIn(f'id="g{n}-read" aria-live="polite"', section.group(0))
         self.assertNotIn("<details open", html)
 
+    def test_graphs_3_to_5_are_one_card_that_keeps_their_anchors_and_their_exact_numbers(self):
+        section = re.search(r'<section class="graph" id="g3">.*?</section>', read("index.html"), re.S).group(0)
+        self.assertIn('<p class="graph-n">Graphs 3–5</p>', section)
+        # The quality panel links to #g4 and #g5 (spec_drift_score.PARTS): both land on the card.
+        for n in (4, 5):
+            self.assertIn(f'<span class="anchor" id="g{n}"></span>', section)
+        exact = re.search(r'<details class="exact">.*?</details>', section, re.S).group(0)
+        self.assertEqual(re.findall(r'<table id="(g\d)-table">', exact), ["g3", "g4", "g5"])
+        self.assertNotIn("levels", section)  # one ladder only, graph 1's
+
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for n in range(1, 12):
+        for n in CARDS:
             self.assertIn(f'id="g{n}-plot"', html, f"graph {n}")
             before = html[:html.index(f'id="g{n}-plot"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), f"graph {n}")
@@ -962,14 +1008,14 @@ class PageFilesTest(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", page)
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
-    def test_the_twelve_graphs_sit_in_order_under_five_group_headings(self):
+    def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in (1, 2, 3, 4, 5, 12, 6, 7, 8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in (1, 2, 3, 12, 6, 7, 8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {1: 0, 2: 0, 3: 1, 4: 1, 5: 1, 12: 2, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
+        group = {1: 0, 2: 0, 3: 1, 12: 2, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
         for n, g in group.items():
             at = html.index(f'<section class="graph" id="g{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, f"graph {n}")
