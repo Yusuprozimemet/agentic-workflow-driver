@@ -97,7 +97,7 @@ const PIPE = [
     { names: ["Style check"], inPr: true, does: "ruff again, in CI." },
     { names: ["Compose and Prometheus"], kit: true, does: "Every service is wired into compose and Prometheus. It came with the kit; there is nothing for it to check here." },
     { names: ["Tests"], ci: "Tests", does: "tests.yml: the whole suite, serially, on Linux." },
-    { names: ["Track breaks"], ci: "Track breaks", does: "track-breaks.yml: replays the pull request's broken: lines, and the Day's earlier tracks', on Linux on the merge commit." },
+    { names: ["Track breaks"], ci: "Track breaks", does: "track-breaks.yml: replays the pull request's broken: lines, and the Day's earlier tracks', on Linux on the merge commit; on every pull request, each closed Day's in-force break must still apply, and runs when the change touches it." },
     { names: ["Dashboard tests"], ci: "Dashboard metric tests", does: "spec-drift-tests.yml: drift and gap move when they should, token counts hold on Windows, the starter names no project." }] },
   { name: "You", gates: [
     { names: ["Your merge"], merged: true, does: "main is protected: nothing lands without the checks passing and the maintainer's merge." }] },

@@ -23,7 +23,7 @@ def body(find="ok = True", report="AssertionError: the guard is off", what="the 
     return f"## Breaks\n\nmanifest: {json.dumps(entry)}\nbroken: {what} → {report}\n"
 
 
-class TrackBreaksTest(unittest.TestCase):
+class Scratch(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
@@ -34,6 +34,8 @@ class TrackBreaksTest(unittest.TestCase):
         with open(os.path.join(self.dir, path), "w", encoding="utf-8", newline="\n") as f:
             f.write(text)
 
+
+class TrackBreaksTest(Scratch):
     def run_it(self, this, *earlier, branch="day-09/track-b-guard"):
         self.write("this.md", this)
         names = []
@@ -75,7 +77,71 @@ class TrackBreaksTest(unittest.TestCase):
     def test_a_branch_that_is_not_a_track_has_nothing_to_replay(self):
         run = self.run_it(body(report="anything"), branch="tooling/catch-earlier")
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-        self.assertIn("nothing to replay", run.stdout)
+        self.assertIn("no PR body to replay", run.stdout)
+
+
+def spec(cid, what, report, replaced=None):
+    later = f"- [x] C02.1 **new** — the guard again.\n      Replaces: {replaced} — was: the guard.\n" if replaced else ""
+    return (f"# Day\n\n## Acceptance criteria\n- [x] {cid} **hold** — the guard holds.\n"
+            f"      broken: {what} → {report}\n{later}")
+
+
+class EarlierDaysTest(Scratch):
+    """An earlier Day's in-force break is checked on every branch: its find statically, its run when
+    the change touches it. #184 re-recorded ten whose finds had gone stale unseen."""
+
+    def setUp(self):
+        super().setUp()
+        os.makedirs(os.path.join(self.dir, "specs", "breaks"))
+        self.day(find="ok = True")
+        subprocess.run(["git", "add", "-A"], cwd=self.dir, check=True)
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"],
+                       cwd=self.dir, check=True)
+
+    def day(self, find, report="AssertionError: the guard is off", replaced=None):
+        entry = {"what": "the guard off", "file": "guard.py", "find": find, "replace": "ok = False", "command": CHECK}
+        self.write("specs/breaks/day-01.json", json.dumps([entry]))
+        self.write("specs/day-01-guard.md", spec("C01.1", "the guard off", report))
+        if replaced:
+            self.write("specs/day-02-again.md", spec("C02.2", "none", "a reader", replaced=replaced))
+
+    def run_branch(self, branch="tooling/catch-earlier"):
+        return subprocess.run([sys.executable, SCRIPT, "--branch", branch, "--base", "HEAD"], cwd=self.dir,
+                              capture_output=True, text=True, encoding="utf-8")
+
+    def test_a_stale_find_fails_and_names_what_to_re_record(self):
+        self.write("guard.py", "ok = True  # the guard\nok = True\n")
+        run = self.run_branch()
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("no longer applies: the guard off (C01.1): the find occurs 2 times in guard.py: re-record it "
+                      "in this PR (specs/breaks/day-01.json and specs/day-01-guard.md)", run.stdout)
+        self.assertIn("0 of 1 earlier Days' breaks still apply", run.stdout)
+
+    def test_a_replaced_criterion_s_break_is_not_checked(self):
+        self.day(find="gone", replaced="C01.1")
+        run = self.run_branch()
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("0 of 0 earlier Days' breaks still apply", run.stdout)
+
+    def test_the_break_runs_only_when_the_change_touches_its_file(self):
+        self.day(find="ok = True", report="something else")
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "report"],
+                       cwd=self.dir, check=True)
+        run = self.run_branch()
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("applies: the guard off (C01.1)", run.stdout)
+        self.assertIn("1 of 1 earlier Days' breaks still apply, 0 run", run.stdout)
+        self.write("guard.py", "ok = True\n\n")
+        run = self.run_branch()
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("differs: the guard off (C01.1): recorded 'something else', "
+                      "replayed 'AssertionError: the guard is off'", run.stdout)
+
+    def test_the_branch_s_own_day_is_left_to_its_close(self):
+        self.write("guard.py", "ok = True  # the guard\nok = True\n")
+        run = self.run_branch(branch="day-01/close-the-day")
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("0 of 0 earlier Days' breaks", run.stdout)
 
 
 class WorkflowTest(unittest.TestCase):
@@ -87,8 +153,11 @@ class WorkflowTest(unittest.TestCase):
         triggers = workflow.get("on", workflow.get(True))  # YAML 1.1 reads the key `on` as true
         self.assertIn("edited", triggers["pull_request"]["types"])
         [step] = [s for s in workflow["jobs"]["track-breaks"]["steps"] if s.get("name") == "Replay the track's breaks"]
-        self.assertEqual(step["run"], 'python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR"')
+        self.assertEqual(step["run"], 'python scripts/track-breaks.py --branch "$BRANCH" --pr "$PR" --base HEAD^1')
         self.assertEqual(step["env"]["BRANCH"], "${{ github.head_ref }}")
+        # HEAD^1, main's side of the merge commit, is there only when the checkout fetches two commits.
+        [checkout] = [s for s in workflow["jobs"]["track-breaks"]["steps"] if s.get("uses", "").startswith("actions/checkout")]
+        self.assertEqual(checkout["with"]["fetch-depth"], 2)
 
 
 if __name__ == "__main__":
