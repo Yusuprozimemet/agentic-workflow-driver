@@ -60,6 +60,8 @@ days on a small Python CLI. What that evidence does and does not show is in
    code under `tests/`).
    `test_count` is absent: added as `{"files": "<path regex>", "test": "<line regex>"}`, "Frozen
    files stay unedited" also fails a PR whose count of matching lines falls (`scripts/invariants.py`).
+   It needs no field for the specs' own freezes: a `hold` in force whose Verify line runs
+   `git diff --exit-code <sha> -- <paths>` freezes those paths, as the base's specs have it.
 3. Add a workflow that runs the project's own tests: the kit's CI checks the workflow, not the
    code. Require it with the others below. pytest exits 5 when it collects no test, so a pytest
    workflow fails every PR until the first test lands, and the PRs before it need an admin
