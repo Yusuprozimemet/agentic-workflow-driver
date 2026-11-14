@@ -253,7 +253,7 @@ def main():
                     data=data_source(),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
-                              phases=phases(plan), stops=stops(plan)))
+                              phases=phases(plan), stops=stops(plan), where=where_rows(plan, spec_days)))
         real["score"] = quality_score(real)
         if args.build:
             # The re-check rows are on the data branch, every other file the panel quotes on main.

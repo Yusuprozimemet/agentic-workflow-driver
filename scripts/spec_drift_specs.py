@@ -211,6 +211,35 @@ def run_order(plan, spec_days):
     return [d for d in sorted(spec_days) if d not in listed + cut] + listed, stop
 
 
+def where_rows(plan, spec_days):
+    """plan.md's "Day-by-day specs" list as the page's "Where we are" rows, one per phase in the order
+    the list first names it: its Days as the list gives them, the Day its "Stop and evaluate" marks and
+    whether a course correction lifted it, the Day its "numbered from N" starts at, and whether it is
+    **cut**. Spec Days that no item names come first, under no phase. The short name of a Day with no
+    spec is the text after "- Day N:" under "## Phases", to its first colon, stop or bracket."""
+    rows, names = {}, {}
+    for line in plan_items(plan):
+        phase = re.search(r"Phase (\d+)", line)
+        row = rows.setdefault(int(phase.group(1)) if phase else None, dict(days=[], stop=None, lifted=False, from_day=None, cut=False))
+        first = re.search(r"numbered from (\d+)", line)
+        if first:
+            row["from_day"] = int(first.group(1))
+            row["days"] += [d for d in sorted(spec_days) if d >= row["from_day"]]
+            continue
+        days = [d for a, b in re.findall(r"(\d+)(?:\s*[–-]\s*(\d+))?", UNPHASED.sub("", line)) for d in range(int(a), int(b or a) + 1)]
+        row["days"] += days
+        row["cut"] = row["cut"] or "**cut**" in line
+        if "Stop and evaluate" in line and days:
+            row["stop"], row["lifted"] = days[-1], bool(phase and lifted(plan, phase.group(1)))
+    named = {d for row in rows.values() for d in row["days"]}
+    loose = [d for d in sorted(spec_days) if d not in named]
+    if loose:
+        rows = {None: dict(days=loose, stop=None, lifted=False, from_day=None, cut=False), **{k: v for k, v in rows.items() if k is not None}}
+    for n, text in re.findall(r"^- Day (\d+): (.*(?:\n  +\S.*)*)", section(plan, "Phases"), re.M):
+        names[int(n)] = re.split(r"[.(;:]", " ".join(text.split()))[0].strip().rstrip(",")
+    return dict(rows=[dict(phase=k, **v) for k, v in rows.items()], names=names)
+
+
 def out_of_order(order):
     """The days that do not run in numeric order: those outside the longest run of the order that
     rises by number: Days 38-40 ran ahead of Day 17, Day 17 behind Days 18-19, and Day 25 is planned

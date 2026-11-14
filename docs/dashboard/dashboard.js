@@ -193,6 +193,44 @@ function model(DATA) {
       missing: dataMissing(), now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length, took };
   }
 
+  /* Where we are: plan.md's phases, one tile per Day, with the next step and the next stop (spec-drift.py, where_rows) */
+  function whereNow() {
+    const W = (DATA.meta || {}).where || {}, rows = W.rows || [], names = W.names || {}, phaseNames = (DATA.meta || {}).phases || [];
+    if (!rows.length) return null;
+    const by = Object.fromEntries(days.map(d => [d.day, d])), order = (DATA.order || []).filter(d => typeof d === "number");
+    const open = n => !(by[n] && finished(by[n]));
+    const nextDay = order.find(open), stopAt = now.stop_after != null ? now.stop_after : null;
+    const WORD = { done: "done", open: "closed, boxes open", active: "in progress", ready: "spec written", next: "next, no spec yet",
+      planned: "provisional: plan.md names it, no spec yet", cut: "cut" };
+    const counted = rows.filter(r => !r.cut).flatMap(r => r.days);
+    const tiles = rows.map(r => r.days.map((n, i) => {
+      const d = by[n], c = (d && d.criteria) || {};
+      const state = r.cut || (d && d.status === "cut") ? "cut" : d && finished(d) ? (d.status === "done" ? "done" : "open")
+        : d && n === current ? "active" : d ? "ready" : n === nextDay ? "next" : "planned";
+      const bar = state === "active" && (d.tracks || []).length ? (d.tracks_merged || []).length / d.tracks.length : null;
+      const stop = n === r.stop ? (r.lifted ? "stop, lifted by a course correction" : "stop: the work halts here until the maintainer lifts it") : "";
+      const end = !r.cut && i === r.days.length - 1 && r.phase != null;
+      const what = d ? plain(d.title) : names[n] || "";
+      const label = String(n).padStart(2, "0");
+      const say = [WORD[state], c.total ? `${c.ticked} of ${c.total} criteria ticked` : "",
+        bar != null ? `${(d.tracks_merged || []).length} of ${d.tracks.length} tracks merged` : "", end ? "ends a phase" : "", stop].filter(Boolean);
+      return { day: n, label, state, bar, stop: !!stop, lifted: !!stop && r.lifted, end, text: `Day ${label}${what ? ` · ${what}` : ""} · ${say.join(" · ")}` };
+    }));
+    const span = r => r.days.length ? (r.days.length === 1 ? `Day ${r.days[0]}` : `Days ${Math.min(...r.days)}–${Math.max(...r.days)}`) : "";
+    const out = rows.map((r, i) => ({
+      name: r.phase == null ? "Before the plan's list" : `${r.phase}. ${phaseNames[r.phase] || `Phase ${r.phase}`}${r.cut ? " (cut)" : ""}`,
+      sub: [span(r) || (r.from_day != null ? `from Day ${r.from_day}` : ""), r.stop != null ? `stop at Day ${r.stop}${r.lifted ? ", lifted" : ""}` : ""].filter(Boolean).join(" · "),
+      tiles: tiles[i], unnumbered: r.from_day != null && !r.days.length ? `Not numbered yet: from Day ${r.from_day}` : "" }));
+    const left = stopAt == null ? 0 : order.slice(0, order.indexOf(stopAt) + 1).filter(open).length;
+    const active = current != null && by[current];
+    return { kicker: active ? `Day ${current} in progress` : "Between Days",
+      count: `${counted.filter(n => !open(n)).length} of ${counted.length} numbered Days finished`
+        + (active && (active.tracks || []).length ? ` · Day ${current}: ${(active.tracks_merged || []).length} of ${active.tracks.length} tracks merged` : ""),
+      next: String(now.next_step || ""),
+      stop: stopAt == null ? "" : `Day ${stopAt}${names[stopAt] || by[stopAt] ? `, ${by[stopAt] ? plain(by[stopAt].title) : names[stopAt]}` : ""}, ${left ? plural(left, "Day", "Days") + " to go" : "reached"}. The work halts there until the maintainer lifts it.`,
+      rows: out };
+  }
+
   /* Graph 3: ability by day */
   function abilityGraph() {
     const keyOf = s => named.some(a => a.key === s.ability) ? s.ability : null;
@@ -943,7 +981,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph);
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
-  return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
+  return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
     g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
@@ -1444,6 +1482,39 @@ function draw(M, DATA) {
     onDay.forEach(f => f(lit));
   }));
   put("days", h("span", null, "Highlight one Day in every graph:"), chips);
+
+  /* Where we are: a tile lights its Day as its chip does; a Day with no spec only says what it is */
+  const W = M.where && !M.where.error ? M.where : null;
+  $("where").hidden = !W;
+  $("now").hidden = !!W;
+  if (W) {
+    const READ = "Click a Day to see what it is, and to highlight it in every graph.";
+    put("where-kick", W.kicker);
+    put("where-count", W.count);
+    put("where-next", rich(W.next));
+    put("where-stop", W.stop ? [h("strong", null, "Next stop: "), W.stop] : "");
+    const tiles = [];
+    put("where-rows", W.rows.map(r => h("div", { class: "where-row" },
+      h("div", { class: "where-phase" }, h("b", null, r.name), h("small", null, r.sub)),
+      h("div", { class: "where-tiles" }, r.tiles.map(t => {
+        const b = h("button", { type: "button", class: `wt ${t.state}${t.stop ? (t.lifted ? " stop lifted" : " stop") : ""}`, "aria-pressed": "false", "aria-label": t.text, title: t.text },
+          t.label, t.end && h("i", { class: "wt-end" }), t.bar != null && h("i", { class: "wt-bar" }, h("i", { style: `width:${Math.round(t.bar * 100)}%` })));
+        b.addEventListener("click", () => {
+          const i = M.days.findIndex(d => d.day === t.day), on = b.getAttribute("aria-pressed") !== "true";
+          if (i >= 0) chips[on ? i + 1 : 0].click();
+          tiles.forEach(x => x.b.setAttribute("aria-pressed", x.t === t && on ? "true" : "false"));
+          put("where-read", on ? t.text : READ);
+        });
+        tiles.push({ b, t });
+        return b;
+      }), r.unnumbered && h("span", { class: "wt-wide" }, r.unnumbered)))));
+    put("where-read", READ);
+    const KEY = [["done", "Done"], ["open", "Closed, boxes open"], ["next", "Next"], ["active", "In progress (bar: tracks merged)"], ["planned", "Provisional"]];
+    put("where-key", [...KEY.map(([s, w]) => h("span", null, h("i", { class: `wt key ${s}` }), w)),
+      h("span", null, h("i", { class: "wt key planned" }, h("i", { class: "wt-end" })), "Ends a phase"),
+      h("span", null, h("i", { class: "wt key planned stop" }), "A stop")]);
+    onDay.push(day => tiles.forEach(x => x.b.setAttribute("aria-pressed", x.t.day === day ? "true" : "false")));
+  }
 
   /* Graph 1 */
   graph("g1", (m, mark) => {

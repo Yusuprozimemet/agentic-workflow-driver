@@ -33,6 +33,23 @@
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="demo-banner" id="data-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
+    <section class="where" id="where" aria-labelledby="where-h" hidden>
+      <h2 id="where-h">Where we are</h2>
+      <p class="graph-say">Rebuilt after every merge from the repository itself: the Day in progress, the next step, and the Days <code>plan.md</code> names ahead. Click a Day to see what it is and to highlight it in every graph.</p>
+      <div class="where-cols">
+        <div class="where-left">
+          <p class="where-kick" id="where-kick"></p>
+          <p class="where-count" id="where-count"></p>
+          <div class="where-next"><p class="where-kick">Next step</p><p class="where-step" id="where-next"></p></div>
+          <p class="where-stop" id="where-stop"></p>
+        </div>
+        <div class="where-right">
+          <div id="where-rows"></div>
+          <p class="where-read" id="where-read" aria-live="polite"></p>
+          <div class="legend where-key" id="where-key"></div>
+        </div>
+      </div>
+    </section>
     <section class="quality" id="quality" aria-label="Quality of the work" hidden>
       <div class="q-top">
         <div class="q-num"><b id="q-n"></b><small id="q-of"></small></div>

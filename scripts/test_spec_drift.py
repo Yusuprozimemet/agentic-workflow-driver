@@ -1624,6 +1624,34 @@ Go on.
         self.assertEqual(sd.run_order(plan, list(range(1, 8)))[1], 6)
         self.assertEqual((sd.phases("# Plan\n"), sd.stops("# Plan\n")), ([], []))
 
+    def test_where_we_are_has_a_row_per_phase_with_its_days_its_stop_and_the_unwritten_days_names(self):
+        plan = """# Toy plan
+
+## Phases
+
+### Phase 1 — Build it
+- Day 3: the reviewer (item 7).
+- Day 4: the trial's record at level 2: what merged, what
+  parked.
+
+## Course correction after Phase 0
+
+Go on.
+
+## Day-by-day specs
+
+1. Phase 0: Days 1-2. **Stop and evaluate.**
+2. Phase 1: Days 3-4. **Stop and evaluate.**
+3. Phase 2: numbered from 5.
+4. Phase 9: Days 8-9. **cut**
+"""
+        out = sd.where_rows(plan, [0, 1, 2, 5, 6])
+        self.assertEqual([(r["phase"], r["days"], r["stop"], r["lifted"], r["from_day"], r["cut"]) for r in out["rows"]],
+                         [(None, [0], None, False, None, False), (0, [1, 2], 2, True, None, False),
+                          (1, [3, 4], 4, False, None, False), (2, [5, 6], None, False, 5, False), (9, [8, 9], None, False, None, True)])
+        self.assertEqual(out["names"], {3: "the reviewer", 4: "the trial's record at level 2"})
+        self.assertEqual(sd.where_rows("# Plan\n", []), dict(rows=[], names={}))
+
     def test_a_course_corrections_entry_naming_the_phase_lifts_its_stop(self):
         # a pilot, Day 4: the stop's decisions went under the template's "Course corrections",
         # and Days 2, 4 and 5 ran under "Day 03 is done: stop".
