@@ -311,7 +311,7 @@ class ModelTest(unittest.TestCase):
         g = model(data(days=days, defect_recurrence=dict(recurrences=[dict(id="D2.1", same_as="D1.1")]),
                        gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=1, runs=2, cost=1.0),
                                                dict(gate="hooks", found=None, defects=0, runs=1, cost=0.1)])))["g7"]
-        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 1, 0, 0], [0, 1, 0, 0, 1, 0], [0] * 6])
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 1, 0, 0, 0, 0], [0] * 10])
         self.assertEqual([r["note"] for r in g["rows"]], ["3 of 12", "not read yet", "read at its close"])
         dots = {o["id"]: o for r in g["rows"] for o in r["dots"]}
         self.assertEqual([(o["id"], o["cause"], o["escaped"], o["back"]) for o in dots.values()], [
@@ -322,8 +322,9 @@ class ModelTest(unittest.TestCase):
             ["Made on Day 1 and caught on Day 2: it escaped for 1 Day. The same problem as D1.1, back again."]))
         self.assertEqual(dots["D1.2"]["b"], ["Made outside any Day: in the plan, a tool or a machine. Noticed by: Track A."])
         self.assertEqual(dots["D2.2"]["b"], ["Caught on Day 2; its line does not say which Day made it."])
-        self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "1 caught", "0 caught",
-                                                         "1 caught · tracks, reviews, the session", "1 caught", "0 caught"])
+        self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "0 caught", "1 caught", "0 caught",
+                                                         "1 caught · tracks, reviews, the session", "1 caught", "0 caught",
+                                                         "0 caught", "0 caught", "0 caught"])
         self.assertEqual(g["read"]["t"], "4 defects; the auditors caught 1 of them before any code was written")
         self.assertEqual(g["read"]["b"], ["1 was in a spec. 1 escaped from an earlier Day and 1 came back. A second reader gave 3 of 12 "
                                           "tags differently. Each catch cost about $1.00 at the auditors."])
@@ -445,7 +446,7 @@ class ModelTest(unittest.TestCase):
                          ("not counted yet", "in the PR checks' count", "kit"))
         self.assertEqual([(p["name"], p["n"], p["pct"]) for p in P["phases"]],
                          [("Before any code", 1, 25), ("While writing", 2, 50), ("At the close", 1, 25), ("After the merge", 0, 0)])
-        self.assertEqual(P["gates"], 34)
+        self.assertEqual(P["gates"], 39)
 
     def test_graph_1_counts_the_promises_built_and_written_at_each_merge_and_what_is_left_before_the_stop(self):
         # The unnumbered hand-off counts in `open` but not in the numbered count the graph draws.
@@ -677,16 +678,32 @@ class ModelTest(unittest.TestCase):
                        gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=2, runs=2, cost=1.0)]),
                        clock=dict(sessions=[], prs=[pr(1, 1, "2026-01-01T10:00:00Z"), pr(2, 2, "2026-01-03T10:00:00Z")]),
                        counted=dict(at="2026-01-02T12:00:00+01:00")))["g7"]
-        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1] + [0] * 9, [1] + [0] * 9])
         self.assertEqual(g["rows"][0]["dots"][0]["cause"], "spec")
         self.assertEqual(g["read"]["b"], ["2 were in a spec. 0 escaped from an earlier Day and 0 came back. Each catch cost about $1.00 at the auditors, "
                                           "over the catches of the Days in the count: Day 2 had a pull request merge after it. "
                                           "The gates' runs and dollars are counted up to 12:00 on 2 Jan."])
 
-    def test_graph_7_puts_a_rehearsal_with_the_evidence_replay_not_the_work(self):
-        defect = dict(id="D1.1", found="rehearsal", cause="process", made="Day 01", same_as=None, problem=None)
-        g = model(data(days=[a_day(1, defects=[defect])]))["g7"]
-        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 0, 1])
+    def test_graph_7_puts_a_rehearsal_at_the_close_not_after_the_merge(self):
+        defect = dict(id="D12.1", found="rehearsal", cause="process", made="Day 12", same_as=None, problem=None)
+        g = model(data(days=[a_day(12, defects=[defect])]))["g7"]
+        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
+        gates = {n: x for s in g["pipe"]["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([o["id"] for o in gates["close-evidence --rehearse"]["dots"]], ["D12.1"])
+        self.assertEqual(gates["Evidence replay"]["dots"], [])
+        self.assertEqual([(p["name"], p["n"]) for p in g["pipe"]["phases"]],
+                         [("Before any code", 0), ("While writing", 0), ("At the close", 1), ("After the merge", 0)])
+
+    def test_graph_7_gives_a_spec_change_pr_the_dashboard_and_a_day_review_their_own_trays(self):
+        defect = lambda i, found: dict(id=i, found=found, cause="process", made="Day 02", same_as=None, problem=None)
+        g = model(data(days=[a_day(2, defects=[defect("D2.1", "spec-change PR"), defect("D2.2", "dashboard"), defect("D2.3", "Day 02 review"),
+                                               defect("D2.4", "review"), defect("D2.5", "evidence replay")])]))["g7"]
+        gates = {n: x for s in g["pipe"]["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([[o["id"] for o in gates[n]["dots"]] for n in ("Spec-change PR", "Noticed in the work", "Evidence replay", "Dashboard", "Day NN review")],
+                         [["D2.1"], ["D2.4"], ["D2.5"], ["D2.2"], ["D2.3"]])
+        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 0 · self 0 · review 1 · other 0")
+        self.assertEqual([(p["name"], p["n"]) for p in g["pipe"]["phases"]],
+                         [("Before any code", 1), ("While writing", 1), ("At the close", 0), ("After the merge", 3)])
 
     def test_graph_8_shares_a_dates_dollars_over_the_pull_requests_merged_before_the_count(self):
         # Counted at 12:00 on 2 Jan (11:00 UTC): #1 had merged, #2 merged an hour later that date and #3 two dates on.
