@@ -32,6 +32,15 @@ commit hash or an absolute path: the close replays the line on another machine, 
 project's 23 recurring defects up to Day 7 were such reports (D03.17 to D07.40). --replay, which
 evidence.py passes, runs the check once and leaves the comparison with the recorded line to the caller.
 
+--record writes the entry into the break manifest itself, so no one retypes it: the manifest's keys,
+"report" (the report of the broken: line) and "blob" (`git hash-object` of the file before the
+break: the code it ran on, which a commit's own hash cannot name before the commit holds the
+record). The manifest is specs/breaks/day-NN.json on a day-NN/ branch and specs/breaks/<slug>.json
+on change/<slug>; on another branch, name it: --record <path>. An entry with the same "what" is
+replaced in place, so a re-run re-records; the others are kept. A break that cannot give an entry
+(--cwd, a file outside the tree) is refused before anything changes, as is --record with --replay.
+Break-bookkeeping defects were 33 of Days 1-11's 73 process defects, most of them a copy by hand.
+
 Each rule here is a defect the paper's record holds (docs/paper, Appendix F): an incremental compile
 that skipped a break (D23-027), breaks run through cmd.exe into WSL's bash that never started Maven
 (D26-056), `git checkout` over unstaged work (D21-007, D25-050), two breaks run together (D25-043).
@@ -151,21 +160,77 @@ def in_tree(file, cwd):
         return False
 
 
-def manifest(a):
-    """The line before the broken: line: the break's entry for specs/breaks/day-NN.json
-    (specs/README.md), to copy into the track PR beside it, or why there is none. The replay runs the
-    command from the repository root, so the entry holds only a break run from there."""
+NO_ENTRY = "run break.py from the repository root, without --cwd, for an entry the replay can run"
+
+
+def entry_of(a):
+    """The break's entry for specs/breaks/day-NN.json (specs/README.md), or None. The replay runs
+    the command from the repository root, so there is an entry only for a break run from there."""
     try:
         file = os.path.relpath(a.file)
     except ValueError:  # another drive
         file = os.pardir
     if os.path.abspath(a.cwd) != os.getcwd() or file.startswith(os.pardir):
-        return "manifest: none → run break.py from the repository root, without --cwd, for an entry the replay can run"
+        return None
     entry = {"what": a.what, "file": file.replace(os.sep, "/"), "find": a.find, "replace": a.replace,
              "command": a.command}
     if a.expect_stdout is not None:
         entry["expect_stdout"] = a.expect_stdout
+    return entry
+
+
+def manifest(a):
+    """The line before the broken: line: the break's entry, to copy into the track PR beside it, or
+    why there is none."""
+    entry = entry_of(a)
+    if entry is None:
+        return f"manifest: none → {NO_ENTRY}"
     return "manifest: " + json.dumps(entry, ensure_ascii=False)
+
+
+DAY_BRANCH = re.compile(r"^day-(\d+)/")
+CHANGE_BRANCH = re.compile(r"^change/([\w.-]+)$")
+
+
+def record_path(given):
+    """The manifest --record writes: the one given, or the branch's (day-NN/ or change/<slug>);
+    (path, None) or (None, why there is none)."""
+    if given:
+        return given, None
+    head = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
+    branch = head.stdout.strip()
+    if m := DAY_BRANCH.match(branch):
+        return f"specs/breaks/day-{m.group(1)}.json", None
+    if m := CHANGE_BRANCH.match(branch):
+        return f"specs/breaks/{m.group(1)}.json", None
+    return None, f"{branch or 'this branch'} is not a day-NN/ or change/<slug> branch: name the manifest, --record <path>"
+
+
+def blob_of(path, content):
+    """git's blob hash of content as path would be committed (its line-ending filters applied), or None."""
+    run = subprocess.run(["git", "hash-object", "--stdin", "--path", path], input=content, capture_output=True)
+    return run.stdout.decode().strip() if run.returncode == 0 else None
+
+
+def record(path, entry):
+    """Write entry into the manifest at path, in place of one with the same "what" or at its end, one
+    entry a line as the close writes them, in the file's own line endings. "added" or "replaced"."""
+    entries, newline = [], "\n"
+    if os.path.exists(path):
+        with open(path, "rb") as f:
+            raw = f.read()
+        newline = "\r\n" if b"\r\n" in raw else "\n"
+        entries = json.loads(raw.decode("utf-8") or "[]")
+    at = next((i for i, e in enumerate(entries) if e.get("what") == entry["what"]), None)
+    if at is None:
+        entries.append(entry)
+    else:
+        entries[at] = entry
+    body = ("," + newline).join(" " + json.dumps(e, ensure_ascii=False) for e in entries)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(("[" + newline + body + newline + "]" + newline if entries else "[]" + newline).encode("utf-8"))
+    return "added" if at is None else "replaced"
 
 
 def endings(find, replace, original):
@@ -202,6 +267,9 @@ def main(args=None):
     p.add_argument("--replay", action="store_true",
                    help="for evidence.py: one run with the break in and no look at its report, which the caller "
                    "compares with the line recorded")
+    p.add_argument("--record", nargs="?", const="", metavar="PATH",
+                   help="write the entry, its report and the file's blob into the break manifest: PATH, or the "
+                   "branch's (specs/breaks/day-NN.json on day-NN/, specs/breaks/<slug>.json on change/<slug>)")
     p.add_argument("command", nargs=argparse.REMAINDER, help="the check, with its options; a leading -- is dropped")
     a = p.parse_args(args)
     a.command = a.command[1:] if a.command[:1] == ["--"] else a.command
@@ -221,8 +289,20 @@ def main(args=None):
     if elsewhere and not in_tree(a.file, a.cwd):
         return refuse(f"--file {a.file} is outside the tree --cwd {a.cwd} runs the check in ({tree(a.cwd)}): "
                       "the break would not be in the code the check runs; name the file in that tree")
+    target = None
+    if a.record is not None:
+        if a.replay:
+            return refuse("--record with --replay: a replay checks a recorded entry, it does not record one")
+        if entry_of(a) is None:
+            return refuse(f"--record has no entry to write: {NO_ENTRY}")
+        target, why = record_path(a.record)
+        if target is None:
+            return refuse(why)
     with open(a.file, "rb") as f:
         original = f.read()
+    blob = blob_of(entry_of(a)["file"], original) if target else None
+    if target and blob is None:
+        return refuse(f"--record needs git to hash {a.file}: run it inside the repository")
     find, replace = endings(a.find.encode(), a.replace.encode(), original)
     if original.count(find) != 1:
         where = f" (lines {', '.join(map(str, lines_of(find, original)))})" if find in original else ""
@@ -291,6 +371,9 @@ def main(args=None):
         return refuse(f"the report holds {name} ({text}), which another run or machine prints differently: "
                       f"{reports[0]!r}; have the test print a fixed word in its place (<uuid>, <head>, <pid>, "
                       "a relative path)")
+    if target:
+        how = record(target, {**entry_of(a), "report": reports[0], "blob": blob})
+        print(f"recorded: {how} in {target}")
     print(manifest(a))
     print(f"broken: {a.what} → {reports[0]}")
     return 0

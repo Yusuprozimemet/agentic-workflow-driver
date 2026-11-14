@@ -252,7 +252,11 @@ prints them as `manifest: {...}` above its `broken:` line, and a track PR record
 beside the `broken:` line, so the close copies each entry instead of rebuilding it from the
 merged code. Copy it from the raw body (`gh pr view <n> --json body`), not the rendered page,
 which drops a level of backslashes, and check that each entry parses. A break run with `--cwd`, or on a file outside the directory it ran from, prints
-`manifest: none` with the reason: run it from the repository root. Optional
+`manifest: none` with the reason: run it from the repository root. `break.py --record` writes
+the entry into the manifest itself (`specs/breaks/day-NN.json` on a `day-NN/` branch,
+`specs/breaks/<slug>.json` on `change/<slug>`, or the path given), with two more keys the
+replay ignores: `report`, the `broken:` line's report, and `blob`, the `git hash-object` of the
+file before the break. A second run with the same `what` replaces its entry. Optional
 `at` names the historical commit when the close no longer contains the text to edit;
 `passes: true` marks a near miss that must pass with the mutation in; `expect_stdout` holds
 the regex the break gave `break.py --expect-stdout`, for a check judged by what it prints
