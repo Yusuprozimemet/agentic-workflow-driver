@@ -209,6 +209,18 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(self.contents(), self.original)
         self.assertFalse(os.path.exists(LOCK))
 
+    def test_expect_stdout_that_matches_any_output_is_refused_before_anything_changes(self):
+        # D11.21: `^$` under re.M matches the empty end of any output ending in a newline.
+        prints = [sys.executable, "-c", f"print('1 broken') if 'broken' in open({self.file!r}).read() else None"]
+        for regex in ("^$", ".*", "x?"):
+            run = self.run_break("// ok", "// broken", prints, extra=("--expect-stdout", regex))
+            self.assertEqual(run.returncode, 2, regex)
+            self.assertIn("matches any output", run.stderr)
+            self.assertNotIn("broken:", run.stdout)
+            self.assertEqual(self.contents(), self.original)
+        run = self.run_break("// ok", "// broken", prints, extra=("--expect-stdout", r"\A\Z"))
+        self.assertEqual((run.returncode, run.stdout.strip().splitlines()[-1]), (0, "broken: the guard removed → 1 broken"))
+
     def test_the_lock_is_held_during_the_baseline_run(self):
         marker = os.path.join(self.dir, "baseline-ran")
         command = [sys.executable, "-c", f"import os, sys; t = open({self.file!r}).read(); "

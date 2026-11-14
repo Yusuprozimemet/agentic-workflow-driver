@@ -168,6 +168,11 @@ PR. CI's "Track tests seen red" re-runs each `new` criterion's test this way whe
 repository variable `TRACK_RED_RUNNER` names the project's runner (`docs/kit.md`, setup); unset, it fails
 a track that owns a `new` criterion and passes the rest.
 
+Run it at the track's start, not after its code: send the brief's tests first, run
+`seen-red.py --expect` on them, and only then send the code. A `new` test already green on `main`
+is a spec defect, a hold or a test that checks the wrong thing; four reached CI's check after their
+track's code was written (D09.26, D10.12, D10.13, D11.19), and the code was written for nothing.
+
 Re-count any number the implementer reports (lines, tests, entries in a file) before it goes in
 a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 
@@ -280,7 +285,8 @@ Breaks on purpose:
   name Git Bash by its full path (`"C:/Program Files/Git/bin/bash.exe" -c "..."`). `break.py`
   refuses such a run rather than record it.
 - A check judged by what it prints, not its exit code (`grep -c` exits 1 at 0, a count): pass
-  `--expect-stdout <regex>`, its output without the break; break.py refuses if it does not match.
+  `--expect-stdout <regex>`, its output without the break; break.py refuses if it does not match,
+  or if it matches any output (`^$` under `re.M` does, D11.21): for "prints nothing", `\A\Z`.
 - On a CRLF tree, a `git diff --exit-code` check prints git's CRLF warning, and `break.py`
   reports that warning as the check's line: run `git -c core.safecrlf=false diff ...`.
 - Replaying each manifest entry through `break.py` does not check the spec's `broken:` lines
