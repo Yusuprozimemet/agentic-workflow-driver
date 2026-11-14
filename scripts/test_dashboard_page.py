@@ -1062,7 +1062,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r"^window\.SPEC_DRIFT = (.*);$", page, re.M), ['{"now": {"next_step": "x"}}'])
 
     def test_no_text_in_the_data_can_keep_its_script_open(self):
-        # Day 12's spec quoted "<!--" and "<script>": in a browser the data script then ran to the end
+        # Bearing's twelfth Day's spec quoted "<!--" and "<script>": in a browser the data script then ran to the end
         # of the page, and the live dashboard showed nothing. With no "<" on the line, no tag or comment
         # can start there, whatever the text.
         text = "<!-- PROJECT: x --> <!-- a second `<script>` </script> <SCRIPT src=x>"
