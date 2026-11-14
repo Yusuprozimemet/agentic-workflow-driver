@@ -169,7 +169,7 @@ class Classify(unittest.TestCase):
             return [row]
 
         with mock.patch.object(rh, "merges", return_value=[(5, "a" * 40, "s"), (6, "b" * 40, "s")]), \
-                mock.patch.object(rh, "closes", return_value={"01": 1}), mock.patch.object(rh, "checks", return_value=[]), \
+                mock.patch.object(rh, "closes", return_value={"01": 1}), mock.patch.object(rh, "checks", return_value=[]),                 mock.patch.object(rh, "manifest_days", return_value=set()), \
                 mock.patch.object(rh, "sample", sample), mock.patch("builtins.print"):
             with self.assertRaises(KeyboardInterrupt):
                 rh.main(["--out", out, "--since", "HEAD"])
@@ -207,6 +207,35 @@ class Sampling(unittest.TestCase):
     def test_any_other_merge_samples_the_last_day_closed_before_it(self):
         self.assertEqual(rh.sampled_days(22, "Merge pull request #44 from me/dashboard/x", self.closed), (["05"], "day"))
         self.assertEqual(rh.sampled_days(15, "Merge pull request #30 from me/tooling/x", self.closed), (["04"], "day"))
+
+    def test_a_merge_that_changes_a_closed_days_breaks_re_checks_that_day(self):
+        # #184 re-recorded Day 03's to Day 10's breaks; only Day 11 was re-checked at it, so the
+        # board kept the #179 close's "break no longer applies" for them.
+        closed = {"03": 30, "06": 60, "11": 179}
+        self.assertEqual(rh.sampled_days(184, "Merge pull request #184 from me/tooling/x", closed, {"03", "06"}),
+                         (["03", "06", "11"], "day"))
+        self.assertEqual(rh.sampled_days(170, "Merge pull request #170 from me/day-11/track-a-x", closed, {"03"}),
+                         (["03", "11"], "day"))
+
+    def test_a_changed_manifest_of_a_day_not_closed_by_then_waits(self):
+        self.assertEqual(rh.sampled_days(22, "Merge pull request #44 from me/tooling/x", self.closed, {"06"}),
+                         (["05"], "day"))
+        self.assertEqual(rh.sampled_days(15, "Merge pull request #30 from me/tooling/x", self.closed, {"05"}),
+                         (["04"], "day"))
+
+    def test_a_merge_measured_before_gets_only_the_days_it_lacks_and_a_close_none(self):
+        self.assertEqual(rh.still_to_sample(["03", "06", "11"], "day", {"11"}), ["03", "06"])
+        self.assertEqual(rh.still_to_sample(["03", "06", "11"], "all", {"03", "11"}), [])
+        self.assertEqual(rh.still_to_sample(["03", "11"], "all", set()), ["03", "11"])
+
+    def test_the_page_says_the_re_check_runs_after_every_merge_as_recheck_yml_does(self):
+        root = os.path.dirname(HERE)
+        with open(os.path.join(root, ".github", "workflows", "recheck.yml"), encoding="utf-8") as f:
+            self.assertRegex(f.read(), r"on:\s*\n\s*push:\s*\n\s*branches: \[main\]")
+        with open(os.path.join(root, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
+            page = f.read()
+        self.assertEqual(page.count("run by hand"), 0)
+        self.assertEqual(page.count("It runs after every merge to main"), 2)
 
 
 class Order(unittest.TestCase):

@@ -114,7 +114,7 @@ def manifest_days(sha):
     return {m.group(1) for p in out if (m := re.match(r"specs/breaks/day-(\d{2})\.json$", p))}
 
 
-def sampled_days(n, subject, closed, changed):
+def sampled_days(n, subject, closed, changed=()):
     """The days whose criteria a merge at position n samples, and "all" or "day"; None to wait.
     changed: the days whose breaks manifest the merge changed; a closed one is sampled too."""
     done = sorted(d for d, at in closed.items() if at <= n)
