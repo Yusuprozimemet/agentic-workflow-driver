@@ -62,6 +62,55 @@ const GATES = [
   { key: "close", name: "The close", at: "the close" },
   { key: "evidence replay", name: "The evidence replay", at: "the evidence replay" },
 ];
+// Graph 7's pipeline: every gate work passes, in seven stages, top to bottom. A gate with `pile` holds the defects the
+// Notes credit to it (a GATES key); `guard` and `ci` name what counts how often it stopped something (a hook's refusals,
+// a CI workflow's failed pull requests); `nc` marks a gate nothing counts yet; `inPr` a check counted under PR checks.
+const PIPE = [
+  { name: "Before any code", gates: [
+    { names: ["plan-auditor", "spec-auditor"], subs: ["first Day of a phase", "every Day"], pile: "auditor",
+      does: "On the first Day of a phase, the plan-auditor asks whether the phase's specs still deliver what plan.md wants, on today's code. Every Day, before any code, the spec-auditor runs every check in the spec on the code as it is and tries to break every hold criterion." },
+    { names: ["plan-links.py"], nc: true, does: "Every criterion's Plan: line must quote the plan's own words." }] },
+  { name: "Writing a track, on this machine", gates: [
+    { names: ["brief-check.py"], nc: true, does: "Fails when a backticked name in the implementer's brief sits in another file than the line names." },
+    { names: ["seen-red.py"], pile: "seen red", does: "Runs the branch's new tests on main's code: they must fail, for the reason the spec gives." },
+    { names: ["break.py"], pile: "break on purpose", does: "Breaks the code on purpose and runs the check twice with the break in, then puts the bytes back. A test that still passes would not catch a real failure." },
+    { names: ["ruff"], nc: true, does: "ruff check and ruff format --check: fails on unformatted code, never rewrites it." },
+    { names: ["test-parallel.py"], nc: true, does: "The whole of tests/, one file per process, the failures printed whole." },
+    { names: ["pr-names.py"], nc: true, does: "The branch, title and commit names agree with the Day and track." },
+    { names: ["check-links.py"], nc: true, does: "Every link in a Markdown file touched resolves." },
+    { names: ["Noticed in the work"], pile: "work", leak: true, subs: ["no gate: a leak"],
+      does: "No gate: a defect someone noticed while working, in a track, a review or the session. A catch by a gate the Notes do not name (the 400-line check, a hook) is counted here too, for now." }] },
+  { name: "Hooks, in the session", gates: [
+    { names: ["step-guard"], guard: "step-guard", does: "After a short \"merged\", refuses subagents, edits, branches, commits, pushes and pull requests until a new session." },
+    { names: ["read-guard"], guard: "read-guard", does: "Refuses a whole-file Read of a file over 8,000 bytes, and names its size." },
+    { names: ["auditor-guard"], guard: "auditor-guard", does: "Keeps the five auditors read-only: blocks git writes and gh commands that are not reads, and checks the repository at their stop." },
+    { names: ["cap-output"], subs: ["trims, never refuses"], nc: true, does: "Cuts Bash output over 8,000 characters to its head and tail. It trims; it does not refuse." }] },
+  { name: "CI on every pull request", gates: [
+    { names: ["Description uses the template"], inPr: true, does: "The pull request's description has the template's sections." },
+    { names: ["Diff stays reviewable"], subs: ["400 lines"], inPr: true, does: "No pull request over 400 changed lines; an Oversized: line turns the failure into a warning." },
+    { names: ["Frozen files stay unedited"], inPr: true, does: "Files a Day froze are not edited." },
+    { names: ["Criteria keep their wording"], inPr: true, does: "A merged criterion's words do not change under it." },
+    { names: ["Replaces: lines are real"], inPr: true, does: "A Replaces: line names an earlier criterion that exists." },
+    { names: ["Plan links quote the plan"], inPr: true, does: "plan-links.py again, in CI." },
+    { names: ["Branch, title, commits agree"], inPr: true, does: "pr-names.py again, in CI, with the Jira keys." },
+    { names: ["Track tests seen red"], inPr: true, does: "Re-runs each new criterion's test on main's code, when TRACK_RED_RUNNER is set." },
+    { names: ["Style check"], inPr: true, does: "ruff again, in CI." },
+    { names: ["Compose and Prometheus"], kit: true, does: "Every service is wired into compose and Prometheus. It came with the kit; there is nothing for it to check here." },
+    { names: ["Tests"], ci: "Tests", does: "tests.yml: the whole suite, serially, on Linux." },
+    { names: ["Track breaks"], ci: "Track breaks", does: "track-breaks.yml: replays the pull request's broken: lines, and the Day's earlier tracks', on Linux on the merge commit." },
+    { names: ["Dashboard tests"], ci: "Dashboard metric tests", does: "spec-drift-tests.yml: drift and gap move when they should, token counts hold on Windows, the starter names no project." }] },
+  { name: "You", gates: [
+    { names: ["Your merge"], merged: true, does: "main is protected: nothing lands without the checks passing and the maintainer's merge." }] },
+  { name: "The close", gates: [
+    { names: ["Tick each criterion"], pile: "close", does: "The closing pull request ticks every criterion with its evidence and writes the Day's Notes; a defect found doing it is caught here. The closing pull request then passes stages 3 to 5 once more." },
+    { names: ["relabel.py + defect-rater"], relabel: true, does: "A reader who did not write the Day tags its defects blind; each disagreement is decided in the closing pull request." },
+    { names: ["close-evidence --rehearse"], ci: "Evidence replay", does: "Replays the closing branch as its merge into main would, locally and in CI (\"A closed day's evidence replays\")." }] },
+  { name: "After the merge", gates: [
+    { names: ["Evidence replay"], pile: "evidence replay", does: "evidence.yml on the closing merge commit, checked with gh run view --exit-status before the next step." },
+    { names: ["Re-check history"], nc: true, does: "recheck.yml: after every merge, re-checks the merges with no Linux row." }] },
+];
+// The bar above the pipe: when the catches came, in four phases.
+const PHASES = [["Before any code", ["auditor"]], ["While writing", ["seen red", "break on purpose", "work"]], ["At the close", ["close"]], ["After the merge", ["evidence replay"]]];
 const CAUSES = ["spec", "process", "implementation", "environment", "other"];
 const KINDS = { origin: "the first commit", spec: "spec", code: "code", close: "a Day's close", other: "other" };
 const WORK = [["spec", "Spec and agent context"], ["prod", "Production code"], ["test", "Tests"], ["tooling", "Tooling"]];
@@ -69,6 +118,7 @@ const REASONS = { replay_failed: "Replay failed", replay_error: "Replay error", 
   evidence_missing: "Evidence missing", not_seen_red: "Not seen red", test_not_found: "Test not found", handoff_unclaimed: "Hand-off unclaimed",
   not_breakable: "No break possible from the repository", test_skippable: "Can be skipped in CI (expected)",
   handoff_next: "Hand-off for the next Day", handoff_unpicked: "Hand-off no later Day picks up" };
+const LOWER_BETTER = ["cost", "replies", "escapes", "parks", "gates", "reread"];
 const YARD_HINT = { escapes: "fewer is better", refusals: "many of one kind mean a rule is in the way", reread: "re-reading is most of the cost",
   gates: "a gate run in the main session is also inside the pull requests' cost above" };
 
@@ -300,7 +350,9 @@ function model(DATA) {
         const where = escaped ? `Made on Day ${made} and caught on Day ${d.day}` + (made < d.day ? `: it escaped for ${plural(d.day - made, "Day", "Days")}.` : ".")
           : made != null ? `Made and caught on Day ${d.day}.` : /^none$/i.test(x.made || "") ? "Made outside any Day: in the plan, a tool or a machine."
           : `Caught on Day ${d.day}; its line does not say which Day made it.`;
-        return { id: x.id || `Day ${d.day}, defect ${i + 1}`, gate: gate.key, cause, escaped, back: back.has(x.id),
+        // Who noticed a defect caught in the work: a track, a review, the session itself, or something else.
+        const f = tagOf(x.found), by = gate.key !== "work" ? null : /^track\b/.test(f) ? "track" : /review/.test(f) ? "review" : f === "self" ? "self" : "other";
+        return { id: x.id || `Day ${d.day}, defect ${i + 1}`, day: d.day, gate: gate.key, cause, escaped, back: back.has(x.id), by,
           t: `${x.id || `Day ${d.day}, defect ${i + 1}`} · ${cause} · caught by: ${lower(gate.name)}`,
           b: [where + (back.has(x.id) ? ` The same problem as ${back.get(x.id)}, back again.` : "") + (gate.key === "work" && x.found ? ` Noticed by: ${x.found}.` : "")] };
       });
@@ -320,10 +372,35 @@ function model(DATA) {
       read.length ? `A second reader gave ${sum(read, r => r.differ)} of ${sum(read, r => r.tags)} tags differently.` : "",
       each.length ? `Each catch cost about ${andList(each.map(([c, name]) => `${money(c)} at ${name}`))}${late.length ? `, over the catches of the Days in the count: ${daySpan(late)} had a pull request merge after it` : ""}.` : "",
       countedAt && spent.size ? `The gates' runs and dollars are counted up to ${countedSay}.` : ""].filter(Boolean);
-    return { gates, rows,
+    // The pipeline: the same dots, at the same gates, with how often the other gates stopped something, over all dates.
+    const per = new Map(GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && inAt(g.key)).map(([g, s]) => [g.key, s.cost / inAt(g.key)]));
+    const refused = {}, failed = {};
+    (DATA.refusals || []).forEach(r => { refused[r.guard] = (refused[r.guard] || 0) + (r.refused || 0); });
+    (DATA.verification || []).forEach(v => new Set(v.failed_in || []).forEach(w => { failed[w] = (failed[w] || 0) + 1; }));
+    const merged = (DATA.rows || []).filter(r => r.pr).length, hooks = ((DATA.gate_report || {}).gates || []).find(g => g.gate === "hooks");
+    const runs = keys => { const s = keys.map(k => spent.get(k)).filter(Boolean); return s.length ? `${plural(sum(s, x => x.runs), "run", "runs")} · ${money(sum(s, x => x.cost))}` : ""; };
+    const nRefused = sum(Object.values(refused)), prFails = failed["PR checks"] || 0;
+    const notes = [runs(["auditor"]) && `auditors: ${runs(["auditor"])}`, runs(["seen red", "break on purpose"]) && `seen red and breaks: ${runs(["seen red", "break on purpose"])}`,
+      (DATA.refusals || []).length ? `${plural(nRefused, "refusal", "refusals")}${hooks ? ` · ${money(hooks.cost)}` : ""}` : "",
+      (DATA.verification || []).length ? `PR checks failed on ${plural(prFails, "pull request", "pull requests")}` : "", "", "", runs(["evidence replay"]) && `replay: ${runs(["evidence replay"])}`];
+    const prs = n => plural(n, "pull request", "pull requests");
+    const stages = PIPE.map((st, si) => ({ n: si + 1, name: st.name, note: notes[si] || "", gates: st.gates.map(g => {
+      const dots = g.pile ? CAUSES.flatMap(c => all.filter(o => o.gate === g.pile && o.cause === c)) : null;
+      const stop = g.guard ? `${refused[g.guard] || 0} refused` : g.ci ? `failed on ${prs(failed[g.ci] || 0)}` : g.merged ? `${prs(merged)} merged`
+        : g.relabel && read.length ? `${sum(read, r => r.differ)} of ${sum(read, r => r.tags)} tags read differently` : "";
+      const n = k => dots.filter(o => o.by === k).length;
+      const caught = dots && `${dots.length} caught` + (per.has(g.pile) && dots.length ? ` · about ${money(per.get(g.pile))} a catch` : "");
+      const plain = g.kit ? "nothing to check here" : g.nc ? "not counted yet" : g.inPr ? "in the PR checks' count" : "";
+      return { names: g.names, subs: g.subs || [], kind: g.leak ? "leak" : g.kit ? "kit" : g.inPr ? "small" : "valve", dots, stop, plain, caught,
+        by: g.pile === "work" && dots.length ? `by: tracks ${n("track")} · self ${n("self")} · review ${n("review")} · other ${n("other")}` : "",
+        t: g.names.join(" and "), b: [g.does, [caught, stop, plain].filter(Boolean).join("; ") + "."].filter(s => s !== ".") };
+    }) }));
+    const phases = PHASES.map(([name, ks]) => { const c = all.filter(o => ks.includes(o.gate)).length; return { name, n: c, pct: all.length ? Math.round(100 * c / all.length) : 0 }; });
+    const pipe = { stages, phases, escaped: nEsc, gates: sum(stages, s => sum(s.gates, g => g.names.length)) };
+    return { gates, rows, pipe,
       key: [...CAUSES.filter(c => c !== "other" || by(c)).map(c => ({ cls: `dot ${c}`, text: `${c.charAt(0).toUpperCase() + c.slice(1)} ${by(c)}` })),
         { cls: "dot ring", text: `Ringed: the same problem came back ${nBack}` }, { cls: "dot square", text: `Square: made on an earlier Day ${nEsc}` }],
-      say: `Each dot is one defect from a Day's Notes, ${all.length} in all, placed at the gate that caught it. Work passes the gates from left to right, so a dot further right was caught later.`,
+      say: `Work flows down the pipe, through ${pipe.gates} gates in seven stages. Each dot is one defect from a Day's Notes, ${all.length} in all, at the gate that caught it: the lower its tray, the later the catch. A grey number is how often a gate stopped something, over all dates. Point at a gate's name for what it checks.`,
       read: { t: !all.length ? "No defect is recorded yet" : at("auditor") ? `${plural(all.length, "defect", "defects")}; the auditors caught ${at("auditor")} of them before any code was written` : `${plural(all.length, "defect", "defects")} in the Days' Notes`,
         b: all.length ? [b.join(" ")] : [] },
       table: { head: ["Day", ...GATES.map(g => g.name), ...CAUSES.map(c => `Cause: ${c}`), "Escaped", "Came back", "Tags read differently", "Tags"],
@@ -430,6 +507,22 @@ function model(DATA) {
     const Y = DATA.yardsticks || {}, all = (Y.rows || []).map(parksFromRuns), cols = [...new Set([...days.map(d => d.day), ...(Y.days || [])])].sort((a, b) => a - b);
     const show = (r, v) => r.unit === "$" ? `$${v.toFixed(r.decimals)}` : `${v.toFixed(r.decimals)}${r.unit || ""}`;
     const has = r => (r.values || []).some(v => v.value != null);
+    // A row as a bullet: the last Day's bar, every Day's range, the average so far and the kit's tick, on the row's own
+    // scale (0 to 1), and the Day by Day trend beside it. Green or amber says whether the last Day beat the average,
+    // for the yardsticks where lower is better; refusals have no better direction.
+    const bullet = (r, every, lastAvg, fine) => {
+      // Only the columns' Days: the driver's run log can name a Day of the project it drove, which this page has no column for.
+      const inCols = every.filter(v => cols.includes(v.day)), vals = inCols.length ? inCols : every;
+      const last = vals[vals.length - 1], lo = Math.min(...vals.map(v => v.value)), hi = Math.max(...vals.map(v => v.value));
+      const top = Math.max(hi, r.baseline || 0, lastAvg ? lastAvg.value : 0) * 1.08 || 1, at = v => v / top;
+      const cmp = !lastAvg || !LOWER_BETTER.includes(r.key) ? "" : last.value < lastAvg.value ? "better" : last.value > lastAvg.value ? "worse" : "";
+      return { lo: at(lo), hi: at(hi), last: at(last.value), avg: lastAvg ? at(lastAvg.value) : null, base: r.baseline != null ? at(r.baseline) : null, cmp,
+        spark: cols.map((day, i) => { const v = r.values.find(x => x.day === day); return v && v.value != null ? { day, x: cols.length > 1 ? i / (cols.length - 1) : 0.5, y: at(v.value) } : null; }).filter(Boolean),
+        now: show(r, last.value), day: last.day, avgText: lastAvg ? show(fine, lastAvg.value) : "–",
+        t: `${r.name}: ${show(r, last.value)} on Day ${last.day}`,
+        b: [`Every Day between ${show(r, lo)} and ${show(r, hi)}${lastAvg ? `, average so far ${show(fine, lastAvg.value)}` : ""}${r.baseline != null ? `; the kit with a person driving every step: ${show(r, r.baseline)}` : "; no kit figure to compare"}.`
+          + (cmp ? ` The last Day was ${cmp} than the average.` : "")] };
+    };
     const rows = all.filter(has).map(r => {
       // The average so far is drawn on the same scale, so the scale must reach it too.
       const vals = r.values.filter(v => v.value != null), avgs = (r.average || []).map((a, i) => ({ a, day: (r.values[i] || {}).day })).filter(x => x.a != null);
@@ -451,7 +544,7 @@ function model(DATA) {
         cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
         over: cells.filter(c => c.over).length, n: vals.length, last: vals[vals.length - 1],
         note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v),
-        avg, avgNote: lastAvg ? `average so far: ${lastAvg.text}${noun ? ` over every ${noun}` : ""}` : "" };
+        avg, avgNote: lastAvg ? `average so far: ${lastAvg.text}${noun ? ` over every ${noun}` : ""}` : "", bullet: bullet(r, vals, lastAvg, fine) };
     });
     const waiting = all.filter(r => !has(r)).map(r => ({ name: r.name, why: (((r.values || []).filter(v => v.text).pop() || {}).text || "nothing is counted yet").replace(/^none(?: yet)?[:,]\s*/i, "") }));
     const based = rows.filter(r => r.line != null);
@@ -1409,13 +1502,46 @@ function draw(M, DATA) {
   /* Graph 7 */
   graph("g7", (m, mark) => {
     $("g7-say").textContent = m.say;
-    key("g7-key", [["", "Cause:"], ...m.key.map(k => [k.cls, k.text])]);
-    put("g7-plot", h("div", { class: "sieve" },
+    key("g7-key", [["", "Cause:"], ...m.key.map(k => [k.cls, k.text]), ["", "Grey: how often a gate stopped something, all dates"]]);
+    const P = m.pipe, dot = o => forDays(mark(h("button", { type: "button", class: `dot ${o.cause}${o.escaped ? " square" : ""}${o.back ? " ring" : ""}` }), o), [o.day]);
+    // The valves: a full one for a gate that stops work, a small one for a check counted under PR checks, a pale one for the kit's.
+    const valve = kind => {
+      const s = document.createElementNS(SVG_NS, "svg"), big = kind === "valve", r = big ? 15 : 10;
+      s.setAttribute("width", 2 * r); s.setAttribute("height", 2 * r); s.setAttribute("viewBox", `0 0 ${2 * r} ${2 * r}`); s.setAttribute("aria-hidden", "true");
+      s.setAttribute("class", `valve ${kind}`);
+      if (kind === "leak") { svgEl(s, "path", { class: "zig", d: "M26 6 l-6 4 l6 4 l-6 4 l6 4 l-6 4" }); s.setAttribute("width", 30); s.setAttribute("height", 30); s.setAttribute("viewBox", "0 0 30 30"); return s; }
+      svgEl(s, "circle", { class: "body", cx: r, cy: r, r: r - 1 });
+      svgEl(s, "circle", { class: "wheel", cx: r, cy: r, r: big ? 9 : 5.5 });
+      if (big) { svgEl(s, "path", { class: "wheel", d: "M15 15 L24 15 M15 15 L10.5 22.8 M15 15 L10.5 7.2" }); svgEl(s, "circle", { class: "hub", cx: 15, cy: 15, r: 2.6 }); }
+      return s;
+    };
+    const gate = g => h("div", { class: `pipe-row gate ${g.kind}` },
+      h("div", { class: "pipe-name" }, g.names.map((nm, i) => h("div", { class: "one" }, mark(h("button", { type: "button" }, nm), g), g.subs[i] && h("span", { class: "sub" }, g.subs[i])))),
+      h("div", { class: `pipe${g.names.length > 1 ? " two" : ""}` }, g.names.map(() => valve(g.kind))),
+      h("div", { class: "pipe-side" }, g.stop && h("span", { class: "stop" }, g.stop), g.plain && h("span", { class: "nc" }, g.plain),
+        g.dots && h("span", { class: "caught" }, g.caught), g.by && h("span", { class: "wsplit" }, g.by),
+        g.dots && g.dots.length > 0 && h("div", { class: "tray" }, g.dots.map(dot))));
+    const stage = st => h("div", { class: "pipe-stage" },
+      h("div", { class: "pipe-row stage-head" }, h("div", { class: "t" }, `${st.n} · ${st.name}`), h("div", { class: "pipe" }), h("div", { class: "n" }, st.note)),
+      st.gates.map(gate));
+    const end = (cls, text) => h("div", { class: `pipe-row ends ${cls}` }, h("div", { class: "end" }, text), h("div", { class: "pipe" }, h("div", { class: "end-cap" })), h("div"));
+    const pipeline = h("div", { class: "pipeline" },
+      h("div", { class: "split", role: "img", "aria-label": P.phases.map(p => `${p.name} ${p.n}`).join(", ") },
+        P.phases.map(p => h("div", { style: `flex:${Math.max(p.n, 0.0001)} 1 0` }, p.pct >= 6 ? `${p.pct}%` : ""))),
+      h("div", { class: "split-key" }, P.phases.map(p => h("div", null, h("b", null, `${p.pct}%`), `${p.name} · ${p.n}`))),
+      h("div", { class: "pipe-body" },
+        h("div", { class: "rail" }, h("span", null, `${P.escaped} got through a whole Day, caught on a later one`)),
+        end("in", "A Day's work"), stage(P.stages[0]),
+        h("div", { class: "pipe-loop" }, h("span", { class: "loop-label" }, "once per track PR"), P.stages.slice(1, 5).map(stage)),
+        P.stages.slice(5).map(stage), end("out", "Next Day")));
+    const sieve = h("div", { class: "sieve" },
       h("div", { class: "sieve-row head" }, h("div", { class: "sieve-day" }), h("div", { class: "sieve-gates" }, m.gates.map(g => h("div", { class: "sieve-gate" }, h("strong", null, g.name), h("span", null, g.sub)))),
         h("div", { class: "sieve-note" }, "Tags a second reader gave differently")),
       m.rows.map(r => forDays(h("div", { class: "sieve-row" }, h("div", { class: "sieve-day" }, `Day ${r.day}`),
         h("div", { class: "sieve-gates" }, r.cells.map(list => h("div", { class: "sieve-cell" }, list.map(o => mark(h("button", { type: "button", class: `dot ${o.cause}${o.escaped ? " square" : ""}${o.back ? " ring" : ""}` }), o))))),
-        h("div", { class: "sieve-note mono" }, r.note)), [r.day]))));
+        h("div", { class: "sieve-note mono" }, r.note)), [r.day])));
+    // The same dots one row per Day: the only view that sets the Days side by side, to see whether catches move earlier.
+    put("g7-plot", pipeline, h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), h("div", { class: "scroll-x" }, sieve)));
   });
 
   /* Graphs 8 and 9: stacked bars over a shared baseline, with rows of counts under them */
@@ -1466,25 +1592,27 @@ function draw(M, DATA) {
 
   /* Graph 2 */
   graph("g2", (m, mark) => {
-    key("g2-key", [["sw main", "At or under the kit's baseline, or no baseline"], ["sw over", "Above the kit's baseline"], ["dash", "Baseline"], ["sw avg", "Average so far"]]);
-    // The average so far, over the row's columns on the bars' own 34px scale; the columns are centred at i + 0.5.
-    const NS = "http://www.w3.org/2000/svg";
-    const avgSvg = r => {
-      const pts = r.avg.map(a => [m.cols.indexOf(a.day) + 0.5, 34 * (1 - a.y)]);
-      const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x},${y.toFixed(1)}`).join(" "), dots = pts.map(([x, y]) => `M${x},${y.toFixed(1)} h0`).join(" ");
-      const path = (cls, d) => { const p = document.createElementNS(NS, "path"); p.setAttribute("class", cls); p.setAttribute("d", d); return p; };
-      const svg = document.createElementNS(NS, "svg");
-      svg.setAttribute("class", "yard-avg"); svg.setAttribute("viewBox", `0 0 ${m.cols.length} 34`); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
-      svg.append(path("halo", line), path("line", line), path("dots", dots));
-      return svg;
+    key("g2-key", [["b-sw range", "Range of all Days"], ["b-sw last", "Last Day"], ["b-sw diamond", "Average so far"], ["b-sw kit", "The kit, with a person driving"]]);
+    const pct = v => `${(100 * v).toFixed(1)}%`;
+    // The trend, Day by Day, on the row's own scale; each Day's point lights with the Day buttons.
+    const spark = (r, B) => {
+      const s = document.createElementNS(SVG_NS, "svg"), X = p => (4 + p.x * 112).toFixed(1), Y = p => (30 - p.y * 26).toFixed(1);
+      s.setAttribute("viewBox", "0 0 120 34"); s.setAttribute("class", "b-spark"); s.setAttribute("aria-hidden", "true");
+      if (B.base != null) svgEl(s, "line", { class: "base", x1: 4, x2: 116, y1: Y({ y: B.base }), y2: Y({ y: B.base }) });
+      svgEl(s, "path", { class: "trend", d: B.spark.map((p, i) => `${i ? "L" : "M"}${X(p)} ${Y(p)}`).join(" ") });
+      B.spark.forEach((p, i) => forDays(svgEl(s, "circle", { class: i === B.spark.length - 1 ? "pt last" : "pt", cx: X(p), cy: Y(p), r: i === B.spark.length - 1 ? 2.8 : 1.8 }), [p.day]));
+      return s;
     };
-    put("g2-plot", h("div", { class: "yard" },
-      h("div", { class: "yard-row head" }, h("div", { class: "yard-name" }), h("div", { class: "yard-cells" }, m.cols.map(d => forDays(h("div", null, `Day ${d}`), [d]))), h("div", { class: "yard-note" })),
-      m.rows.flatMap(r => [h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, r.name),
-        h("div", { class: "yard-cells" }, r.cells.map(c => forDays(mark(h("button", { type: "button", class: "yard-cell" }, h("b", null, c.text), h("span", { class: c.over ? "over" : "", style: `height:${px(c.h * 34)}` })), c), [c.day])),
-          r.line != null && h("div", { class: "yard-line", style: `bottom:${px(r.line * 34)}` }), r.avg.length > 0 && avgSvg(r)),
-        h("div", { class: "yard-note" }, r.note, r.avgNote ? h("span", { class: "yard-avg-note" }, r.avgNote) : null)), r.foot && h("p", { class: "yard-foot" }, r.foot)]),
-      m.waiting.map(w => h("div", { class: "yard-row" }, h("div", { class: "yard-name" }, w.name), h("div", { class: "yard-wait" }, h("span", null, "Not measured yet: ", rich(w.why))), h("div", { class: "yard-note" }, "draws here once it is counted")))));
+    put("g2-plot", h("div", { class: "bullets" },
+      m.rows.flatMap(r => { const B = r.bullet; return [mark(h("div", { class: "b-row", tabindex: "0" },
+        h("div", { class: "b-name" }, r.name, h("small", null, r.note)),
+        h("div", { class: "b-bar" }, h("span", { class: "well" }), h("span", { class: "range", style: `left:${pct(B.lo)};width:${pct(Math.max(B.hi - B.lo, 0.005))}` }),
+          h("span", { class: "last", style: `width:${pct(Math.max(B.last, 0.004))}` }), B.avg != null && h("span", { class: "diamond", style: `left:${pct(B.avg)}` }),
+          B.base != null && h("span", { class: "kit", style: `left:${pct(B.base)}` })),
+        spark(r, B),
+        h("div", { class: "b-now" }, h("span", { class: B.cmp }, B.now), h("small", null, `Day ${B.day} · avg ${B.avgText}`))), B),
+        r.foot && h("p", { class: "yard-foot" }, r.foot)]; }),
+      m.waiting.map(w => h("div", { class: "b-row" }, h("div", { class: "b-name" }, w.name, h("small", null, "draws here once it is counted")), h("div", { class: "yard-wait" }, h("span", null, "Not measured yet: ", rich(w.why)))))));
   });
 
   /* Graph 10 */
