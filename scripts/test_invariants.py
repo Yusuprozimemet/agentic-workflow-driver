@@ -198,6 +198,109 @@ class InvariantsTest(unittest.TestCase):
         self.assertIn("OK", result.stdout)
 
 
+FROZEN_SPEC = """# Day 01
+
+## Acceptance criteria
+
+- [x] C01.1 **hold** — The files Day 1 does not change are unchanged since `{sha}`: Verify's
+      diff prints nothing.
+      Evidence: the diff printed nothing.
+- [x] C01.2 **new** — Something else.
+
+## Verify
+```bash
+python -m unittest discover -s tests
+git -c core.safecrlf=false diff --exit-code {sha} -- driver/a.py hooks
+```
+"""
+REPLACING_SPEC = """# Day 02
+
+## Acceptance criteria
+
+- [x] C02.1 **hold** — The files Day 2 does not change are unchanged since `{sha}`.
+      Replaces: C01.1 — was: the files Day 1 does not change are unchanged, over a list that holds `driver/a.py`.
+
+## Verify
+```bash
+git -c core.safecrlf=false diff --exit-code {sha} -- hooks
+```
+"""
+
+
+class SpecFreezeTest(unittest.TestCase):
+    """A hold in force whose Verify block runs `git diff --exit-code <sha> -- <paths>` freezes
+    those paths, as the specs say at the base (D10.1: Day 9's #142 edited what C08.1 froze)."""
+
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.repo = self.folder.name
+        for args in (("init", "-q", "-b", "main"), ("config", "core.autocrlf", "false"),
+                     ("config", "user.name", "Test"), ("config", "user.email", "test@example.com"),
+                     ("config", "commit.gpgsign", "false")):
+            git(self.repo, *args)
+        for path in ("driver/a.py", "driver/b.py", "hooks/guard.py"):
+            write(self.repo, path, f"# {path}\n")
+        self.commit("the code")
+        self.sha = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=self.repo,
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        write(self.repo, "specs/day-01-a.md", FROZEN_SPEC.format(sha=self.sha))
+        self.commit("Day 1's spec")
+
+    def tearDown(self):
+        self.folder.cleanup()
+
+    def commit(self, message):
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", message)
+
+    def change(self, *paths, spec=None):
+        """The script's exit code and stdout over a branch that edits the paths (and writes Day
+        2's spec, when given), the fixture's commit printed as `<sha>` so a report is fixed."""
+        git(self.repo, "checkout", "-q", "-b", "change")
+        if spec:
+            write(self.repo, "specs/day-02-b.md", spec.format(sha=self.sha))
+        for path in paths:
+            write(self.repo, path, f"# {path}, edited\n")
+        self.commit("the change")
+        run = subprocess.run([sys.executable, SCRIPT, "main", "change"], cwd=self.repo,
+                             capture_output=True, text=True, encoding="utf-8")
+        return run.returncode, run.stdout.replace(self.sha, "<sha>")
+
+    def test_an_edit_of_a_file_a_hold_in_force_freezes_fails_and_names_the_hold(self):
+        code, out = self.change("driver/a.py")
+        self.assertEqual(code, 1, out)
+        self.assertIn("C01.1 freezes driver/a.py (unchanged since <sha>): modified", out)
+
+    def test_a_file_added_under_a_frozen_directory_fails(self):
+        code, out = self.change("hooks/hook_log.py")
+        self.assertEqual(code, 1, out)
+        self.assertIn("C01.1 freezes hooks/hook_log.py (unchanged since <sha>): added", out)
+
+    def test_an_edit_of_a_file_no_hold_freezes_passes(self):
+        code, out = self.change("driver/b.py")
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 spec freeze in force (C01.1)", out)
+
+    def test_a_replaced_hold_freezes_nothing(self):
+        write(self.repo, "specs/day-02-b.md", REPLACING_SPEC.format(sha=self.sha))
+        self.commit("Day 2's spec replaces C01.1")
+        code, out = self.change("driver/a.py")
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 spec freeze in force (C02.1)", out)
+
+    def test_a_hold_an_unticked_criterion_replaces_freezes_nothing(self):
+        # The day's spec-change PR has merged; its criterion is ticked only at the close (#123).
+        write(self.repo, "specs/day-02-b.md", REPLACING_SPEC.format(sha=self.sha).replace("- [x]", "- [ ]"))
+        self.commit("Day 2's spec, not yet closed, replaces C01.1")
+        code, out = self.change("driver/a.py")
+        self.assertEqual(code, 0, out)
+
+    def test_the_specs_are_the_bases_so_a_change_cannot_replace_the_hold_it_breaks(self):
+        code, out = self.change("driver/a.py", spec=REPLACING_SPEC)
+        self.assertEqual(code, 1, out)
+        self.assertIn("C01.1 freezes driver/a.py (unchanged since <sha>): modified", out)
+
+
 class JobNameTest(unittest.TestCase):
     def test_the_job_that_runs_it_is_named_for_frozen_files(self):
         # Branch protection requires the check by this name, so a rename is a settings change too.
