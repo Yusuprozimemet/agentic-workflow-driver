@@ -9,6 +9,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
 
 PROJECT = "sample-shop"
@@ -480,6 +481,8 @@ def demo():
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",
                                   chance_draws=1000),
                   break_line_from_pr=0, project=PROJECT, phases=PHASES, stops=[]))
+    # Counted from the example Days' Defect lines as the real data is, so the two cannot drift apart.
+    out["defect_counts"] = defect_counts(out["days"])
     out["score"] = quality_score(out)
     return out
 
