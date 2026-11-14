@@ -1578,10 +1578,12 @@ function draw(M, DATA) {
       h("div", { class: "pipe-row stage-head" }, h("div", { class: "t" }, `${st.n} · ${st.name}`), h("div", { class: "pipe" }), h("div", { class: "n" }, st.note)),
       st.gates.map(gate));
     const end = (cls, text) => h("div", { class: `pipe-row ends ${cls}` }, h("div", { class: "end" }, text), h("div", { class: "pipe" }, h("div", { class: "end-cap" })), h("div"));
-    const pipeline = h("div", { class: "pipeline" },
+    // The split, the key and the readout sit in a panel beside the pipe that stays in view while the pipe scrolls past.
+    put("g7-split",
       h("div", { class: "split", role: "img", "aria-label": P.phases.map(p => `${p.name} ${p.n}`).join(", ") },
         P.phases.map(p => h("div", { style: `flex:${Math.max(p.n, 0.0001)} 1 0` }, p.pct >= 6 ? `${p.pct}%` : ""))),
-      h("div", { class: "split-key" }, P.phases.map(p => h("div", null, h("b", null, `${p.pct}%`), `${p.name} · ${p.n}`))),
+      h("div", { class: "split-key" }, P.phases.map(p => h("div", null, h("b", null, `${p.pct}%`), `${p.name} · ${p.n}`))));
+    const pipeline = h("div", { class: "pipeline" },
       h("div", { class: "pipe-body" },
         h("div", { class: "rail" }, h("span", null, `${P.escaped} got through a whole Day, caught on a later one`)),
         end("in", "A Day's work"), stage(P.stages[0]),
@@ -1594,7 +1596,8 @@ function draw(M, DATA) {
         h("div", { class: "sieve-gates" }, r.cells.map(list => h("div", { class: "sieve-cell" }, list.map(o => mark(h("button", { type: "button", class: `dot ${o.cause}${o.escaped ? " square" : ""}${o.back ? " ring" : ""}` }), o))))),
         h("div", { class: "sieve-note mono" }, r.note)), [r.day])));
     // The same dots one row per Day: the only view that sets the Days side by side, to see whether catches move earlier.
-    put("g7-plot", pipeline, h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), h("div", { class: "scroll-x" }, sieve)));
+    put("g7-plot", pipeline);
+    put("g7-days", h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), h("div", { class: "scroll-x" }, sieve)));
   });
 
   /* Graphs 8 and 9: stacked bars over a shared baseline, with rows of counts under them */

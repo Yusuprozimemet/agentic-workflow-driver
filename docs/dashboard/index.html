@@ -169,9 +169,18 @@
       <h2>Does the checking work, and is it worth it?</h2>
       <p class="graph-say" id="g7-say">Work flows down the pipe, through the gates in seven stages. Each dot is one defect from a Day's Notes, at the gate that caught it: the lower its tray, the later the catch.</p>
     </div>
-    <div class="legend" id="g7-key"></div>
-    <div class="scroll-x" id="g7-plot"></div>
-    <div class="readout" id="g7-read" aria-live="polite"></div>
+    <div class="g7-body">
+      <div class="scroll-x" id="g7-plot"></div>
+      <aside class="g7-panel" aria-label="Reading panel">
+        <p class="g7-h">When the catches came</p>
+        <div id="g7-split"></div>
+        <p class="g7-h">Key</p>
+        <div class="legend" id="g7-key"></div>
+        <p class="g7-h">In focus</p>
+        <div class="readout" id="g7-read" aria-live="polite"></div>
+      </aside>
+    </div>
+    <div id="g7-days"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
   </section>
 
