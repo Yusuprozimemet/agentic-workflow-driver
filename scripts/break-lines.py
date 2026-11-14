@@ -123,7 +123,11 @@ def main(argv=None):
             print(line)
         bad = sum(not ok for ok, _ in results)
         cites = sum(not line.startswith("not in the spec") for _, line in results)
-        print(f"break-lines: {cites - bad} of {cites} broken: lines in {a.spec} agree with {path}")
+        # An unchecked line passes, but it is not counted as agreeing: "27 of 27 agree" was printed
+        # for a spec whose 27 lines were all unchecked (instrument-auditor, 2026-11-14).
+        unchecked = sum(line.startswith("unchecked: ") for _, line in results)
+        held = f", {unchecked} unchecked (its entry has no report)" if unchecked else ""
+        print(f"break-lines: {cites - bad - unchecked} of {cites} broken: lines in {a.spec} agree with {path}{held}")
         return 1 if bad else 0
     base = a.base or git("merge-base", "main", "HEAD").stdout.strip() or None
     lines, unrecorded = pr_lines(added(path, base))

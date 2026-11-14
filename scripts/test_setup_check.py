@@ -183,6 +183,30 @@ class CopiedListsTest(unittest.TestCase):
                 names |= {m.strip().strip('"') for m in re.findall(r"^    name: (.+)$", f.read(), re.M)}
         self.assertEqual(set(setup_check.REQUIRED + setup_check.OPTIONAL) - names, set())
 
+    def test_the_breaks_replay_is_required_and_every_required_check_reports_on_every_pull_request(self):
+        # #151 and #152 merged with "A track's breaks replay" red: it ran, and nothing required it.
+        self.assertIn("A track's breaks replay", setup_check.REQUIRED)
+        # A required check that never starts on a pull request blocks its merge: no path or branch
+        # filter on the trigger, and no condition on the job but always().
+        workflows = os.path.join(ROOT, ".github", "workflows")
+        jobs = {}
+        for file in os.listdir(workflows):
+            if not file.endswith((".yml", ".yaml")):
+                continue
+            with open(os.path.join(workflows, file), encoding="utf-8") as f:
+                text = f.read()
+            trigger = re.search(r"^on:\n(.*?)^\S", text, re.M | re.S).group(1)
+            for job in re.split(r"(?m)^  (?=[\w-]+:\n)", text.split("\njobs:\n", 1)[1]):
+                name = re.search(r"^    name: (.+)$", job, re.M)
+                if name:
+                    jobs[name.group(1).strip().strip('"')] = (file, trigger, re.findall(r"^    if: (.+)$", job, re.M))
+        for check in setup_check.REQUIRED:
+            file, trigger, conditions = jobs[check]
+            on_pr = re.search(r"^  pull_request:.*?\n(.*?)(?=^  \S|\Z)", trigger, re.M | re.S)
+            self.assertIsNotNone(on_pr, f"{check} ({file}) does not run on pull requests")
+            self.assertNotRegex(on_pr.group(1), r"(?m)^    (paths|paths-ignore|branches|branches-ignore):", f"{check} ({file})")
+            self.assertEqual([c for c in conditions if c.strip() != "always()"], [], f"{check} ({file})")
+
     def test_the_kit_rule_requires_the_same_checks(self):
         with open(os.path.join(ROOT, "docs", "kit.md"), encoding="utf-8") as f:
             rule = re.search(r"```json\s*\n\s*(\{\"required_status_checks\".*?)```", f.read(), re.S).group(1)

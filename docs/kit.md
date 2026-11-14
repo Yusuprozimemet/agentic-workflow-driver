@@ -106,6 +106,10 @@ Control activation in a copied kit (CI checks must also be required in branch pr
   On a pull request the same check rehearses a closing branch's replay before the merge
   (`scripts/close-evidence.py --rehearse`); it blocks the merge only once required in branch
   protection.
+- **Track breaks replay:** "A track's breaks replay" reports on every pull request: a day's track
+  replays its breaks and the day's earlier tracks' on Linux, and every branch checks that each
+  closed Day's in-force breaks still apply. Required by name, it blocks a merge on a break that no
+  longer replays (Day 10's #151 and #152 merged with it red while it was not).
 - **Auditor guard hook:** active by default in Claude Code sessions that load
   `.claude/settings.json`; guards the configured auditors' commands and stop state. It is a
   command guard, not a sandbox (`CLAUDE.md`, "The auditors").
@@ -147,8 +151,8 @@ On GitHub, in this order:
 - Before Day 1, branch protection on `main`: a pull request before merging, and these checks
   required by name: "Description uses the template", "Diff stays reviewable", "Branch, title,
   commits and Jira keys agree", "Frozen files stay unedited", "Dashboard metric tests gate",
-  "Criteria keep their wording", "A closed day's evidence replays", "Track tests seen red", and
-  the project's tests. The settings page offers only checks
+  "Criteria keep their wording", "A closed day's evidence replays", "Track tests seen red",
+  "A track's breaks replay", and the project's tests. The settings page offers only checks
   that have already run; the API takes any name. Write the rule to a file (a bash heredoc fails
   in PowerShell):
 
@@ -156,7 +160,8 @@ On GitHub, in this order:
   {"required_status_checks": {"strict": false, "contexts": ["Description uses the template",
     "Diff stays reviewable", "Branch, title, commits and Jira keys agree",
     "Frozen files stay unedited", "Dashboard metric tests gate", "Criteria keep their wording",
-    "A closed day's evidence replays", "Track tests seen red", "<the project's tests>"]},
+    "A closed day's evidence replays", "Track tests seen red", "A track's breaks replay",
+    "<the project's tests>"]},
    "enforce_admins": false, "required_pull_request_reviews": null, "restrictions": null}
   ```
 

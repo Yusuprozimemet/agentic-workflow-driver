@@ -6,9 +6,11 @@ writes five files, since the real one reads this machine's transcripts.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -157,6 +159,44 @@ class PublishCountsTest(unittest.TestCase):
         self.assertEqual(git(self.origin, "rev-parse", "dashboard-data^"), first)
         self.assertEqual(json.loads(git(self.origin, "show", "dashboard-data:docs/dashboard/sessions.json")),
                          ["one", "two"])
+
+
+# Stands in for a count that fails with a report of 20 lines, all inside the 500 characters it keeps.
+NOISY = "import sys\nsys.exit('\\n'.join(f'line {n} of the report' for n in range(20)))\n"
+STAMPED = re.compile(r"\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d \[(\d+)\] (.*)\Z")
+
+
+class LogTest(unittest.TestCase):
+    def test_detached_runs_together_write_whole_lines_each_after_its_moment_and_pid(self):
+        # The log had no times, and two sessions ending together tore a line in two
+        # ("...up to 2026-11-14publish-counts: pushed to ...").
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo, counter = os.path.join(tmp.name, "repo"), os.path.join(tmp.name, "counter.py")
+        with open(counter, "w") as f:
+            f.write(NOISY)
+        git(tmp.name, "init", "-q", "-b", "main", repo)
+        runs = 6
+        for _ in range(runs):
+            subprocess.run([sys.executable, SCRIPT, "--repo", repo, "--counter", counter, "--detach"],
+                           check=True, env=ENV)
+        log = os.path.join(repo, ".claude", "state", "publish-counts.log")
+        lines = []
+        for _ in range(240):
+            with open(log, "rb") as f:
+                lines = f.read().decode("utf-8").splitlines()
+            if sum("line 19 of the report" in line for line in lines) == runs:
+                break
+            time.sleep(0.25)
+        body = re.compile(r"\A(publish-counts: the count failed: )?line \d+ of the report\Z")
+        pids = set()
+        for line in lines:
+            stamped = STAMPED.match(line)
+            # Fixed words, not the line: it holds a moment and a pid, which differ from run to run.
+            self.assertIsNotNone(stamped, "a line with no moment and pid")
+            self.assertTrue(body.match(stamped.group(2)), "a line torn or joined to another")
+            pids.add(stamped.group(1))
+        self.assertEqual((len(lines), len(pids)), (runs * 20, runs))
 
 
 class WiringTest(unittest.TestCase):

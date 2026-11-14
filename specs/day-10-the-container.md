@@ -492,7 +492,7 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       count `len(setup_check.REQUIRED) + 2` made `+ 3`. `tests.yml` does not run it;
       `spec-drift-tests.yml` runs every `scripts/test_*.py`.
       Evidence: the command above passes with the seven tests' edits alone (#158); broken once at the close, which #158 had not done (D10.21).
-      broken: the bypass line put in place of the pull request line → AssertionError: 10 != 11
+      broken: the bypass line put in place of the pull request line → AssertionError: 11 != 12
 - [x] C10.30 **new** — Live: one step of the trial's project ran in the container. In
       `docs/trial/day-10.md`: the run log's `start`, `pid` and `end` lines with
       `"container": "driver-<session>"`; the `end` line's outcome "opened: #<n> from `<branch>`"

@@ -36,6 +36,7 @@ REQUIRED = (
     "Criteria keep their wording",
     "A closed day's evidence replays",
     "Track tests seen red",
+    "A track's breaks replay",
 )
 # Kit checks that are not required, so not the project's tests either.
 OPTIONAL = ("Every service is wired into compose and Prometheus",)
