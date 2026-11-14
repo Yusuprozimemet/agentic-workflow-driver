@@ -135,6 +135,35 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(head["next"], "Day 03 Track A: `run`")
         self.assertEqual(head["took"], "")
 
+    def test_where_we_are_has_a_tile_per_day_of_each_phase_and_names_the_next_stop(self):
+        rows = [dict(phase=0, days=[1, 2], stop=2, lifted=True, from_day=None, cut=False),
+                dict(phase=1, days=[3, 4, 5], stop=5, lifted=False, from_day=None, cut=False),
+                dict(phase=2, days=[], stop=None, lifted=False, from_day=6, cut=False)]
+        days = [a_day(1), a_day(2, "closed", criteria=dict(total=3, ticked=2)),
+                a_day(3, "active", tracks=["A", "B", "C", "D"], tracks_merged=["A"])]
+        w = model(data(days=days, order=[1, 2, 3, 4, 5], now=dict(current_day=3, next_step="Day 03 Track B: `x`", stop_after=5),
+                       meta=dict(phases=["Ground", "Build", "Chain"], where=dict(rows=rows, names={"4": "the reviewer"}))))["where"]
+        self.assertEqual((w["kicker"], w["count"], w["next"]),
+                         ("Day 3 in progress", "2 of 5 numbered Days finished · Day 3: 1 of 4 tracks merged", "Day 03 Track B: `x`"))
+        self.assertEqual(w["stop"], "Day 5, 3 Days to go. The work halts there until the maintainer lifts it.")
+        self.assertEqual([(r["name"], r["sub"], r["unnumbered"]) for r in w["rows"]],
+                         [("0. Ground", "Days 1–2 · stop at Day 2, lifted", ""), ("1. Build", "Days 3–5 · stop at Day 5", ""),
+                          ("2. Chain", "from Day 6", "Not numbered yet: from Day 6")])
+        tiles = [t for r in w["rows"] for t in r["tiles"]]
+        self.assertEqual([(t["label"], t["state"], t["bar"], t["end"], t["stop"], t["lifted"]) for t in tiles],
+                         [("01", "done", None, False, False, False), ("02", "open", None, True, True, True),
+                          ("03", "active", 0.25, False, False, False), ("04", "planned", None, False, False, False),
+                          ("05", "planned", None, True, True, False)])
+        self.assertEqual(tiles[1]["text"], "Day 02 · Day 2: thing · closed, boxes open · 2 of 3 criteria ticked · ends a phase · "
+                         "stop, lifted by a course correction")
+        self.assertEqual(tiles[3]["text"], "Day 04 · the reviewer · provisional: plan.md names it, no spec yet")
+        between = model(data(days=[a_day(1), a_day(2)], order=[1, 2, 3, 4, 5], now=dict(next_step="Day 03: write its day spec", stop_after=5),
+                             meta=dict(phases=["Ground", "Build"], where=dict(rows=rows[:2], names={}))))["where"]
+        self.assertEqual((between["kicker"], [t["state"] for t in between["rows"][1]["tiles"]]), ("Between Days", ["next", "planned", "planned"]))
+        self.assertIsNone(model(data())["where"])  # no "Day-by-day specs" list: the plain Now line stays
+        drawn = boot(data(days=days, order=[1, 2, 3, 4, 5], meta=dict(phases=["Ground", "Build", "Chain"], where=dict(rows=rows, names={}))))
+        self.assertEqual((drawn["error"], drawn["logged"]), (None, []))
+
     def test_the_header_says_how_many_dates_the_days_took(self):
         # A Day is a step of the plan, not a calendar day: two Days share a date here. The Day in progress is not
         # counted, and neither is a pull request outside any Day that merged later, whatever Day its row carries.

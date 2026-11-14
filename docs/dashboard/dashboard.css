@@ -614,3 +614,43 @@ footer { font-size: 12.5px; color: var(--muted); }
 .quality .limit { margin: 10px 0 4px; }
 .days button .dq { margin-left: 7px; font: 500 12px var(--mono); opacity: .75; font-variant-numeric: tabular-nums; }
 @media (max-width: 560px) { .q-row { grid-template-columns: 1fr 28px; } .q-row .q-bar { grid-column: 1 / -1; grid-row: 2; } .q-where { grid-column: 1 / -1; } }
+
+/* ---------- where we are: plan.md's phases, a tile per Day ---------- */
+.where { padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.where h2 { font: 700 22px/1.2 var(--display); margin-bottom: 4px; }
+.where-cols { display: flex; flex-wrap: wrap; gap: 20px 36px; margin-top: 14px; align-items: flex-start; }
+.where-left { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.where-right { flex: 999 1 540px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.where-kick { font: 500 12px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.where-count { font-size: 15px; color: var(--ink-2); }
+.where-next { background: var(--wash); border-radius: 8px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
+.where-step { font-size: 17px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.where-stop { color: var(--ink-2); padding: 8px 12px; border: 1px solid var(--line); border-left: 5px solid var(--s4); border-radius: 8px; }
+.where-stop:empty { display: none; }
+#where-rows { display: flex; flex-direction: column; gap: 10px; }
+.where-row { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.where-phase { flex: 0 0 230px; min-width: 0; display: flex; flex-direction: column; }
+.where-phase small { color: var(--muted); font-size: 12.5px; }
+.where-tiles { flex: 1 1 280px; display: flex; flex-wrap: wrap; gap: 8px; }
+.wt { position: relative; width: 56px; height: 46px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  font: 500 14px/1 var(--mono); padding: 0; box-sizing: border-box; background: var(--card); color: var(--ink); border: 1.5px solid var(--axis); }
+.wt.done { background: var(--unproven); border-color: var(--proven); }
+.wt.open { background: var(--well); border: 1.5px dashed var(--repair); }
+.wt.next { border: 2px solid var(--spec); }
+.wt.ready { border: 1.5px solid var(--spec); }
+.wt.active { background: var(--wash); border: 2px solid var(--spec); }
+.wt.planned { border-style: dashed; color: var(--muted); }
+.wt.cut { border-style: dashed; color: var(--muted); text-decoration: line-through; }
+.wt.stop::after { content: ""; position: absolute; top: -1.5px; bottom: -1.5px; right: -7px; width: 5px; border-radius: 0 3px 3px 0; background: var(--s4); }
+.wt.stop.lifted::after { background: var(--s2); }
+.wt[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--ink); }
+.wt-end { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--process); }
+.wt-bar { position: absolute; left: 6px; right: 6px; bottom: 5px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.wt-bar i { display: block; height: 100%; background: var(--spec); }
+.wt-wide { display: inline-flex; align-items: center; min-height: 46px; padding: 0 14px; border: 1.5px dashed var(--axis); border-radius: 8px; color: var(--muted); font-size: 13px; }
+.where-read { min-height: 38px; padding: 8px 12px; border-radius: 8px; background: var(--well); color: var(--ink-2); font-size: 13px; }
+.where-key { padding-top: 8px; border-top: 1px solid var(--line); }
+.wt.key { width: 22px; height: 16px; border-radius: 4px; display: inline-block; }
+.wt.key .wt-end { top: 3px; right: 3px; width: 4px; height: 4px; }
+.wt.key.stop { margin-right: 6px; }
+.wt.key.stop::after { right: -5px; width: 3px; }
