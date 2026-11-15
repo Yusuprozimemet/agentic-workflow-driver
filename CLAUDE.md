@@ -125,6 +125,7 @@ own specs: in this repository that session has read past its own errors more tha
 | the closing PR of Phase 3 (level 3: phases chain, the last phase `plan.md` names) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
 | every close, after the Notes are written | defect-rater, on `relabel.py`'s blind file | Does a reader who did not write the day tag its defects the same way? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
+| a PR edits a brief in `.claude/agents/` that has cases (`specs/agent-cases/`: the defect-rater so far) | `python scripts/agent-cases.py <agent>` | Does the agent still answer its known cases as it did? A count, not a gate: paste its lines in the PR, and `--record` when the maintainer accepts the new count. |
 | only when the maintainer asks for it by name | instrument-auditor | Starting from a picture of every view of the live page, those behind a button or a closed section included: is each view true when recounted from git and GitHub, and what does each say needs fixing, in the dashboard or in the project? "On the tooling": do the tooling scripts still enforce the rules they were written for? |
 
 The instrument-auditor is manual only: no step of a day, no close, no phase end and no driver run

@@ -1,0 +1,24 @@
+{
+ "agent": "defect-rater",
+ "cases": [
+  {
+   "spec": "specs/day-09-phase-1-leftovers.md",
+   "at": "173e525e18f59bb1ae6747a65e597e3fd0353a30"
+  },
+  {
+   "spec": "specs/day-10-the-container.md",
+   "at": "173e525e18f59bb1ae6747a65e597e3fd0353a30"
+  },
+  {
+   "spec": "specs/day-11-where-am-i.md",
+   "at": "173e525e18f59bb1ae6747a65e597e3fd0353a30"
+  }
+ ],
+ "recorded": {
+  "stage": 88,
+  "cause": 81,
+  "made": 89,
+  "runs": 3,
+  "brief": "cb70d80"
+ }
+}
