@@ -16,7 +16,7 @@ Only when the maintainer asks, by name. Nothing in the day loop, a close, step 6
 `run-steps.py` starts you, and your report is advice: what becomes a PR is the maintainer's call.
 If the maintainer names a scope ("the dashboard", "the break tooling", "graph 7"), keep to it.
 
-**Aim to finish in about 15 minutes.** The first run took 46 minutes, almost all of it waiting on
+**Aim to finish in about 18 minutes.** The first run took 46 minutes, almost all of it waiting on
 a full replay of every break that returned nothing. So: never run the whole test suite, never
 replay breaks by running their checks (unless the maintainer asks "on the breaks"), never wait on
 a background command, and stop at the step budgets below. A finding with a time-boxed "not
@@ -32,12 +32,22 @@ Write this to a scratch file outside the repository (the system temp directory) 
 import sys
 from playwright.sync_api import sync_playwright
 
+OPEN_ALL = """() => {
+    const d = [...document.querySelectorAll('details')];
+    d.forEach(x => { x.open = true; });
+    return d.length + ' opened: ' + d.map(x =>
+        (x.querySelector('summary')?.innerText || '?').trim().slice(0, 50)).join(' | ');
+}"""
+UNSCROLL = "e => { e.style.overflow = 'visible'; e.style.width = e.scrollWidth + 'px'; }"
+
 out = sys.argv[1]
 with sync_playwright() as p:
     b = p.chromium.launch(channel="msedge")
     page = b.new_page(viewport={"width": 1400, "height": 1000})
     page.goto("https://yusuprozimemet.github.io/agentic-workflow-driver/", wait_until="networkidle")
     page.wait_for_timeout(1500)
+    print(page.evaluate(OPEN_ALL))
+    page.wait_for_timeout(1000)
     h = page.evaluate("document.documentElement.scrollHeight")
     for n, y in enumerate(range(0, h, 1000)):
         page.screenshot(
@@ -45,16 +55,29 @@ with sync_playwright() as p:
             full_page=True,
             clip={"x": 0, "y": y, "width": 1400, "height": min(1000, h - y)},
         )
+    for n, el in enumerate(page.query_selector_all(".scroll-x")):
+        w = el.evaluate("e => e.scrollWidth > e.clientWidth ? e.scrollWidth : 0")
+        if w:
+            el.evaluate(UNSCROLL)
+            el.screenshot(path=f"{out}/wide-{n:02d}.png")
+            print(f"wide-{n:02d}.png", w, "px")
     print(page.evaluate("document.body.innerText.length"), "chars;", h, "px")
     b.close()
 ```
 
-Read every slice, top to bottom, and list what looks wrong, before reading any code: a graph
+It opens every collapsed section first (`<details>`: "Needs attention", "The ladder: where on
+the plan each Day lands", "By Day: each Day's catches side by side", every "Exact numbers"), so
+the slices show what a reader who opens them sees. A box that scrolls sideways is cut at 1400 px
+in the slices; each one wider than that is saved whole as `wide-NN.png`. Read those too.
+
+Read every slice and wide file, top to bottom, and list what looks wrong, before reading any code: a graph
 empty or cut off, a banner saying data is missing, overlapping text, a sentence that is no longer
 true, two places on the page that state the same figure differently, a status that contradicts
 another (a promise "broken" under a check that says it passed), the header's commit not being
-`main`'s head (`git rev-parse origin/main`). That list, plus the figures it shows, is what the
-rest of the audit investigates first.
+`main`'s head (`git rev-parse origin/main`), an opened section that disagrees with the graph it
+details (the ladder with graph 1, "By Day" with graph 7's totals and graph 2's counts, "Needs
+attention" with the statuses it lists). That list, plus the figures it shows, is what the rest
+of the audit investigates first.
 
 ## 2. Recount (about 5 minutes)
 
@@ -83,6 +106,17 @@ through the dashboard's code. Report each: where on the page, stated, recounted,
 
 Name the instrument whose tests would let a wrong value through, and the wrong value.
 
+## 5. What the graphs say about the pipeline (about 3 minutes)
+
+Once the figures are trusted, read them for the pipeline, not the page. Start from "By Day:
+each Day's catches side by side": for each Day, where its catches landed (spec audit, seen red,
+break, CI, the close, the replay after the merge) and whether the later Days catch earlier than
+the first ones. Then the other graphs: which stage catches most and which catches nothing, what
+a Day costs (graph 8) against what it caught, where time or replies pile up, and what "Needs
+attention" keeps listing Day after Day. Name at most three changes that would move catches
+earlier or cost less, each with the graph and figures it rests on. These are suggestions, read
+from the graphs; do not build or try them.
+
 ## How to work
 
 - Read-only. Never edit, create or delete tracked files; never commit, push, open a PR or comment.
@@ -101,6 +135,7 @@ Name the instrument whose tests would let a wrong value through, and the wrong v
     5. Rules with no enforcement: <list>
     6. Breaks that no longer apply: <list, or "N of N apply">
     7. Weakest instrument test: <which, and the wrong value it would let through>
+    8. What the graphs say about the pipeline: <up to three changes, each with its graph and figures>
 
     Findings: <numbered, most serious first; each with evidence and a suggested fix>
     Not checked, and why: <short list, including anything cut by the time budget>
