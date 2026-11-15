@@ -1,6 +1,6 @@
 # Day 12 — The reviewer: its brief, its read-only settings, the before-and-after comparison, its verdict on the PR, a blocker's fix
 
-**Phase:** 2 · **Depends on:** Day 11 · **Expected PRs:** 10 (the spec change, Tracks A, B, C, D, E0, E1, E2, F, the close)
+**Phase:** 2 · **Depends on:** Day 11 · **Expected PRs:** 11 (the spec change, a second spec change for C12.23, Tracks A, B, C, D, E0, E1, E2, F, the close)
 
 ## Goal
 Once a pull request's required checks are green, the driver starts a reviewer session, new and
@@ -169,7 +169,7 @@ check's fix share the two fixes a pull request has.
 | C | | `review.snapshot`, `review.changed`: C12.6, C12.7 |
 | D | | `review.verdict`, `review.body`, `issues.pr_comment`, the fake `gh`'s `pr comment`: C12.8–C12.10 |
 | E0 | | Refactor only: `once.command` out of `once.begin`, `loop.fix` out of `loop.resume`; no criterion |
-| E1 | | The `review` switch; `review.run`; `loop.wait_reviewed`: C12.11, C12.12, C12.16–C12.19, C12.22 |
+| E1 | | The `review` switch; `review.run`; `loop.wait_reviewed`: C12.11, C12.12, C12.16–C12.19, C12.22, C12.23 |
 | E2 | | The blocker's fix within the shared two: C12.13–C12.15, C12.20 |
 | F | | Live: `--agents` and `--agent` from a file, the read-only settings refusing a commit: C12.21 |
 
@@ -369,15 +369,20 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ReviewLiveTest.test_agent_from_file`, `ReviewLiveTest.test_commit_refused`.
       Plan: P63 "reaches the session with `--agents` and `--agent`"
 
-- [ ] C12.22 **new** — As C12.12 with the pull request read `MERGED` at `wait_reviewed`'s first
-      `pr view` (the maintainer merged it as the checks went green): no reviewer session starts,
-      no `pr comment` is recorded, and the run goes on as `wait_merge` reads a merged pull
-      request today. And with a fake `git` that exits 1 on `status` before the review: `on`
-      prints "cannot read the project: git failed before the review of #12", exits 2, and starts
-      no reviewer session. Red today: no reviewer.
-      Test: `ReviewLoopTest.test_merged_before_review`, `ReviewLoopTest.test_snapshot_git_fails`.
+- [ ] C12.22 **new** — As C12.12 with a fake `git` that exits 1 on `status` before the review:
+      `on` prints "cannot read the project: git failed before the review of #12", exits 2, and
+      starts no reviewer session. Red today: no reviewer.
+      Test: `ReviewLoopTest.test_snapshot_git_fails`.
       Plan: P63 "the driver compares HEAD, the refs, the stash and `git status` before and after
       it"
+- [ ] C12.23 **hold** — As C12.12 with the pull request read `MERGED` at `wait_reviewed`'s first
+      `pr view` (the maintainer merged it as the checks went green): no reviewer session starts,
+      no `pr comment` is recorded, and the run goes on as `wait_merge` reads a merged pull
+      request today. True today: no reviewer runs at all. Broken in Track E1 by reading a merged
+      pull request as an open one.
+      Test: `ReviewLoopTest.test_merged_before_review`.
+      Plan: none — what a pull request merged before its review gets; `plan.md` says the
+      reviewer runs before the merge, not what happens when the maintainer merges first.
 
 ## Verify
 ```bash
@@ -462,6 +467,7 @@ edited. The fake `gh` in `tests/test_github.py` gains Track D's `pr comment`.
   It is caught by `WaitTest.test_red_after_two_fixes_parks` (the three other named tests pass
   with it in). Left to the track that adds the check or the code it breaks:
   - C12.20, Track E1: the reviewer run when `review` is absent.
+  - C12.23, Track E1: a merged pull request reviewed (the MERGED read taken as open).
   - C12.21, Track F: `broken: none` (it skips where it is replayed); the PR reports the run with
     `--agent probe` left out.
 - **Defect** D12.1 — found: auditor · cause: spec · made: Day 12 · the switch was to be set in the repository's `driver.json`, which is gitignored and untracked, so C12.11's clause could fail in CI (fixed in this PR: the maintainer sets it).
@@ -488,6 +494,7 @@ edited. The fake `gh` in `tests/test_github.py` gains Track D's `pr comment`.
 - **Defect** D12.22 — found: auditor · cause: spec · made: Day 12 · four `Plan:` lines claimed more than their criteria show: C12.17's P31, C12.5's P22, C12.12's P64 (fixed in this PR); C12.12's P55 now asserts the cost.
 - **Defect** D12.23 — found: auditor · cause: spec · made: Day 12 · the spec did not say `status` shows the reviewer as one more step row with no estimate (fixed in this PR: Out of scope, H12.3).
 - **Defect** D12.24 — found: auditor · cause: spec · made: Day 12 · the Notes said H09.2 and H10.2 go to Day 14 "as Day 11's Notes say"; Day 11 says Day 13 cites them and passes them on (fixed in this PR).
+- **Defect** D12.25 — found: seen red · cause: spec · made: Day 12 · C12.22 tagged `new` a first half, a merged pull request starting no reviewer, that is true on `main`, where no reviewer runs at all; "Track tests seen red" failed Track E1's PR (#214) on `ReviewLoopTest.test_merged_before_review` (fixed in a second spec change: that half is C12.23, a `hold`).
 - **Hand-off** H12.1 → Day 13: H10.1's question, whether the level 2 merge needs `live-check` run
   in the image, is the merge's call: this day runs the reviewer in the image (C12.19, C12.21)
   but merges nothing.
