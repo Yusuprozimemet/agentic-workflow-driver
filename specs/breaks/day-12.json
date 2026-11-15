@@ -1,0 +1,3 @@
+[
+ {"what": "a third fix allowed for red checks (C12.20)", "file": "driver/loop.py", "find": "if used >= 2:", "replace": "if used >= 3:", "command": ["python", "-m", "unittest", "tests.test_wait.WaitTest.test_red_after_two_fixes_parks"], "report": "AssertionError: 3 != 2", "blob": "e9de19fc53b109337cb6d04cba57868950d2c895"}
+]
