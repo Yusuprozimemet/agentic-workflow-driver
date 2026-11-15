@@ -1,5 +1,5 @@
 """The reviewer in `on` (driver/once.py, driver/review.py): C12.11's review key in driver.json, and
-C12.12, C12.16 to C12.19 and C12.22 on the run. The reviewer is the case's second claude call, after the
+C12.12, C12.16 to C12.19, C12.22 and C12.23 on the run. The reviewer is the case's second claude call, after the
 step's, from tests/fake_review.py; in the container it is the second docker run, from tests/fake_docker.py.
 A report holds no head, no state folder and no session uuid: the placeholders stand in for them."""
 
@@ -339,7 +339,7 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
         )
 
     def test_merged_before_review(self):
-        # C12.22, first half: a pull request merged before its review starts no reviewer session.
+        # C12.23: a pull request merged before its review starts no reviewer session.
         self.review("merged_first", [{"text": REVIEW_ONLY}], views=[view("MERGED", head=HEAD)])
         code, out, _ = self.on()
         step, reviewer = self.uuids()
@@ -357,7 +357,7 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
         )
 
     def test_snapshot_git_fails(self):
-        # C12.22, second half: a git whose status fails stops the run with code 2, before any reviewer.
+        # C12.22: a git whose status fails stops the run with code 2, before any reviewer.
         self.review("git_fails", [{"text": REVIEW_ONLY}])
         self.secrets = self.folder / "secrets.env"
         script = self.folder / "git.py"
