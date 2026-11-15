@@ -21,11 +21,18 @@ push keeps the files it does not write, and a push rejected because another one 
 built again on the branch as it now stands.
 """
 import argparse
+import atexit
+import datetime
 import json
 import os
 import subprocess
 import sys
 import tempfile
+
+if os.name == "nt":
+    import msvcrt
+else:
+    import fcntl
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = ("token-usage.json", "refusals.json", "gates.json", "sessions.json", "counted.json")
@@ -173,12 +180,73 @@ def put(repo, remote, branch, paths, message, dispatch):
     return ask_rebuild(repo) if dispatch else 0
 
 
+class LineLog:
+    """What a detached count prints, written into its log a whole line at a time under a lock, each
+    line after its moment and the writer's pid. Two sessions that end together count together: their
+    output, appended as it came, tore a line in two ("...up to 2026-11-14publish-counts: pushed..."),
+    and with no times the log could not say which count a line belonged to or when it ran."""
+
+    def __init__(self, path):
+        self.path, self.part = path, ""
+        atexit.register(self.close)
+
+    def write(self, text):
+        *lines, self.part = (self.part + text).split("\n")
+        for line in lines:
+            self.append(line)
+        return len(text)
+
+    def flush(self):
+        pass
+
+    def close(self):
+        if self.part:
+            self.append(self.part)
+            self.part = ""
+
+    def append(self, line):
+        stamp = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        data = f"{stamp} [{os.getpid()}] {line.rstrip(chr(13))}\n".encode("utf-8")
+        with open(self.path, "ab") as f:
+            locked = lock(f)
+            try:
+                f.seek(0, os.SEEK_END)
+                f.write(data)
+                f.flush()
+            finally:
+                if locked:
+                    unlock(f)
+
+
+def lock(f):
+    """Holds the log's first byte (Windows) or the whole file (POSIX) until unlock; False when the
+    lock could not be had in about ten seconds, and the line is written anyway."""
+    try:
+        if os.name == "nt":
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        return True
+    except OSError:
+        return False
+
+
+def unlock(f):
+    if os.name == "nt":
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
 def detach(argv, repo):
     """Starts the same command without --detach and returns at once: a session's end hook is given
-    about a second, and the count and the push take longer. What it printed is in the log."""
+    about a second, and the count and the push take longer. What it prints is in the log, through
+    LineLog; the log takes the process's own output too, for a failure before Python runs it."""
     log = os.path.join(repo, ".claude", "state", "publish-counts.log")
     os.makedirs(os.path.dirname(log), exist_ok=True)
-    cmd = [sys.executable, os.path.abspath(__file__)] + [a for a in argv if a != "--detach"]
+    cmd = [sys.executable, os.path.abspath(__file__)] + [a for a in argv if a != "--detach"] + ["--log", log]
     with open(log, "ab") as out:
         io = dict(stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, cwd=repo)
         if os.name != "nt":
@@ -205,7 +273,10 @@ def main(argv=None):
                     help="the script that writes driver-runs.json from the driver's run log")
     ap.add_argument("--put", nargs="+", metavar="FILE", help="push these files to the branch as they are, no count")
     ap.add_argument("--message", help="the commit subject for --put")
+    ap.add_argument("--log", help=argparse.SUPPRESS)  # set by --detach: write the output through LineLog
     args = ap.parse_args(argv)
+    if args.log:
+        sys.stdout = sys.stderr = LineLog(args.log)
     if args.detach:
         return detach(argv, args.repo)
     if args.put:

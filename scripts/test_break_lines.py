@@ -118,7 +118,17 @@ class SpecCheckTest(Scratch):
         run = self.check(spec("broken: the guard off → anything", "broken: none → a reader judged it"), [hand])
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("unchecked: the guard off (C12.1)", run.stdout)
-        self.assertIn("break-lines: 1 of 1 broken: lines", run.stdout)
+        # An unchecked line is not counted as agreeing: "27 of 27 agree" was printed with all 27 unchecked.
+        self.assertIn("break-lines: 0 of 1 broken: lines in specs/day-12-guard.md agree with "
+                      "specs/breaks/day-12.json, 1 unchecked (its entry has no report)", run.stdout)
+
+    def test_the_count_holds_agreeing_and_unchecked_lines_apart(self):
+        hand = {k: v for k, v in entry(what="by hand").items() if k not in ("report", "blob")}
+        run = self.check(spec("broken: the guard off → AssertionError: the guard is off", "broken: by hand → x"),
+                         [entry(), hand])
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("break-lines: 1 of 2 broken: lines in specs/day-12-guard.md agree with "
+                      "specs/breaks/day-12.json, 1 unchecked (its entry has no report)", run.stdout)
 
 
 if __name__ == "__main__":
