@@ -12,7 +12,10 @@ were the first wiring: the terminal's Claude Code 2.1.170 ran them, the VS Code 
 Each brief said "Read-only", and all but the defect-rater had Bash to break it with; one auditor
 ran `git checkout main` in a replay clone. `pre` blocks, wherever it points, a git command that
 changes a repository (checkout, commit, stash, a new branch, fetch, ...) and a gh command that is
-not a read (anything but list, view, status, diff, checks, and `gh api` GETs). It reads the
+not a read (anything but list, view, status, diff, checks, and `gh api` GETs). One write passes:
+`git -C <absolute path> fetch` into another repository, so the instrument-auditor can bring its
+scratch clone up to date (blocked in its audit of 2026-11-15); "another" means a different git
+common directory, so a worktree of this repository, which shares its refs, is still blocked. It reads the
 command, not what a program does: `python -c` with `open(..., "w")` or `subprocess` gets through.
 So `stop` compares the repository with what it was before the auditor's first command: HEAD, the
 branch, every ref, the stash and `git status`. A change sends the auditor back to put it back and
@@ -28,6 +31,7 @@ the system's temp directory, removed at the stop.
 """
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -96,13 +100,39 @@ def _program(token):
     return name[:-4] if name.endswith(".exe") else name
 
 
-def _git(args):
-    i = 0
+def _native(path):
+    """A Git Bash path (/c/Users/...) as Windows names it; any other path as it stands."""
+    m = re.match(r"/([a-zA-Z])(/|$)", path) if os.name == "nt" else None
+    return f"{m.group(1)}:/{path[3:]}" if m else path
+
+
+def _common_dir(path):
+    out = subprocess.run(["git", "-C", path, "rev-parse", "--path-format=absolute",
+                          "--git-common-dir"], capture_output=True, text=True)
+    found = out.stdout.strip() if out.returncode == 0 else ""
+    return os.path.normcase(os.path.realpath(found)) if found else None
+
+
+def _another_repository(path, repo):
+    """True when `path` is an absolute path into a repository that is not `repo` or its worktree."""
+    path = _native(path)
+    if not repo or not os.path.isabs(path):
+        return False
+    theirs = _common_dir(path)
+    return theirs is not None and theirs != _common_dir(repo)
+
+
+def _git(args, repo=None):
+    i, where = 0, None
     while i < len(args) and args[i].startswith("-"):
+        if args[i] == "-C" and i + 1 < len(args):
+            where = args[i + 1]
         i += 2 if args[i] in GIT_OPTIONS_WITH_VALUE else 1
     if i >= len(args) or args[i] not in GIT_WRITES:
         return None
     sub, rest = args[i], args[i + 1:]
+    if sub == "fetch" and where and _another_repository(where, repo):
+        return None
     if sub in GIT_READ_FORMS and (rest[0] if rest else "") in GIT_READ_FORMS[sub]:
         return None
     if sub in ("branch", "tag"):
@@ -137,8 +167,9 @@ def _gh(args):
     return f"gh {args[0]} {verb} is not a read".replace("  ", " ")
 
 
-def blocked(command):
-    """Why `command` writes to a repository or GitHub, or None if it only reads."""
+def blocked(command, repo=None):
+    """Why `command` writes to a repository or GitHub, or None if it only reads; `repo` is the
+    repository the auditor must leave as it found it."""
     for segment in _segments(command):
         i = 0
         while i < len(segment) and (_program(segment[i]) in WRAPPERS or "=" in segment[i].split("/")[0]
@@ -147,11 +178,11 @@ def blocked(command):
         if i >= len(segment):
             continue
         program, args = _program(segment[i]), segment[i + 1:]
-        reason = _git(args) if program == "git" else _gh(args) if program == "gh" else None
+        reason = _git(args, repo) if program == "git" else _gh(args) if program == "gh" else None
         if program in SHELLS or program == "eval":
             for j, arg in enumerate(args):
                 if program == "eval" or (j and args[j - 1] in ("-c", "-Command")):
-                    reason = reason or blocked(arg)
+                    reason = reason or blocked(arg, repo)
         if reason:
             return reason
     return None
@@ -192,7 +223,7 @@ def run(mode, data, repo, store):
         return 0, ""
     snapshot = os.path.join(store, f"{data.get('agent_id') or 'main'}.json")
     if mode == "pre":
-        reason = blocked((data.get("tool_input") or {}).get("command", ""))
+        reason = blocked((data.get("tool_input") or {}).get("command", ""), repo)
         if reason:
             return 2, (f"auditor-guard: blocked, {reason}. Auditors only read; report what you "
                        "would have run instead.")

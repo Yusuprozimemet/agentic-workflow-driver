@@ -139,7 +139,8 @@ the others' reports: their disagreement is part of the result.
 
 "Read-only" is enforced as far as a hook can: `.claude/settings.json` runs
 `scripts/auditor-guard.py` on every Bash command and every subagent's stop. For the six
-auditors with Bash it blocks a git command that changes a repository and a `gh` command that is
+auditors with Bash it blocks a git command that changes a repository (but `git -C <absolute
+path> fetch` into another repository, a scratch clone, passes) and a `gh` command that is
 not a read, and at the auditor's stop it compares HEAD, the refs, the stash and `git status` with
 what they were and sends the auditor back once if they changed; the main session and other agents
 pass. It is not a sandbox: it reads the command, not what a program does (`python -c` that writes

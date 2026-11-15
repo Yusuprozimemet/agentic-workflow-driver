@@ -31,8 +31,10 @@ does not.
 ## 1. Picture every view (about 3 minutes)
 
 The live page is what readers see: <https://yusuprozimemet.github.io/agentic-workflow-driver/>.
-Write this to a scratch file outside the repository (the system temp directory) and run it with
-`python <file> <scratch dir>`; it takes about a minute and uses the installed Edge:
+Write this to a scratch file outside the repository (the system temp directory) with the Write
+tool, never through a shell (a heredoc or `echo` can drop a backslash and break the script), and
+run it with `python <file> <scratch dir>`; it takes about a minute and uses the installed Edge.
+Besides the pictures it saves `sd.json`, the data the live page was built from:
 
 ```python
 import sys
@@ -44,7 +46,8 @@ OPEN_ALL = """() => {
     return d.length + ' opened';
 }"""
 UNSCROLL = "e => { e.style.overflow = 'visible'; e.style.width = e.scrollWidth + 'px'; }"
-TEXT = "e => e.innerText.replace(/\\n{2,}/g, '\\n').slice(0, 3000)"
+NL = "String.fromCharCode(10)"  # no backslash anywhere in the JavaScript: nothing to lose
+TEXT = f"e => e.innerText.split({NL}).filter(l => l.trim()).join({NL}).slice(0, 3000)"
 CLOSE = "() => document.querySelectorAll('section.graph details').forEach(x => { x.open = false; })"
 GRAPHS = ["g1", "g2", "g3", "g12", "g6", "g7", "g8", "g9", "g10", "g11"]
 
@@ -88,6 +91,8 @@ with sync_playwright() as p:
     page = b.new_page(viewport={"width": 1400, "height": 1000})
     page.goto("https://yusuprozimemet.github.io/agentic-workflow-driver/", wait_until="networkidle")
     page.wait_for_timeout(1500)
+    with open(f"{out}/sd.json", "w", encoding="utf-8") as f:
+        f.write(page.evaluate("() => JSON.stringify(window.SPEC_DRIFT)"))
     print(page.evaluate(OPEN_ALL))
     page.wait_for_timeout(1000)
     h = page.evaluate("document.documentElement.scrollHeight")
@@ -177,6 +182,9 @@ page changed, or this script is out of date), never a reason to skip the view.
 
 Go down this list in order. Every row gets an answer in the report, "not checked, and why" included.
 If the page has a view this list lacks (a new graph, a new button), add it at the end and say so.
+Keep about two minutes a row: a recount that would take longer is "not checked, and why", not a
+reason to stop before row 18. Then read each `wide-NN.png` the script printed (about 3 minutes):
+a box that is cut off or overlaps is a finding.
 
 | # | View | Pictures |
 |---|---|---|
@@ -207,8 +215,9 @@ For each view, read its picture and its text in `views.txt`, then write four lin
   `gh`, the spec files, `specs/plan/promises.json` or the `dashboard-data` branch
   (`git show origin/dashboard-data:docs/dashboard/<file>.json`), by a route that does not go
   through the dashboard's code (`docs/dashboard/dashboard.js`, `scripts/spec_drift_*.py`). Say the
-  command. `python scripts/spec-drift.py --out <scratch>/sd.json --cache <scratch>/c.json`, run once,
-  is the page's data: compare with it to tell a data error from a drawing error, never to recount.
+  command. `<scratch>/sd.json`, saved by the script in step 1, is the page's data (`now.head` is
+  the commit it was built at): compare with it to tell a data error from a drawing error, never to
+  recount. Do not run `scripts/spec-drift.py`: it takes 20 minutes and more.
 - **Its own words:** the sentence the view prints about itself (the readout, the line under the
   title). Is it still true of the picture and of the repository?
 - **Says to fix:** what the view, read as true, asks for. Name the items and the figures: for the
@@ -261,6 +270,16 @@ most serious first, each with evidence and a suggested fix.
 
 - Read-only. Never edit, create or delete tracked files; never commit, push, open a PR or comment.
   Write scratch files and clones only outside the repository (the system temp directory).
+- Read git as GitHub has it from a clone of your own, made once:
+  `git clone -q https://github.com/Yusuprozimemet/agentic-workflow-driver <scratch>/repo`, then
+  `git -C <scratch>/repo show origin/main:<path>` and `origin/dashboard-data`. To bring it up to
+  date, `git -C <absolute path of the clone> fetch -q`: the guard lets a fetch through only so,
+  into a repository that is not this one or a worktree of it.
+- Pull requests' failed checks, in two calls, never one per pull request (GitHub times out on
+  `statusCheckRollup` for many):
+  `gh run list --status failure --event pull_request --limit 2000 --json headBranch,workflowName,databaseId`
+  and `gh pr list --state merged --limit 400 --json number,headRefName` to match a run to its
+  pull request by branch.
 - You may run the repository's own scripts, and experiments that leave nothing behind.
 - Every finding carries its evidence: a picture's file name, a command and its output (trimmed),
   or file:line. Keep the output you print small: filter to the lines that matter.
