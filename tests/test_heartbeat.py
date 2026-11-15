@@ -1,8 +1,9 @@
 """The heartbeat file (Day 11, Track C): --once writes <state>/heartbeat.json at its start and at each poll, so
 a session that is quiet for a while, as a tool that runs for seconds is, still shows its last event and the
-time of the last poll. The case runs a fake claude that prints its init line and sleeps, with the driver's
---poll at 0.3 seconds, and reads the file twice while the session is quiet. No report here names a pid, uuid
-or path."""
+time of the last poll. The case runs a fake claude that prints its init line as a poll's issue read
+begins, then stays quiet until the test releases it. The driver's --poll is 0.3 seconds and each issue
+read sleeps two seconds; the test reads the file once its last_event is that init line and again at a
+later poll, then releases the fake. No report here names a pid, uuid or path."""
 
 import datetime
 import json
@@ -24,6 +25,7 @@ from tests.test_halt import stop
 from tests.test_once import DASHED, driver_copy
 from tests.test_once_halt import kill_left_over
 from tests.test_once_park_issues import build
+from tests.test_phone import wait_for_reads
 
 SYSTEM = {"type": "system", "subtype": "init"}
 KEYS = ["last_event", "poll", "session", "started", "step"]
@@ -37,6 +39,14 @@ def parsed_stamp(value):
         return datetime.datetime.strptime(value, lock.STAMP)
     except (TypeError, ValueError):
         return None
+
+
+def later(beat, earlier):
+    # True when both beats' polls read with lock.STAMP, and the beat's is later than the earlier beat's.
+    if not (isinstance(beat, dict) and isinstance(earlier, dict)):
+        return False
+    now, before = parsed_stamp(beat.get("poll")), parsed_stamp(earlier.get("poll"))
+    return now is not None and before is not None and now > before
 
 
 class HeartbeatTest(unittest.TestCase):
@@ -58,12 +68,38 @@ class HeartbeatTest(unittest.TestCase):
             self.fail("the heartbeat file does not hold a JSON object")
         self.fail("the session wrote no heartbeat")
 
+    def beat_where(self, state, wanted, bound=30):
+        # The heartbeat file read every 0.05 seconds until wanted(beat) is true, or the bound passes. It returns
+        # the beat wanted, or else the last beat read, so that the test's check reports what it saw.
+        deadline = time.monotonic() + bound
+        beat = self.heartbeat(state)
+        while not wanted(beat) and time.monotonic() < deadline:
+            time.sleep(0.05)
+            beat = self.heartbeat(state)
+        return beat
+
     def test_heartbeat_beats_through_a_quiet_tool(self):
-        # The fake prints its init line, then sleeps for four seconds: a quiet tool that the bound of one
-        # minute does not end. Its own result line comes after the sleep, when the session ends.
-        do = f"print({json.dumps(SYSTEM)!r}, flush=True)\nimport time; time.sleep(4)\n"
+        # The fake prints its init line as a poll's issue read begins, then stays quiet until the test writes
+        # its release file: a quiet tool that the bound of one minute does not end. Its own result line comes
+        # after the release, when the session ends.
         folder = Path(tempfile.mkdtemp(dir=self.root))
+        release = folder / "release"
+        # The init line comes as a poll's issue read begins, and each read sleeps two seconds, as on a
+        # busy machine. The fake then waits for the release file, or for 30 seconds.
+        do = (
+            wait_for_reads(folder / "gh" / "calls.jsonl", 1, 30)
+            + f"print({json.dumps(SYSTEM)!r}, flush=True)\n"
+            + "import os, time\n"
+            + "deadline = time.monotonic() + 30\n"
+            + f"while not os.path.exists({str(release)!r}) and time.monotonic() < deadline:\n"
+            + "    time.sleep(0.02)\n"
+        )
         flags = build(folder, drift=drift_of(DASHED), do=do)
+        gh_file = folder / "gh" / "fake.json"
+        spec = json.loads(gh_file.read_bytes())
+        spec["sleep_on"] = "list"
+        spec["sleep"] = 2
+        gh_file.write_bytes(json.dumps(spec).encode("utf-8"))
         copy = driver_copy(tempfile.mkdtemp(dir=self.root))
         self.addCleanup(kill_left_over, folder / "claude")
         state = folder / "state"
@@ -80,16 +116,27 @@ class HeartbeatTest(unittest.TestCase):
         deadline = time.monotonic() + 30
         while True:
             files = list((state / "sessions").glob("*.events.jsonl"))
-            if files and files[0].read_bytes().strip():
+            # A line still being written does not end in a newline: the wait goes on until one does.
+            if files and b"\n" in files[0].read_bytes().lstrip():
                 break
             if time.monotonic() >= deadline:
                 self.fail("the session wrote no events line")
             time.sleep(0.05)
-        t0 = time.monotonic()
-        time.sleep(max(0, t0 + 0.5 - time.monotonic()))
-        first = self.heartbeat(state)
-        time.sleep(max(0, t0 + 2.5 - time.monotonic()))
-        second = self.heartbeat(state)
+        # The init line's time, as the heartbeat's last_event names it: the events file's first non-blank line.
+        init = next(
+            (line for line in files[0].read_bytes().decode("utf-8").splitlines() if line.strip()),
+            "",
+        )
+        try:
+            init_at = json.loads(init).get("at")
+        except ValueError:
+            init_at = None
+        # The first beat that names the init line, then a beat from a later poll, both read while the fake is quiet.
+        first = self.beat_where(
+            state, lambda beat: isinstance(beat, dict) and beat.get("last_event") == init_at
+        )
+        second = self.beat_where(state, lambda beat: later(beat, first))
+        release.write_bytes(b"go\n")
         if not (isinstance(first, dict) and isinstance(second, dict)):
             self.fail("the heartbeat file does not hold a JSON object")
         runs = [
