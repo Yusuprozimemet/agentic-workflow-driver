@@ -105,8 +105,8 @@
 {"date":"2026-11-15","day":null,"model":"claude-opus-5-5","agent":"general-purpose","input":90,"cache_write":153035,"cache_read":5502762,"output":23658,"replies":45,"bash":39,"cut":0,"reads":5,"whole":0,"cost":2.3392,"cost_past_150k":0.2842},
 {"date":"2026-11-15","day":null,"model":"claude-opus-5-5","agent":"instrument-auditor","input":70,"cache_write":88604,"cache_read":2251802,"output":22570,"replies":35,"bash":32,"cut":0,"reads":7,"whole":2,"cost":1.3451,"cost_past_150k":0},
 {"date":"2026-11-15","day":null,"model":"claude-opus-5-5","agent":"main","input":1182,"cache_write":1381929,"cache_read":52150311,"output":349734,"replies":542,"bash":412,"cut":18,"reads":45,"whole":8,"cost":28.4849,"cost_past_150k":1.1792},
-{"date":"2026-11-15","day":12,"model":"claude-haiku-5-5","agent":"implementer","input":320,"cache_write":594818,"cache_read":10220782,"output":208637,"replies":155,"bash":91,"cut":6,"reads":15,"whole":3,"cost":0.6331,"cost_past_150k":0.2206},
+{"date":"2026-11-15","day":12,"model":"claude-haiku-5-5","agent":"implementer","input":326,"cache_write":597341,"cache_read":10499996,"output":210320,"replies":158,"bash":94,"cut":6,"reads":15,"whole":3,"cost":0.637,"cost_past_150k":0.2206},
 {"date":"2026-11-15","day":12,"model":"claude-opus-5-5","agent":"instrument-auditor","input":170,"cache_write":242196,"cache_read":5817117,"output":52520,"replies":83,"bash":69,"cut":0,"reads":17,"whole":14,"cost":3.4255,"cost_past_150k":0},
-{"date":"2026-11-15","day":12,"model":"claude-opus-5-5","agent":"main","input":724,"cache_write":501253,"cache_read":36303909,"output":219690,"replies":331,"bash":244,"cut":7,"reads":7,"whole":0,"cost":15.6675,"cost_past_150k":5.0947},
+{"date":"2026-11-15","day":12,"model":"claude-opus-5-5","agent":"main","input":826,"cache_write":626648,"cache_read":41488617,"output":252096,"replies":374,"bash":275,"cut":7,"reads":7,"whole":0,"cost":18.3561,"cost_past_150k":5.0947},
 {"date":"2026-11-15","day":12,"model":"claude-opus-5-5","agent":"spec-auditor","input":152,"cache_write":179400,"cache_read":9101011,"output":57201,"replies":76,"bash":68,"cut":5,"reads":8,"whole":0,"cost":3.8618,"cost_past_150k":1.3373}
 ]
