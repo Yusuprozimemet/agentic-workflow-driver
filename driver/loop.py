@@ -55,16 +55,21 @@ def wait_found(args, project, line, record):
 
 
 def resume(args, project, number, record, command, failed, used):
-    # Runs one fix: the fix line is written before the session starts, so that a crash during it
-    # still counts. Returns (line, code), as the session's outcome reads.
-    session = record["session"]
+    # Builds the fix's prompt from the failed checks and runs it through fix().
     names = ", ".join(entry["name"] for entry in failed)
     log = github.failed_lines(project, args.gh, failed)
-    runlog.fix(args.state, session, number, used + 1)
     prompt = (
         f"The required checks failed on #{number}: {names}.\n{log}\n"
         "Fix this step's pull request, push, and stop.\n"
     )
+    return fix(args, project, number, record, command, prompt, used)
+
+
+def fix(args, project, number, record, command, prompt, used):
+    # Runs one fix of a pull request: the fix line is written before the session starts, so that a
+    # crash during it still counts. Returns (line, code), as the session's outcome reads.
+    session = record["session"]
+    runlog.fix(args.state, session, number, used + 1)
     again = ["--resume" if part == "--session-id" else part for part in command]
     done = once.run_session(again, prompt, args, project, record["issue"], record)
     if done is None:

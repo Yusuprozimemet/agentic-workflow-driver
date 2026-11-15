@@ -596,6 +596,35 @@ def reached(args, home, project, config):
     return session, box.reach(args.docker, image, secrets, home, args.state, project, session)
 
 
+def command(args, home, config, settings, session, extra=()):
+    # The session's claude command line, before any container wraps it; `extra` goes before
+    # --session-id (the reviewer's --agents and --agent, Track E1).
+    boxed = "container_image" in config
+    return [
+        "claude" if boxed else shutil.which(args.claude),
+        "-p",
+        "--model",
+        args.model,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--max-budget-usd",
+        str(config["budget_usd"]),
+        "--permission-mode",
+        "auto",
+        "--strict-mcp-config",
+        "--settings",
+        "/state/container-settings.json" if boxed else settings,
+        "--append-system-prompt-file",
+        "/driver/rules/session.md"
+        if boxed
+        else os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
+        *extra,
+        "--session-id",
+        session,
+    ]
+
+
 def begin(args, home, project, config, step, session):
     # Everything a session needs before it starts: its uuid, the run's issue, the settings, the run
     # log's start line, the command and the prompt. Returns (record, command, prompt, None), or
@@ -626,30 +655,9 @@ def begin(args, home, project, config, step, session):
         issue=record["issue"],
         container=record.get("container"),
     )
-    command = [
-        "claude" if boxed else path,
-        "-p",
-        "--model",
-        args.model,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--max-budget-usd",
-        str(config["budget_usd"]),
-        "--permission-mode",
-        "auto",
-        "--strict-mcp-config",
-        "--settings",
-        "/state/container-settings.json" if boxed else settings_path,
-        "--append-system-prompt-file",
-        "/driver/rules/session.md"
-        if boxed
-        else os.path.join(os.path.abspath(str(home)), "rules", "session.md"),
-        "--session-id",
-        session,
-    ]
+    argv = command(args, home, config, settings_path, session)
     if boxed:
-        command = box.command(
+        argv = box.command(
             args.docker,
             image,
             config["container_secrets"],
@@ -657,14 +665,14 @@ def begin(args, home, project, config, step, session):
             args.state,
             project,
             record["container"],
-            command,
+            argv,
         )
     # The prompt is on stdin, not in an argument: cmd.exe drops a newline and what follows it.
     prompt = (
         f"Next step: {sentence}\n"
         "Do this one step as CLAUDE.md says, open its one pull request, and stop.\n"
     )
-    return record, command, prompt, None
+    return record, argv, prompt, None
 
 
 def transcripts(args, record):
