@@ -4,6 +4,7 @@ parks; the halt file stops the wait. The driver runs as a subprocess, with the f
 tests/test_once.py, which writes the session's transcript under CLAUDE_CONFIG_DIR, and the fake gh
 of tests/test_github.py."""
 
+import datetime
 import json
 import os
 import shutil
@@ -117,6 +118,16 @@ def starts_of(folder):
     return jsonl(folder / "claude" / "starts.jsonl")
 
 
+def stamp_of(record):
+    # The record's at read with lock.STAMP, or None when it is not one.
+    from driver import lock
+
+    try:
+        return datetime.datetime.strptime(record.get("at"), lock.STAMP)
+    except (TypeError, ValueError):
+        return None
+
+
 def stop(proc):
     # A driver the test left running is killed, so that no case outlives its test.
     if proc.poll() is None:
@@ -184,13 +195,18 @@ class UsageLimitTest(unittest.TestCase):
             text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
         return code, (text.replace(session, "<uuid>") if session else text).splitlines()
 
-    def halt_after_end(self, folder):
-        # Writes the halt file once the run log holds the session's first end line (30 s at most).
-        until = time.monotonic() + 30
+    def wait_end(self, folder, bound=60):
+        # Waits until the run log holds the session's first end line, or the bound passes; returns whether it does.
+        until = time.monotonic() + bound
         while "end" not in events(folder) and time.monotonic() < until:
             time.sleep(0.1)
-        (folder / "state" / "halt").write_bytes(b"halted by the test\n")
         return "end" in events(folder)
+
+    def halt_after_end(self, folder):
+        # Writes the halt file once the run log holds the session's first end line (60 s at most).
+        ended = self.wait_end(folder)
+        (folder / "state" / "halt").write_bytes(b"halted by the test\n")
+        return ended
 
     def test_waits_and_resumes(self):
         # C09.1: the session hits a limit two seconds ahead and is resumed after it.
@@ -221,16 +237,31 @@ class UsageLimitTest(unittest.TestCase):
         self.assertEqual((code, len(starts_of(folder)), lines[-1:], len(parks)), (1, 2, [AGAIN], 1))
 
     def test_far_reset_parks(self):
-        # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
+        # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for. The 10 seconds
+        # are counted from the session's start to the park line's end line, not from the driver's start, which
+        # a busy machine slows: the start-up and the issue creates before the park line take their time.
         far = "park: the usage limit resets at <when>, more than 6 hours away (session `<uuid>`)"
         runs = [{"records": limit_records(30 * 3600), "result": LIMITED}]
         # Each issue create sleeps six seconds, as on a busy machine.
         folder, proc = self.start(runs, gh_extra={"sleep_on": "create", "sleep": 6})
-        code, lines = self.finish(folder, proc, bound=10)
-        self.assertEqual((code, len(starts_of(folder)), lines), (1, 1, [far]))
+        ended = self.wait_end(folder)
+        code, lines = self.finish(folder, proc)
+        session = session_of(folder)
+        records = jsonl(folder / "state" / "run.jsonl")
+        pid = next(
+            (r for r in records if r.get("session") == session and r.get("event") == "pid"), {}
+        )
+        end = next(
+            (r for r in records if r.get("session") == session and r.get("event") == "end"), {}
+        )
+        began, over = stamp_of(pid), stamp_of(end)
+        quick = began is not None and over is not None and 0 <= (over - began).total_seconds() <= 10
+        self.assertEqual(
+            (ended, quick, code, len(starts_of(folder)), lines), (True, True, 1, 1, [far])
+        )
         folder, proc = self.start(runs, flags=["--limit-hours", "40"])
         ended = self.halt_after_end(folder)
-        code, lines = self.finish(folder, proc, bound=10)
+        code, lines = self.finish(folder, proc)
         self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
 
     def test_halt_during_wait(self):

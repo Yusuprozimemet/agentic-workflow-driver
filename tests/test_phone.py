@@ -1,8 +1,9 @@
 """The phone's heartbeat comment (Day 11, Track E1) and its stale comment (Track E2): a --once run that is in a
 session at a poll edits one comment on the run's issue in place, and a comment that fails is tried again at the
 next poll. A session quiet for stale_minutes gets one stale comment, and a resumed session keeps its comment.
-Each case runs a fake claude that prints its init line and sleeps for four seconds, with the driver's --poll at
-0.3 seconds or at 30, and reads the bodies the fake gh recorded. No report here names a pid, uuid or path."""
+Each case runs a fake claude that prints its init line and sleeps for four seconds (the heartbeat case waits
+for the fake gh's reads instead), with the driver's --poll at 0.3 seconds or at 30, and reads the bodies the
+fake gh recorded. No report here names a pid, uuid or path."""
 
 import json
 import os
@@ -140,7 +141,8 @@ class PhoneTest(unittest.TestCase):
         # closing comment comes last. The run that polls at 30 seconds has no heartbeat, so it is the
         # reference for the return code and the output. Each poll's issue read sleeps a second, as on a
         # busy machine, and the fake prints its result as the third poll's read begins, so that poll's
-        # heartbeat is built after the result line.
+        # heartbeat is built after the result line. A patch made after the result line says "last event:
+        # result", which is true and no failure: the last check reads the last patch made before it.
         _, first, start, number, bodies = self.live_run(
             0.3,
             comment_id=99,
@@ -157,7 +159,13 @@ class PhoneTest(unittest.TestCase):
         patches = [record for record in bodies if record["args"] == PATCH]
         lines = beats[0]["body"].split("\n") if beats else []
         patch_objects = [parsed(record["body"]) for record in patches]
-        last = patch_objects[-1] if patch_objects and isinstance(patch_objects[-1], dict) else {}
+        # The last patch made before the result line: one made after it says "last event: result".
+        before_result = [
+            obj
+            for obj in patch_objects
+            if not (isinstance(obj, dict) and "last event: result" in str(obj.get("body", "")))
+        ]
+        last = before_result[-1] if before_result and isinstance(before_result[-1], dict) else {}
         order = [line_at(lines, prefix) for prefix in PREFIXES]
         checks = (
             len(beats) == 1,
