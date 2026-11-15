@@ -134,8 +134,9 @@ class UsageLimitTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.root, True)
 
-    def start(self, runs, flags=()):
-        # One case in its own folder: the fake claude with its runs, the fake gh, and the driver.
+    def start(self, runs, flags=(), gh_extra=None):
+        # One case in its own folder: the fake claude with its runs, the fake gh, and the driver. gh_extra
+        # is merged into the fake gh's fake.json, as the sleeps of a busy machine are set there.
         folder = Path(tempfile.mkdtemp(dir=self.root))
         project = make_project(folder, drift_of(DASHED))
         (folder / "claude").mkdir()
@@ -146,6 +147,11 @@ class UsageLimitTest(unittest.TestCase):
         gh = fake_gh(
             folder / "gh", runs=[{"status": "completed", "conclusion": "success"}], prs=[OPEN_PR]
         )
+        if gh_extra is not None:
+            gh_file = folder / "gh" / "fake.json"
+            spec = json.loads(gh_file.read_bytes())
+            spec.update(gh_extra)
+            gh_file.write_bytes(json.dumps(spec).encode("utf-8"))
         config = write_config(folder, project)
         command = [
             sys.executable,
@@ -218,7 +224,8 @@ class UsageLimitTest(unittest.TestCase):
         # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
         far = "park: the usage limit resets at <when>, more than 6 hours away (session `<uuid>`)"
         runs = [{"records": limit_records(30 * 3600), "result": LIMITED}]
-        folder, proc = self.start(runs)
+        # Each issue create sleeps six seconds, as on a busy machine.
+        folder, proc = self.start(runs, gh_extra={"sleep_on": "create", "sleep": 6})
         code, lines = self.finish(folder, proc, bound=10)
         self.assertEqual((code, len(starts_of(folder)), lines), (1, 1, [far]))
         folder, proc = self.start(runs, flags=["--limit-hours", "40"])

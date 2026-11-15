@@ -24,6 +24,7 @@ from tests.test_halt import stop
 from tests.test_once import DASHED, driver_copy
 from tests.test_once_halt import kill_left_over
 from tests.test_once_park_issues import build
+from tests.test_phone import wait_for_reads
 
 SYSTEM = {"type": "system", "subtype": "init"}
 KEYS = ["last_event", "poll", "session", "started", "step"]
@@ -61,9 +62,19 @@ class HeartbeatTest(unittest.TestCase):
     def test_heartbeat_beats_through_a_quiet_tool(self):
         # The fake prints its init line, then sleeps for four seconds: a quiet tool that the bound of one
         # minute does not end. Its own result line comes after the sleep, when the session ends.
-        do = f"print({json.dumps(SYSTEM)!r}, flush=True)\nimport time; time.sleep(4)\n"
         folder = Path(tempfile.mkdtemp(dir=self.root))
+        # The init line comes as a poll's issue read begins, and each read sleeps two seconds, as on a
+        # busy machine.
+        do = (
+            wait_for_reads(folder / "gh" / "calls.jsonl", 1, 30)
+            + f"print({json.dumps(SYSTEM)!r}, flush=True)\nimport time; time.sleep(4)\n"
+        )
         flags = build(folder, drift=drift_of(DASHED), do=do)
+        gh_file = folder / "gh" / "fake.json"
+        spec = json.loads(gh_file.read_bytes())
+        spec["sleep_on"] = "list"
+        spec["sleep"] = 2
+        gh_file.write_bytes(json.dumps(spec).encode("utf-8"))
         copy = driver_copy(tempfile.mkdtemp(dir=self.root))
         self.addCleanup(kill_left_over, folder / "claude")
         state = folder / "state"
