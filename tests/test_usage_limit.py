@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -188,12 +189,41 @@ class UsageLimitTest(unittest.TestCase):
         except subprocess.TimeoutExpired:
             proc.kill()
             out, code = proc.communicate(timeout=60)[0], None
+        return code, self.cleaned(folder, out)
+
+    def cleaned(self, folder, out):
+        # The stdout bytes as lines, with the uuid and the reset's local time replaced.
         text = out.decode("utf-8")
         session = session_of(folder)
         # The reset's local time differs on every run too; only the transcript's own are replaced.
         for reset in resets(folder):
             text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
-        return code, (text.replace(session, "<uuid>") if session else text).splitlines()
+        return (text.replace(session, "<uuid>") if session else text).splitlines()
+
+    def finish_timed(self, folder, proc, bound=60):
+        # As finish, and the time each stdout line was read. The pipes are read by threads, so that neither
+        # fills while the driver runs; stderr is dropped.
+        out, times = [], []
+
+        def read_out():
+            for line in iter(proc.stdout.readline, b""):
+                out.append(line)
+                times.append(time.monotonic())
+
+        readers = [threading.Thread(target=read_out), threading.Thread(target=proc.stderr.read)]
+        for reader in readers:
+            reader.start()
+        try:
+            code = proc.wait(timeout=bound)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=60)
+            code = None
+        for reader in readers:
+            reader.join(60)
+        proc.stdout.close()
+        proc.stderr.close()
+        return code, self.cleaned(folder, b"".join(out)), times
 
     def wait_end(self, folder, bound=60):
         # Waits until the run log holds the session's first end line, or the bound passes; returns whether it does.
@@ -265,13 +295,20 @@ class UsageLimitTest(unittest.TestCase):
         self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
 
     def test_halt_during_wait(self):
-        # C09.4: the halt file written during a 60-second wait stops the driver within 5 seconds.
-        # The run's issue close sleeps six seconds, as on a busy machine; it comes after the halt line.
+        # C09.4: the halt file written during a 60-second wait stops the driver, and its halt line is printed
+        # within 5 seconds of the halt file: the 5 seconds run from the halt file to the halt line, as C09.4
+        # says. The run's issue close sleeps six seconds, as on a busy machine, and comes before the exit,
+        # which is waited for up to 60 seconds.
         runs = [{"records": limit_records(60), "result": LIMITED}]
         folder, proc = self.start(runs, gh_extra={"sleep_on": "close", "sleep": 6})
         ended = self.halt_after_end(folder)
-        code, lines = self.finish(folder, proc, bound=5)
-        self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
+        written = time.monotonic()
+        code, lines, times = self.finish_timed(folder, proc)
+        quick = len(lines) == len(times) > 0 and lines[-1] == HALT and 0 <= times[-1] - written <= 5
+        self.assertEqual(
+            (ended, quick, code, lines[-1:], len(starts_of(folder))),
+            (True, True, 1, [HALT], 1),
+        )
         self.assertEqual(events(folder), ["start", "pid", "end"])
 
     def test_earlier_limit_is_not_the_last(self):

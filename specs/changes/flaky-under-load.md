@@ -1,11 +1,12 @@
-# Three heartbeat and park tests hold under load
+# Four heartbeat, park and halt tests hold under load
 
 ## What changes
 Before: three tests failed on and off when the machine was busy, and passed when run alone
 (D10.18, D11.25, D11.29, D11.32, D12.34 to D12.36; #211, N1):
 `PhoneTest.test_heartbeat_comment_edited_in_place` (C11.16),
 `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool` (C11.10) and
-`UsageLimitTest.test_far_reset_parks` (C09.3). After: each runs with its fake `gh` slowed on
+`UsageLimitTest.test_far_reset_parks` (C09.3); a fourth, `UsageLimitTest.test_halt_during_wait`
+(C09.4), failed the same way once they held (Notes). After: each runs with its fake `gh` slowed on
 purpose, as a busy machine slows it, and with its fake claude timed to the driver's polls, and
 passes every time. The driver does not change: in each failure it did what its criterion says,
 and the test had bet on the clock.
@@ -48,6 +49,12 @@ Tick each box in this PR once its evidence is in the PR body; under a box left u
       the driver prints the park line alone, exits 1 within 60 seconds and starts the fake once;
       with `--limit-hours 40` it waits instead and is stopped by the halt file.
       Test: `UsageLimitTest.test_far_reset_parks`.
+- [ ] S-flaky-under-load.4 **hold** — C09.4 under load: with the fake `gh`'s `issue close`
+      sleeping 6 seconds, the halt file written during a 60-second wait makes the driver print
+      "halt: the halt file was set during the wait for the usage limit (session `<id>`)" at most
+      5 seconds after it, as C09.4 says, then exit 1 within 60 seconds, starting the fake once;
+      the run log's events for the session are `start`, `pid`, `end`.
+      Test: `UsageLimitTest.test_halt_during_wait`.
 
 ## Verify
 ```bash
@@ -68,4 +75,13 @@ python scripts/test-parallel.py --repeat 10 test_usage_limit.py
   asked for a short spec, and its criteria are `hold`, since the code on `main` already does what
   they say. A `new` criterion would fail CI's "Track tests seen red": the code before is the code
   after. The seen-red record is the first commit, the slowed fakes with the old checks.
-- Each test is longer by the sleeps it adds: about 3, 4 and 12 seconds run alone.
+- C09.4 needs no departure: its criterion bounds the halt line, and the test had bounded the exit,
+  which comes after the run's issue is closed.
+- **Defect** — found: self · cause: implementation · made: none · `UsageLimitTest.test_halt_during_wait`
+  (C09.4) failed 8 of 10 beside the full suite once the other three held: its 5 seconds were
+  counted to the driver's exit, not to the halt line. `scripts/test-parallel.py` prints a file's
+  first failure in full, so on `main` `test_far_reset_parks` hid it; the eight kept failure files
+  named it. Fixed here as S-flaky-under-load.4 (this PR).
+- **Defect** — found: self · cause: process · made: none · the first `--repeat 10` runs were given
+  `tests/test_phone.py` and printed nothing, matching no file: `scripts/test-parallel.py` takes a
+  name under `tests/`, as `CLAUDE.md` writes it. Re-run with the bare names (this PR).
