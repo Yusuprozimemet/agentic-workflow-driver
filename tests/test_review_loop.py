@@ -1,5 +1,5 @@
 """The reviewer in `on` (driver/once.py, driver/review.py): C12.11's review key in driver.json, and
-C12.12, C12.16 to C12.19, C12.22 and C12.23 on the run. The reviewer is the case's second claude call, after the
+C12.12 to C12.19, C12.22 and C12.23 on the run. The reviewer is the case's second claude call, after the
 step's, from tests/fake_review.py; in the container it is the second docker run, from tests/fake_docker.py.
 A report holds no head, no state folder and no session uuid: the placeholders stand in for them."""
 
@@ -21,9 +21,11 @@ if str(ROOT) not in sys.path:
 from tests import test_box_preflight as preflight
 from tests import test_box_session as box_session
 from tests.fake_review import fake_review
+from tests.test_dry_run import drift_of
 from tests.test_github import read_bodies
+from tests.test_merge_wait import run as run_answer
 from tests.test_merge_wait import view
-from tests.test_on import OnCase
+from tests.test_on import GREEN, RED, OnCase
 from tests.test_once import DASHED, STEP_PR
 
 # Forty hex characters, as a commit hash is: the head the pull request and the project report.
@@ -31,6 +33,8 @@ HEAD = "c0ffee" * 6 + "c0ff"
 # The reviewer's session in the container; the step's is box_session.U.
 R = "00000000-0000-4000-8000-000000000020"
 REVIEW_ONLY = "found: advice — a word\nREVIEW: none"
+BLOCKER_ONLY = "found: blocker — no test\nREVIEW: blocker"
+NONE_ONLY = "REVIEW: none"
 NIGHT = "on: 1 steps, the night's count"
 # The reviewer's do: a commit in the project, and a file nothing commits.
 COMMIT = (
@@ -72,10 +76,10 @@ def without_at(record):
 
 # Shared by the two classes below; not a TestCase, so that importing it collects no tests.
 class ReviewCase(OnCase):
-    def review(self, name, replies, views=None, comment_code=0, steps=1):
+    def review(self, name, replies, views=None, comment_code=0, steps=1, **build):
         # The case's project and fake claude; fake_review writes the program at the path build gave, so
-        # the --claude flag already names it.
-        self.build(name, steps=steps)
+        # the --claude flag already names it. build takes checks and drift for a test that needs them.
+        self.build(name, steps=steps, **build)
         program = fake_review(self.folder / "claude", replies)
         assert program in self.flags, "the --claude flag does not name the fake's program"
         self.reviewed(views=views, comment_code=comment_code)
@@ -381,6 +385,182 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
                 len(self.reviewer_ids()),
             ),
             (2, True, 1, 0),
+        )
+
+    def test_blocker_resumes_the_step(self):
+        # C12.13: a blocker resumes the step's session, which opens its fix; the reviewer runs again on the
+        # fixed pull request, and its verdict of none lets the merge be waited on.
+        self.review(
+            "blocker_fixed",
+            [{"text": BLOCKER_ONLY}, {"text": NONE_ONLY}],
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)],
+        )
+        code, out, _ = self.on()
+        step, reviewer = self.uuids()
+        sessions = self.sessions()
+        resumed = sessions[2] if len(sessions) > 2 else {"args": [], "stdin": ""}
+        log = self.run_log()
+        fix_at = [i for i, r in enumerate(log) if r.get("event") == "fix"]
+        review_at = [i for i, r in enumerate(log) if r.get("event") == "review"]
+        kinds = [
+            "reviewer"
+            if "--agent" in call["args"]
+            else "resume"
+            if "--resume" in call["args"]
+            else "step"
+            for call in sessions
+        ]
+        self.assertEqual(
+            (
+                code,
+                self.hold(out, step, reviewer).splitlines()[-1:],
+                kinds,
+                self.hold(value_of(resumed["args"], "--resume") or "", step, reviewer),
+                "--agent" in resumed["args"],
+                self.hold(bytes.fromhex(resumed["stdin"]).decode("utf-8"), step, reviewer),
+                len(set(self.reviewer_ids())),
+                step in self.reviewer_ids(),
+                [(r.get("pr"), r.get("n")) for r in log if r.get("event") == "fix"],
+                [
+                    self.hold(str(r.get("session")), step, reviewer)
+                    for r in log
+                    if r.get("event") == "fix"
+                ],
+                bool(fix_at) and len(review_at) > 1 and fix_at[0] < review_at[1],
+                [r.get("blockers") for r in log if r.get("event") == "review"],
+                [r.get("event") for r in log if r.get("event") in ("review", "fix", "merged")],
+                len(self.gh_of("pr", "checks")) > 1,
+            ),
+            (
+                0,
+                [NIGHT],
+                ["step", "reviewer", "resume", "reviewer"],
+                "<step-uuid>",
+                False,
+                (
+                    "The reviewer found a blocker on #12:\nfound: blocker — no test\n"
+                    "Fix this step's pull request, push, and stop.\n"
+                ),
+                2,
+                False,
+                [(12, 1)],
+                ["<step-uuid>"],
+                True,
+                [1, 0],
+                ["review", "fix", "review", "merged"],
+                True,
+            ),
+        )
+
+    def test_blocker_park_after_two_fixes(self):
+        # C12.14: a reviewer that still finds a blocker after two fixes parks the run; no merge is waited on.
+        self.review(
+            "blocker_parks",
+            [{"text": BLOCKER_ONLY}],
+            views=[
+                view("OPEN", head=HEAD),
+                view("OPEN", head=HEAD),
+                view("OPEN", head=HEAD),
+                view("MERGED", head=HEAD),
+            ],
+        )
+        code, out, _ = self.on()
+        step, reviewer = self.uuids()
+        log = self.run_log()
+        self.assertEqual(
+            (
+                code,
+                self.hold(out, step, reviewer).splitlines()[-1:],
+                len(self.sessions()),
+                [r.get("n") for r in log if r.get("event") == "fix"],
+                len([r for r in log if r.get("event") == "review"]),
+                [r for r in log if r.get("event") == "merged"],
+            ),
+            (
+                1,
+                ["park: the reviewer still has a blocker on #12 after two fixes"],
+                6,
+                [1, 2],
+                3,
+                [],
+            ),
+        )
+
+    def test_fixes_shared_with_red_checks(self):
+        # C12.14: the red check and the reviewer's blocker share the two fixes: the first goes to the red
+        # check, the second to the blocker, and the blocker after them parks the run.
+        self.review(
+            "shared",
+            [{"text": BLOCKER_ONLY}],
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)],
+            checks=[RED, GREEN],
+        )
+        code, out, _ = self.on()
+        step, reviewer = self.uuids()
+        resumed = [call for call in self.sessions() if "--resume" in call["args"]]
+        prompts = [
+            self.hold(bytes.fromhex(call["stdin"]).decode("utf-8"), step, reviewer)
+            for call in resumed
+        ]
+        starts = [
+            "The required checks failed on #12: tests.",
+            "The reviewer found a blocker on #12:",
+        ]
+        log = self.run_log()
+        self.assertEqual(
+            (
+                code,
+                self.hold(out, step, reviewer).splitlines()[-1:],
+                [r.get("n") for r in log if r.get("event") == "fix"],
+                [prompt.startswith(start) for prompt, start in zip(prompts, starts)],
+                len(self.sessions()),
+                len([r for r in log if r.get("event") == "review"]),
+            ),
+            (
+                1,
+                ["park: the reviewer still has a blocker on #12 after two fixes"],
+                [1, 2],
+                [True, True],
+                5,
+                2,
+            ),
+        )
+
+    def test_found_pr_blocker_parks(self):
+        # C12.15: a pull request open at the start, with no session of this run, is reviewed; a blocker
+        # parks the run, since there is no step session to resume.
+        self.review(
+            "found_blocker",
+            [{"text": BLOCKER_ONLY}],
+            views=[view("OPEN", head=HEAD), view("MERGED", head=HEAD)],
+            drift=drift_of(DASHED, open_prs=(12,)),
+            # The evidence run closes the run's issue, so that a run that merges #12 ends (with off).
+            run_steps=[{**run_answer("completed", "success"), "closes": [1]}],
+        )
+        code, out, _ = self.on()
+        step, reviewer = self.uuids()
+        sessions = self.sessions()
+        log = self.run_log()
+        lines = self.hold(out, step, reviewer).splitlines()
+        self.assertEqual(
+            (
+                code,
+                "wait: #12" in lines,
+                lines[-1:],
+                [value_of(call["args"], "--agent") for call in sessions],
+                len([call for call in sessions if "--resume" in call["args"]]),
+                len([r for r in log if r.get("event") == "fix"]),
+                [r.get("blockers") for r in log if r.get("event") == "review"],
+            ),
+            (
+                1,
+                True,
+                ["park: the reviewer has a blocker on #12: no test"],
+                ["reviewer"],
+                0,
+                0,
+                [1],
+            ),
         )
 
 

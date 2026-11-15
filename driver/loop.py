@@ -141,12 +141,18 @@ def wait_pr(args, project, number, record, command=None):
         sleep(args.poll)
 
 
-def wait_reviewed(args, home, project, number, record, command, config):
-    # Returns (line, code); (None, 0) means the merge wait goes on. The reviewer reads the head the
-    # pull request had when its checks went green; a change to the project during its session parks.
+# A pull request's fixes, shared by the red checks and the reviewer's blockers: the run parks when a
+# pull request has had this many. wait_pr's own red-check limit is written out where it is used.
+FIXES = 2
+
+
+def review_pass(args, home, project, number, record, command, config):
+    # One pass of the reviewer: returns (line, code, blockers). (None, 0, []) means the merge wait goes
+    # on with no blocker. The reviewer reads the head the pull request had when its checks went green; a
+    # change to the project during its session parks.
     line, code = wait_pr(args, project, number, record, command)
     if line:
-        return line, code
+        return line, code, []
     number = record["pr"]  # a fix may have moved the pull request
     heads = []
 
@@ -163,34 +169,59 @@ def wait_reviewed(args, home, project, number, record, command, config):
 
     line, code = poll(args, project, record, read)
     if line:
-        return line, code
+        return line, code, []
     if not heads:
-        return None, 0
+        return None, 0, []
     head = heads[0]
     before = review.snapshot(project)
     if None in before.values():
-        return f"cannot read the project: git failed before the review of #{number}", 2
+        return f"cannot read the project: git failed before the review of #{number}", 2, []
     session, line, code, found = review.run(args, home, project, number, record, config, head)
     if line:
-        return line, code
+        return line, code, []
     where = f"#{number} (session `{session}`)"
     after = review.snapshot(project)
     if None in after.values():
-        return f"cannot read the project: git failed before the review of #{number}", 2
+        return f"cannot read the project: git failed before the review of #{number}", 2, []
     what = review.changed(before, after)
     if what:
-        return f"park: the reviewer changed {what} in the project on {where}", 1
+        return f"park: the reviewer changed {what} in the project on {where}", 1, []
     if found is None:
-        return f"park: the reviewer gave no verdict on {where}", 1
+        return f"park: the reviewer gave no verdict on {where}", 1, []
     lines, blockers = found
     print(f"review: #{number}, {len(blockers)} blockers", flush=True)
     failed = issues.pr_comment(project, args.gh, number, review.body(head, session, lines))
     if failed:
         print(f"review: no comment on #{number}: {failed}", flush=True)
     runlog.review(args.state, number, session, head, len(blockers))
-    # A blocker is posted and logged, and the merge wait still follows: the blocker's fix is not
-    # built yet, so `review` stays off in the driver's own driver.json until it is.
-    return None, 0
+    return None, 0, blockers
+
+
+def wait_reviewed(args, home, project, number, record, command, config):
+    # Returns (line, code); (None, 0) means the merge wait goes on. A blocker resumes the step's session
+    # to fix it, and the reviewer reads the fixed pull request again, FIXES fixes at most.
+    while True:
+        line, code, blockers = review_pass(args, home, project, number, record, command, config)
+        if line or not blockers:
+            return line, code
+        number = record["pr"]
+        first = blockers[0].removeprefix(review.BLOCKER)
+        if not command:
+            return f"park: the reviewer has a blocker on #{number}: {first}", 1
+        used = runlog.fixes(args.state, record["session"])
+        if used >= FIXES:
+            return f"park: the reviewer still has a blocker on #{number} after two fixes", 1
+        prompt = (
+            f"The reviewer found a blocker on #{number}:\n"
+            + "\n".join(blockers)
+            + "\nFix this step's pull request, push, and stop.\n"
+        )
+        line, code = fix(args, project, number, record, command, prompt, used)
+        if code != 0:
+            return line, code
+        print(line, flush=True)
+        record["pr"] = int(re.match(r"opened: #(\d+)", line).group(1))
+        number = record["pr"]
 
 
 # to_main keeps off a project with a branch of the step it is given. The step that just merged still
