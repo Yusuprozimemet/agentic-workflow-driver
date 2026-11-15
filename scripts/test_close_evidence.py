@@ -219,10 +219,11 @@ class RehearseTest(unittest.TestCase):
         self.close(spec(more="- [x] C1.2 **new** — Test: `CliTest.test_a`.\n"
                              "- [x] C1.3 **new** — Test: `CliTest.test_a`.\n      broken: none → docs only\n"))
         run = self.rehearse("day-01/close-the-day")
-        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
-        self.assertIn("ok    C1.1 broken: the ok removed", run.stdout)
         for cid in ("C1.2", "C1.3"):
-            self.assertIn(f"FAIL  {cid} broken: → a new criterion with no break the replay can run", run.stdout)
+            self.assertTrue(f"FAIL  {cid} broken: → a new criterion with no break the replay can run" in run.stdout,
+                            f"{cid}: the rehearsal did not fail it")
+        self.assertIn("ok    C1.1 broken: the ok removed", run.stdout)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
 
     def test_the_merge_commit_ci_checks_out_rehearses_by_its_parents(self):
         # A pull request's checkout: the merge of the branch into the base, on no branch, its

@@ -152,6 +152,7 @@ class PlanLinksTests(unittest.TestCase):
 
     def test_a_commitment_due_by_the_current_day_that_no_criterion_names_fails(self):
         self.links["C01.1"] = []
+        self.assertTrue(self.run_check()[0], "P01 is overdue and nothing said so")
         self.assertEqual(self.run_check()[0], [
             "P01: overdue, due on Day 1, the current Day is 1, and no criterion names it: name it in a Plan: "
             "line, or record it in specs/plan/overdue.json with the Day that settles it"])

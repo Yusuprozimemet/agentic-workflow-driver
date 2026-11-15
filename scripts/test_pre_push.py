@@ -32,13 +32,9 @@ class PrePushTest(unittest.TestCase):
     def test_every_check_ci_runs_on_a_pull_request_has_a_line(self):
         # A check added to CI and not to pre-push.py is the one a first push meets (#212 S23, #213 B12).
         local = {name.strip('"') for name in self.names()}
-        for flow, on, jobs in workflows():
-            if "pull_request" not in on:
-                continue
-            for job in jobs.values():
-                name = job.get("name")
-                if name and name not in NOT_A_CHECK:
-                    self.assertIn(name, local, f"{flow}: no line in pre-push.py for {name!r}")
+        missing = [f"{flow}: {job['name']}" for flow, on, jobs in workflows() if "pull_request" in on
+                   for job in jobs.values() if job.get("name") and job["name"] not in NOT_A_CHECK | local]
+        self.assertFalse(missing, "CI checks with no line in pre-push.py")
 
     def test_what_only_a_pull_request_has_is_a_skip_that_names_it(self):
         checks = self.names()

@@ -80,9 +80,10 @@ class TestParallelTest(unittest.TestCase):
         self.write("test_two.py", FLAKY.replace("class T(", also + "class T(", 1))
         code, out = self.main("--repeat", "3", "-j", "1")
         self.assertEqual(code, 1)
-        self.assertIn("test_two.py failed 3 of 3\n", out)
-        self.assertIn("  U.test_also failed 3 of 3\n", out)
-        self.assertIn("  T.test_it failed 1 of 3\n", out)
+        counts = [line for line in out.splitlines() if " failed " in line]
+        self.assertIn("  U.test_also failed 3 of 3", counts, "U.test_also is not counted")
+        self.assertIn("  T.test_it failed 1 of 3", counts, "T.test_it is not counted")
+        self.assertIn("test_two.py failed 3 of 3", counts)
 
 
 if __name__ == "__main__":

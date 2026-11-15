@@ -39,7 +39,7 @@ class SessionSizeTest(unittest.TestCase):
         self.assertEqual(out["hookSpecificOutput"], {"hookEventName": "PostToolUse",
                                                      "additionalContext": out["systemMessage"]})
         self.assertNotIn("decision", out)  # a warning, never a refusal
-        self.assertIsNone(self.at(reply(190_000)), "once per step")
+        self.assertIsNone(self.at(reply(190_000)) and "warned again", "once per step")
         self.assertIn("context is 211k", self.at(reply(210_000))["systemMessage"])
 
     def test_a_subagent_s_reply_is_not_the_session_s_size(self):
