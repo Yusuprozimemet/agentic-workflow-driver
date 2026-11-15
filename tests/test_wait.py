@@ -117,8 +117,7 @@ class WaitTest(unittest.TestCase):
         self.assertEqual(len(sessions), 2)
         for session in sessions:
             args = session["args"]
-            # A fixed message: break.py refuses a report holding the session's uuid.
-            self.assertTrue("--resume" in args, "the fix's session not started with --resume")
+            self.assertIn("--resume", args)
             self.assertEqual(args[args.index("--resume") + 1], SESSION)
             self.assertNotIn("--session-id", args)
             prompt = bytes.fromhex(session["stdin"]).decode("utf-8")

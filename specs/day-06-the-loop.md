@@ -232,7 +232,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `WaitTest.test_red_resumed_twice_then_green`, `WaitTest.test_red_after_two_fixes_parks`, `WaitTest.test_red_without_session_parks`, `WaitTest.test_no_checks_parks`, `WaitTest.test_two_open_prs_park` (#67). Against the fake `gh` only: H06.3.
       seen red: python -m unittest tests.test_wait on main → FAILED (errors=10) (#67)
       broken: the resume keeps --session-id → AssertionError: '--resume' not found in ['-p', '--settings', '<tmp>/state/settings.json', '--session-id', '00000000-0000-4000-8000-000000000000'] (#67)
-      broken: the fix line is not written → AssertionError: Tuples differ: ('park: the session ended without a result[57 chars]', 1) != (None, 0) (#67)
+      broken: the fix line is not written → AssertionError: Lists differ: [b'0', b'0'] != [b'1', b'2'] (#67)
       broken: the failing lines left out of the prompt → AssertionError: 'boom' not found in "The required checks failed on #12: tests.\nFix this step's pull request, push, and stop.\n" (#67)
       broken: a third fix allowed → AssertionError: 3 != 2 (#67)
       broken: a pull request with no session is resumed → FAILED (errors=1) (#67)
@@ -310,7 +310,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `OnTest.test_steps_per_night`, `OnTest.test_off_between_steps` (#73), and the next step re-read after a merge, `OnTest.test_next_step_read_after_merge` (#74).
       seen red: python -m unittest tests.test_on on main → AssertionError: Tuples differ (#73)
       broken: the night runs one step past its count → AssertionError: Tuples differ: (0, "on: 3 steps, the night's count", 3, 1, 1, ['1[50 chars]alse) != (0, "on: 2 steps, the night's count", 2, 1, 1, ['1[50 chars]alse) (#73)
-      broken: a resume counts as a step → AssertionError: Tuples differ: (0, "on: 1 steps, the night's count", 1, 1, 1, ['1[51 chars]alse) != (0, "on: 2 steps, the night's count", 2, 1, 1, ['1[50 chars]alse) (#73)
+      broken: a resume counts as a step → AssertionError: Tuples differ: (0, "on: 1 steps, the night's count", 1, 1, 1, ['1[50 chars]alse) != (0, "on: 2 steps, the night's count", 2, 1, 1, ['1[50 chars]alse) (#73)
       broken: the switches are not read between steps → AssertionError: Tuples differ: (0, "on: 2 steps, the night's count", 2, 2, [], [['issue', 'close', '2']]) != (0, "off: the run's issue #1 is closed; nothing new starts", 1, 1, [], []) (#73)
       broken: the fix's pull request is not the one waited on → AssertionError: Tuples differ: (0, ['5'], "on: 1 steps, the night's count") != (0, ['13'], "on: 1 steps, the night's count") (#73)
       broken: on does not re-read the next step after a merge → AssertionError: Tuples differ: (0, [[21 chars]ack A: C01.1–C01.3', 'Next step: Day 01 Track A: C01.1–C01.3']) != (0, [[21 chars]ack A: C01.1–C01.3', 'Next step: Day 01 Track A: C01.4']) (#74)
@@ -325,7 +325,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `LiveCheckTest.test_live_check_records_only_a_clean_pass`.
       Evidence: `LiveCheckTest.test_on_refuses_an_unchecked_version`, `LiveCheckTest.test_live_check_records_only_a_clean_pass` (#74).
       seen red: python -m unittest tests.test_live_check on main → AssertionError: Tuples differ (#74)
-      broken: on skips the version check → AssertionError: Tuples differ: (0, "opened: #5 from `day-01/track-a-x`\no[707 chars]alse) != (2, '', ['cannot start: Claude Code `2.1.4[85 chars]alse) (#74)
+      broken: on skips the version check → AssertionError: Tuples differ: (0, "opened: #5 from `day-01/track-a-x`\no[727 chars]alse) != (2, '', ['cannot start: Claude Code `2.1.4[85 chars]alse) (#74)
       broken: live-check counts OK (skipped=2) as a pass → AssertionError: Tuples differ: (0, b'2.1.400 (Claude Code)\n') != (1, None) (#74)
       broken: live-check ignores the exit code → AssertionError: Tuples differ: (0, b'2.1.400 (Claude Code)\n') != (1, None) (#74)
       broken: live-check names another program to the tests → AssertionError: Tuples differ: (['-m', 'unittest', 'tests.test_live_cli'], False, True) != (['-m', 'unittest', 'tests.test_live_cli'], True, True) (#74)
