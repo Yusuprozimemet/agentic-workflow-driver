@@ -6,13 +6,15 @@ than --wait-minutes, end the wait with a park line. A STOP issue halts the run, 
 closed ends it with no new step. Once the checks are green, the path check parks a pull request that
 touches plan.md or a human-only path, the merge wait holds until the maintainer merges it, pulls
 main, and waits for the evidence run on the new head. `on` runs these steps one after another, until
-steps_per_night sessions have started or a park, a refusal or a halt ends the night."""
+steps_per_night sessions have started or a park, a refusal or a halt ends the night. With `review`
+on in driver.json, wait_reviewed runs the reviewer once the checks are green, before the merge
+wait."""
 
 import os
 import re
 from time import monotonic, sleep
 
-from driver import github, issues, livecheck, once, runlog, tree
+from driver import github, issues, livecheck, once, review, runlog, tree
 from driver import home as driver_home
 from driver.preflight import image_claude, kit_lines
 from driver.steps import Step
@@ -45,12 +47,19 @@ def read_switches(args, project, record):
     return None, None, None
 
 
-def wait_found(args, project, line, record):
+# Absent is off, so the tests' own driver.json files keep their call lists.
+def reviewing(config):
+    return config is not None and config.get("review") is True
+
+
+def wait_found(args, project, line, record, home=None, config=None):
     # `line` is decide()'s "wait: #3, #5" for a pull request found at a start. That pull request has
     # no session of this run, so a red check parks it.
     numbers = re.findall(r"#(\d+)", line)
     if len(numbers) > 1:
         return "park: more than one open pull request: " + ", ".join(f"#{n}" for n in numbers), 1
+    if reviewing(config):
+        return wait_reviewed(args, home, project, int(numbers[0]), record, None, config)
     return wait_pr(args, project, int(numbers[0]), record)
 
 
@@ -130,6 +139,58 @@ def wait_pr(args, project, number, record, command=None):
             record["pr"] = number
             runlog.wait(args.state, number)
         sleep(args.poll)
+
+
+def wait_reviewed(args, home, project, number, record, command, config):
+    # Returns (line, code); (None, 0) means the merge wait goes on. The reviewer reads the head the
+    # pull request had when its checks went green; a change to the project during its session parks.
+    line, code = wait_pr(args, project, number, record, command)
+    if line:
+        return line, code
+    number = record["pr"]  # a fix may have moved the pull request
+    heads = []
+
+    def read():
+        state, _, _, _, failed, head = github.pr_state(project, args.gh, number)
+        if failed:
+            return None, failed
+        if state in ("MERGED", "CLOSED"):
+            return (None, 0), None
+        if head is None:
+            return None, f"gh pr view gave #{number} no head"
+        heads.append(head)
+        return (None, 0), None
+
+    line, code = poll(args, project, record, read)
+    if line:
+        return line, code
+    if not heads:
+        return None, 0
+    head = heads[0]
+    before = review.snapshot(project)
+    if None in before.values():
+        return f"cannot read the project: git failed before the review of #{number}", 2
+    session, line, code, found = review.run(args, home, project, number, record, config, head)
+    if line:
+        return line, code
+    where = f"#{number} (session `{session}`)"
+    after = review.snapshot(project)
+    if None in after.values():
+        return f"cannot read the project: git failed before the review of #{number}", 2
+    what = review.changed(before, after)
+    if what:
+        return f"park: the reviewer changed {what} in the project on {where}", 1
+    if found is None:
+        return f"park: the reviewer gave no verdict on {where}", 1
+    lines, blockers = found
+    print(f"review: #{number}, {len(blockers)} blockers", flush=True)
+    failed = issues.pr_comment(project, args.gh, number, review.body(head, session, lines))
+    if failed:
+        print(f"review: no comment on #{number}: {failed}", flush=True)
+    runlog.review(args.state, number, session, head, len(blockers))
+    # A blocker is posted and logged, and the merge wait still follows: the blocker's fix is not
+    # built yet, so `review` stays off in the driver's own driver.json until it is.
+    return None, 0
 
 
 # to_main keeps off a project with a branch of the step it is given. The step that just merged still
@@ -299,7 +360,7 @@ def steps(args, home, project, read_facts, config):
             if reason:
                 return once.refuse([f"cannot read the project: {reason}"])
             record["pr"] = int(re.search(r"#(\d+)", step.line).group(1))
-            line, code = wait_found(args, project, step.line, record)
+            line, code = wait_found(args, project, step.line, record, home=home, config=config)
         else:
             session, line = once.reached(args, home, project, config)
             if line:
@@ -316,7 +377,12 @@ def steps(args, home, project, read_facts, config):
             if code != 0 or driver_home.check(home, started)[1]:
                 return once.finish(args, home, project, started, record, line, code, open_list)
             record["pr"] = int(re.match(r"opened: #(\d+)", line).group(1))
-            line, code = wait_pr(args, project, record["pr"], record, command)
+            if reviewing(config):
+                line, code = wait_reviewed(
+                    args, home, project, record["pr"], record, command, config
+                )
+            else:
+                line, code = wait_pr(args, project, record["pr"], record, command)
         keys = {}
         if line is None:
             line, code, keys = wait_merge(

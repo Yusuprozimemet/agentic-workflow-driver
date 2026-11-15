@@ -91,6 +91,19 @@ def fix(state, session, pr, n):
     append(state, {"event": "fix", "at": stamp(), "session": session, "pr": pr, "n": n})
 
 
+def review(state, pr, session, head, blockers):
+    # Day 13 reads the head: its merge is of the pull request this verdict was given on.
+    record = {
+        "event": "review",
+        "at": stamp(),
+        "pr": pr,
+        "session": session,
+        "head": head,
+        "blockers": blockers,
+    }
+    append(state, record)
+
+
 def pid(state, session, pid, started, container=None):
     # Written right after the process starts, a first session or a resume: live_session reads it
     # after a crash, with lock.lives, so a reused pid counts as gone.

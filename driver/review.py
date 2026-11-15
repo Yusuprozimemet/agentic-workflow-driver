@@ -7,11 +7,21 @@ snapshot() reads HEAD, the refs, the stash's top and git status with read-only g
 changed() names the first that moved.
 
 verdict() reads the reviewer's result: its found: lines and blockers, when the REVIEW line agrees
-with them; body() is the comment the driver posts on the pull request."""
+with them; body() is the comment the driver posts on the pull request.
+
+run() starts the reviewer's session for a pull request with green checks, in the container when the
+config has one, and writes its end line; it returns the session, a line that parks the run, and the
+verdict."""
 
 import json
 import os
+import shutil
 import subprocess
+import uuid
+
+from driver import box, livecheck, once, runlog, stream
+from driver import settings as driver_settings
+from driver.preflight import image_claude
 
 DESCRIPTION = (
     "Reviews one pull request the driver's step opened, reads only, and ends with a REVIEW line."
@@ -104,3 +114,77 @@ def body(head, session, found):
     blocked = any(line.startswith(BLOCKER) for line in found)
     lines.append("REVIEW: blocker" if blocked else "REVIEW: none")
     return "\n".join(lines)
+
+
+def run(args, home, project, number, record, config, head):
+    # The reviewer is a session of its own: a new uuid, the agent from agents(), and the read-only
+    # settings. Returns (session, line, code, found): a line parks the run, and found is None when
+    # the reply gave no verdict.
+    session = str(uuid.uuid4())
+    boxed = "container_image" in config
+    reviewer = {**record, "session": session}
+    if boxed:
+        reviewer["container"] = f"driver-{session}"
+    agents_path = agents(args.state, home, inside=boxed)
+    settings_path = driver_settings.review(args.state, home, inside=boxed)
+    if boxed:
+        version = livecheck.version(*image_claude(args.docker, config["container_image"]))
+    else:
+        version = livecheck.version(shutil.which(args.claude))
+    runlog.start(
+        args.state,
+        record["step"],
+        "review",
+        session,
+        version,
+        issue=record["issue"],
+        container=reviewer.get("container"),
+    )
+    argv = once.command(
+        args,
+        home,
+        config,
+        settings_path,
+        session,
+        extra=("--agents", agents_path, "--agent", "reviewer"),
+    )
+    # The reviewer's brief is its agent's prompt; the step's rules file is not sent to it.
+    at = argv.index("--append-system-prompt-file")
+    del argv[at : at + 2]
+    if boxed:
+        argv[argv.index("--settings") + 1] = "/state/review-container-settings.json"
+        argv = box.command(
+            args.docker,
+            config["container_image"],
+            config["container_secrets"],
+            home,
+            args.state,
+            project,
+            reviewer["container"],
+            argv,
+        )
+    prompt = (
+        f"Review pull request #{number} at commit {head}, for the step: {record['step']}.\n"
+        "Read it as your brief says, change nothing, and end with the REVIEW line.\n"
+    )
+    done = once.run_session(argv, prompt, args, project, record["issue"], reviewer)
+    if done is None:
+        return session, "halt: the reviewer's session was stopped", 1, None
+    if done is once.PAST:
+        return (session, *once.past_bound(args, session), None)
+    stdout, _ = done
+    stopped = once.halted_after(args, session)
+    if stopped:
+        return session, stopped, 1, None
+    out = stdout.decode("utf-8", errors="replace")
+    data = stream.result(out)
+    found = None
+    replied = data is not None and data.get("is_error") is not True
+    if replied and isinstance(data.get("result"), str):
+        found = verdict(data["result"])
+    if found is None:
+        outcome = f"park: the reviewer gave no verdict on #{number} (session `{session}`)"
+    else:
+        outcome = f"review: #{number}, {len(found[1])} blockers"
+    once.write_end(args.state, session, outcome, out)
+    return session, None, 0, found
