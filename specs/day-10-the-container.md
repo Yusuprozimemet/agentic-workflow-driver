@@ -324,9 +324,9 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       Test: `ReachCheckTest.test_unwritable_log_refuses`, `ReachCheckTest.test_probe_failure_refuses`.
       Evidence: `ReachCheckTest.test_unwritable_log_refuses`, `ReachCheckTest.test_probe_failure_refuses` (#152; two breaks recorded again in #153).
       seen red: python -m unittest tests.test_reach_check on main → AssertionError: Tuples differ: (0, 'opened: #5 from `day-01/track-a-x`\n') != (2, '') (all four tests fail on `main`: `FAILED (failures=5)`, the fifth a subtest) (#152)
-      broken: a refused folder that must write not read (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[368 chars]ck']) != (2, '', ["cannot start: the session's cont[34 chars]s`"]) (#153)
+      broken: a refused folder that must write not read (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[63 chars], []) != (2, '', ["cannot start: the session's cont[34 chars]s`"]) (#153)
       broken: the mounted folders not made before the probe (C10.12) → AssertionError: Tuples differ: ([], [False, False]) != ([], [True, True]) (#152)
-      broken: a probe that printed too few lines believed (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[368 chars]ck']) != (2, '', ["cannot start: the session's cont[32 chars] 0"]) (#153)
+      broken: a probe that printed too few lines believed (C10.12) → AssertionError: Tuples differ: (1, 'park: the session ended without a res[63 chars], []) != (2, '', ["cannot start: the session's cont[32 chars] 0"]) (#153)
 - [x] C10.13 **new** — `on` checks before each step, not only the first: with two steps to take
       and the probe passing before the first and printing `written /state` before the second,
       `on` runs the first step's session, then prints "cannot start: the session's container can
