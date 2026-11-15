@@ -75,6 +75,23 @@ def without_at(record):
 
 
 # Shared by the two classes below; not a TestCase, so that importing it collects no tests.
+def same(test, found, expected):
+    """assertEqual that names what differs in short, fixed words: the fields of a tuple by place,
+    the keys of a dict, so a break's report replays the same on every machine (break.py refuses
+    unittest's shortened [N chars]; #211, S21)."""
+    if found == expected:
+        return
+    if isinstance(found, dict) and isinstance(expected, dict):
+        bad = sorted(str(k) for k in set(found) | set(expected) if found.get(k) != expected.get(k))
+    elif isinstance(found, (tuple, list)) and isinstance(expected, (tuple, list)):
+        bad = [str(i) for i, (a, b) in enumerate(zip(found, expected)) if a != b]
+        if len(found) != len(expected):
+            bad.append(f"length {len(found)} for {len(expected)}")
+    else:
+        bad = ["the value"]
+    test.fail("differs: " + ", ".join(bad or ["the type"]))
+
+
 class ReviewCase(OnCase):
     def review(self, name, replies, views=None, comment_code=0, steps=1, **build):
         # The case's project and fake claude; fake_review writes the program at the path build gave, so
@@ -165,7 +182,8 @@ class ReviewConfigTest(unittest.TestCase):
                 loaded, lines = config.load(path)
                 lines = [line.replace(str(path), "<path>") for line in lines]
                 found[name] = (loaded is None, lines)
-        self.assertEqual(
+        same(
+            self,
             found,
             {
                 "yes": (True, ["cannot start: <path>'s review must be true or false"]),
@@ -202,7 +220,8 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
         tail = [self.hold(arg, step, reviewer).replace("\\", "/") for arg in second["args"][-6:]]
         settings = self.hold(value_of(second["args"], "--settings") or "", step, reviewer)
         prompt = bytes.fromhex(second["stdin"]).decode("utf-8").splitlines()[:1]
-        self.assertEqual(
+        same(
+            self,
             (
                 code,
                 self.hold(out, step, reviewer).splitlines()[-1:],
@@ -231,7 +250,8 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
                 [f"Review pull request #12 at commit <head>, for the step: {DASHED}."],
             ),
         )
-        self.assertEqual(
+        same(
+            self,
             (
                 self.gh_of("pr", "comment"),
                 [self.hold(body, step, reviewer) for body in self.pr_bodies()],
@@ -241,7 +261,8 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
                 [f"review of `<head>` (session `<uuid>`):\n{REVIEW_ONLY}"],
             ),
         )
-        self.assertEqual(
+        same(
+            self,
             (
                 [r.get("prefix") for r in review_start],
                 isinstance(step_issue, int),
@@ -333,7 +354,8 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
         lines = self.hold(out, step, reviewer).splitlines()
         reasons = [line[len(prefix) :] for line in lines if line.startswith(prefix)]
         log = self.run_log()
-        self.assertEqual(
+        same(
+            self,
             (
                 [bool(reason.strip()) for reason in reasons],
                 [r.get("event") for r in log if r.get("event") in ("review", "merged")],
@@ -377,7 +399,8 @@ class ReviewLoopTest(ReviewCase, unittest.TestCase):
             code, _, err = self.run_steps("on")
         step, reviewer = self.uuids()
         message = "cannot read the project: git failed before the review of #12"
-        self.assertEqual(
+        same(
+            self,
             (
                 code,
                 message in self.hold(err, step, reviewer),
@@ -604,7 +627,8 @@ class ReviewBoxTest(ReviewCase, unittest.TestCase):
         names = [name.replace(R, "<uuid>") for name in self.names() if "-probe-" not in name]
         reviewer_runs = self.named(f"driver-{R}")
         run = [arg.replace(R, "<uuid>") for arg in reviewer_runs[0]] if reviewer_runs else []
-        self.assertEqual(
+        same(
+            self,
             (
                 code,
                 len(names),
