@@ -363,13 +363,14 @@ class BreakTest(unittest.TestCase):
         self.assertNotIn("broken:", run.stdout)
         self.assertEqual(self.contents(), self.original)
 
-    def test_a_report_that_holds_a_pid_uuid_commit_hash_or_absolute_path_is_refused(self):
+    def test_a_report_that_holds_a_pid_uuid_commit_hash_absolute_path_or_n_chars_is_refused(self):
         cases = (
             ("a pid", "AssertionError: pid 4242 still holds the lock"),
             ("a uuid", "AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed"),
             ("a commit hash", "AssertionError: None != 'park: the evidence run on `1dc0f03` ended `failure`'"),
             ("an absolute path", "AssertionError: 'C:\\Users\\me\\repo\\plan.md' is missing"),
             ("an absolute path", "AssertionError: '/home/me/repo/plan.md' is missing"),
+            ("a value unittest shortened", "AssertionError: 'park: the [707 chars]ult' != 'park: the [727 chars]ult'"),
         )
         for name, message in cases:
             with self.subTest(what=name, message=message):

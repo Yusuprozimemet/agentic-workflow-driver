@@ -347,8 +347,9 @@ def input_file(path):
     return record
 
 
-def check_spec(path, ref, only=None):
-    """One spec's record: what it was checked from and at, and its checks; only, a partial replay's criteria."""
+def check_spec(path, ref, only=None, new_needs_break=False):
+    """One spec's record: what it was checked from and at, and its checks; only, a partial replay's criteria.
+    new_needs_break, the rehearsal's: a ticked `new` criterion with no break to replay fails too (#212, S21)."""
     name = os.path.basename(path)
     record = {"spec": input_file(path), "day": None, "change": None, "close_sha": None, "verify_base_sha": None,
               "breaks": None, "criteria": list(only) if only else None, "checks": []}
@@ -454,6 +455,9 @@ def check_spec(path, ref, only=None):
             found = [m.groups() for l in joined(lines) if (m := BROKEN.match(l))]
             if not found and "**hold**" in lines[0]:
                 add(f"{cid}/break", "break", "failed", f"{cid} broken:", "a hold criterion with no broken: line", cid)
+            elif new_needs_break and "**new**" in lines[0] and all(what == "none" for what, _ in found):
+                add(f"{cid}/break", "break", "failed", f"{cid} broken:", "a new criterion with no break the "
+                    "replay can run: it would stay 'holds, never broken'", cid)
             for what, report in found:
                 key, label = f"{cid}/break/{what}", f"{cid} broken: {what}"
                 if what == "none":
@@ -549,6 +553,8 @@ def main(argv=None):
     p.add_argument("--json", metavar="PATH", help="also write the checks as a report")
     p.add_argument("--cache", metavar="PATH", help="reuse a spec's replay kept here when its replay_key is "
                    "unchanged and every check held; keep this run's held replays here")
+    p.add_argument("--new-needs-break", action="store_true",
+                   help="fail a ticked new criterion with no break to replay (the closing branch's rehearsal)")
     p.add_argument("--criterion", action="append", metavar="ID", type=criterion_id,
                    help="replay only this criterion's checks (repeatable; one spec only; skips the Verify block)")
     a = p.parse_args(argv)
@@ -573,7 +579,7 @@ def main(argv=None):
                 print(f"reused  {path}: replayed {hit['replayed']}, nothing it reads has changed since")
             else:
                 hit = None
-                day = check_spec(spec, a.ref, a.criterion)
+                day = check_spec(spec, a.ref, a.criterion, a.new_needs_break)
         except Exception as e:  # what the checker did not foresee still leaves a report
             key = None
             day = {"spec": {"path": path}, "checks": [

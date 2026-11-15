@@ -94,7 +94,11 @@ that changes behaviour in force without a `Replaces:` line is a finding.
     `specs/plan/promises.json`: is each `Plan:` line true (does the criterion deliver or guard
     what that commitment says, not only share a word with it), is a `Plan: none` really none,
     and does any criterion contradict a commitment, its own or another? A commitment whose
-    `owner_day` is this day that no criterion names is a finding too.
+    `owner_day` is this day that no criterion names is a finding too. `plan-links.py` fails
+    on a commitment due by the current Day that no criterion names and that
+    `specs/plan/overdue.json` does not excuse until a later Day (#211, N5), and prints a
+    warning for a Day where more than a third of the criteria say `Plan: none` (#212, S18):
+    report both as they print.
 13. **Overdue before additions, and the size** (`specs/README.md`, "Rules"). List the
     commitments in `specs/plan/promises.json` whose `owner_day` is earlier than this day that
     no earlier day's criterion names (`Plan:` lines, `specs/plan/links-days-01-10.json`). Each

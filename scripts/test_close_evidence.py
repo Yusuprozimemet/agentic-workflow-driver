@@ -214,6 +214,16 @@ class RehearseTest(unittest.TestCase):
         self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
         self.assertIn("FAIL  Verify: echo 1", run.stdout)
 
+    def test_a_new_criterion_with_no_break_to_replay_fails_the_rehearsal(self):
+        # Day 12's C12.11 and four others: ticked, new, no broken: line; the close passed (#212, S21).
+        self.close(spec(more="- [x] C1.2 **new** — Test: `CliTest.test_a`.\n"
+                             "- [x] C1.3 **new** — Test: `CliTest.test_a`.\n      broken: none → docs only\n"))
+        run = self.rehearse("day-01/close-the-day")
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("ok    C1.1 broken: the ok removed", run.stdout)
+        for cid in ("C1.2", "C1.3"):
+            self.assertIn(f"FAIL  {cid} broken: → a new criterion with no break the replay can run", run.stdout)
+
     def test_the_merge_commit_ci_checks_out_rehearses_by_its_parents(self):
         # A pull request's checkout: the merge of the branch into the base, on no branch, its
         # subject not a closing merge's. CI names the two sides by its parents.

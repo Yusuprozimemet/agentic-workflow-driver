@@ -70,9 +70,19 @@ class TestParallelTest(unittest.TestCase):
         self.write("test_passes.py", PASSES)
         code, out = self.main("--repeat", "3", "-j", "1")
         self.assertEqual(code, 1)
-        self.assertIn("test_flaky.py failed 1 of 3", out)
+        self.assertIn("test_flaky.py failed 1 of 3\n  T.test_it failed 1 of 3\n", out)
         self.assertNotIn("test_passes.py failed", out)
         self.assertIn("Ran 6 tests", out)
+
+    def test_repeat_names_each_failing_test_with_its_count_not_only_the_first(self):
+        # Two tests fail in one file: the second is named, though only the first is printed whole.
+        also = "class U(unittest.TestCase):\n    def test_also(self):\n        self.fail('always')\n\n"
+        self.write("test_two.py", FLAKY.replace("class T(", also + "class T(", 1))
+        code, out = self.main("--repeat", "3", "-j", "1")
+        self.assertEqual(code, 1)
+        self.assertIn("test_two.py failed 3 of 3\n", out)
+        self.assertIn("  U.test_also failed 3 of 3\n", out)
+        self.assertIn("  T.test_it failed 1 of 3\n", out)
 
 
 if __name__ == "__main__":

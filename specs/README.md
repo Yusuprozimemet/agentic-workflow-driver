@@ -17,7 +17,7 @@ Take the lowest rung that qualifies, and say which in the PR.
 
 | Rung | Branch | Qualifies | Keeps |
 |---|---|---|---|
-| area branch | `<area>/<slug>` | no product behaviour changes: kit tooling, docs, dashboard, CI, plan | the branch and title rules, the diff limit, a seen-red test and a `broken:` line when the PR has a check |
+| area branch | `<area>/<slug>` | no product behaviour changes: kit tooling, docs, dashboard, CI, plan; a fix that changes only tests (a flaky test made steady), which has no `new` criterion for a short spec to hold (#222) | the branch and title rules, the diff limit, a seen-red test and a `broken:` line when the PR has a check |
 | short spec | `change/<slug>` | one product behaviour, one PR, no contract test, frozen file or `Replaces:` | `S-<slug>.N` criteria tagged `new` or `hold`, seen red, breaks, `Defect` lines in its Notes, the behaviour index, the replay |
 | day spec | `day-NN/...` | plan work, and anything the rows above exclude | the auditors, tracks, the close, the blind relabel, the replay |
 

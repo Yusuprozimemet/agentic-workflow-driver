@@ -1,0 +1,38 @@
+name: Settings match the documents
+
+# scripts/setup-check.py, once a week and on demand: branch protection, the required checks, the
+# runner variable and Pages, against what docs/kit.md asks for. A setting that drifts from the
+# documents then fails where it is seen, not at the next audit (#211, N2).
+#
+# Reading branch protection needs admin read, which GITHUB_TOKEN never has: the job reads the
+# secret SETUP_CHECK_TOKEN, a fine-grained token on this repository with "Administration: read"
+# and "Variables: read" (and "Pages: read"). With no secret it fails and says so: a check that
+# could not look is not a pass.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"  # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup-check:
+    name: Settings match the documents
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the settings
+        env:
+          GH_TOKEN: ${{ secrets.SETUP_CHECK_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::no SETUP_CHECK_TOKEN secret: add a fine-grained token with Administration: read (see this file's header)"
+            exit 1
+          fi
+          python scripts/setup-check.py --repo "$GITHUB_REPOSITORY"

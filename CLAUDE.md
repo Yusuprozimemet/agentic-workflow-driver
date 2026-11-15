@@ -31,6 +31,12 @@ PR after Day 12's close.
 Not every change is a day: take the lowest rung of the [size-of-change ladder](specs/README.md#size-of-change)
 that qualifies (area branch, short spec, day spec) and say which in the PR.
 
+**Run the gates before planning, not before pushing:** the ones that decide the rung and the
+files a change may touch (`python scripts/invariants.py main HEAD` for frozen files, the rung's
+own rules, `python scripts/plan-links.py`), and ask the maintainer once, early, for everything
+that is theirs to decide. The N1 fix found two such rules after building on the wrong
+assumption, and lost about 25 minutes to them (#212, S23).
+
 **While a Day is open** (its spec PR merged, its closing PR not yet), an area PR (`tooling/`,
 `dashboard/`, `docs/` and the rest) opens only when it fixes what blocks the Day's next step: a
 failing check, or a tool the step needs that is broken. Say in the PR what it unblocks.
@@ -200,6 +206,10 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 
 ## Before pushing
 
+- Run `python scripts/pre-push.py --title "<PR title>" --body <body file>` on the committed
+  branch: one line per PR check with a local command (`invariants.py main HEAD`, "Frozen files
+  stay unedited", among them), exit 1 on any failure; "A track's breaks replay" needs Linux and
+  only says so. The items below say what each one is for.
 - Run the check-only style command `ruff check . && ruff format --check .`; it must fail on unformatted code and never rewrite files.
 - While working, run only the test files the change touches
   (`python scripts/test-parallel.py "test_setup*.py"`, a glob under `tests/`), and name them in

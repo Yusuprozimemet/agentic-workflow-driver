@@ -33,7 +33,9 @@ written <tmp>, so no local path, a user name in it, reaches the PR.
 It runs the check twice with the break in, and refuses a report that differs between the two runs, or
 a check that failed in one and passed in the other. It refuses a report that holds a pid, a uuid, a
 commit hash or an absolute path: the close replays the line on another machine, and 12 of this
-project's 23 recurring defects up to Day 7 were such reports (D03.17 to D07.40). --replay, which
+project's 23 recurring defects up to Day 7 were such reports (D03.17 to D07.40). It refuses one
+that holds unittest's "[N chars]" too: the length of a shortened value changes with where it runs
+(the dashboard's replay got [707 chars] for the [727 chars] recorded, #211 N4). --replay, which
 evidence.py passes, runs the check once and leaves the comparison with the recorded line to the caller.
 
 --record writes the entry into the break manifest itself, so no one retypes it: the manifest's keys,
@@ -105,6 +107,7 @@ UNSTABLE = [(name, re.compile(p)) for name, p in (
     ("a pid", r"(?i)\b(?:pid|process id)\b\W{0,3}\d+"),
     ("a commit hash", r"\b(?=[0-9a-f]*\d)(?=\d*[a-f])[0-9a-f]{7,40}\b"),
     ("an absolute path", r"(?<![A-Za-z0-9])[A-Za-z]:[\\/]|(?<![\w/:.<>~-])/[\w.-]+(?:/[\w.-]+)+"),
+    ("a value unittest shortened", r"\[\d+ chars\]"),
 )]
 
 
@@ -511,7 +514,7 @@ def main(args=None):
         name, text = found
         return refuse(f"the report holds {name} ({text}), which another run or machine prints differently: "
                       f"{reports[0]!r}; have the test print a fixed word in its place (<uuid>, <head>, <pid>, "
-                      "a relative path)")
+                      "a relative path), or, for [N chars], compare something short and fixed")
     if target:
         how = record(target, {**entry_of(a), "report": reports[0], "blob": blob})
         print(f"recorded: {how} in {target}")

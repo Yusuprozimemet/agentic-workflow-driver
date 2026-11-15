@@ -11,7 +11,9 @@ CI keeps the serial command.
 
 A failing file's whole output is kept in .claude/state/test-failures/ (gitignored), and its
 path printed: two flaky failures (D07.27, D08.81) were seen once, not kept, and their cause is
-still unknown. --repeat N runs each file N times and says how often each failed.
+still unknown. --repeat N runs each file N times and says how often each failed, and how often
+each failing test in it did: a file's first failure is printed in full, and a second test failing
+behind it (C09.4 behind C09.3, #212 S23) is named only in that count.
 
     python scripts/test-parallel.py            # all tests, one worker per CPU
     python scripts/test-parallel.py -j 4 test_once_*.py
@@ -59,6 +61,19 @@ def run(name):
         "seconds": time.monotonic() - start,
         "output": out,
     }
+
+
+FAILED_TEST = re.compile(r"^(?:FAIL|ERROR): (\w+) \(([\w.]+)\)", re.MULTILINE)
+
+
+def failing_tests(output):
+    """The tests one run's unittest output says failed or errored, as "Class.test", in order, once each.
+    Python 3.11 on writes "test (module.Class.test)", earlier ones "test (module.Class)"."""
+    found = []
+    for test, where in FAILED_TEST.findall(output):
+        parts = where.split(".")
+        found.append(f"{parts[-2] if parts[-1] == test and len(parts) > 1 else parts[-1]}.{test}")
+    return list(dict.fromkeys(found))
 
 
 def keep(result, stamp):
@@ -127,6 +142,9 @@ def main(argv=None):
     )
     for name in sorted({r["name"] for r in failed}) if args.repeat > 1 else ():
         print(f"{name} failed {sum(r['name'] == name for r in failed)} of {args.repeat}")
+        runs = [failing_tests(r["output"]) for r in failed if r["name"] == name]
+        for test in dict.fromkeys(t for tests in runs for t in tests):
+            print(f"  {test} failed {sum(test in tests for tests in runs)} of {args.repeat}")
     if failed:
         print(f"FAILED ({len(failed)}: {', '.join(sorted({r['name'] for r in failed}))})")
         return 1
