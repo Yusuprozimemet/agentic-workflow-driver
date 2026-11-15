@@ -5,7 +5,9 @@ A driver for projects set up from the
 runs a project's day loop, one `claude -p` session per step, and parks for the maintainer when a
 step needs a person. The maintainer writes the project's `plan.md` and answers the parks.
 
-Nothing is built yet. [plan.md](plan.md) is the goal; the day specs in [specs/](specs/) are the
+The driver is built one Day at a time: `python scripts/behaviour-index.py` prints what it does
+now, and the [dashboard](https://yusuprozimemet.github.io/agentic-workflow-driver/) which Day is
+next. [plan.md](plan.md) is the goal; the day specs in [specs/](specs/) are the
 steps; [CLAUDE.md](CLAUDE.md) is the working order. This repository is itself run by hand, one day
 spec at a time, as the kit describes ([docs/kit.md](docs/kit.md)); the driver never drives it.
 

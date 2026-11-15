@@ -19,10 +19,23 @@ A person or an agent new to this repository: read `plan.md`, then run
 the dashboard) for the current day and next step; then ask for it, for example "start Day 12". Nothing merges without the
 maintainer, and nothing starts after a phase ends until they say so.
 
+**The merge gate is CI and the auditors; the maintainer's merge is a go-ahead.** CI's required
+checks and the auditors' reports are what a PR must pass; the maintainer's "merged" says go
+ahead, not that every line was reviewed by a person. Of the first 213 PRs, the median went from
+open to merged in 4 minutes, CI included (#211, N3). So a PR body says what CI and the auditors
+did not check, where a reader should look. `plan.md` takes the same sentence in the plan-change
+PR after Day 12's close.
+
 ## A day, in order
 
 Not every change is a day: take the lowest rung of the [size-of-change ladder](specs/README.md#size-of-change)
 that qualifies (area branch, short spec, day spec) and say which in the PR.
+
+**While a Day is open** (its spec PR merged, its closing PR not yet), an area PR (`tooling/`,
+`dashboard/`, `docs/` and the rest) opens only when it fixes what blocks the Day's next step: a
+failing check, or a tool the step needs that is broken. Say in the PR what it unblocks.
+Anything else goes into #213 and waits for the close. On 14 Nov 21 tooling and dashboard PRs
+merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` branch (#212, S15).
 
 1. **Audit before writing anything.** On the first day of a phase, run the **plan-auditor**
    agent on the phase first: do the specs still add up to what `plan.md` wants from it, and
@@ -104,8 +117,9 @@ Output that lands in the main session is re-read by every later reply. Keep it s
 - Test runs and CI logs: filter to the failures and the counts (`grep`, `tail`), or have a
   subagent read them and return the summary. Never print a whole log or report.
 - Replies are the cost, more than their size: batch independent calls into one reply, and
-  checks into one shell command that prints one line per item. Wait for CI with
-  `gh pr checks <n> --watch > <file>`, then print only the final `gh pr checks <n>`.
+  checks into one shell command that prints one line per item. Wait for CI in the background
+  (`run_in_background`) with `gh pr checks <n> --watch > <file>`, then print only the final
+  `gh pr checks <n>`: never watch it in the foreground.
 - Read the part of a file you need (`offset`/`limit`, `grep -n`), not the whole file, unless the
   step changes all of it. Diffs: `--stat` first, then the files that matter. A hook enforces the
   first half ("Where things live").
@@ -187,6 +201,10 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 ## Before pushing
 
 - Run the check-only style command `ruff check . && ruff format --check .`; it must fail on unformatted code and never rewrite files.
+- While working, run only the test files the change touches
+  (`python scripts/test-parallel.py "test_setup*.py"`, a glob under `tests/`), and name them in
+  an implementer's brief; the full run below goes once, before pushing. Waiting on commands
+  was 55% of the main session's busy time over 6 to 15 Nov, most of it whole-suite runs (#212, S1).
 - Run `python scripts/test-parallel.py` from the repository root: the whole of `tests/`, one
   file per process, slowest first, the failures printed whole. It is the same tests as
   `python -m unittest discover -s tests`, which CI (`tests.yml`) runs serially with `-v`, and

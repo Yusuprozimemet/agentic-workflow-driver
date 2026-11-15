@@ -218,6 +218,15 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   10 are linked in `specs/plan/links-days-01-10.json` instead; their specs are not edited. A
   `Plan:` line is criterion wording: write and change it in the spec-change PR. The dashboard's
   plan graph will draw from these lines.
+- **Overdue commitments come before additions.** A commitment is overdue for a Day when its
+  `owner_day` in `specs/plan/promises.json` is earlier than that Day and no criterion of an
+  earlier Day names it (in a `Plan:` line or `specs/plan/links-days-01-10.json`). A Day's spec
+  takes the overdue commitments before any commitment added since (the `N` IDs), or says why
+  not in one line under its Goal: `Overdue: P25, P37 wait — <why>`. Day 11 spent 21 of its 23
+  criteria on additions while eight commitments came due uncovered (#211, N6).
+- **At most 24 criteria a Day.** A plan change that would give a Day more is split over two
+  Days, and the first Day's spec names the second and what it takes. Days 1 to 12 had 7 to 23,
+  except Day 10's 32, where a plan change landed at once (#212, S3).
 - Changing a spec is normal. Change it in a PR *before* the work, not after.
   Criterion wording, tags and IDs change only in a spec-change PR on `day-NN/spec-<slug>`.
   CI's "Criteria keep their wording" job enforces this against the branch's merge base on

@@ -148,8 +148,9 @@ On GitHub, in this order:
   the dashboard, and without Pages the first push's Dashboard run fails at "Publish to Pages"
   (404).
 - A public repository, or a paid plan for Pages and branch protection on a private one.
-- Before Day 1, branch protection on `main`: a pull request before merging, and these checks
-  required by name: "Description uses the template", "Diff stays reviewable", "Branch, title,
+- Before Day 1, branch protection on `main`: these checks required by name, and no required
+  review (one maintainer cannot approve their own pull request; the required checks and the
+  auditors are the merge gate, `CLAUDE.md`): "Description uses the template", "Diff stays reviewable", "Branch, title,
   commits and Jira keys agree", "Frozen files stay unedited", "Dashboard metric tests gate",
   "Criteria keep their wording", "A closed day's evidence replays", "Track tests seen red",
   "A track's breaks replay", and the project's tests. The settings page offers only checks
@@ -165,8 +166,10 @@ On GitHub, in this order:
    "enforce_admins": false, "required_pull_request_reviews": null, "restrictions": null}
   ```
 
-  and run `gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input <file>`. Then tick
-  "Require a pull request before merging" on the settings page: the API ties it to a review rule.
+  and run `gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input <file>`. Leave
+  "Require a pull request before merging" unticked: the API ties it to a review rule. The
+  required checks run only on pull requests, so a change no one bypasses still reaches `main`
+  through one.
 - "Every service is wired into compose and Prometheus" checks nothing until `services/` exists,
   and passes. A project with no services leaves it out of the required checks, or deletes the job.
 - The kit has no workflow for the project's own tests: each project adds one (for example
@@ -174,8 +177,8 @@ On GitHub, in this order:
   kit's workflows test only its own tools.
 - "Track tests seen red" reports on every pull request; set `TRACK_RED_RUNNER` (item 6
   above) and require it by name too.
-- Then run `python scripts/setup-check.py`: one line per item, `ok` or `FAIL`, for a pull request
-  before merging and each required check above on `main` (classic protection or a ruleset), the
+- Then run `python scripts/setup-check.py`: one line per item, `ok` or `FAIL`, for no one allowed
+  to bypass the rules and each required check above on `main` (classic protection or a ruleset), the
   project's tests among them, `TRACK_RED_RUNNER`, Pages built by GitHub Actions, and each Markdown
   file with a `<!-- PROJECT` placeholder left. It reads only, needs `gh` logged in as an admin of
   the repository, and exits 1 until every item is set up. In the kit itself, run it with

@@ -62,9 +62,8 @@ class ProtectionTest(unittest.TestCase):
 
     def test_an_unprotected_main_fails_each_required_check_by_name(self):
         lines = setup_check.protection_lines(REPO, fake(protection=(404, ["gh: Branch not protected (HTTP 404)"])))
-        self.assertEqual(len(failed(lines)), len(setup_check.REQUIRED) + 3)
+        self.assertEqual(len(failed(lines)), len(setup_check.REQUIRED) + 2)
         self.assertIn('main requires "A closed day\'s evidence replays": not required', failed(lines))
-        self.assertIn("main: a pull request before merging: not required", failed(lines))
 
     def test_one_missing_check_fails_that_line_alone(self):
         contexts = [c for c in setup_check.REQUIRED if c != "Track tests seen red"] + [PROJECT_TESTS]

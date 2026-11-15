@@ -95,6 +95,12 @@ that changes behaviour in force without a `Replaces:` line is a finding.
     what that commitment says, not only share a word with it), is a `Plan: none` really none,
     and does any criterion contradict a commitment, its own or another? A commitment whose
     `owner_day` is this day that no criterion names is a finding too.
+13. **Overdue before additions, and the size** (`specs/README.md`, "Rules"). List the
+    commitments in `specs/plan/promises.json` whose `owner_day` is earlier than this day that
+    no earlier day's criterion names (`Plan:` lines, `specs/plan/links-days-01-10.json`). Each
+    one this spec does not name, while it names an `N` commitment added since, is a finding
+    unless the spec's `Overdue:` line names it with a reason. More than 24 criteria is a
+    finding too: say where the day would split.
 
 ## How to work
 
