@@ -266,7 +266,9 @@ class UsageLimitTest(unittest.TestCase):
 
     def test_halt_during_wait(self):
         # C09.4: the halt file written during a 60-second wait stops the driver within 5 seconds.
-        folder, proc = self.start([{"records": limit_records(60), "result": LIMITED}])
+        # The run's issue close sleeps six seconds, as on a busy machine; it comes after the halt line.
+        runs = [{"records": limit_records(60), "result": LIMITED}]
+        folder, proc = self.start(runs, gh_extra={"sleep_on": "close", "sleep": 6})
         ended = self.halt_after_end(folder)
         code, lines = self.finish(folder, proc, bound=5)
         self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
