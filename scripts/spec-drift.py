@@ -252,7 +252,7 @@ def main():
                     clock=clock(prs, runs), counted=counted(), driver_runs=driver_runs(parked_issues(note)),
                     data=data_source(),
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
-                              break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(),
+                              break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(), repo_url=repo_url(),
                               phases=phases(plan), stops=stops(plan), where=where_rows(plan, spec_days)))
         real["score"] = quality_score(real)
         if args.build:

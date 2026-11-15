@@ -253,3 +253,11 @@ def project_name():
         return run("gh", "repo", "view", "--json", "name", "-q", ".name").strip()
     except subprocess.CalledProcessError:
         return os.path.basename(run("git", "rev-parse", "--show-toplevel").strip())
+
+
+def repo_url():
+    """The repository's URL on GitHub, for the page's source links; None with no remote."""
+    try:
+        return run("gh", "repo", "view", "--json", "url", "-q", ".url").strip() or None
+    except subprocess.CalledProcessError:
+        return None

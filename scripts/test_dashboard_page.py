@@ -59,6 +59,13 @@ const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(tagOf)", ctx)));
 """
 
+# howBlob() on the data from stdin: where the page's "Read ..." links point.
+HOW_BLOB = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nhowBlob(DATA)", ctx)));
+"""
+
 
 def node(harness, data):
     return json.loads(subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True,
@@ -340,7 +347,7 @@ class ModelTest(unittest.TestCase):
         g = model(data(days=days, defect_recurrence=dict(recurrences=[dict(id="D2.1", same_as="D1.1")]),
                        gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=1, runs=2, cost=1.0),
                                                dict(gate="hooks", found=None, defects=0, runs=1, cost=0.1)])))["g7"]
-        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 1, 0, 0, 0, 0], [0] * 10])
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0], [0] * 11])
         self.assertEqual([r["note"] for r in g["rows"]], ["3 of 12", "not read yet", "read at its close"])
         dots = {o["id"]: o for r in g["rows"] for o in r["dots"]}
         self.assertEqual([(o["id"], o["cause"], o["escaped"], o["back"]) for o in dots.values()], [
@@ -351,8 +358,8 @@ class ModelTest(unittest.TestCase):
             ["Made on Day 1 and caught on Day 2: it escaped for 1 Day. The same problem as D1.1, back again."]))
         self.assertEqual(dots["D1.2"]["b"], ["Made outside any Day: in the plan, a tool or a machine. Noticed by: Track A."])
         self.assertEqual(dots["D2.2"]["b"], ["Caught on Day 2; its line does not say which Day made it."])
-        self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "0 caught", "1 caught", "0 caught",
-                                                         "1 caught · tracks, reviews, the session", "1 caught", "0 caught",
+        self.assertEqual([x["sub"] for x in g["gates"]], ["1 caught · 2 runs · $1.00", "0 caught", "1 caught", "0 caught", "0 caught",
+                                                         "1 caught · tracks, the session", "1 caught", "0 caught",
                                                          "0 caught", "0 caught", "0 caught"])
         self.assertEqual(g["read"]["t"], "4 defects; the auditors caught 1 of them before any code was written")
         self.assertEqual(g["read"]["b"], ["1 was in a spec. 1 escaped from an earlier Day and 1 came back. A second reader gave 3 of 12 "
@@ -460,22 +467,56 @@ class ModelTest(unittest.TestCase):
                        verification=[dict(number=1, failed_in=["PR checks", "Tests"]), dict(number=2, failed_in=["PR checks"]), dict(number=3, failed_in=[])],
                        rows=[dict(pr=None), dict(pr=1, day=1), dict(pr=2, day=1)]))["g7"]
         P = g["pipe"]
-        self.assertEqual([s["name"] for s in P["stages"]], ["Before any code", "Writing a track, on this machine", "Hooks, in the session",
-                                                          "CI on every pull request", "You", "The close", "After the merge"])
-        gates = {n: x for s in P["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([s["name"] for s in P["stages"]], ["Before any code", "Writing a track, on this machine", "The close",
+                                                          "CI on every pull request", "You", "After the merge"])
+        gates = {n: x for s in [*P["stages"], P["hooks"]] for x in s["gates"] for n in x["names"]}
         self.assertEqual([o["id"] for o in gates["spec-auditor"]["dots"]], ["D1.1"])
-        self.assertEqual([o["id"] for o in gates["Noticed in the work"]["dots"]], ["D1.3", "D1.2"])  # by cause: process before implementation
-        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 1 · self 0 · review 1 · other 0")
+        self.assertEqual([o["id"] for o in gates["Noticed in the work"]["dots"]], ["D1.2"])
+        self.assertEqual([o["id"] for o in gates["Diff review"]["dots"]], ["D1.3"])
+        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 1 · self 0 · other 0")
         # Both views hold the same dots: the pipeline cannot disagree with the rows by Day.
         self.assertEqual(sorted(o["id"] for s in P["stages"] for x in s["gates"] if x["dots"] for o in x["dots"]), sorted(o["id"] for r in g["rows"] for o in r["dots"]))
         self.assertEqual([gates[n]["stop"] for n in ("read-guard", "step-guard", "auditor-guard", "Tests", "Track breaks", "Your merge")],
                          ["5 refused", "1 refused", "0 refused", "failed on 1 pull request", "failed on 0 pull requests", "2 pull requests merged"])
-        self.assertEqual([s["note"] for s in P["stages"]][2:4], ["6 refusals", "PR checks failed on 2 pull requests"])
+        notes = {s["name"]: s["note"] for s in P["stages"]}
+        self.assertEqual((P["hooks"]["note"], notes["CI on every pull request"]), ("6 refusals", "PR checks failed on 2 pull requests"))
         self.assertEqual((gates["ruff"]["plain"], gates["Style check"]["plain"], gates["Compose and Prometheus"]["kind"]),
                          ("not counted yet", "in the PR checks' count", "kit"))
         self.assertEqual([(p["name"], p["n"], p["pct"]) for p in P["phases"]],
                          [("Before any code", 1, 25), ("While writing", 2, 50), ("At the close", 1, 25), ("After the merge", 0, 0)])
-        self.assertEqual(P["gates"], 39)
+        self.assertEqual(P["gates"], 40)
+
+    def test_graph_7_sends_every_pull_request_through_ci_and_the_merge_with_the_hooks_beside_the_pipe(self):
+        defect = lambda i, found: dict(id=i, found=found, cause="process", made="Day 12", same_as=None, problem=None)
+        g = model(data(days=[a_day(12, defects=[defect("D12.1", "review"), defect("D12.2", "self"), defect("D12.3", "rehearsal")])],
+                       refusals=[dict(date="2026-01-01", guard="read-guard", refused=3)]))["g7"]
+        P = g["pipe"]
+        # The track loop wraps the writing alone; the spec change, each track and the close then pass CI and the merge,
+        # the closing PR's rehearsal among CI's checks, and the replay after the merge.
+        self.assertEqual([(s["name"], s.get("loop", False)) for s in P["stages"]],
+                         [("Before any code", False), ("Writing a track, on this machine", True), ("The close", False),
+                          ("CI on every pull request", False), ("You", False), ("After the merge", False)])
+        where = {n: s["name"] for s in P["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([where.get(n) for n in ("close-evidence --rehearse", "Diff review", "Your merge")],
+                         ["CI on every pull request", "Writing a track, on this machine", "You"])
+        # The hooks run in every stage: a band beside the pipe, not a stage of it, with the same refusal counts.
+        self.assertEqual([x["names"][0] for x in P["hooks"]["gates"]], ["step-guard", "read-guard", "auditor-guard", "cap-output"])
+        self.assertEqual((P["hooks"]["note"], P["hooks"]["gates"][1]["stop"]), ("3 refusals", "3 refused"))
+        # The main session's diff review is a gate of its own; the work no longer counts reviews.
+        gates = {n: x for s in P["stages"] for x in s["gates"] for n in x["names"]}
+        self.assertEqual([[o["id"] for o in gates[n]["dots"]] for n in ("Diff review", "Noticed in the work")], [["D12.1"], ["D12.2"]])
+        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 0 · self 1 · other 0")
+        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0])
+        # A phase's end sits after the Day's pipe: nothing counts its auditors apart yet.
+        self.assertEqual((P["phase_end"]["name"], [x["names"] for x in P["phase_end"]["gates"]], P["phase_end"]["gates"][0]["plain"]),
+                         ("End of a phase", [["plan-auditor"], ["security-ops-auditor", "agentic-engineering-auditor", "architecture-auditor"]],
+                          "not counted yet"))
+        self.assertNotIn("seven", g["say"])
+
+    def test_the_pages_source_links_go_to_the_repository_the_data_names(self):
+        blob = lambda meta: node(HOW_BLOB, dict(meta=meta))
+        self.assertEqual(blob(dict(repo_url="https://github.com/someone/fork")), "https://github.com/someone/fork/blob/main/")
+        self.assertEqual(blob(dict(project="toy")), None)
 
     def test_graph_1_counts_the_promises_built_and_written_at_each_merge_and_what_is_left_before_the_stop(self):
         # The unnumbered hand-off counts in `open` but not in the numbered count the graph draws.
@@ -716,7 +757,7 @@ class ModelTest(unittest.TestCase):
                        gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=2, runs=2, cost=1.0)]),
                        clock=dict(sessions=[], prs=[pr(1, 1, "2026-01-01T10:00:00Z"), pr(2, 2, "2026-01-03T10:00:00Z")]),
                        counted=dict(at="2026-01-02T12:00:00+01:00")))["g7"]
-        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1] + [0] * 9, [1] + [0] * 9])
+        self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1] + [0] * 10, [1] + [0] * 10])
         self.assertEqual(g["rows"][0]["dots"][0]["cause"], "spec")
         self.assertEqual(g["read"]["b"], ["2 were in a spec. 0 escaped from an earlier Day and 0 came back. Each catch cost about $1.00 at the auditors, "
                                           "over the catches of the Days in the count: Day 2 had a pull request merge after it. "
@@ -725,7 +766,7 @@ class ModelTest(unittest.TestCase):
     def test_graph_7_puts_a_rehearsal_at_the_close_not_after_the_merge(self):
         defect = dict(id="D12.1", found="rehearsal", cause="process", made="Day 12", same_as=None, problem=None)
         g = model(data(days=[a_day(12, defects=[defect])]))["g7"]
-        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
+        self.assertEqual([len(c) for c in g["rows"][0]["cells"]], [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
         gates = {n: x for s in g["pipe"]["stages"] for x in s["gates"] for n in x["names"]}
         self.assertEqual([o["id"] for o in gates["close-evidence --rehearse"]["dots"]], ["D12.1"])
         self.assertEqual(gates["Evidence replay"]["dots"], [])
@@ -737,9 +778,9 @@ class ModelTest(unittest.TestCase):
         g = model(data(days=[a_day(2, defects=[defect("D2.1", "spec-change PR"), defect("D2.2", "dashboard"), defect("D2.3", "Day 02 review"),
                                                defect("D2.4", "review"), defect("D2.5", "evidence replay")])]))["g7"]
         gates = {n: x for s in g["pipe"]["stages"] for x in s["gates"] for n in x["names"]}
-        self.assertEqual([[o["id"] for o in gates[n]["dots"]] for n in ("Spec-change PR", "Noticed in the work", "Evidence replay", "Dashboard", "Day NN review")],
+        self.assertEqual([[o["id"] for o in gates[n]["dots"]] for n in ("Spec-change PR", "Diff review", "Evidence replay", "Dashboard", "Day NN review")],
                          [["D2.1"], ["D2.4"], ["D2.5"], ["D2.2"], ["D2.3"]])
-        self.assertEqual(gates["Noticed in the work"]["by"], "by: tracks 0 · self 0 · review 1 · other 0")
+        self.assertEqual((gates["Noticed in the work"]["dots"], gates["Noticed in the work"]["by"]), ([], ""))
         self.assertEqual([(p["name"], p["n"]) for p in g["pipe"]["phases"]],
                          [("Before any code", 1), ("While writing", 1), ("At the close", 0), ("After the merge", 3)])
 

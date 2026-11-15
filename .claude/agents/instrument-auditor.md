@@ -190,7 +190,7 @@ If the page has a view this list lacks (a new graph, a new button), add it at th
 | 8 | Graph 12, the four "Show only" filters, each with its list | `g12-filter-N`, `g12-filter-N-list` |
 | 9 | Graph 12, the ladder: where on the plan each Day lands | `g12-ladder` |
 | 10 | Graph 6: Do the spec and the code still agree? | `g6`, `g6-exact` |
-| 11 | Graph 7: Does the checking work? (the pipeline) | `g7`, `g7-exact` |
+| 11 | Graph 7: Does the checking work, and is it worth it? (the pipeline) | `g7`, `g7-exact` |
 | 12 | Graph 7, By Day: each Day's catches side by side | `g7-byday` |
 | 13 | Graph 8: What did it cost? By who | `g8`, `g8-exact` |
 | 14 | Graph 8, By Day | `g8-byday` |
