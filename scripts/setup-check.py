@@ -3,8 +3,8 @@
     python scripts/setup-check.py [--repo owner/name]    # default: the repository gh sees here
     python scripts/setup-check.py --kit                  # the kit itself: its placeholders stay
 
-The items are the README's "Starting a project from it": on `main`, a pull request before merging
-with no one allowed to bypass the rules, and each check in REQUIRED required by name (classic
+The items are the README's "Starting a project from it": on `main`, no one allowed to bypass
+the rules (no review is asked for: one maintainer cannot approve their own pull request), and each check in REQUIRED required by name (classic
 branch protection or a ruleset, either counts), and one more required check, the project's own tests; the repository variable
 TRACK_RED_RUNNER set to a runner track-red.py knows, or a command holding `{test}`; GitHub Pages built by GitHub Actions; and no
 `<!-- PROJECT` placeholder left in a tracked Markdown file outside kit/ (in backticks, a placeholder
@@ -94,7 +94,9 @@ def bypass_line(repo, gh, classic, rules):
 
 
 def protection_lines(repo, gh):
-    """Pull request before merging and the required checks on `main`, from both kinds of rule."""
+    """No bypass and the required checks on `main`, from both kinds of rule. No review is asked
+    for: one maintainer cannot approve their own pull request, so the required checks and the
+    auditors are the merge gate (CLAUDE.md)."""
     what = "branch protection on main"
     status, classic = gh(f"repos/{repo}/branches/main/protection")
     if status == 404:  # "Branch not protected": rulesets may still protect it
@@ -106,15 +108,10 @@ def protection_lines(repo, gh):
         return unreadable(what + " (rulesets)", status, rules)
     checks = (classic.get("required_status_checks") or {})
     required = set(checks.get("contexts") or []) | {c["context"] for c in checks.get("checks") or []}
-    pull_request = "required_pull_request_reviews" in classic
     for rule in rules or []:
-        if rule.get("type") == "pull_request":
-            pull_request = True
         if rule.get("type") == "required_status_checks":
             required |= {c["context"] for c in rule["parameters"]["required_status_checks"]}
-    lines = [("ok" if pull_request else "FAIL", "main: a pull request before merging"
-              + ("" if pull_request else ": not required"))]
-    lines.append(bypass_line(repo, gh, classic, rules))
+    lines = [bypass_line(repo, gh, classic, rules)]
     for name in REQUIRED:
         lines.append(("ok", f'main requires "{name}"') if name in required
                      else ("FAIL", f'main requires "{name}": not required'))

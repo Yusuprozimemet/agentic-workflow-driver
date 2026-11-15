@@ -38,9 +38,8 @@ def fake(answers):
 class BypassTest(unittest.TestCase):
     def check(self, answers, expected):
         lines = setup_check.protection_lines(REPO, fake(answers))
-        self.assertEqual(len(lines), len(setup_check.REQUIRED) + 3)
-        self.assertTrue(lines[0][1].startswith("main: a pull request before merging"))
-        self.assertEqual(lines[1], expected)
+        self.assertEqual(len(lines), len(setup_check.REQUIRED) + 2)
+        self.assertEqual(lines[0], expected)
 
     def test_classic_enforce_admins(self):
         off = {"required_pull_request_reviews": {}, "enforce_admins": {"enabled": False}}
