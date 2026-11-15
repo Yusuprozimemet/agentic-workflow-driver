@@ -21,8 +21,8 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 
 # The fake program: it records its arguments in calls.jsonl beside it, then answers `run list`,
 # `pr list`, `issue list`, and the issue writes (`issue create`, `issue comment`, `issue close`,
-# `label create`) from fake.json (`issue_code` fails every issue and label call), and exits 99 on
-# anything else. A call with `--body-file -` also appends its stdin to bodies.jsonl beside it. A
+# `label create`, `pr comment`) from fake.json (`issue_code` fails every issue and label call), and
+# exits 99 on anything else. A call with `--body-file -` also appends its stdin to bodies.jsonl beside it. A
 # fake.json with `sleep_on` (an `issue` subcommand) and `sleep` makes that call sleep first, for
 # the timeout test. `pr checks`, `pr view`, `run view` and `run list` with `run_steps` answer from the
 # lists `checks`, `views`, `logs` and `run_steps` in fake.json, each entry `{"code": n, "out": ...}`
@@ -31,7 +31,9 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # issue at an exact call. `pr_code` fails every `pr list` call, as `issue_code` does its calls. An
 # answer's `err` is written to stderr when it has one. `comment_id` is the number that
 # `issue comment` prints after `#issuecomment-` (1 when not given), and `comment_code` fails
-# every `issue comment` and `api` call when it is not 0. An `api` call exits 0 once its stdin
+# every `issue comment` and `api` call when it is not 0. `pr comment` prints
+# `https://github.com/me/project/pull/<n>#issuecomment-<comment_id>`, and `comment_code` fails it
+# as it fails `issue comment`. An `api` call exits 0 once its stdin
 # is recorded, as a PATCH of a comment does.
 FAKE = """import json
 import sys
@@ -69,7 +71,9 @@ if args[0] == "issue" and spec.get("sleep_on") == args[1]:
     time.sleep(spec.get("sleep", 0))
 if spec["code"] != 0:
     sys.exit(spec["code"])
-if spec.get("comment_code", 0) != 0 and (args[:2] == ["issue", "comment"] or args[0] == "api"):
+if spec.get("comment_code", 0) != 0 and (
+    args[:2] in (["issue", "comment"], ["pr", "comment"]) or args[0] == "api"
+):
     sys.exit(spec["comment_code"])
 if args[0] in ("issue", "label") and spec.get("issue_code", 0) != 0:
     sys.exit(spec["issue_code"])
@@ -137,6 +141,9 @@ if args[:2] == ["pr", "view"]:
 if args[:2] == ["run", "view"]:
     step("logs")
 if args[0] == "api":
+    sys.exit(0)
+if args[:2] == ["pr", "comment"]:
+    print(f"https://github.com/me/project/pull/{args[2]}#issuecomment-{spec.get('comment_id', 1)}")
     sys.exit(0)
 sys.exit(99)
 """

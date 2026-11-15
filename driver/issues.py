@@ -120,6 +120,18 @@ def _comment(project, gh, number, body, timeout=None):
     return code
 
 
+def pr_comment(project, gh, number, body):
+    # The reviewer's found: lines, one comment on the pull request; None or why it failed.
+    code, _ = _write(
+        project, gh, ["pr", "comment", str(number), "--body-file", "-"], body, timeout=30
+    )
+    if code is None:
+        return "gh pr comment timed out"
+    if code != 0:
+        return f"gh pr comment exited {code}"
+    return None
+
+
 def _create(project, gh, args, body):
     # gh prints the new issue's URL as its last line; the number is the end of that URL.
     code, out = _write(project, gh, ["issue", "create", *args, "--body-file", "-"], body)

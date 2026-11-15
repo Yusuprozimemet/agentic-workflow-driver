@@ -4,7 +4,10 @@ afresh: one agent, reviewer, whose prompt is the brief. The file goes in <state>
 line: cmd.exe drops a newline and what follows it.
 
 snapshot() reads HEAD, the refs, the stash's top and git status with read-only git commands;
-changed() names the first that moved."""
+changed() names the first that moved.
+
+verdict() reads the reviewer's result: its found: lines and blockers, when the REVIEW line agrees
+with them; body() is the comment the driver posts on the pull request."""
 
 import json
 import os
@@ -20,6 +23,8 @@ NAMES = (
     ("stash_top", "the stash"),
     ("status", "`git status`"),
 )
+BLOCKER = "found: blocker — "
+ADVICE = "found: advice — "
 
 
 def agents(state, home, inside=False):
@@ -77,3 +82,25 @@ def changed(before, after):
         if before[key] != after[key]:
             return name
     return None
+
+
+def verdict(text):
+    # The found lines and the blockers, only when the REVIEW line (the last non-empty one) agrees
+    # with them; anything else is None, and the driver does not post it as a verdict.
+    lines = text.splitlines()
+    found = [line for line in lines if line.startswith((BLOCKER, ADVICE))]
+    blockers = [line for line in found if line.startswith(BLOCKER)]
+    filled = [line.strip() for line in lines if line.strip()]
+    last = filled[-1] if filled else None
+    if (last == "REVIEW: blocker" and blockers) or (last == "REVIEW: none" and not blockers):
+        return found, blockers
+    return None
+
+
+def body(head, session, found):
+    # The comment on the pull request: what was found, then the REVIEW line the blockers decide.
+    lines = [f"review of `{head}` (session `{session}`):"]
+    lines += found or ["nothing found"]
+    blocked = any(line.startswith(BLOCKER) for line in found)
+    lines.append("REVIEW: blocker" if blocked else "REVIEW: none")
+    return "\n".join(lines)
