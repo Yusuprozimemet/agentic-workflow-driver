@@ -109,5 +109,5 @@
 {"date":"2026-11-15","day":12,"gate":"auditors","runs":2,"replies":159,"context":15340046,"output":109721,"cost":7.2873},
 {"date":"2026-11-15","day":12,"gate":"break on purpose","runs":40,"replies":67,"context":7401758,"output":51449,"cost":3.2253},
 {"date":"2026-11-15","day":12,"gate":"hooks","runs":3,"replies":4,"context":103615,"output":859,"cost":0.0047},
-{"date":"2026-11-15","day":12,"gate":"seen red","runs":12,"replies":19,"context":2083383,"output":7171,"cost":0.7234}
+{"date":"2026-11-15","day":12,"gate":"seen red","runs":13,"replies":21,"context":2367724,"output":9783,"cost":0.8724}
 ]
