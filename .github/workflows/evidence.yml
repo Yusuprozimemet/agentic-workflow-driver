@@ -21,6 +21,7 @@ jobs:
   replay:
     name: A closed day's evidence replays
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       # A pull request's checkout is its merge commit: first parent the base, second the branch.
       - uses: actions/checkout@v4

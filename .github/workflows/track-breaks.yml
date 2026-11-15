@@ -16,6 +16,7 @@ jobs:
   track-breaks:
     name: A track's breaks replay
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       # All of history: HEAD^1, main's side of the merge, is what the PR's changes are diffed against,
       # and an earlier Day's break may check against an older commit (Day 10's C10.31 diffs from 495bf69).

@@ -6,7 +6,9 @@ branch before it merges.
 
 A rehearsal replays the branch as its merge would: the merge of --head (the branch) into --base, made
 as a commit on no branch whose subject is a closing merge's, checked out in a scratch worktree, and
-evidence.py run there. It moves no ref and touches no file but its report, evidence-rehearsal.json.
+evidence.py run there. It moves no ref and touches no file but its report, evidence-rehearsal.json. Unlike the replay
+after the merge, it also fails a ticked `new` criterion with no break to replay (#212, S21): five
+of Day 12's were left "holds, never broken" by a close that passed.
 A branch that closes no day and lands no short spec has nothing to rehearse, and passes. It reads
 what is committed: commit the close first. It is not the replay after the merge: `main` can move in
 between, and a squash merge is found by its title, which a rehearsal never sees.
@@ -64,7 +66,8 @@ def rehearse(branch, base, head):
         return 1
     try:
         print(f"rehearsal: {branch} merged into {sides[0][:7]} as {commit[:7]}, a commit on no branch", flush=True)
-        return subprocess.call([sys.executable, EVIDENCE, spec, "--ref", commit, "--json", report], cwd=worktree)
+        return subprocess.call([sys.executable, EVIDENCE, spec, "--ref", commit, "--json", report,
+                                "--new-needs-break"], cwd=worktree)
     finally:
         run("worktree", "remove", "--force", worktree)
 

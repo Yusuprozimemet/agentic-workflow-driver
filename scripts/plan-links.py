@@ -18,6 +18,17 @@ From Day 11 on, each criterion of a day spec says it in its own `Plan:` line ins
 `Plan: none` (optionally `Plan: none — <why>`). A criterion with no `Plan:` line, two of them,
 or one in neither form fails, and its quotes are checked as the backfill's are.
 
+A commitment is overdue when its `owner_day` is at or before the current Day (the highest Day
+with a spec in `specs/`) and no criterion names it: that fails too, since a commitment no
+criterion names has no test that can fail (#211, N5). `specs/plan/overdue.json` records the ones
+known and not yet settled, each with the Day that settles it (`settled_by`) and why; an entry
+holds only while the current Day is before that Day, so the spec of that Day goes red unless it,
+or a spec change before it, names the commitment. An entry for a commitment that is named, not
+due, or unknown fails, so the file only ever lists what is still open.
+
+A Day from 11 on where more than a third of the criteria say `Plan: none` is printed as a
+warning, not a failure: a sign that the plan needs a change (#212, S18).
+
 Whitespace (line wrapping in `plan.md`) is not compared. Prints one line per problem and
 exits 1, or one summary line and exits 0.
 """
@@ -37,6 +48,8 @@ DAY_FILE = re.compile(r"day-(\d+)-[^/\\]+\.md")
 FIELDS = {"id", "short", "section", "owner_day", "rule_about_people", "quote", "text"}
 BACKFILL_DAYS = range(1, 11)
 PLAN_LINES_FROM = 11
+OVERDUE = os.path.join("specs", "plan", "overdue.json")
+NONE_SHARE = 1 / 3
 
 
 def flat(text):
@@ -69,22 +82,62 @@ def link_problems(cid, pid, quote, texts, seen):
 
 
 def plan_line(cid, block, texts):
-    """The problems with one criterion's `Plan:` line, and how many links it makes."""
+    """The problems with one criterion's `Plan:` line, and the commitments it names."""
     fields = PLAN_FIELD.findall(block)
     if not fields:
-        return [f"{cid}: no Plan: line (the commitments it serves, or Plan: none)"], 0
+        return [f"{cid}: no Plan: line (the commitments it serves, or Plan: none)"], []
     if len(fields) > 1:
-        return [f"{cid}: more than one Plan: line"], 0
+        return [f"{cid}: more than one Plan: line"], []
     value = flat(fields[0])
     if PLAN_NONE.fullmatch(value):
-        return [], 0
+        return [], []
     linked = PLAN_LINK.findall(value)
     if not linked or not re.fullmatch(r"[\s,;]*", PLAN_LINK.sub("", value)):
-        return [f'{cid}: a Plan: line is none, or ids each with a quote: "{value}"'], 0
+        return [f'{cid}: a Plan: line is none, or ids each with a quote: "{value}"'], []
     problems, seen = [], set()
     for pid, quote in linked:
         problems += link_problems(cid, pid, flat(quote), texts, seen)
-    return problems, len(linked)
+    return problems, [pid for pid, _ in linked]
+
+
+def overdue(promises, named, today, excepted):
+    """The problems of commitments due by Day `today` that no criterion names, and of the
+    recorded exceptions; `excepted` maps an id to its overdue.json entry."""
+    owner = {e.get("id"): e.get("owner_day") for e in promises}
+    problems = []
+    for pid, day in owner.items():
+        if not PROMISE_ID.fullmatch(str(pid)) or not isinstance(day, int) or day > today or pid in named:
+            continue
+        until = excepted.get(pid, {}).get("settled_by")
+        if isinstance(until, int) and today < until:
+            continue
+        problems.append(f"{pid}: overdue, due on Day {day}, the current Day is {today}, and no criterion names "
+                        f"it: name it in a Plan: line" + (f" (its exception ran out at Day {until})" if until
+                        else f", or record it in {OVERDUE.replace(os.sep, '/')} with the Day that settles it"))
+    for pid, entry in excepted.items():
+        if pid not in owner:
+            problems.append(f"{pid}: in {OVERDUE.replace(os.sep, '/')}, but no such commitment")
+        elif pid in named:
+            problems.append(f"{pid}: named by a criterion now: take it out of {OVERDUE.replace(os.sep, '/')}")
+        elif not isinstance(owner[pid], int) or owner[pid] > today:
+            problems.append(f"{pid}: in {OVERDUE.replace(os.sep, '/')}, but not due yet")
+        elif not isinstance(entry.get("settled_by"), int) or not entry.get("why"):
+            problems.append(f"{pid}: an exception gives settled_by, a Day number, and why")
+    return problems
+
+
+def none_shares(root):
+    """A warning for each Day from 11 on where more than a third of the criteria say Plan: none."""
+    warnings = []
+    for day, criteria in sorted(spec_criteria(os.path.join(root, "specs")).items()):
+        if day < PLAN_LINES_FROM:
+            continue
+        values = [flat(f[0]) for _, block in criteria if len(f := PLAN_FIELD.findall(block)) == 1]
+        none = sum(bool(PLAN_NONE.fullmatch(v)) for v in values)
+        if values and none / len(values) > NONE_SHARE:
+            warnings.append(f"warning: Day {day}: {none} of {len(values)} criteria say Plan: none, more than a "
+                            "third: the plan may need a change (#212, S18)")
+    return warnings
 
 
 def check(root):
@@ -118,6 +171,7 @@ def check(root):
             problems.append(f'{pid}: quote not in plan.md: "{quote}"')
 
     known = {c for criteria in days.values() for c, _ in criteria}
+    named = {link.get("p") for served in links.values() for link in served}
     for cid, served in links.items():
         if cid not in known:
             problems.append(f"{cid}: no such criterion in specs/")
@@ -133,7 +187,10 @@ def check(root):
         for cid, block in days[day]:
             found, made = plan_line(cid, block, texts)
             problems += found
-            lines, count = lines + 1, count + made
+            lines, count, named = lines + 1, count + len(made), named | set(made)
+    path = os.path.join(root, OVERDUE)
+    excepted = {e.get("id"): e for e in json.loads(read(path))} if os.path.exists(path) else {}
+    problems += overdue(promises, named, max(days, default=0), excepted)
     return problems, (f"plan links: {len(texts)} commitments, {len(links)} criteria, "
                       f"{lines} Plan: lines, {count} links, every quote found")
 
@@ -143,7 +200,7 @@ def main(argv=None):
     ap.add_argument("--root", default=os.path.dirname(HERE))
     args = ap.parse_args(argv)
     problems, summary = check(args.root)
-    for p in problems:
+    for p in none_shares(args.root) + problems:
         print(p)
     if problems:
         print(f"plan links: {len(problems)} problem(s)")

@@ -46,6 +46,7 @@ jobs:
   build:
     name: Build the page
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,6 +108,7 @@ jobs:
     name: Publish to Pages
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

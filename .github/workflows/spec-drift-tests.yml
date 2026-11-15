@@ -19,6 +19,7 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.diff.outputs.run }}
     steps:
@@ -43,6 +44,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,6 +70,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.run == 'true'
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -81,6 +84,7 @@ jobs:
   starter:
     name: The starter names no project
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,6 +103,7 @@ jobs:
     if: always()
     needs: [changes, test, token-windows, starter]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Every job passed or had nothing to do
         env:

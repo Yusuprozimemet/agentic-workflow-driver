@@ -150,6 +150,45 @@ class PlanLinksTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out.getvalue().splitlines()[-1], "plan links: 1 problem(s)")
 
+    def test_a_commitment_due_by_the_current_day_that_no_criterion_names_fails(self):
+        self.links["C01.1"] = []
+        self.assertTrue(self.run_check()[0], "P01 is overdue and nothing said so")
+        self.assertEqual(self.run_check()[0], [
+            "P01: overdue, due on Day 1, the current Day is 1, and no criterion names it: name it in a Plan: "
+            "line, or record it in specs/plan/overdue.json with the Day that settles it"])
+        self.promises[0]["owner_day"] = 2
+        self.assertEqual(self.run_check()[0], [], "due on a later Day: not overdue yet")
+
+    def test_an_exception_holds_only_before_the_day_that_settles_it(self):
+        self.links["C01.1"] = []
+        self.files["specs/plan/overdue.json"] = json.dumps([{"id": "P01", "settled_by": 2, "why": "PR B"}])
+        self.assertEqual(self.run_check()[0], [])
+        self.files["specs/day-02-preflight.md"] = "## Acceptance criteria\n\n- [x] C02.1 **new** — x\n"
+        self.links["C02.1"] = []
+        self.assertEqual(self.run_check()[0], [
+            "P01: overdue, due on Day 1, the current Day is 2, and no criterion names it: name it in a Plan: "
+            "line (its exception ran out at Day 2)"])
+
+    def test_an_exception_for_a_named_unknown_or_not_yet_due_commitment_fails(self):
+        self.promises.append(promise("P03", "Nothing merges", "Nothing merges by itself.", owner=5))
+        self.files["specs/plan/overdue.json"] = json.dumps(
+            [{"id": i, "settled_by": 9, "why": "x"} for i in ("P01", "P03", "P09")])
+        self.assertEqual(self.run_check()[0], [
+            "P01: named by a criterion now: take it out of specs/plan/overdue.json",
+            "P03: in specs/plan/overdue.json, but not due yet",
+            "P09: in specs/plan/overdue.json, but no such commitment"])
+
+    def test_a_day_with_more_than_a_third_plan_none_is_a_warning_not_a_problem(self):
+        problems, _ = self.day11("Plan: none")
+        self.assertEqual(problems, [])
+        self.assertEqual(pl.none_shares(self.root), [
+            "warning: Day 11: 2 of 2 criteria say Plan: none, more than a third: the plan may need a change "
+            "(#212, S18)"])
+        self.day11('Plan: P01 "parks when the next step"')
+        self.assertEqual(pl.none_shares(self.root), [
+            "warning: Day 11: 1 of 2 criteria say Plan: none, more than a third: the plan may need a change "
+            "(#212, S18)"])
+
 
 if __name__ == "__main__":
     unittest.main()
