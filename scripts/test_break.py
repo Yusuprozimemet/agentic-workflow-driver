@@ -103,7 +103,10 @@ class BreakTest(unittest.TestCase):
         said = f"AssertionError: {full!r} != '[27 chars]1\\\\AppData\\\\Local\\\\Temp\\\\tmp2ewplof6\\\\a.txt' in {full}"
         run = self.run_break("// ok", "// broken", command=[sys.executable, "-c",
                              f"import sys; t = open({self.file!r}).read(); sys.exit({said!r}) if 'broken' in t else None"])
-        line = run.stdout.strip().splitlines()[-1]
+        # Its "[27 chars]" is a temp path's length, which differs by machine: refused since #211 N4,
+        # and the refusal quotes the report as untemp() wrote it.
+        line = run.stderr.strip().splitlines()[-1]
+        self.assertIn("the report holds a value unittest shortened ([27 chars])", line)
         self.assertNotIn(tempfile.gettempdir(), line)
         self.assertNotIn("tmp2ewplof6", line)
         self.assertEqual(line.count("<tmp>"), 3, line)

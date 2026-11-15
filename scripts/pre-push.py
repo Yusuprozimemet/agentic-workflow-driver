@@ -49,6 +49,11 @@ def changed_lines(base):
     return total
 
 
+def has(path):
+    """CI's hashFiles() conditions: a project with no services/ or no kit/ skips those steps."""
+    return os.path.exists(os.path.join(ROOT, path))
+
+
 def checks(a, base, branch, files):
     """(CI's name, commands to run in order, or a str: why it is skipped or failed without a run)."""
     body = open(a.body, encoding="utf-8").read() if a.body else None
@@ -69,7 +74,7 @@ def checks(a, base, branch, files):
                                                                        "the body (--body) it is a warning")),
         ("Frozen files stay unedited", [[PY, "scripts/invariants.py", base, "HEAD"]]),
         ("Every service is wired into compose and Prometheus",
-         [[PY, "scripts/test_service_wiring.py"], [PY, "scripts/service-wiring.py"]]),
+         [[PY, "scripts/test_service_wiring.py"]] + ([[PY, "scripts/service-wiring.py"]] if has("services") else [])),
         ('"Replaces: lines name real earlier criteria"',
          [[PY, "scripts/test_behaviour_index.py"], [PY, "scripts/behaviour-index.py"]]),
         ('"Plan links quote the plan\'s words"', [[PY, "scripts/test_plan_links.py"], [PY, "scripts/plan-links.py"]]),
@@ -82,7 +87,7 @@ def checks(a, base, branch, files):
         ("Drift and gap move when they should", [[PY, t] for t in scripts_tests]
          if any(DRIFT_PATHS.match(f) for f in files) else []),
         ("Token counts on Windows", "skip: in the line above" if any(DRIFT_PATHS.match(f) for f in files) else []),
-        ("The starter names no project", [[PY, "kit/starter-check.py"]]),
+        ("The starter names no project", [[PY, "kit/starter-check.py"]] if has("kit/starter-check.py") else []),
         ("A closed day's evidence replays", [[PY, "scripts/close-evidence.py", "--rehearse", branch, "--base", base,
                                               "--head", "HEAD"]]),
         ("A track's breaks replay", "skip: needs Linux, CI replays it on the merge commit; rehearse with "
