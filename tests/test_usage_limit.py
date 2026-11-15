@@ -136,6 +136,16 @@ def stop(proc):
         proc.wait(timeout=60)
 
 
+def cleaned(folder, out):
+    # The stdout bytes as lines (a module function, as test_halt_race borrows finish), with the uuid and the reset's local time replaced.
+    text = out.decode("utf-8")
+    session = session_of(folder)
+    # The reset's local time differs on every run too; only the transcript's own are replaced.
+    for reset in resets(folder):
+        text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
+    return (text.replace(session, "<uuid>") if session else text).splitlines()
+
+
 class UsageLimitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -189,16 +199,7 @@ class UsageLimitTest(unittest.TestCase):
         except subprocess.TimeoutExpired:
             proc.kill()
             out, code = proc.communicate(timeout=60)[0], None
-        return code, self.cleaned(folder, out)
-
-    def cleaned(self, folder, out):
-        # The stdout bytes as lines, with the uuid and the reset's local time replaced.
-        text = out.decode("utf-8")
-        session = session_of(folder)
-        # The reset's local time differs on every run too; only the transcript's own are replaced.
-        for reset in resets(folder):
-            text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
-        return (text.replace(session, "<uuid>") if session else text).splitlines()
+        return code, cleaned(folder, out)
 
     def finish_timed(self, folder, proc, bound=60):
         # As finish, and the time each stdout line was read. The pipes are read by threads, so that neither
@@ -223,7 +224,7 @@ class UsageLimitTest(unittest.TestCase):
             reader.join(60)
         proc.stdout.close()
         proc.stderr.close()
-        return code, self.cleaned(folder, b"".join(out)), times
+        return code, cleaned(folder, b"".join(out)), times
 
     def wait_end(self, folder, bound=60):
         # Waits until the run log holds the session's first end line, or the bound passes; returns whether it does.
