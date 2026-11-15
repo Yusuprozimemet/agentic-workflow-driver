@@ -432,6 +432,15 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `StreamLiveTest.test_image_takes_stream_json`, run with `DRIVER_CONTAINER_IMAGE=agentic-workflow-driver-session:2.1.322` and `DRIVER_CONTAINER_SECRETS` set on this machine, passes (#178), and again on `main` at `6f51a22` at the close; CI skips its Docker part.
       Live, so not replayed: CI and the replay have no image; a reader checked the live run and its break in #178: with `--verbose` left out of the test's command, the test failed twice with "AssertionError: 1 != 0 : exit 1" and the CLI's "requires --verbose" error. A replayed break would only skip, so it has no manifest entry (as C10.7).
       broken: none → live, so not replayed: with `--verbose` left out of the test's command it failed twice on this PC (#178); CI and the replay have no image
+- [x] C11.24 **hold** — The driver does not start by itself: no tracked file under `driver/`,
+      `docker/`, `hooks/`, `rules/` or `scripts/`, nor `run-steps.py`, names a way to start a
+      program at boot or login (`schtasks`, `systemctl enable`, `crontab`, `@reboot`, a `Run`
+      or `RunOnce` key, `launchctl`, a startup folder). True today: nothing installs one; added
+      after the close, as the overdue P49 (#211, N5).
+      Test: `NoAutostartTest.test_nothing_installs_an_autostart`.
+      Plan: P49 "After a reboot the driver stays off until the maintainer runs `on`"
+      Evidence: `NoAutostartTest.test_nothing_installs_an_autostart` passes on this branch (#224); the test is newer than the close, so its break is pinned at `e0f8f52`.
+      broken: a start at boot named in run-steps.py (C11.24) → AssertionError: Lists differ: ['run-steps.py: schtasks'] != [] (#224)
 
 ## Verify
 ```bash
@@ -565,3 +574,4 @@ fake `gh` in `tests/test_github.py` gains Track E1's switches.
   D10.18 (the test reads the driver's exit before the driver has ended), which the rater read as
   unclear.
 - Still for the maintainer, as plan-change matters: `plan.md` says the session id is read from the output ("Where am I, while a session runs"; "What to build", item 2), `plan.md:130`'s "the JSON result", `plan.md:630`'s "Days 1 to 9 have specs", and P60's `--output-format json`.
+- After the close, C11.24 holds P49, overdue since Day 6 (#211, N5): its test, `tests/test_no_autostart.py`, is newer than the close, so its break is pinned at `e0f8f52`. Day 11 now has 24 criteria, the cap. C11.4 is replaced by Day 12's C12.24, which lifts its freeze on `tests/test_usage_limit.py` (#224).

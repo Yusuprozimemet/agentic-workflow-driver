@@ -318,6 +318,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: none — a switch, so that the tests' own `driver.json` files keep their call lists.
       Evidence: `ReviewConfigTest.test_review_key` passes on `main` at `3774c34` (#214).
       seen red: python -m unittest tests.test_review_loop.ReviewConfigTest tests.test_review_loop.ReviewLoopTest.test_reviewed_then_merge_wait tests.test_review_loop.ReviewLoopTest.test_change_parks tests.test_review_loop.ReviewLoopTest.test_no_verdict_parks tests.test_review_loop.ReviewLoopTest.test_comment_failure_goes_on tests.test_review_loop.ReviewLoopTest.test_snapshot_git_fails tests.test_review_loop.ReviewBoxTest on main → AssertionError: Tuples differ: (0, 1, ['driver-<uuid>'], ['driver-<uuid>'], [18 chars]alse) != (0, 2, ['driver-<uuid>'], ['driver-<uuid>'], [132 chars]True) (#214)
+      broken: a review that is not a boolean loaded (C12.11) → AssertionError: differs: yes (#224)
 - [x] C12.12 **new** — `on` with `"review": true`, a fake `claude` whose step session opens
       #12 and whose `--agent reviewer` session replies "found: advice — a word\nREVIEW: none",
       green checks, and a merge read as `MERGED`: the fake `claude` is started twice; the second
@@ -337,6 +338,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       step's session"; P55 "with the reviewer session counted in"
       Evidence: `ReviewLoopTest.test_reviewed_then_merge_wait` passes on `main` at `3774c34` (#214); its reviewer's `fix` and merge waits as E2 left them (#218).
       seen red: python -m unittest tests.test_review_loop.ReviewConfigTest tests.test_review_loop.ReviewLoopTest.test_reviewed_then_merge_wait tests.test_review_loop.ReviewLoopTest.test_change_parks tests.test_review_loop.ReviewLoopTest.test_no_verdict_parks tests.test_review_loop.ReviewLoopTest.test_comment_failure_goes_on tests.test_review_loop.ReviewLoopTest.test_snapshot_git_fails tests.test_review_loop.ReviewBoxTest on main → AssertionError: Tuples differ: (0, 1, ['driver-<uuid>'], ['driver-<uuid>'], [18 chars]alse) != (0, 2, ['driver-<uuid>'], ['driver-<uuid>'], [132 chars]True) (#214)
+      broken: the reviewer started without --agent reviewer (C12.12) → AssertionError: differs: 0, 1, 3, 6 (#224)
 - [x] C12.13 **new** — As C12.12 with the reviewer replying "found: blocker — no test\nREVIEW:
       blocker" the first time and "REVIEW: none" the second: the step's session is resumed once,
       `--resume <the step's uuid>`, with the prompt "The reviewer found a blocker on
@@ -397,6 +399,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: none — a failed comment does not stop the run; the run log keeps the verdict.
       Evidence: `ReviewLoopTest.test_comment_failure_goes_on` passes on `main` at `3774c34` (#214).
       seen red: python -m unittest tests.test_review_loop.ReviewConfigTest tests.test_review_loop.ReviewLoopTest.test_reviewed_then_merge_wait tests.test_review_loop.ReviewLoopTest.test_change_parks tests.test_review_loop.ReviewLoopTest.test_no_verdict_parks tests.test_review_loop.ReviewLoopTest.test_comment_failure_goes_on tests.test_review_loop.ReviewLoopTest.test_snapshot_git_fails tests.test_review_loop.ReviewBoxTest on main → AssertionError: Tuples differ: (0, 1, ['driver-<uuid>'], ['driver-<uuid>'], [18 chars]alse) != (0, 2, ['driver-<uuid>'], ['driver-<uuid>'], [132 chars]True) (#214)
+      broken: no line for a failed review comment (C12.18) → AssertionError: differs: 0 (#224)
 - [x] C12.19 **new** — As C12.12 with `container_image` and `container_secrets` in `driver.json`
       and the fake `docker`: the reviewer's `docker run` is named `driver-<uuid>` and its inner
       command holds `--settings /state/review-container-settings.json` and `--agents
@@ -406,10 +409,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: P22 "never the step's session"
       Evidence: `ReviewBoxTest.test_reviewer_in_the_container` passes on `main` at `3774c34` (#214).
       seen red: python -m unittest tests.test_review_loop.ReviewConfigTest tests.test_review_loop.ReviewLoopTest.test_reviewed_then_merge_wait tests.test_review_loop.ReviewLoopTest.test_change_parks tests.test_review_loop.ReviewLoopTest.test_no_verdict_parks tests.test_review_loop.ReviewLoopTest.test_comment_failure_goes_on tests.test_review_loop.ReviewLoopTest.test_snapshot_git_fails tests.test_review_loop.ReviewBoxTest on main → AssertionError: Tuples differ: (0, 1, ['driver-<uuid>'], ['driver-<uuid>'], [18 chars]alse) != (0, 2, ['driver-<uuid>'], ['driver-<uuid>'], [132 chars]True) (#214)
+      broken: the reviewer's container settings left at the step's (C12.19) → AssertionError: differs: 4 (#224)
 - [x] C12.20 **hold** — Without `review` in `driver.json`, nothing changes: `tests/test_on.py`,
       `tests/test_merge_wait.py`, `tests/test_gated_merge.py`, `tests/test_wait.py` and
-      `tests/test_runlog_fix.py` are unedited since `5bb5fa1` and pass, and C10.31's and C11's
-      diffs (Verify) stay empty: no new test goes in a file they list.
+      `tests/test_runlog_fix.py` are unedited since `5bb5fa1` and pass, and C12.24's
+      diff stays empty: no new test goes in a file they list.
       Test: `OnTest.test_merge_waits_on_the_fixed_pr`, `OnTest.test_wait_line_after_fix`,
       `MergeWaitTest.test_merged_pulled_evidence_waited`, `WaitTest.test_red_after_two_fixes_parks`.
       Plan: P23 "with the failing check's lines, filtered and capped, twice at most"
@@ -444,6 +448,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       it"
       Evidence: `ReviewLoopTest.test_snapshot_git_fails` passes on `main` at `3774c34` (#214).
       seen red: python -m unittest tests.test_review_loop.ReviewConfigTest tests.test_review_loop.ReviewLoopTest.test_reviewed_then_merge_wait tests.test_review_loop.ReviewLoopTest.test_change_parks tests.test_review_loop.ReviewLoopTest.test_no_verdict_parks tests.test_review_loop.ReviewLoopTest.test_comment_failure_goes_on tests.test_review_loop.ReviewLoopTest.test_snapshot_git_fails tests.test_review_loop.ReviewBoxTest on main → AssertionError: Tuples differ: (0, 1, ['driver-<uuid>'], ['driver-<uuid>'], [18 chars]alse) != (0, 2, ['driver-<uuid>'], ['driver-<uuid>'], [132 chars]True) (#214)
+      broken: no git check before the review (C12.22) → AssertionError: differs: 2, 3 (#224)
 - [x] C12.23 **hold** — As C12.12 with the pull request read `MERGED` at `wait_reviewed`'s first
       `pr view` (the maintainer merged it as the checks went green): no reviewer session starts,
       no `pr comment` is recorded, and the run goes on as `wait_merge` reads a merged pull
@@ -455,12 +460,24 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `ReviewLoopTest.test_merged_before_review` passes on `main` at `3774c34` (#214, its hold settled by #215).
       broken: a merged pull request reviewed (C12.23) → AssertionError: Tuples differ: (0, [[30 chars]t"], 2, 1, [['pr', 'comment', '12', '--body-fi[28 chars]ed']) != (0, [[30 chars]t"], 1, 0, [], ['merged']) (#214)
 
+- [x] C12.24 **hold** — The files C11.4 and C10.31 froze stay unchanged since `5d4f1b5`, all
+      but `tests/test_usage_limit.py` and `tests/test_issues.py`, which a later spec change of
+      #211's PR B edits: the C09.3 and C09.4 fix, and the 3 s bound of the issue close's time-out
+      test, which failed 4 of 10 runs under load (D12.39). Verify's `5d4f1b5` diff prints
+      nothing, and the outcome table's and the run log's tests pass unedited.
+      Plan: N31 "The result event stays the record"
+      Evidence: `git -c core.safecrlf=false diff --exit-code 5d4f1b5` over Verify's list prints nothing on this branch and at Day 12's close (#224).
+      broken: a byte added to driver/decide.py (C12.24) → import re (#224)
+      Replaces: C11.4 — was: seven run log and outcome test files pass unedited since Day 11's spec, `tests/test_usage_limit.py` among them, and C10.31's diff stays empty.
+      Replaces: C10.31 — was: the files Days 8 to 10 do not change are unchanged since Day 10's spec, over a list that holds `tests/test_issues.py`.
+
 ## Verify
 ```bash
 python -m unittest tests.test_review_agents tests.test_readonly_hook tests.test_review_snapshot tests.test_review_verdict tests.test_review_loop tests.test_review_live tests.test_on tests.test_merge_wait tests.test_gated_merge tests.test_wait tests.test_runlog_fix tests.test_halt tests.test_box_command tests.test_recovery_holds -v
 git -c core.safecrlf=false diff --exit-code 5bb5fa1 -- tests/test_on.py tests/test_merge_wait.py tests/test_gated_merge.py tests/test_wait.py tests/test_runlog_fix.py
 git -c core.safecrlf=false diff --exit-code c8e5963 -- tests/test_once_outcome.py tests/test_once_run.py tests/test_usage_limit.py tests/test_runlog.py tests/test_runlog_end.py tests/test_once_halt.py tests/test_halt_race.py tests/test_once_stop.py tests/test_session_bound.py tests/test_box_command.py tests/test_status.py tests/test_status_trial.py tests/test_level_2_sentence.py tests/test_contract.py
 git -c core.safecrlf=false diff --exit-code 495bf69 -- tests/test_contract.py tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_tree.py tests/test_config.py tests/test_encoding.py tests/test_halt.py tests/test_halt_report.py tests/test_home.py tests/test_hooks.py tests/test_issues.py tests/test_off.py tests/test_once_park_issues.py tests/test_once_parks.py tests/test_preflight.py tests/test_recovery_table.py tests/test_lock_takeover.py driver/decide.py driver/steps.py driver/home.py rules/session.md tests/test_failures.py tests/test_once_outcome.py tests/test_once_run.py tests/test_runlog.py tests/test_runlog_fix.py tests/test_session_bound.py tests/test_wait.py tests/test_kit_copy.py tests/test_lock.py tests/test_live_cli.py tests/test_once_halt.py tests/test_live_once.py tests/test_once_stop.py
+git -c core.safecrlf=false diff --exit-code 5d4f1b5 -- tests/test_once_outcome.py tests/test_once_run.py tests/test_runlog.py tests/test_runlog_end.py tests/test_once_halt.py tests/test_halt_race.py tests/test_once_stop.py tests/test_session_bound.py tests/test_box_command.py tests/test_status.py tests/test_status_trial.py tests/test_level_2_sentence.py tests/test_on.py tests/test_contract.py tests/test_decide.py tests/test_dry_run.py tests/test_steps.py tests/test_tree.py tests/test_config.py tests/test_encoding.py tests/test_halt.py tests/test_halt_report.py tests/test_home.py tests/test_hooks.py tests/test_off.py tests/test_once_park_issues.py tests/test_once_parks.py tests/test_preflight.py tests/test_recovery_table.py tests/test_lock_takeover.py driver/decide.py driver/steps.py driver/home.py rules/session.md tests/test_failures.py tests/test_runlog_fix.py tests/test_wait.py tests/test_kit_copy.py tests/test_lock.py tests/test_live_cli.py tests/test_live_once.py
 ```
 `tests/test_review_live.py` skips unless `DRIVER_LIVE_REVIEW` is set, and its image run unless
 `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` are set too; on this machine, run it with
@@ -577,6 +594,9 @@ edited. The fake `gh` in `tests/test_github.py` gains Track D's `pr comment`.
 - **Defect** D12.34 — found: Track B · cause: implementation · made: Day 09 · same-as: D11.29 · `UsageLimitTest.test_far_reset_parks` failed in Track B's full run, in a file the track does not touch, then 25 of 25 alone under `--repeat 5` (#205).
 - **Defect** D12.35 — found: Track C · cause: implementation · made: Day 11 · same-as: D11.25 · `PhoneTest.test_heartbeat_comment_edited_in_place` failed in Track C's full run and 4 of 5 under `--repeat 5`, then 3 of 3 on `main` and on the branch (#207); again in Track E2's full run (#218) and in Track F's first CI run, whose re-run passed (#220).
 - **Defect** D12.36 — found: Track E1 · cause: implementation · made: Day 11 · same-as: D11.32 · `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool` failed once in Track E1's full run and 3 of 5 on `main`'s code under `--repeat 5` (#214), and 3 of 3 under `--repeat 3` straight after Track E2's full run (#218).
+- **Defect** D12.37 — found: Day 12 review · cause: process · made: Day 12 · five `new` criteria, C12.11, C12.12, C12.18, C12.19 and C12.22, closed with a seen-red line and no break: their tests' reports held unittest's shortened `[N chars]`, which `break.py` refuses, and the close let them through (#212, S21). Their tests now report in short fixed words and their breaks are recorded, pinned at `e0f8f52`, since the close's tests print the long reports (#224).
+- **Defect** D12.38 — found: Day 12 review · cause: implementation · made: Day 12 · `driver/loop.py` reports a failed `git` after the review as "git failed before the review of #<n>", the same line as the check before it; nothing tests the second. Left to Day 13 (H12.5).
+- **Defect** D12.39 — found: Day 12 review · cause: implementation · made: Day 05 · `IssueWritesTest.test_close_times_out` took 3.25 s against its 3 s bound and failed 4 of 10 runs under load; the fix goes in the second spec change of #211's PR B, with C09.3 and C09.4's, since C12.24 must land first to lift the freeze on `tests/test_issues.py` (#224).
 - **Hand-off** H12.1 → Day 13: H10.1's question, whether the level 2 merge needs `live-check` run
   in the image, is the merge's call: this day runs the reviewer in the image (C12.19, C12.21)
   but merges nothing.
@@ -584,9 +604,18 @@ edited. The fake `gh` in `tests/test_github.py` gains Track D's `pr comment`.
   blocker on #<n> after two fixes" as it ends on "still red after two fixes" (H08.4).
 - **Hand-off** H12.3 → Day 14: `status` shows the reviewer's session as a step row with the
   step's sentence and no estimate; whether the record wants it as its own kind.
+- **Hand-off** H12.4 → Day 13: Day 05's P25 and P37, linked here to the criteria that hold their
+  parks (C01.3, C05.4; C04.10, C08.16), leave two parts with no criterion: the plan-auditor's
+  report the phase's park carries, and the last phase's three auditors; and a park that names
+  "the audit found nothing" when no spec-change PR opens. And Day 08's P51, linked to C02.1 and
+  C01.3: its token scope (contents, pull requests and issues) has no check, and may no longer be
+  wanted with the container (#211, PR D). P08 and N10 stay in `specs/plan/overdue.json`, settled
+  by Day 13 (#224).
+- **Hand-off** H12.5 → Day 13: D12.38's line for a `git` that fails after the review, and a test
+  of it.
 - The Notes' five **Assumed** lines, as the tracks found them: `--agents <file>` with `--agent probe` replied ORCHID on 2.1.322 before Track E1 (#214) and in Track F's live test (#220); `gh pr comment 208 --body-file -` printed the comment's URL and exited 0, gh 2.93.0 (#208); the read-only hook from `--settings` fired in a session started with `--agent` and refused its commit, HEAD unmoved (#220); the image's Claude Code left nothing under `/work` that `git status --porcelain --ignored` shows (#220). `gh api --input` alone is refused whatever its method, as the line says; nothing ran it.
 - At the close, on `main` at `3774c34`: Verify's tests ran 96, OK, none skipped, with `DRIVER_LIVE_REVIEW`, `DRIVER_CONTAINER_IMAGE` and `DRIVER_CONTAINER_SECRETS` set, so `ReviewLiveTest` ran on the PC and in the image; Verify's three `git diff`s print nothing. Full suite (`python scripts/test-parallel.py`): 449 tests, two failures, the load flakes D12.35 and D12.36 (`test_heartbeat_comment_edited_in_place`, `test_heartbeat_beats_through_a_quiet_tool`); each file passed run alone straight after (5 tests OK, 1 test OK).
 - The manifest is the tracks' own records (`break.py --record` on each `day-12/` branch): 26 entries, and `python scripts/break-lines.py --spec specs/day-12-the-reviewer.md` finds the spec's 26 `broken:` lines agree with it. The five Track E0 recorded again, under C12.20, are Days 4, 6, 9 and 10's, whose own manifests keep them too; Day 6's "the resume keeps --session-id" was not recorded again (D12.27): its find moved byte for byte and Day 6's entry still replays.
-- Five `new` criteria have a seen-red line and no break of their own: C12.11, C12.12, C12.18, C12.19 and C12.22 (Track E1's four breaks sit under C12.16, C12.17, C12.20 and C12.23).
+- Five `new` criteria closed with a seen-red line and no break of their own: C12.11, C12.12, C12.18, C12.19 and C12.22 (Track E1's four breaks sit under C12.16, C12.17, C12.20 and C12.23). Their breaks came after the close (D12.37), pinned at `e0f8f52`; with C12.24's, added after the close too, the manifest has 32 entries and the spec 32 `broken:` lines (#224).
 - Maintainer action, still open: `"review": true` in the driver's own `driver.json` (gitignored), as the Notes above say; until then the driver runs no reviewer.
 - The blind relabel (`scripts/relabel.py`) ran on 36 entries; the last whole run agreed on 33 of 36 stages, 31 of 36 causes and 32 of 36 `made:`. After the first run, D12.26's cause changed from `spec` to `implementation`: the fix went into the test, not the spec. Kept: D12.34 to D12.36 as escapes, `implementation`, `made:` Day 09 and Day 11, as D11.29, D11.25 and D11.32 (the rater, reading no `same-as:`, saw no origin and read the machine's load); D12.29 `implementation`, `break.py` being this repository's own script; D12.33 `process`, the views being my brief's, as D11.24; D12.30 `made: none`, the console's codepage being the machine's, as D11.22.

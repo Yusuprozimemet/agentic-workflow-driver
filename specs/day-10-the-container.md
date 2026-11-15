@@ -493,6 +493,7 @@ it; no test but C10.7, C10.14 and C10.30 needs Docker.
       `spec-drift-tests.yml` runs every `scripts/test_*.py`.
       Evidence: the command above passes with the seven tests' edits alone (#158); broken once at the close, which #158 had not done (D10.21).
       broken: the bypass line put in place of the pull request line → AssertionError: 11 != 12
+      broken: the project's tests line dropped after the bypass line → AssertionError: Lists differ: [] != ["main requires the project's tests: no required check beyond the kit's"] (#224)
 - [x] C10.30 **new** — Live: one step of the trial's project ran in the container. In
       `docs/trial/day-10.md`: the run log's `start`, `pid` and `end` lines with
       `"container": "driver-<session>"`; the `end` line's outcome "opened: #<n> from `<branch>`"
@@ -722,3 +723,4 @@ Where the tests live: `ContainerConfigTest` in `tests/test_box_config.py`; `BoxC
   `process`, since the brief, not the implementer, allowed the assertions that print the whole
   file (as D09.22 and D09.23). The first run, on 25, also read D10.17 as `made: Day 10`; kept
   `none`, as Git Bash's path conversion is the machine's (as D05.5).
+- After the close, C10.29 has a second break, the project's tests line dropped after the bypass line: its first, the pull request line it swapped, is pinned at `a3292a2` since that line is gone (#201). The new find occurs once at the close and on `main`, and reports the same at both (#224). C10.31 is replaced by Day 12's C12.24, which lifts its freeze on `tests/test_issues.py` (#224).

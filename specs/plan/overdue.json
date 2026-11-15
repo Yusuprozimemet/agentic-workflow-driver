@@ -1,10 +1,4 @@
 [
-  {"id": "P03", "settled_by": 13, "why": "likely true today with no criterion: PR B (#211) adds a hold criterion and its test, or puts it on a Day"},
-  {"id": "P05", "settled_by": 13, "why": "likely true today with no criterion: PR B (#211) adds a hold criterion and its test, or puts it on a Day"},
-  {"id": "P08", "settled_by": 13, "why": "two readings disagree on whether driver/home.py covers it; settle before Day 13's merge (#211, N5)"},
-  {"id": "P25", "settled_by": 13, "why": "likely covered by phase_end in driver/steps.py: PR B (#211) adds the Plan: line or a hold criterion"},
-  {"id": "P37", "settled_by": 13, "why": "no code found: PR B (#211) puts it on a Day, or the plan-change PR takes it out"},
-  {"id": "P49", "settled_by": 13, "why": "true only because nothing starts the driver; settle before Day 13's merge (#211, N5)"},
-  {"id": "P51", "settled_by": 13, "why": "unclear whether level 1's entry conditions are checked: PR B (#211) reads the code and settles it"},
-  {"id": "N10", "settled_by": 13, "why": "the two readings disagree on whether code exists: PR B (#211) reads the code and settles it"}
+  {"id": "P08", "settled_by": 13, "why": "PR B (#211, N5) found no check that --project is not the driver's own repository: Day 13 adds it or the plan-change PR takes it out"},
+  {"id": "N10", "settled_by": 13, "why": "PR B (#211, N5) found no driver code that installs the project before its tests: Day 13 adds it or the plan-change PR takes it out"}
 ]
