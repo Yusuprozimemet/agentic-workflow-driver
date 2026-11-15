@@ -30,7 +30,7 @@ CI saw one of them once (#220). The causes, seen on `main` at `51f8450` on 2026-
 ## Acceptance criteria
 Tick each box in this PR once its evidence is in the PR body; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] S-flaky-under-load.1 **hold** — C11.16 under load: with the fake `gh`'s `issue list`
+- [x] S-flaky-under-load.1 **hold** — C11.16 under load: with the fake `gh`'s `issue list`
       sleeping 1 second and the fake claude printing its `result` as the third poll's issue read
       starts, the run posts one heartbeat comment, then at least one PATCH whose stdin is an object
       with the one key `body`; the last PATCH made before the `result` line was read (the last
@@ -38,23 +38,27 @@ Tick each box in this PR once its evidence is in the PR body; under a box left u
       outcome is that of the run at `--poll 30`. A PATCH after the `result` line holds "last event:
       result" and is no failure.
       Test: `PhoneTest.test_heartbeat_comment_edited_in_place`.
-- [ ] S-flaky-under-load.2 **hold** — C11.10 under load: with the fake `gh`'s `issue list`
+      broken: a heartbeat that keeps no comment id → AssertionError: Tuples differ: (False, True, True, False, True, False, True, True) != (True, True, True, True, True, True, True, True)
+- [x] S-flaky-under-load.2 **hold** — C11.10 under load: with the fake `gh`'s `issue list`
       sleeping 2 seconds and the fake claude printing its `init` line as a poll's issue read starts,
       then quiet until the test lets it go, the test reads `<state>/heartbeat.json` once its
       `last_event` is the `init` line's `at` and again once its `poll` is later, each wait at most
       30 seconds; both reads pass C11.10's checks, and the file is there after the step.
       Test: `HeartbeatTest.test_heartbeat_beats_through_a_quiet_tool`.
-- [ ] S-flaky-under-load.3 **hold** — C09.3 under load: with the fake `gh`'s `issue create`
+      broken: the poll writes no heartbeat → AssertionError: Tuples differ: (True, True, True, True, True, True, False, False, True) != (True, True, True, True, True, True, True, True, True)
+- [x] S-flaky-under-load.3 **hold** — C09.3 under load: with the fake `gh`'s `issue create`
       sleeping 6 seconds, the run log's `end` line comes at most 10 seconds after its `pid` line,
       the driver prints the park line alone, exits 1 within 60 seconds and starts the fake once;
       with `--limit-hours 40` it waits instead and is stopped by the halt file.
       Test: `UsageLimitTest.test_far_reset_parks`.
-- [ ] S-flaky-under-load.4 **hold** — C09.4 under load: with the fake `gh`'s `issue close`
+      broken: a park that waits 15 seconds before its line → AssertionError: Tuples differ: (True, False, 1, 1, ['park: the usage limit rese[53 chars]`)']) != (True, True, 1, 1, ['park: the usage limit reset[52 chars]`)'])
+- [x] S-flaky-under-load.4 **hold** — C09.4 under load: with the fake `gh`'s `issue close`
       sleeping 6 seconds, the halt file written during a 60-second wait makes the driver print
       "halt: the halt file was set during the wait for the usage limit (session `<id>`)" at most
       5 seconds after it, as C09.4 says, then exit 1 within 60 seconds, starting the fake once;
       the run log's events for the session are `start`, `pid`, `end`.
       Test: `UsageLimitTest.test_halt_during_wait`.
+      broken: a halt line 8 seconds after the halt file → AssertionError: Tuples differ: (True, False, 1, ['halt: the halt file was set d[54 chars]], 1) != (True, True, 1, ['halt: the halt file was set du[53 chars]], 1)
 
 ## Verify
 ```bash
@@ -75,6 +79,9 @@ python scripts/test-parallel.py --repeat 10 test_usage_limit.py
   asked for a short spec, and its criteria are `hold`, since the code on `main` already does what
   they say. A `new` criterion would fail CI's "Track tests seen red": the code before is the code
   after. The seen-red record is the first commit, the slowed fakes with the old checks.
+- The sleeps make each test longer: run alone, about 18, 12, 19 and 10 seconds. `test_phone.py`
+  and `test_usage_limit.py` are among the suite's slowest files; the runner's floor is still
+  `test_on.py`.
 - C09.4 needs no departure: its criterion bounds the halt line, and the test had bounded the exit,
   which comes after the run's issue is closed.
 - **Defect** — found: self · cause: implementation · made: none · `UsageLimitTest.test_halt_during_wait`
