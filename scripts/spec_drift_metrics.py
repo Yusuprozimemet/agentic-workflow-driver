@@ -659,11 +659,11 @@ def gate_report(days, gates, refused):
                 elsewhere=sum(tag(x.get("found")) not in named for x in lines))
 
 
-# The closed list of found: values (specs/README.md), read into stages. self, review and Track <X>
-# are one stage, the work. Before the twelfth Day (specs/README.md), evidence replay named both
+# The closed list of found: values (specs/README.md), read into stages. self and Track <X> are one
+# stage, the work; review, the main session's diff review, is a stage of its own. Before the twelfth Day (specs/README.md), evidence replay named both
 # the close's rehearsal and the replay after its merge: those lines are read as "unsplit", not
 # rewritten. A value off the list is in no stage, and reported.
-STAGES = ("auditor", "spec-change PR", "seen red", "break on purpose", "work", "close", "rehearsal",
+STAGES = ("auditor", "spec-change PR", "seen red", "break on purpose", "review", "work", "close", "rehearsal",
           "evidence replay", "unsplit", "dashboard", "Day review")
 EARLY = ("auditor", "spec-change PR")  # before any code: every other stage is a late catch
 SPLIT_FROM = 12
@@ -672,7 +672,7 @@ SPLIT_FROM = 12
 def found_stage(value, day):
     """The stage of a Defect line's found: on a Day, or None when the value is off the list."""
     f = found_tag(value)
-    if f in ("self", "review") or re.fullmatch(r"track [a-z]\d*", f):
+    if f == "self" or re.fullmatch(r"track [a-z]\d*", f):
         return "work"
     if re.fullmatch(r"day \d+ review", f):
         return "Day review"

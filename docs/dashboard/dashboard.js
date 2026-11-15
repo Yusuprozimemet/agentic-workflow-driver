@@ -59,6 +59,7 @@ const GATES = [
   { key: "spec-change PR", name: "The spec-change pull request", at: "the spec-change pull request" },
   { key: "seen red", name: "A test seen failing", at: "a test seen failing" },
   { key: "break on purpose", name: "A break on purpose", at: "a break on purpose" },
+  { key: "review", name: "The main session's diff review", at: "the diff review" },
   { key: "work", name: "Noticed during the work", at: "the work" },
   { key: "close", name: "The close", at: "the close" },
   { key: "rehearsal", name: "The close's rehearsal", at: "the rehearsal" },
@@ -69,16 +70,18 @@ const GATES = [
 // The gate a found: value names, as spec_drift_metrics.found_stage reads it; anything else was noticed during the work.
 const gateOf = v => { const f = tagOf(v); return /^day \d+ review$/.test(f) ? "Day review"
   : (GATES.find(g => g.key.toLowerCase() === f && g.key !== "work" && g.key !== "Day review") || { key: "work" }).key; };
-// Graph 7's pipeline: every gate work passes, in seven stages, top to bottom. A gate with `pile` holds the defects the
-// Notes credit to it (a GATES key); `guard` and `ci` name what counts how often it stopped something (a hook's refusals,
-// a CI workflow's failed pull requests); `nc` marks a gate nothing counts yet; `inPr` a check counted under PR checks.
+// Graph 7's pipeline: every gate a Day's work passes, top to bottom, its stages keyed by name. A gate with `pile` holds
+// the defects the Notes credit to it (a GATES key); `guard` and `ci` name what counts how often it stopped something (a
+// hook's refusals, a CI workflow's failed pull requests); `nc` marks a gate nothing counts yet; `inPr` a check counted
+// under PR checks. The track loop wraps the writing alone (`loop`); the spec change, each track and the close all pass
+// CI and the merge. The hooks run in every stage: HOOKS is drawn beside the pipe. PHASE_END comes after the Day's pipe.
 const PIPE = [
   { name: "Before any code", gates: [
     { names: ["plan-auditor", "spec-auditor"], subs: ["first Day of a phase", "every Day"], pile: "auditor",
-      does: "On the first Day of a phase, the plan-auditor asks whether the phase's specs still deliver what plan.md wants, on today's code. Every Day, before any code, the spec-auditor runs every check in the spec on the code as it is and tries to break every hold criterion." },
-    { names: ["Spec-change PR"], subs: ["day-NN/spec-slug"], pile: "spec-change PR", does: "The pull request that fixes what the auditors found in the Day's spec, before any track starts; a defect found while writing it is caught here." },
+      does: "On the first Day of a phase, the plan-auditor asks whether the phase's specs still deliver what plan.md wants, on today's code. Every Day, before any code, the spec-auditor runs every check in the spec on the code as it is and tries to break every hold criterion. This tray holds every auditor's catches, those at a phase's end too: the Notes do not say which auditor." },
+    { names: ["Spec-change PR"], subs: ["day-NN/spec-slug"], pile: "spec-change PR", does: "The pull request that fixes what the auditors found in the Day's spec, before any track starts; a defect found while writing it is caught here. Like every pull request, it then passes CI and your merge." },
     { names: ["plan-links.py"], nc: true, does: "Every criterion's Plan: line must quote the plan's own words." }] },
-  { name: "Writing a track, on this machine", gates: [
+  { name: "Writing a track, on this machine", loop: true, gates: [
     { names: ["brief-check.py"], nc: true, does: "Fails when a backticked name in the implementer's brief sits in another file than the line names." },
     { names: ["seen-red.py"], pile: "seen red", does: "Runs the branch's new tests on main's code: they must fail, for the reason the spec gives." },
     { names: ["break.py"], pile: "break on purpose", does: "Breaks the code on purpose and runs the check twice with the break in, then puts the bytes back. A test that still passes would not catch a real failure. With --record it writes the break into the Day's record, specs/breaks/day-NN.json." },
@@ -87,13 +90,13 @@ const PIPE = [
     { names: ["test-parallel.py"], nc: true, does: "The whole of tests/, one file per process, the failures printed whole." },
     { names: ["pr-names.py"], nc: true, does: "The branch, title and commit names agree with the Day and track." },
     { names: ["check-links.py"], nc: true, does: "Every link in a Markdown file touched resolves." },
+    { names: ["Diff review"], subs: ["the main session"], pile: "review", does: "The main session reads the implementer's diff before it runs the checks, breaks the code and commits: a defect it finds there is caught here." },
     { names: ["Noticed in the work"], pile: "work", leak: true, subs: ["no gate: a leak"],
-      does: "No gate: a defect someone noticed while working, in a track, a review or the session. A catch by a gate the Notes do not name (the 400-line check, a hook) is counted here too, for now." }] },
-  { name: "Hooks, in the session", gates: [
-    { names: ["step-guard"], guard: "step-guard", does: "After a short \"merged\", refuses subagents, edits, branches, commits, pushes and pull requests until a new session." },
-    { names: ["read-guard"], guard: "read-guard", does: "Refuses a whole-file Read of a file over 8,000 bytes, and names its size." },
-    { names: ["auditor-guard"], guard: "auditor-guard", does: "Keeps the five auditors read-only: blocks git writes and gh commands that are not reads, and checks the repository at their stop." },
-    { names: ["cap-output"], subs: ["trims, never refuses"], nc: true, does: "Cuts Bash output over 8,000 characters to its head and tail. It trims; it does not refuse." }] },
+      does: "No gate: a defect someone noticed while working, in a track or the session. A catch by a gate the Notes do not name (the 400-line check, a hook) is counted here too, for now." }] },
+  { name: "The close", gates: [
+    { names: ["Tick each criterion"], pile: "close", does: "The closing pull request ticks every criterion with its evidence and writes the Day's Notes; a defect found doing it is caught here. Then, like every pull request, it passes CI, where its rehearsal runs, and your merge." },
+    { names: ["relabel.py + defect-rater"], relabel: true, does: "A reader who did not write the Day tags its defects blind; each disagreement is decided in the closing pull request." },
+    { names: ["break-lines.py --spec"], nc: true, does: "Checks the spec's broken: lines against the Day's break record: every line has its entry, and no two breaks share a name." }] },
   { name: "CI on every pull request", gates: [
     { names: ["Description uses the template"], inPr: true, does: "The pull request's description has the template's sections." },
     { names: ["Diff stays reviewable"], subs: ["400 lines"], inPr: true, does: "No pull request over 400 changed lines; an Oversized: line turns the failure into a warning." },
@@ -101,28 +104,33 @@ const PIPE = [
     { names: ["Criteria keep their wording"], inPr: true, does: "A merged criterion's words do not change under it." },
     { names: ["Replaces: lines are real"], inPr: true, does: "A Replaces: line names an earlier criterion that exists." },
     { names: ["Plan links quote the plan"], inPr: true, does: "plan-links.py again, in CI." },
-    { names: ["Branch, title, commits agree"], inPr: true, does: "pr-names.py again, in CI, with the Jira keys." },
+    { names: ["Branch, title, commits and Jira keys agree"], inPr: true, does: "pr-names.py again, in CI, with the Jira keys." },
     { names: ["Track tests seen red"], inPr: true, does: "Re-runs each new criterion's test on main's code, when TRACK_RED_RUNNER is set." },
     { names: ["Style check"], inPr: true, does: "ruff again, in CI." },
-    { names: ["Compose and Prometheus"], kit: true, does: "Every service is wired into compose and Prometheus. It came with the kit; there is nothing for it to check here." },
+    { names: ["Compose and Prometheus"], kit: true, subs: ["applies when the project has services"], does: "Every service is wired into compose and Prometheus. It came with the kit and applies when the project has services; this one has none, so there is nothing for it to check here." },
     { names: ["Tests"], ci: "Tests", does: "tests.yml: the whole suite, serially, on Linux." },
     { names: ["Track breaks"], ci: "Track breaks", does: "track-breaks.yml: replays the pull request's broken: lines, and the Day's earlier tracks', on Linux on the merge commit; on every pull request, each closed Day's in-force break must still apply, and runs when the change touches it." },
-    { names: ["Dashboard tests"], ci: "Dashboard metric tests", does: "spec-drift-tests.yml: drift and gap move when they should, token counts hold on Windows, the starter names no project." }] },
+    { names: ["Dashboard tests"], ci: "Dashboard metric tests", does: "spec-drift-tests.yml: drift and gap move when they should, token counts hold on Windows, the starter names no project." },
+    { names: ["close-evidence --rehearse"], ci: "Evidence replay", pile: "rehearsal", subs: ["the closing PR, counted from Day 12"], does: "On the closing pull request only: replays the closing branch as its merge into main would, before the merge, locally and in CI (\"A closed day's evidence replays\"). Until Day 12 the Notes named its catches evidence replay: they sit with the replay after the merge." }] },
   { name: "You", gates: [
-    { names: ["Your merge"], merged: true, does: "main is protected: nothing lands without the checks passing and the maintainer's merge." }] },
-  { name: "The close", gates: [
-    { names: ["Tick each criterion"], pile: "close", does: "The closing pull request ticks every criterion with its evidence and writes the Day's Notes; a defect found doing it is caught here. The closing pull request then passes stages 3 to 5 once more." },
-    { names: ["relabel.py + defect-rater"], relabel: true, does: "A reader who did not write the Day tags its defects blind; each disagreement is decided in the closing pull request." },
-    { names: ["break-lines.py --spec"], nc: true, does: "Checks the spec's broken: lines against the Day's break record: every line has its entry, and no two breaks share a name." },
-    { names: ["close-evidence --rehearse"], ci: "Evidence replay", pile: "rehearsal", subs: ["counted from Day 12"], does: "Replays the closing branch as its merge into main would, locally and in CI (\"A closed day's evidence replays\"). Until Day 12 the Notes named its catches evidence replay: they sit with the replay after the merge." }] },
+    { names: ["Your merge"], merged: true, does: "main is protected: nothing lands without the checks passing and the maintainer's merge, the spec change, each track and the close alike." }] },
   { name: "After the merge", gates: [
     { names: ["Evidence replay"], pile: "evidence replay", subs: ["before Day 12, the rehearsal too"], does: "evidence.yml on the closing merge commit, checked with gh run view --exit-status before the next step." },
     { names: ["Dashboard"], pile: "dashboard", does: "A defect seen on the published page, after the Day closed." },
     { names: ["Day NN review"], pile: "Day review", subs: ["a later Day reads it"], does: "A defect a later Day found in a closed Day's work." },
     { names: ["Re-check history"], nc: true, does: "recheck.yml: after every merge, re-checks the merges with no Linux row." }] },
 ];
+const HOOKS = { name: "Hooks, in every stage", gates: [
+  { names: ["step-guard"], guard: "step-guard", does: "After a short \"merged\", refuses subagents, edits, branches, commits, pushes and pull requests until a new session." },
+  { names: ["read-guard"], guard: "read-guard", does: "Refuses a whole-file Read of a file over 8,000 bytes, and names its size." },
+  { names: ["auditor-guard"], guard: "auditor-guard", does: "Keeps the six auditors with Bash read-only: blocks git writes and gh commands that are not reads, and checks the repository at their stop." },
+  { names: ["cap-output"], subs: ["trims, never refuses"], nc: true, does: "Cuts Bash output over 8,000 characters to its head and tail. It trims; it does not refuse." }] };
+const PHASE_END = { name: "End of a phase", gates: [
+  { names: ["plan-auditor"], subs: ["after a phase's last close"], nc: true, does: "On fresh main after a phase's last closing pull request merged: what did the phase change that the next one must know? Its catches sit in the auditors' tray at the top: the Notes do not say which auditor." },
+  { names: ["security-ops-auditor", "agentic-engineering-auditor", "architecture-auditor"], subs: ["after Phase 3's close", "", ""], nc: true,
+    does: "Once, after the closing pull request of the last phase plan.md names: can the workflow take more autonomy safely, what does it show about agents, do its gates hold? Each from a fresh context." }] };
 // The bar above the pipe: when the catches came, in four phases.
-const PHASES = [["Before any code", ["auditor", "spec-change PR"]], ["While writing", ["seen red", "break on purpose", "work"]], ["At the close", ["close", "rehearsal"]],
+const PHASES = [["Before any code", ["auditor", "spec-change PR"]], ["While writing", ["seen red", "break on purpose", "review", "work"]], ["At the close", ["close", "rehearsal"]],
   ["After the merge", ["evidence replay", "dashboard", "Day review"]]];
 const CAUSES = ["spec", "process", "implementation", "environment", "other"];
 const KINDS = { origin: "the first commit", spec: "spec", code: "code", close: "a Day's close", other: "other" };
@@ -425,7 +433,7 @@ function model(DATA) {
           : made != null ? `Made and caught on Day ${d.day}.` : /^none$/i.test(x.made || "") ? "Made outside any Day: in the plan, a tool or a machine."
           : `Caught on Day ${d.day}; its line does not say which Day made it.`;
         // Who noticed a defect caught in the work: a track, a review, the session itself, or something else.
-        const f = tagOf(x.found), by = gate.key !== "work" ? null : /^track\b/.test(f) ? "track" : /review/.test(f) ? "review" : f === "self" ? "self" : "other";
+        const f = tagOf(x.found), by = gate.key !== "work" ? null : /^track\b/.test(f) ? "track" : f === "self" ? "self" : "other";
         return { id: x.id || `Day ${d.day}, defect ${i + 1}`, day: d.day, gate: gate.key, cause, escaped, back: back.has(x.id), by,
           t: `${x.id || `Day ${d.day}, defect ${i + 1}`} · ${cause} · caught by: ${lower(gate.name)}`,
           b: [where + (back.has(x.id) ? ` The same problem as ${back.get(x.id)}, back again.` : "") + (gate.key === "work" && x.found ? ` Noticed by: ${x.found}.` : "")] };
@@ -436,7 +444,7 @@ function model(DATA) {
     });
     const all = rows.flatMap(r => r.dots), at = k => all.filter(o => o.gate === k).length, by = c => all.filter(o => o.cause === c).length;
     const gates = GATES.map(g => { const s = spent.get(g.key);
-      return { name: g.name, sub: `${at(g.key)} caught` + (s ? ` · ${plural(s.runs, "run", "runs")} · ${money(s.cost)}` : g.key === "work" ? " · tracks, reviews, the session" : "") }; });
+      return { name: g.name, sub: `${at(g.key)} caught` + (s ? ` · ${plural(s.runs, "run", "runs")} · ${money(s.cost)}` : g.key === "work" ? " · tracks, the session" : "") }; });
     // A gate's dollars end at the count, so they are shared over the catches of the Days whose pull requests were all merged by then.
     const late = rows.filter(r => r.dots.length && !dayInCount(r.day)).map(r => r.day), inAt = k => rows.filter(r => !late.includes(r.day)).flatMap(r => r.dots).filter(o => o.gate === k).length;
     const each = GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && inAt(g.key)).map(([g, s]) => [s.cost / inAt(g.key), g.at]).sort((a, b) => a[0] - b[0]);
@@ -454,11 +462,13 @@ function model(DATA) {
     const merged = (DATA.rows || []).filter(r => r.pr).length, hooks = ((DATA.gate_report || {}).gates || []).find(g => g.gate === "hooks");
     const runs = keys => { const s = keys.map(k => spent.get(k)).filter(Boolean); return s.length ? `${plural(sum(s, x => x.runs), "run", "runs")} · ${money(sum(s, x => x.cost))}` : ""; };
     const nRefused = sum(Object.values(refused)), prFails = failed["PR checks"] || 0;
-    const notes = [runs(["auditor"]) && `auditors: ${runs(["auditor"])}`, runs(["seen red", "break on purpose"]) && `seen red and breaks: ${runs(["seen red", "break on purpose"])}`,
-      (DATA.refusals || []).length ? `${plural(nRefused, "refusal", "refusals")}${hooks ? ` · ${money(hooks.cost)}` : ""}` : "",
-      (DATA.verification || []).length ? `PR checks failed on ${plural(prFails, "pull request", "pull requests")}` : "", "", "", runs(["evidence replay"]) && `replay: ${runs(["evidence replay"])}`];
+    const notes = { "Before any code": runs(["auditor"]) && `auditors: ${runs(["auditor"])}`,
+      "Writing a track, on this machine": runs(["seen red", "break on purpose"]) && `seen red and breaks: ${runs(["seen red", "break on purpose"])}`,
+      [HOOKS.name]: (DATA.refusals || []).length ? `${plural(nRefused, "refusal", "refusals")}${hooks ? ` · ${money(hooks.cost)}` : ""}` : "",
+      "CI on every pull request": (DATA.verification || []).length ? `PR checks failed on ${plural(prFails, "pull request", "pull requests")}` : "",
+      "After the merge": runs(["evidence replay"]) && `replay: ${runs(["evidence replay"])}` };
     const prs = n => plural(n, "pull request", "pull requests");
-    const stages = PIPE.map((st, si) => ({ n: si + 1, name: st.name, note: notes[si] || "", gates: st.gates.map(g => {
+    const segment = (st, n) => ({ n, name: st.name, loop: !!st.loop, note: notes[st.name] || "", gates: st.gates.map(g => {
       const dots = g.pile ? CAUSES.flatMap(c => all.filter(o => o.gate === g.pile && o.cause === c)) : null;
       const stop = g.guard ? `${refused[g.guard] || 0} refused` : g.ci ? `failed on ${prs(failed[g.ci] || 0)}` : g.merged ? `${prs(merged)} merged`
         : g.relabel && read.length ? `${sum(read, r => r.differ)} of ${sum(read, r => r.tags)} tags read differently` : "";
@@ -466,15 +476,16 @@ function model(DATA) {
       const caught = dots && `${dots.length} caught` + (per.has(g.pile) && dots.length ? ` · about ${money(per.get(g.pile))} a catch` : "");
       const plain = g.kit ? "nothing to check here" : g.nc ? "not counted yet" : g.inPr ? "in the PR checks' count" : "";
       return { names: g.names, subs: g.subs || [], kind: g.leak ? "leak" : g.kit ? "kit" : g.inPr ? "small" : "valve", dots, stop, plain, caught,
-        by: g.pile === "work" && dots.length ? `by: tracks ${n("track")} · self ${n("self")} · review ${n("review")} · other ${n("other")}` : "",
+        by: g.pile === "work" && dots.length ? `by: tracks ${n("track")} · self ${n("self")} · other ${n("other")}` : "",
         t: g.names.join(" and "), b: [g.does, [caught, stop, plain].filter(Boolean).join("; ") + "."].filter(s => s !== ".") };
-    }) }));
+    }) });
+    const stages = PIPE.map((st, si) => segment(st, si + 1)), band = segment(HOOKS, null), phaseEnd = segment(PHASE_END, null);
     const phases = PHASES.map(([name, ks]) => { const c = all.filter(o => ks.includes(o.gate)).length; return { name, n: c, pct: all.length ? Math.round(100 * c / all.length) : 0 }; });
-    const pipe = { stages, phases, escaped: nEsc, gates: sum(stages, s => sum(s.gates, g => g.names.length)) };
+    const pipe = { stages, hooks: band, phase_end: phaseEnd, phases, escaped: nEsc, gates: sum([...stages, band], s => sum(s.gates, g => g.names.length)) };
     return { gates, rows, pipe,
       key: [...CAUSES.filter(c => c !== "other" || by(c)).map(c => ({ cls: `dot ${c}`, text: `${c.charAt(0).toUpperCase() + c.slice(1)} ${by(c)}` })),
         { cls: "dot ring", text: `Ringed: the same problem came back ${nBack}` }, { cls: "dot square", text: `Square: made on an earlier Day ${nEsc}` }],
-      say: `Work flows down the pipe, through ${pipe.gates} gates in seven stages. Each dot is one defect from a Day's Notes, ${all.length} in all, at the gate that caught it: the lower its tray, the later the catch. A grey number is how often a gate stopped something, over all dates. Point at a gate's name for what it checks.`,
+      say: `Work flows down the pipe, through ${pipe.gates} gates in ${stages.length} stages, with the hooks beside them all; the spec change, each track and the close are each a pull request, and each passes CI and your merge. Each dot is one defect from a Day's Notes, ${all.length} in all, at the gate that caught it: the lower its tray, the later the catch. A grey number is how often a gate stopped something, over all dates. Point at a gate's name for what it checks.`,
       read: { t: !all.length ? "No defect is recorded yet" : at("auditor") ? `${plural(all.length, "defect", "defects")}; the auditors caught ${at("auditor")} of them before any code was written` : `${plural(all.length, "defect", "defects")} in the Days' Notes`,
         b: all.length ? [b.join(" ")] : [] },
       table: { head: ["Day", ...GATES.map(g => g.name), ...CAUSES.map(c => `Cause: ${c}`), "Escaped", "Came back", "Tags read differently", "Tags"],
@@ -1001,7 +1012,8 @@ function howRecheck(x, id) {
   if (!x.text.checks.length) return `<figure class="how-ex"><figcaption>${esc(id)}</figcaption><pre>not re-checked yet</pre></figure>`;
   return `<figure class="how-ex"><figcaption>${esc(id)} at its latest re-check${x.text.pr ? `, the merge of PR #${x.text.pr}` : ""}</figcaption><pre>${x.text.checks.map(c => `${esc(c.check)} → <span class="put">${esc(c.state)}</span>`).join("\n")}</pre></figure>`;
 }
-const HOW_BLOB = "https://github.com/Yusuprozimemet/agentic-workflow-driver/blob/main/";
+// The repository's files on GitHub, from the URL the build read (meta.repo_url); with none, the excerpts carry no link.
+const howBlob = DATA => { const u = ((DATA || {}).meta || {}).repo_url; return u ? `${u.replace(/\/+$/, "")}/blob/main/` : null; };
 const HOW_PLAN_GLOSS = {
   "Short answer": "Can the human leave the loop, and what must stay with them.",
   "Who does what": "The maintainer, the driver and the sessions.",
@@ -1033,7 +1045,7 @@ function drawHow(DATA, tally) {
   const X = DATA.how_this_works || {}, criteria = DATA.criteria_index || [];
   const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
   const value = x => howHas(x) ? esc(x.text) : howMissing(x);
-  const src = (path, label) => `<a class="how-src" href="${HOW_BLOB}${path}" target="_blank" rel="noopener">Read ${esc(label || path)}</a>`;
+  const blob = howBlob(DATA), src = (path, label) => blob ? `<a class="how-src" href="${esc(blob + path)}" target="_blank" rel="noopener">Read ${esc(label || path)}</a>` : "";
   const anat = rows => `<dl class="how-anat">${rows.map(([k, g, v]) => `<div><dt>${esc(k)}</dt><dd><span>${esc(g)}</span>${v ? `<span class="mono">${v}</span>` : ""}</dd></div>`).join("")}</dl>`;
   const promise = criteria.find(c => c.id === id);
   document.getElementById("how-route").innerHTML = `Below is the route one real promise took: <strong>${promise ? esc(promise.plain || promise.claim) : howMissing(X.promise)}</strong> Select a step to see what happened there.`;
@@ -1663,9 +1675,12 @@ function draw(M, DATA) {
       h("div", { class: "pipe-side" }, g.stop && h("span", { class: "stop" }, g.stop), g.plain && h("span", { class: "nc" }, g.plain),
         g.dots && h("span", { class: "caught" }, g.caught), g.by && h("span", { class: "wsplit" }, g.by),
         g.dots && g.dots.length > 0 && h("div", { class: "tray" }, g.dots.map(dot))));
-    const stage = st => h("div", { class: "pipe-stage" },
-      h("div", { class: "pipe-row stage-head" }, h("div", { class: "t" }, `${st.n} · ${st.name}`), h("div", { class: "pipe" }), h("div", { class: "n" }, st.note)),
+    const stage = (st, cls) => h("div", { class: `pipe-stage${cls ? ` ${cls}` : ""}` },
+      h("div", { class: "pipe-row stage-head" }, h("div", { class: "t" }, st.n ? `${st.n} · ${st.name}` : st.name), h("div", { class: "pipe" }), h("div", { class: "n" }, st.note)),
       st.gates.map(gate));
+    // The stages in their order by name: a looped one inside the track loop; before CI, the note that every pull request comes to it.
+    const staged = P.stages.map(st => st.loop ? h("div", { class: "pipe-loop" }, h("span", { class: "loop-label" }, "once per track PR"), stage(st))
+      : st.name === "CI on every pull request" ? [h("p", { class: "pipe-feed" }, "Every pull request comes through here: the spec change, each track and the close."), stage(st)] : stage(st));
     const end = (cls, text) => h("div", { class: `pipe-row ends ${cls}` }, h("div", { class: "end" }, text), h("div", { class: "pipe" }, h("div", { class: "end-cap" })), h("div"));
     // The split, the key and the readout sit in a panel beside the pipe that stays in view while the pipe scrolls past.
     put("g7-split",
@@ -1673,11 +1688,11 @@ function draw(M, DATA) {
         P.phases.map(p => h("div", { style: `flex:${Math.max(p.n, 0.0001)} 1 0` }, p.pct >= 6 ? `${p.pct}%` : ""))),
       h("div", { class: "split-key" }, P.phases.map(p => h("div", null, h("b", null, `${p.pct}%`), `${p.name} · ${p.n}`))));
     const pipeline = h("div", { class: "pipeline" },
+      h("p", { class: "pipe-feed" }, "Beside every stage of the pipe, in the session:"), stage(P.hooks, "hooks-band"),
       h("div", { class: "pipe-body" },
         h("div", { class: "rail" }, h("span", null, `${P.escaped} got through a whole Day, caught on a later one`)),
-        end("in", "A Day's work"), stage(P.stages[0]),
-        h("div", { class: "pipe-loop" }, h("span", { class: "loop-label" }, "once per track PR"), P.stages.slice(1, 5).map(stage)),
-        P.stages.slice(5).map(stage), end("out", "Next Day")));
+        end("in", "A Day's work"), staged, end("out", "Next Day")),
+      h("div", { class: "pipe-after" }, h("p", { class: "pipe-feed" }, "After a phase's last Day, outside the Day's pipe:"), stage(P.phase_end, "phase-end")));
     const sieve = h("div", { class: "sieve" },
       h("div", { class: "sieve-row head" }, h("div", { class: "sieve-day" }), h("div", { class: "sieve-gates" }, m.gates.map(g => h("div", { class: "sieve-gate" }, h("strong", null, g.name), h("span", null, g.sub)))),
         h("div", { class: "sieve-note" }, "Tags a second reader gave differently")),

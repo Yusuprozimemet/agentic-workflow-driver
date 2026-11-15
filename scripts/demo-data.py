@@ -213,6 +213,7 @@ DEFECTS = (
     (2, "D2.1", "Track A", "implementation", "Day 01", "D1.1"),
     (3, "D3.1", "seen red", "implementation", "Day 03", None),
     (4, "D4.1", "break on purpose", "process", "none", None),
+    (4, "D4.2", "review", "implementation", "Day 04", None),
     (5, "D5.1", "close", "spec", "Day 05", None),
     (5, "D5.3", "rehearsal", "process", "Day 05", None),
     (5, "D5.2", "evidence replay", "environment", "none", None),
@@ -484,7 +485,7 @@ def demo():
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",
                                   chance_draws=1000),
-                  break_line_from_pr=0, project=PROJECT, phases=PHASES, stops=[], where=dict(rows=[], names={})))
+                  break_line_from_pr=0, project=PROJECT, repo_url=None, phases=PHASES, stops=[], where=dict(rows=[], names={})))
     # Counted from the example Days' Defect lines as the real data is, so the two cannot drift apart.
     out["defect_counts"] = defect_counts(out["days"])
     out["score"] = quality_score(out)

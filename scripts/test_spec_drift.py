@@ -937,13 +937,30 @@ class DefectCountTest(unittest.TestCase):
                 dict(day=12, criteria=dict(total=0), defects=sd.defect_lines(day12, 12), relabel=dict(cause=[3, 4]))]
         c = sd.defect_counts(days)
         self.assertEqual([(r["day"], r["defects"], r["per_criterion"], r["late"], r["escapes"], r["stages"]) for r in c["days"]], [
-            (11, 6, 1.5, 5, 1, {"auditor": 1, "work": 3, "unsplit": 1, "Day review": 1}),
+            (11, 6, 1.5, 5, 1, {"auditor": 1, "review": 1, "work": 2, "unsplit": 1, "Day review": 1}),
             (12, 4, None, 2, 0, {"spec-change PR": 1, "rehearsal": 1, "evidence replay": 1})])
         self.assertEqual((c["defects"], c["criteria"], c["per_criterion"], c["late"], c["escapes"]), (10, 4, 2.5, 7, 1))
         self.assertEqual(c["rater"], dict(stage=[5, 6], cause=[7, 10], made=[6, 6]))
         self.assertEqual(c["off_list"], ["D12.4"])
         self.assertEqual(sd.defect_count_line(c), "defect counts: 10 over 4 criteria (2.5 each), 7 caught late, "
                                                   "1 escaped, rater agreed on cause 7 of 10")
+
+    def test_the_main_sessions_diff_review_is_a_stage_of_its_own_and_a_late_one(self):
+        self.assertEqual([sd.found_stage(f, 11) for f in ("review", "Review", "self", "Track C1", "Day 12 review")],
+                         ["review", "review", "work", "work", "Day review"])
+        self.assertIn("review", sd.STAGES)
+        self.assertNotIn("review", sd.EARLY)
+
+
+class RepoUrlTest(unittest.TestCase):
+    """The page's source links name the repository it was built from, not a fixed one."""
+
+    def test_the_url_is_the_repositorys_on_github_and_none_without_a_remote(self):
+        git = sys.modules["spec_drift_git"]
+        with mock.patch.object(git, "run", return_value="https://github.com/someone/fork\n"):
+            self.assertEqual(sd.repo_url(), "https://github.com/someone/fork")
+        with mock.patch.object(git, "run", side_effect=subprocess.CalledProcessError(1, "gh")):
+            self.assertIsNone(sd.repo_url())
 
 
 class DefectTest(unittest.TestCase):
