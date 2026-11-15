@@ -292,6 +292,9 @@ def run_session(command, prompt, args, project, number, record):
             # The reader ends with the session's stdout, so what is awaited next is the session's exit.
             try:
                 proc.wait(timeout=timeout)
+                # The reader has read to the end: its pipe is closed here, not left to the collector,
+                # whose ResourceWarning reached stderr in some runs and not others.
+                proc.stdout.close()
                 return b"".join(lines), proc.returncode
             except subprocess.TimeoutExpired:
                 pass

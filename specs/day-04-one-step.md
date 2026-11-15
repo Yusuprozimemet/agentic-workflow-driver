@@ -388,12 +388,12 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       in the report (D03.17).
       Test: `OnceHaltTest.test_halt_during_once`, `OnceHaltTest.test_once_refuses_after_halt`.
       Evidence: `OnceHaltTest.test_halt_during_once`, `OnceHaltTest.test_once_refuses_after_halt` (#29).
-      broken: --once takes no lock → AssertionError: 'halt: set; no driver i' != 'halt: set; killed pid ' (#29)
+      broken: --once takes no lock → AssertionError: 0 != 2 : the session did not start its child (#29)
       The POSIX break was run by the close, not by Track G (D04.14): on Linux, in a
       `python:3.12-slim` container, `scripts/break.py` replaced "os.setpgid(0, 0)" with "pass"
       in `driver/once.py`; on Windows it changes nothing and passes, so CI's Linux replay
       guards it. The first process seen alive is the fake, not its child (D04.15):
-      broken: --once leaves the driver in the caller's process group → AssertionError: True is not false : the fake still runs
+      broken: --once leaves the driver in the caller's process group → AssertionError: 'halt: set; no driver i' != 'halt: set; killed pid '
 - [x] C04.13 **hold** — With `DRIVER_LIVE_CLI` naming the installed Claude Code, on the
       maintainer's PC (`plan.md`, "What to build", item 3, "a real step"): a scratch project
       whose `CLAUDE.md` says to run, first, "echo started > started.txt && sleep 20 && echo late
