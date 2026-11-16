@@ -64,6 +64,7 @@ class QualityScoreTest(unittest.TestCase):
     def test_cost_scores_the_yardstick_over_what_each_day_spent_capped_at_100(self):
         cost = next(p for p in quality_score(DATA)["all"]["parts"] if p["key"] == "cost")
         self.assertEqual(cost["pct"], 75.0)  # Day 1 spent under the yardstick (100), Day 2 twice it (50)
+        self.assertEqual(cost["counts"][0]["note"].split(":")[0], "$2.50 spent against a yardstick of $2.00")
 
     def test_an_ability_scores_its_criteria_and_its_pull_requests(self):
         abilities = quality_score(DATA)["abilities"]

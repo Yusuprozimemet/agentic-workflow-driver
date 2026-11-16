@@ -93,7 +93,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 2</p>
       <h2>Is it meeting what the plan judges it on?</h2>
-      <p class="graph-say">One row per yardstick the plan names, counted at each Day's close. A Day's figure covers everything merged since the close before it, whichever Day the work belonged to. Dollars are API list prices, as in graph 8, and not what was paid. Each row has its own scale: the dark bar is the last Day counted, the grey band every Day's range, the hollow diamond the average so far, and the tall black tick the figure the kit reached with a person driving every step. The trend on the right is Day by Day. Green or amber on the number says whether the last Day beat the average, where lower is better.</p>
+      <p class="graph-say">One row per yardstick the plan names, counted at each Day's close. Up to Day 6 a Day's figure covers everything merged since the close before it, whichever Day the work belonged to; from Day 7 on, only the Day's own pull requests, by branch. Dollars are API list prices, as in graph 8, and not what was paid. Each row has its own scale: the dark bar is the last Day counted, the grey band every Day's range, the hollow diamond the average so far, and the tall black tick the figure the kit reached with a person driving every step. The trend on the right is Day by Day. Green or amber on the number says whether the last Day beat the average, where lower is better.</p>
     </div>
     <div class="legend" id="g2-key"></div>
     <div class="scroll-x" id="g2-plot"></div>
@@ -160,6 +160,8 @@
         <p class="pc-howto">The left lane is the ladder: the original plan's commitments, in the plan's order. "Today" is the plan as it stands now. Each numbered lane is a Day. A band level with a commitment means a criterion of that Day names it. Point at a row for the full commitment and its criteria.</p>
         <div class="pc-legend">
           <span><i class="pc-sw" style="background:var(--ink-2)"></i>Commitment, same as the original</span>
+          <span><i class="pc-sw" style="background:var(--ink-2);opacity:.45"></i>"Today" lane, faded: reworded, same commitment</span>
+          <span><i class="pc-sw" style="background:var(--c-grid);opacity:.45"></i>"Today" lane, empty: the plan dropped it</span>
           <span><i class="pc-sw" style="background:var(--c-out)"></i>Commitment the plan changed or added later</span>
           <span><i class="pc-sw" style="background:var(--c-in)"></i>A Day's criteria (darker: more of them)</span>
           <span><i class="pc-dot"></i>No criterion names it</span>
@@ -225,7 +227,7 @@
       <div class="graph-head">
         <p class="graph-n">Graph 9</p>
         <h2>Where did the work go?</h2>
-        <p class="graph-say">Lines changed in the merged pull requests of each Day, sorted by what the file is.</p>
+        <p class="graph-say">Lines changed in the merged pull requests of each Day, sorted by what the file is. Files a tool writes (the dashboard's count files, lock files, screenshots) and binary files are left out, so the totals run a little under GitHub's additions plus deletions for the same pull requests.</p>
       </div>
       <div class="legend" id="g9-key"></div>
       <div class="bar-plot" id="g9-plot"></div>
@@ -238,7 +240,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 10</p>
       <h2>Where does a date's time go, and who waits for whom?</h2>
-      <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing or waiting on a command it ran, a pull request waiting to be merged, its checks running, the maintainer merging. The marks inside a session's bar are its waits of a minute or longer. Only this repository's sessions are drawn, and the maintainer's own reading and typing leave no mark, so a gap in a lane is not a rest. The sessions are counted on the maintainer's computer and end at the last count, which the readout names; the pull requests and checks come from GitHub and go on after it. A Day button above turns the clock to that Day's last date; the dates here pick another.</p>
+      <p class="graph-say">One date on the clock. Each lane is one actor, and a bar is a stretch it was busy: a session writing or waiting on a command it ran, a pull request waiting to be merged, its checks running, the maintainer merging. The marks inside a session's bar are its waits of a minute or longer. Only this repository's sessions are drawn, and the maintainer's own reading and typing leave no mark, so a gap in a lane is not a rest. The sessions are counted on the maintainer's computer and end at the last count, which the readout names; the pull requests and checks come from GitHub and go on after it. A Day button above turns the clock to that Day's last date; the dates here pick another. A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.</p>
     </div>
     <div class="g10-dates" id="g10-dates" role="group" aria-label="One date on the clock"></div>
     <div class="legend" id="g10-key"></div>
@@ -299,7 +301,7 @@
   </details>
 
   <footer>
-    <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal and gate counts come from <code>scripts/token-usage.py</code>, run on the maintainer's computer at each Day's close. The page this one replaced, with its sixty panels, is the tag <a href="https://github.com/Yusuprozimemet/agentic-workflow-driver/tree/dashboard-v1/docs/dashboard"><code>dashboard-v1</code></a>.</p>
+    <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal, gate and session counts come from <code>scripts/token-usage.py</code>, which the session hooks run on the maintainer's computer when a session starts or ends (<code>scripts/publish-counts.py</code>); they are pushed to the <code>dashboard-data</code> branch, and the page reads them there. The page this one replaced, with its sixty panels, is the tag <a href="https://github.com/Yusuprozimemet/agentic-workflow-driver/tree/dashboard-v1/docs/dashboard"><code>dashboard-v1</code></a>.</p>
   </footer>
 
 </div>

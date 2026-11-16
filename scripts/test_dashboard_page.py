@@ -67,6 +67,23 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
 """
 
 
+# planBar() on the graph 12 model from stdin: the nodes it puts in its box, as the page would hold them (a
+# node is its tag, attributes, text and children; a string child is text).
+PLAN_BAR = r"""
+const fs = require("fs"), vm = require("vm");
+const node = tag => { const n = { tag, attrs: {}, kids: [], textContent: "", hidden: false,
+  setAttribute(k, v) { this.attrs[k] = String(v); }, appendChild(c) { this.kids.push(c); return c; }, append(...c) { c.forEach(x => this.kids.push(x)); },
+  replaceChildren(...c) { this.kids = c.flat(); }, addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }) };
+  n.style = { set cssText(v) { n.attrs.style = v; } }; Object.defineProperty(n, "className", { set(v) { this.attrs.class = v; }, get() { return this.attrs.class || ""; } });
+  return n; };
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document: { createElementNS: (ns, tag) => node(tag), createElement: tag => node(tag) },
+  window: {}, console, box: node("div"), tip: node("div"), panel: node("div"), forDays: el => el, resets: [] });
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nplanBar(model(DATA).g12, box, tip, panel, forDays, resets);", ctx);
+const dump = n => typeof n === "string" ? n : { tag: n.tag, attrs: n.attrs, text: n.textContent, kids: n.kids.map(dump) };
+console.log(JSON.stringify(dump(ctx.box)));
+"""
+
+
 def node(harness, data):
     return json.loads(subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True,
                                      encoding="utf-8", check=True).stdout)
@@ -209,6 +226,15 @@ class ModelTest(unittest.TestCase):
                                           "were picked up; 2 more wait for Day 4, 1 of them numbered. The plan stops for the maintainer after Day 3."])
         self.assertEqual(g["table"]["rows"][0], ["Runs", 2, 0, 0, 1, 3])
 
+    def test_graph_3_row_carries_the_quality_score_and_its_parts_for_an_ability_that_has_one(self):
+        story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")
+        got = model(data(score=self.SCORE, user_stories=dict(ABILITIES, stories=[story(1, 1, "a")])))
+        rows = {r.get("key"): r for r in got["g3"].get("rows", [])}
+        self.assertEqual((rows.get("a", {}).get("score"), rows.get("a", {}).get("score_parts")), (81, "plan 90 · proof 72"))
+        self.assertEqual((rows.get("b", {}).get("score"), rows.get("b", {}).get("score_parts")), (None, None))
+        lines = {l.get("key"): l for l in got.get("map", {}).get("lines", [])}
+        self.assertEqual((lines.get("a", {}).get("score"), lines.get("b", {}).get("score")), (81, None))
+
     def test_graph_4_gives_each_promise_the_state_of_its_newest_recheck(self):
         g = model(data(**PROMISES))["g4"]
         self.assertEqual({t["id"]: t["status"] for r in g["rows"] for t in r["tiles"]}, {
@@ -324,7 +350,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(g["read"]["t"], "Now 47.0° apart, where chance alone would give 52.0°")
         self.assertEqual(g["read"]["b"], ["The specs and the code share more names than chance would: nineteen times in twenty, chance gives "
                                           "50.0° to 54.0°. On average a spec merge moved the dot up by 4.0° and a code merge down by 6.0°. "
-                                          "1 of 5 pull requests had a check fail before they merged."])
+                                          "1 of 5 pull requests had a check of any workflow fail before they merged."])
         self.assertEqual(g["table"]["rows"][2], ["#2", "code", 1, "2026-01-01", "48.0", 120, "yes"])
         self.assertEqual(g["table"]["rows"][4][:3], ["#4", "other", ""])
         self.assertEqual(g["merges"][4]["t"], "Pull request #4 · other · outside any Day, merged after Day 1 closed")
@@ -351,7 +377,7 @@ class ModelTest(unittest.TestCase):
                        gate_report=dict(gates=[dict(gate="auditors", found="auditor", defects=1, runs=2, cost=1.0),
                                                dict(gate="hooks", found=None, defects=0, runs=1, cost=0.1)])))["g7"]
         self.assertEqual([[len(c) for c in r["cells"]] for r in g["rows"]], [[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0], [0] * 11])
-        self.assertEqual([r["note"] for r in g["rows"]], ["3 of 12", "not read yet", "read at its close"])
+        self.assertEqual([r["note"] for r in g["rows"]], ["3 of 12 · 25%", "not read yet", "read at its close"])
         dots = {o["id"]: o for r in g["rows"] for o in r["dots"]}
         self.assertEqual([(o["id"], o["cause"], o["escaped"], o["back"]) for o in dots.values()], [
             ("D1.1", "spec", False, False), ("D1.2", "implementation", False, False), ("D2.1", "process", True, True),
@@ -482,7 +508,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual([gates[n]["stop"] for n in ("read-guard", "step-guard", "auditor-guard", "Tests", "Track breaks", "Your merge")],
                          ["5 refused", "1 refused", "0 refused", "failed on 1 pull request", "failed on 0 pull requests", "2 pull requests merged"])
         notes = {s["name"]: s["note"] for s in P["stages"]}
-        self.assertEqual((P["hooks"]["note"], notes["CI on every pull request"]), ("6 refusals", "PR checks failed on 2 pull requests"))
+        self.assertEqual((P["hooks"]["note"], notes["CI on every pull request"]), ("6 refusals", "the PR checks workflow failed on 2 pull requests; graph 6 counts any workflow"))
         self.assertEqual((gates["ruff"]["plain"], gates["Style check"]["plain"], gates["Compose and Prometheus"]["kind"]),
                          ("not counted yet", "in the PR checks' count", "kit"))
         self.assertEqual([(p["name"], p["n"], p["pct"]) for p in P["phases"]],
@@ -561,6 +587,15 @@ class ModelTest(unittest.TestCase):
         self.assertEqual((g["ahead"], g["unknown"], g["stop"]), ([], [], None))
         self.assertEqual(g["read"]["t"], "1 of 2 promises built")
 
+    def test_graph_1_names_a_promise_a_closed_day_wrote_and_never_built(self):
+        col = lambda pr, built, got: dict(pr=pr, built=built, got=got, written=2, open=0, open_numbered=0, opened=[], closed=[])
+        look = dict(columns=[col(None, 0, []), col(1, 1, ["C1.1"])], pending=None, hand_offs=[])
+        g = model(data(rows=[dict(pr=None, kind="origin", day=0, title="The first commit"), dict(pr=1, kind="spec", day=1, own_day=1, title="`spec`")],
+                       days=[dict(day=1, status="closed", title="One")], criteria_index=[dict(id="C1.1", day=1), dict(id="C1.2", day=1)],
+                       look_ahead=look, now=dict(current_day=3, stop_after=None)))["g1"]
+        self.assertEqual(g["read"]["t"].split(" · ")[-1], "1 never built")
+        self.assertIn("(C1.2)", " ".join(g["read"]["b"]))
+
     def test_graph_1_without_look_ahead_data_says_nothing_is_merged(self):
         g = model(data())["g1"]
         self.assertNotIn("error", g)
@@ -613,7 +648,7 @@ class ModelTest(unittest.TestCase):
                  values=[value(1, 1, "one park"), value(2, 2, "two parks")])])))["g2"]
         self.assertEqual(len(got.get("rows", [])), 2)
         self.assertEqual(got["rows"][0].get("foot"), "Days 1 to 6 count every pull request merged since the last count, outside work included; "
-                                                     "Days 7 and 8 count the Day's own only. The two halves of the row do not compare; "
+                                                     "from Day 7 on, each Day counts its own only. The two halves of the row do not compare; "
                                                      "graph 8's By Day view has the split.")
         self.assertIsNone(got["rows"][1].get("foot"))
 
@@ -631,29 +666,82 @@ class ModelTest(unittest.TestCase):
         g = got["g10"]
         self.assertEqual(([d["date"] for d in g["dates"]], g["at"], g["zone"]), (["2026-01-01", "2026-01-02"], 1, "UTC+01:00"))
         jan2 = g["dates"][1]
-        self.assertEqual((jan2["label"], jan2["days"]), ("2 Jan", [1, 2]))
+        # The 23:50 to 00:10 stretch is the 1st's: a date runs from 05:00 to 05:00, so only the 2nd's work is on the 2nd.
+        self.assertEqual((jan2["label"], jan2["days"]), ("2 Jan", [2]))
         lanes = {lane["name"]: lane for lane in jan2["lanes"]}
         self.assertEqual(list(lanes), ["Main session", "Implementer", "Auditors", "Pull request open", "Checks running", "Maintainer merges"])
         pr7 = next(b for b in lanes["Pull request open"]["bars"] if "#7" in b["t"])
-        self.assertEqual((round(pr7["x"], 3), round(pr7["w"], 3), pr7["cls"], pr7["days"]), (round(630 / 14.4, 3), round(30 / 14.4, 3), "code", [2]))
+        self.assertEqual((round(pr7["x"], 3), round(pr7["w"], 3), pr7["cls"], pr7["days"]), (round(330 / 14.4, 3), round(30 / 14.4, 3), "code", [2]))
         self.assertEqual(pr7["t"], "Pull request #7 · day-02/track-a · open 10:30 to 11:00")
         self.assertEqual(pr7["b"], ["Open for 30 minutes before it merged.", "Its checks were running for 9 minutes: 4 workflow runs, 1 of them failed."])
-        pr6 = next(b for b in lanes["Pull request open"]["bars"] if "#6" in b["t"])
-        self.assertEqual((pr6["from"], pr6["to"], pr6["cls"]), ("00:00", "02:00", "spec"))
-        self.assertIn("opened on an earlier date", pr6["b"][0])
-        self.assertEqual([(b["from"], b["to"]) for b in lanes["Auditors"]["bars"]], [("00:00", "00:10")])
-        self.assertEqual([lane["sub"] for lane in jan2["lanes"]], ["busy 2 h 0 min", "busy 30 minutes", "busy 10 minutes", "2 pull requests, 2 h 30 min in all",
-                                                             "on 1 pull request, running for 9 minutes, 1 with a failure", "2 merges"])
+        # PR 6 opened at 23:00 on the 1st and merged at 02:00 on the 2nd: all of it is the 1st's work, so it is drawn there only.
+        pr6 = next((b for b in lane(g["dates"][0], "Pull request open").get("bars", []) if "#6" in b["t"]), {})
+        self.assertEqual((pr6.get("from"), pr6.get("to"), pr6.get("cls")), ("23:00", "02:00", "spec"))
+        self.assertEqual(pr6.get("b", [""])[0], "Open for 3 h 0 min before it merged.")
+        self.assertEqual([(b["from"], b["to"]) for b in lane(g["dates"][0], "Auditors").get("bars", [])], [("23:50", "00:10")])
+        self.assertEqual([lane["sub"] for lane in jan2["lanes"]], ["busy 2 h 0 min", "busy 30 minutes", "nothing recorded", "1 pull request, 30 minutes in all",
+                                                             "on 1 pull request, running for 9 minutes, 1 with a failure", "1 merge"])
         self.assertEqual([b["cls"] for b in lanes["Checks running"]["bars"]], ["failed"])
-        self.assertEqual(jan2["read"]["t"], "2 Jan: 2 pull requests merged, half of them open for 30 minutes or less")
-        self.assertEqual(jan2["read"]["b"], ["Work of Days 1 to 2.", "The main session was busy for 2 h 0 min, the implementer for 30 minutes and the auditors for 10 minutes.",
-                                             "Nothing ran from 00:10 to 08:00.", "The longest waits for a merge: #6 (3 h 0 min) and #7 (30 minutes).",
+        self.assertEqual(jan2["read"]["t"], "2 Jan: 1 pull request merged, half of them open for 30 minutes or less")
+        self.assertEqual(jan2["read"]["b"], ["Work of Day 2.", "The main session was busy for 2 h 0 min and the implementer for 30 minutes.",
+                                             "The longest wait for a merge: #7 (30 minutes).",
                                              "Times are on the clock of the machine that recorded the sessions (UTC+01:00)."])
         self.assertEqual(jan2["table"]["head"], ["Lane", "What", "From", "To", "Minutes"])
         self.assertIn(["Pull request open", "Pull request #7", "10:30", "11:00", 30], jan2["table"]["rows"])
         self.assertEqual((g["read"], g["table"]), (jan2["read"], jan2["table"]))
-        self.assertEqual([x["t"] for x in g["hours"]][:3], ["00:00", "03:00", "06:00"])
+        self.assertEqual([x["t"] for x in g["hours"]][:3], ["06:00", "09:00", "12:00"])
         self.assertNotIn("Where a date's time goes, and who waits for whom", [n for n, _ in got["notMeasured"]])
+
+    def test_graph_10_runs_a_date_from_05_00_to_05_00_so_work_after_midnight_stays_on_its_date(self):
+        # Local time is +01:00. 23:30 to 01:30 and a merge at 02:00 belong to the first date; 06:00 the next morning to the second.
+        s = lambda start, end: {"date": start[:10], "day": 1, "agent": "main", "from": start, "to": end, "replies": 3}
+        clock = dict(sessions=[s("2026-01-01T23:30:00+01:00", "2026-01-02T01:30:00+01:00"), s("2026-01-02T06:00:00+01:00", "2026-01-02T06:30:00+01:00")],
+                     prs=[dict(number=4, day=1, kind="code", branch="day-01/x", opened="2026-01-01T20:00:00Z", merged="2026-01-02T01:00:00Z", checks=None)])
+        g = model(data(clock=clock))["g10"]
+        first, second = (g.get("dates", []) + [{}, {}])[:2]
+        self.assertEqual(([first.get("date"), second.get("date")], [a["t"] for a in g.get("hours", [])][:2]), (["2026-01-01", "2026-01-02"], ["06:00", "09:00"]))
+        main = lambda d: [(b["from"], b["to"]) for x in d.get("lanes", []) if x["name"] == "Main session" for b in x["bars"]]
+        self.assertEqual((main(first), main(second)), ([("23:30", "01:30")], [("06:00", "06:30")]))
+        merged = [b["t"] for x in first.get("lanes", []) if x["name"] == "Maintainer merges" for b in x["bars"]]
+        self.assertEqual(merged, ["Merged pull request #4 · at 02:00"])
+        # Each tick sits at its minutes after 05:00 on the axis, which runs from 05:00 to 05:00.
+        self.assertEqual([(x["t"], round(x["x"], 2)) for x in g.get("hours", [])],
+                         [(t, round(m / 14.4, 2)) for t, m in [("06:00", 60), ("09:00", 240), ("12:00", 420), ("15:00", 600),
+                                                              ("18:00", 780), ("21:00", 960), ("00:00", 1140), ("03:00", 1320)]])
+
+    def test_graph_10_draws_a_pull_request_still_open_or_closed_without_merging_and_says_which(self):
+        prs = [dict(number=8, day=2, kind="code", branch="day-02/a", opened="2026-01-02T08:00:00Z", merged=None, checks=None),
+               dict(number=9, day=2, kind="code", branch="day-02/b", opened="2026-01-02T09:00:00Z", closed="2026-01-02T12:00:00Z", merged=None, checks=None)]
+        date = (model(data(clock=dict(sessions=[], prs=prs)))["g10"].get("dates") or [{}])[0]
+        pulls = lane(date, "Pull request open")
+        self.assertEqual(sorted((b["t"], b["from"], b["to"]) for b in pulls.get("bars", [])),
+                         [("Pull request #8 · day-02/a · still open from 08:00", "08:00", "05:00"),
+                          ("Pull request #9 · day-02/b · closed without merging 09:00 to 12:00", "09:00", "12:00")])
+        self.assertEqual(pulls.get("sub"), "2 pull requests, 24 h 0 min in all, 1 still open, 1 closed without merging")
+
+    def test_graph_10_puts_overlapping_pull_requests_of_one_lane_on_separate_rows(self):
+        pr = lambda n, opened, merged: dict(number=n, day=2, kind="code", branch=f"day-02/{n}", opened=opened, merged=merged, checks=None)
+        prs = [pr(20, "2026-01-02T08:00:00Z", "2026-01-02T11:00:00Z"), pr(21, "2026-01-02T08:30:00Z", "2026-01-02T09:30:00Z"),
+               pr(22, "2026-01-02T12:00:00Z", "2026-01-02T12:30:00Z")]
+        date = (model(data(clock=dict(sessions=[], prs=prs)))["g10"].get("dates") or [{}])[0]
+        self.assertEqual({b["t"].split(" · ")[0]: b.get("row") for b in lane(date, "Pull request open").get("bars", [])},
+                         {"Pull request #20": 0, "Pull request #21": 1, "Pull request #22": 0})
+
+    def test_graph_10_says_which_pull_requests_had_no_check_run_on_the_date(self):
+        prs = [dict(number=30, day=2, kind="code", branch="day-02/a", opened="2026-01-02T09:00:00Z", merged="2026-01-02T11:00:00Z",
+                    checks=dict(start="2026-01-02T09:31:00Z", end="2026-01-02T09:40:00Z", runs=1, failed=0)),
+               dict(number=31, day=2, kind="code", branch="day-02/b", opened="2026-01-02T09:10:00Z", merged="2026-01-02T11:00:00Z", checks=None)]
+        date = (model(data(clock=dict(sessions=[], prs=prs)))["g10"].get("dates") or [{}])[0]
+        self.assertEqual(lane(date, "Checks running").get("sub"), "on 1 pull request, running for 9 minutes, 0 with a failure; none on #31")
+
+    def test_graph_10_draws_no_driver_or_parked_row_on_a_date_with_nothing_in_them_and_says_so(self):
+        clock = dict(sessions=[dict(date="2026-01-02", day=2, agent="main", **{"from": "2026-01-02T10:00:00Z", "to": "2026-01-02T10:30:00Z"}, replies=2)], prs=[])
+        g = model(data(clock=clock, driver_runs=dict(steps=[], parks=[an_issue(3, "2026-01-01T10:00:00Z", "2026-01-01T12:00:00Z")])))["g10"]
+        busy, quiet = (g.get("dates", []) + [{}, {}])[:2]  # the 1st of January has the park, the 2nd only a session
+        self.assertEqual([x.get("name") for x in quiet.get("lanes", [])], ["Main session", "Implementer", "Auditors", "Pull request open", "Checks running", "Maintainer merges"])
+        self.assertIn("The driver started no step and nothing was parked on this date.", quiet.get("read", {}).get("b", []))
+        self.assertEqual([x.get("name") for x in busy.get("lanes", [])][:2], ["Driver", "Parked for the maintainer"])
+        self.assertNotIn("The driver started no step and nothing was parked on this date.", busy.get("read", {}).get("b", []))
 
     def test_graph_10_draws_what_a_session_waited_on_inside_its_busy_bar(self):
         s = lambda agent, start, end, **more: {"date": start[:10], "day": 2, "agent": agent, "from": start, "to": end, "replies": 5, **more}
@@ -681,13 +769,13 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["Main session", "Main session", "08:00", "10:00", 120], date["table"]["rows"])
 
     def test_graph_10_keeps_a_wait_on_its_own_date_and_counts_a_minute_two_sessions_share_once(self):
-        # A stretch from 23:00 to 01:00 waited half an hour on tests before midnight: none of that wait is the next
-        # date's, which gets only half of the two minutes of shorter waits. Two main sessions busy from 08:00 to 10:00
-        # and from 09:00 to 11:00 are three hours of the clock, not four: four with the hour after midnight, not five.
+        # A stretch from 04:00 to 06:00 crosses 05:00, where a date ends. Its half hour of waiting on tests, from 04:10 to 04:40,
+        # is the first date's, and the hour after 05:00 is the second's, which gets only half of the two minutes of shorter waits.
+        # Two main sessions busy from 08:00 to 10:00 and from 09:00 to 11:00 are three hours of the clock, not four: four with the hour after 05:00, not five.
         s = lambda start, end, **more: {"date": start[:10], "day": 2, "agent": "main", "from": start, "to": end, "replies": 5, **more}
         clock = dict(prs=[], sessions=[
-            s("2026-01-01T23:00:00+01:00", "2026-01-02T01:00:00+01:00", ran=dict(tests=1800, other=120),
-              runs=[["2026-01-01T23:10:00+01:00", "2026-01-01T23:40:00+01:00", "tests"]]),
+            s("2026-01-02T04:00:00+01:00", "2026-01-02T06:00:00+01:00", ran=dict(tests=1800, other=120),
+              runs=[["2026-01-02T04:10:00+01:00", "2026-01-02T04:40:00+01:00", "tests"]]),
             s("2026-01-02T08:00:00+01:00", "2026-01-02T10:00:00+01:00"), s("2026-01-02T09:00:00+01:00", "2026-01-02T11:00:00+01:00")])
         jan1, jan2 = model(data(clock=clock))["g10"]["dates"]
         self.assertEqual(jan1["lanes"][0]["sub"], "busy 1 h 0 min, 31 minutes of it waiting on commands")
@@ -841,7 +929,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(dots[1], [[], [], [("maintainer", 0, False, 70), ("maintainer", 0, True, 30)], [("fault", 0, False, None)]])
         self.assertEqual([c.get("sub") for c in g.get("cols", [])],
                          ["2 steps", "1 step · 2 fix rounds", "2 steps · waited 1 h 40 min", "1 step · the waits are not known"])
-        self.assertEqual(g.get("read", {}).get("t"), "6 steps, 3 of them with no person")
+        self.assertEqual(g.get("read", {}).get("t"), "6 steps ended, 3 of them with no person; 1 more still open")
         self.assertEqual(g.get("read", {}).get("b", [""])[0], "2 parks for the maintainer and 1 park by a fault. 1 crashed session in 1 step. "
                          "1 step still open. A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; "
                          "the fix rounds, the crashes and how a step ended come from the driver's run log.")
@@ -990,10 +1078,89 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(ch.get("rw"), [1])
         self.assertEqual(ch.get("un"), {"P02": dict(kind="due", when="Day 2"), "P03": dict(kind="standing", when=""), "P04": dict(kind="later", when="Day 3")})
 
+    def test_graph_12_gives_the_added_commitments_their_section_labels(self):
+        g = model(data(plan=self.PLAN, criteria_index=self.CRIT))["g12"]
+        self.assertEqual([(s.get("label"), s.get("from"), s.get("to")) for s in g.get("added_sections", [])], [("B", 4, 4)])
+
+    def test_graph_12_marks_a_commitment_owned_by_a_later_day_as_later_and_one_no_day_owns_as_neither(self):
+        # P04 is owned by Day 3, after the last closed Day (2), and no criterion names it; P05 has no owner Day.
+        plan = dict(self.PLAN, commitments=self.PLAN["commitments"] + [dict(id="P05", short="Owned", section="B", owner_day=None, rule=False, change=None, text="Unowned.")])
+        un = model(data(plan=plan, criteria_index=self.CRIT))["g12"]["chart"]["un"]
+        self.assertEqual((un.get("P04"), "P05" in un), (dict(kind="later", when="Day 3"), False))
+
     def test_graph_12_without_a_promise_file_says_so_under_not_measured(self):
         got = model(data(criteria_index=self.CRIT))
         self.assertIn(["Whether the specs follow the plan", got["g12"].get("empty")], got.get("notMeasured", []))
         self.assertIsNotNone(got["g12"].get("empty"))
+
+
+def texts(t):
+    """Every string a drawn node holds, its own text and its children's, in order."""
+    if isinstance(t, str):
+        return [t]
+    return ([t["text"]] if t.get("text") else []) + [s for k in t["kids"] for s in texts(k)]
+
+
+def lane(date, name):
+    """The lane of graph 10's date named `name`, or an empty one, so a missing lane fails the test by its assertion."""
+    return next((x for x in date.get("lanes", []) if x.get("name") == name), {})
+
+
+def nodes(t):
+    """Every drawn node under t, t first."""
+    if isinstance(t, dict):
+        yield t
+        for k in t["kids"]:
+            yield from nodes(k)
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node to draw the page's plan bar")
+class DrawTest(unittest.TestCase):
+    """What graph 12's bar draws, read from the nodes planBar() puts in its box."""
+
+    # Eight commitments under one long section (40 px wide), one under a short one (5 px), and six added later (30 px).
+    PLAN = dict(reference="x", quotes=0, unlined=[], rewrites=[], said={}, links={}, commitments=[
+        *[dict(id=f"P0{i}", short=f"P{i}", section="A long section name that cannot fit", owner_day=None, rule=False, change=None, text="t.")
+          for i in range(1, 9)],
+        dict(id="P09", short="Late", section="Narrow", owner_day=3, rule=False, change=None, text="t."),
+        *[dict(id=f"N0{i}", short=f"N{i}", section="Later", owner_day=None, rule=False, change=None, text="t.") for i in range(1, 7)]])
+
+    def box(self):
+        return node(PLAN_BAR, data(plan=self.PLAN))
+
+    def labels(self, box):
+        """The section labels: the text nodes at the font size they are drawn at."""
+        return [n for n in nodes(box) if n["tag"] == "text" and n["attrs"].get("style") == "font-size:10.5px"]
+
+    def test_graph_12_folds_its_key_under_a_summary_after_the_show_only_chips(self):
+        kids = self.box()["kids"]
+        self.assertEqual([(k["tag"], k["attrs"].get("class")) for k in kids], [("div", "pc-chiprow"), ("details", "pc-key"), ("div", "scroll-x")])
+        key = next((k for k in kids if k["tag"] == "details"), {"kids": []})
+        self.assertIn("Key: what each colour and sign means", texts(key))
+        self.assertEqual(len([k for k in key["kids"] if isinstance(k, dict) and k["attrs"].get("class") == "pc-legend"]), 4)
+
+    def test_graph_12_draws_the_added_commitments_section_label_under_the_added_arm(self):
+        self.assertEqual([n["text"] for n in self.labels(self.box())], ["A long…", "Later"])
+
+    def test_graph_12_draws_section_labels_horizontal_truncated_with_the_full_name_in_a_title_and_none_under_24_px(self):
+        box = self.box()
+        labels = self.labels(box)
+        self.assertEqual([n["text"] for n in labels], ["A long…", "Later"])
+        self.assertEqual([[k["text"] for k in n["kids"] if isinstance(k, dict) and k["tag"] == "title"] for n in labels],
+                         [["A long section name that cannot fit"], ["Later"]])
+        self.assertEqual([n["attrs"].get("transform") for n in labels], [None, None])
+        self.assertFalse(any("Narrow" in s for s in texts(box)))
+        # Each group still has its tick: the two plan sections and the added one.
+        self.assertEqual(len([n for n in nodes(box) if n["tag"] == "line" and n["attrs"].get("stroke-width") == "0.75"]), 3)
+
+    def test_graph_12_draws_a_later_commitment_as_a_dotted_outline(self):
+        outlines = [n["attrs"]["stroke-dasharray"] for n in nodes(self.box()) if n["tag"] == "rect" and "stroke-dasharray" in n["attrs"]]
+        self.assertEqual(outlines, ["1 1.2"])
+
+    def test_graph_12_legend_names_the_later_stripe_and_keeps_the_safety_check_apart_from_no_criterion(self):
+        drawn = texts(self.box())
+        for words in ["no criterion yet, owned by a later Day", "safety check (Plan: none, a row mark)", "no criterion names it (a stripe of the bar)"]:
+            self.assertIn(words, drawn)
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node to boot the page")
@@ -1163,6 +1330,13 @@ class PageFilesTest(unittest.TestCase):
         self.assertGreaterEqual(len(colours(light)), 30)
         self.assertEqual(sorted(colours(by_os)), sorted(colours(light)))
         self.assertEqual(colours(by_os), colours(by_choice))
+
+    def test_graph_10_says_in_one_sentence_that_a_date_runs_from_05_00_to_05_00(self):
+        section = re.search(r'<section class="graph" id="g10">.*?</section>', read("index.html"), re.S).group(0)
+        self.assertIn("A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.", section)
+
+    def test_graph_12_has_a_swatch_for_a_commitment_owned_by_a_later_day(self):
+        self.assertRegex(read("dashboard.css"), r"\.pc-sw\.later \{[^}]*border")
 
     def test_the_page_needs_no_script_or_style_from_anywhere_but_its_own_two_files(self):
         html = read("index.html")

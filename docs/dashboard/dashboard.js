@@ -7,6 +7,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const shortDate = s => `${+s.slice(8, 10)} ${MONTHS[+s.slice(5, 7) - 1]}`;
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const money = n => "$" + Number(n).toFixed(2);
+const SIEVE_CAP = 24;  // the most dots a By Day cell of graph 7 draws; it counts the rest
 const comma = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const sum = (list, f) => list.reduce((a, x) => a + (Number(f ? f(x) : x) || 0), 0);
 const andList = a => a.length < 3 ? a.join(" and ") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
@@ -246,7 +247,10 @@ function model(DATA) {
     const cols = [...days.map(d => ({ day: d.day, label: String(d.day), mark: finished(d) ? "✓" : d.day === current ? "now" : "" })),
       { day: null, label: "No Day", mark: "" }];
     const colOf = s => days.some(d => d.day === s.day) ? s.day : null;
-    const rows = rowsOf.map(a => ({ key: a.key, name: a.name, role: a.role || null, cells: cols.map(c => {
+    // An ability's quality score, when quality() has one for it: the row draws it after the name, its parts in the hover.
+    const SC = (safe(quality) || {}).abilities || {};
+    const rows = rowsOf.map(a => ({ key: a.key, name: a.name, role: a.role || null, score: a.key in SC ? SC[a.key].n : null,
+      score_parts: a.key in SC ? SC[a.key].parts : null, cells: cols.map(c => {
       const prs = stories.filter(s => keyOf(s) === a.key && colOf(s) === c.day).map(s => s.number).sort((x, y) => x - y), n = prs.length;
       const b = n ? `${plural(n, "merged pull request", "merged pull requests")} grew this ability ${c.day == null
           ? "between the Days, as tooling and dashboard work, not as a Day's track" : `on Day ${c.day}`}: ${prs.map(p => "#" + p).join(", ")}.`
@@ -372,7 +376,7 @@ function model(DATA) {
         return { day: c.day, n: c.n, tiles: t, t: c.t, b: [...c.b, t.length ? `They made ${plural(t.length, "promise", "promises")}: ${tally(t)}.` : ""].filter(Boolean) };
       });
       const first = cells.findIndex(c => c.day != null && (c.n || c.tiles.length));
-      return { key: a.key, name: a.name, role: a.role || null, colour, first, cells,
+      return { key: a.key, name: a.name, role: a.role || null, score: a.score, score_parts: a.score_parts, colour, first, cells,
         ring: { proven: r ? r.proven : 0, counted: r ? r.counted : 0, t: a.name, b: [r ? r.count : plural(sum(a.cells, c => c.n), "pull request", "pull requests"), r && r.note].filter(Boolean) } };
     };
     const lines = A.rows.map((a, k) => line(a, relied.get(a.key), a.key == null ? 0 : (k % 7) + 1));
@@ -409,7 +413,7 @@ function model(DATA) {
     const b = [last.gap_full != null && band ? (last.gap_full < band[0] ? "The specs and the code share more names than chance would" : last.gap_full > band[1] ? "The specs and the code share fewer names than chance would" : "That is within what chance gives")
         + `: nineteen times in twenty, chance gives ${band[0].toFixed(1)}° to ${band[1].toFixed(1)}°.` : "",
       spec != null && code != null ? `On average a spec merge moved the dot ${signed(spec)} and a code merge ${signed(code)}.` : "",
-      withPr.length ? `${nFailed} of ${plural(withPr.length, "pull request", "pull requests")} had a check fail before ${withPr.length === 1 ? "it" : "they"} merged.` : ""].filter(Boolean);
+      withPr.length ? `${nFailed} of ${plural(withPr.length, "pull request", "pull requests")} had a check of any workflow fail before ${withPr.length === 1 ? "it" : "they"} merged.` : ""].filter(Boolean);
     const step = hi - lo > 30 ? 10 : 5, ticks = [];
     for (let t = lo + step; t < hi; t += step) ticks.push({ label: `${t}°`, y: (hi - t) / (hi - lo) });
     return { merges, bands, ticks, barTicks: [[1, "1 min"], [10, "10 min"], [top, top >= 90 ? `${Math.round(top / 60)} h` : `${Math.round(top)} min`]].map(([m, label]) => ({ label, h: barAt(m) })),
@@ -442,6 +446,10 @@ function model(DATA) {
       return { day: d.day, dots, cells: GATES.map(g => dots.filter(o => o.gate === g.key)), differ: R ? sum(R, r => r[1] - r[0]) : null, tags: R ? sum(R, r => r[1]) : null,
         note: R ? `${sum(R, r => r[1] - r[0])} of ${sum(R, r => r[1])}` : finished(d) ? "not read yet" : "read at its close" };
     });
+    // The By Day view's note: each read Day's share of tags read differently, and whether it rose or fell since the last read Day (#213, B10).
+    let prevPct = null;
+    rows.forEach(r => { if (!r.tags) return; const pct = Math.round(100 * r.differ / r.tags);
+      r.note += ` · ${pct}%${prevPct == null ? "" : pct > prevPct ? " ↑" : pct < prevPct ? " ↓" : " ="}`; prevPct = pct; });
     const all = rows.flatMap(r => r.dots), at = k => all.filter(o => o.gate === k).length, by = c => all.filter(o => o.cause === c).length;
     const gates = GATES.map(g => { const s = spent.get(g.key);
       return { name: g.name, sub: `${at(g.key)} caught` + (s ? ` · ${plural(s.runs, "run", "runs")} · ${money(s.cost)}` : g.key === "work" ? " · tracks, the session" : "") }; });
@@ -465,7 +473,7 @@ function model(DATA) {
     const notes = { "Before any code": runs(["auditor"]) && `auditors: ${runs(["auditor"])}`,
       "Writing a track, on this machine": runs(["seen red", "break on purpose"]) && `seen red and breaks: ${runs(["seen red", "break on purpose"])}`,
       [HOOKS.name]: (DATA.refusals || []).length ? `${plural(nRefused, "refusal", "refusals")}${hooks ? ` · ${money(hooks.cost)}` : ""}` : "",
-      "CI on every pull request": (DATA.verification || []).length ? `PR checks failed on ${plural(prFails, "pull request", "pull requests")}` : "",
+      "CI on every pull request": (DATA.verification || []).length ? `the PR checks workflow failed on ${plural(prFails, "pull request", "pull requests")}; graph 6 counts any workflow` : "",
       "After the merge": runs(["evidence replay"]) && `replay: ${runs(["evidence replay"])}` };
     const prs = n => plural(n, "pull request", "pull requests");
     const segment = (st, n) => ({ n, name: st.name, loop: !!st.loop, note: notes[st.name] || "", gates: st.gates.map(g => {
@@ -625,7 +633,7 @@ function model(DATA) {
           t: `${r.name} · Day ${day}: ${show(r, v.value)}` + (r.baseline != null ? `${over ? ", above" : ", within"} the baseline of ${show(r, r.baseline)}` : ""), b: [v.text || ""] };
       });
       // The cost row's count changed at Day 7 (outside work counted until then): the row says so, and graph 8's By Day view has the split.
-      return { key: r.key, name: r.name, foot: r.key === "cost" ? "Days 1 to 6 count every pull request merged since the last count, outside work included; Days 7 and 8 count the Day's own only. The two halves of the row do not compare; graph 8's By Day view has the split." : null,
+      return { key: r.key, name: r.name, foot: r.key === "cost" ? "Days 1 to 6 count every pull request merged since the last count, outside work included; from Day 7 on, each Day counts its own only. The two halves of the row do not compare; graph 8's By Day view has the split." : null,
         cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
         over: cells.filter(c => c.over).length, n: vals.length, last: vals[vals.length - 1],
         note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v),
@@ -680,9 +688,15 @@ function model(DATA) {
     const nKind = k => merges.filter(m => m.kind === k).length;
     const left = aheadOut.length ? aheadOut[aheadOut.length - 1].built - built : 0;
     const parts = [left > 0 ? plural(left, "promise", "promises") : "", ...unknown.map(u => `Day ${u.day}`)].filter(Boolean);
+    // Written and not built, and no track or close ahead builds it: a closed Day left it (Day 8's unticked box). The readout names them.
+    const gotIds = new Set(C.flatMap(c => c.got || [])), aheadIds = new Set(ahead.flatMap(a => a.ids));
+    const closedDays = new Set(days.filter(finished).map(d => d.day));
+    const never = (DATA.criteria_index || []).filter(c => c && c.id && closedDays.has(c.day) && !gotIds.has(c.id) && !aheadIds.has(c.id)).map(c => c.id);
+    const unbuilt = never.length;
     const tracks = P ? (P.tracks || []) : [];
     const b = [P ? (tracks.length ? `Day ${P.day} has ${plural(tracks.length, "track left", "tracks left")} (${tracks.map(t => `${t.track}: ${(t.ids || []).length}`).join(", ")}) and its close.`
         : `Day ${P.day} has only its close left.`) : "",
+      unbuilt ? `${plural(unbuilt, "promise", "promises")} written on a closed Day ${unbuilt === 1 ? "was" : "were"} never built, and nothing ahead builds ${unbuilt === 1 ? "it" : "them"} (${never.join(", ")}).` : "",
       ...unknown.map(u => `Day ${u.day} has no spec, so its size cannot be drawn.` + (u.waits ? ` ${plural(u.waits, "numbered hand-off waits", "numbered hand-offs wait")} for it (${u.ids.join(", ")}).` : "")),
       stop != null ? `After Day ${stop} the plan stops for the maintainer. What comes after is not specified, so the graph ends there and gives no percentage of the whole plan.` : ""].filter(Boolean);
     // The ladder starts at the project's own count when the driver's count holds steps; Level 2 is drawn when its count is in.
@@ -709,7 +723,8 @@ function model(DATA) {
       say: `One column per merge, ${merges.length} in all, oldest on the left. The dot is the number of promises built once that merge landed; the dashed line above it is the number written. The bar under it is the numbered hand-offs still open. Right of today, the outlined dots are tracks that are specified and not merged. The first column is the first commit, before any pull request.`,
       ladder,
       read: !C.length ? { t: "Nothing is merged yet", b: [] }
-        : { t: `${built} of ${written} promises built` + (parts.length ? ` · ${andList(parts)}${stop != null ? " before the stop" : " still to come"}` : ""), b },
+        : { t: `${built} of ${written} promises built` + (parts.length ? ` · ${andList(parts)}${stop != null ? " before the stop" : " still to come"}` : "")
+          + (unbuilt ? ` · ${unbuilt} never built` : ""), b },
       table: { head: ["Merge", "Kind", "Day", "Built", "Written", "Hand-offs open"],
         rows: [...merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.built, m.written, m.open]),
           ...aheadOut.map(a => [a.close ? "close" : `track ${a.label}`, "not merged", a.day, a.built, written, ""])] } };
@@ -733,7 +748,7 @@ function model(DATA) {
 
   // Graph 10: one date on the clock. The sessions (sessions.json on the dashboard-data branch) are stamped with the offset of the
   // machine that recorded them, so the clock is the maintainer's and not the reader's; GitHub's times are UTC and
-  // are moved to that offset. A stretch that crosses midnight is clipped to each date it touches.
+  // are moved to that offset. A stretch that crosses 05:00, where a date ends, is clipped to each date it touches.
   const LANES = [["main", "Main session"], ["implementer", "Implementer"], ["auditors", "Auditors"], ["other", "Other subagents"]];
   const laneOf = a => a === "main" || a === "implementer" ? a : /-auditor$|^defect-rater$/.test(a) ? "auditors" : "other";
   const offsetOf = s => { const m = /(Z|[+-]\d\d:\d\d)$/.exec(s || ""); return !m || m[1] === "Z" ? 0 : (m[1][0] === "-" ? -1 : 1) * (+m[1].slice(1, 3) * 60 + +m[1].slice(4, 6)); };
@@ -742,7 +757,7 @@ function model(DATA) {
   // What a session waited on inside a busy stretch (scripts/token-usage.py's RUN_KINDS): its key, its legend and its words in a sentence.
   const RUNS = [["tests", "waiting on tests", "tests"], ["checks", "waiting on GitHub's checks", "GitHub's checks"], ["other", "waiting on another command", "other commands"]];
   function clockGraph() {
-    const C = DATA.clock || {}, S = (C.sessions || []).filter(s => s.from && s.to), PRS = (C.prs || []).filter(p => p.opened && p.merged);
+    const C = DATA.clock || {}, S = (C.sessions || []).filter(s => s.from && s.to), PRS = (C.prs || []).filter(p => p.opened);
     const none = { head: ["Lane", "What", "From", "To", "Minutes"], rows: [] };
     // The driver's runs: the sessions it started, the merges it saw and its parks. Its times are UTC and are moved to the
     // sessions' clock like the pull requests' are; a park's step is the one whose park names its issue, for its Day.
@@ -755,14 +770,24 @@ function model(DATA) {
     S.forEach(s => counts.set(offsetOf(s.from), (counts.get(offsetOf(s.from)) || 0) + 1));
     const zone = S.length ? [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0] : 0;
     const zoneText = zone ? `UTC${zone > 0 ? "+" : "−"}${hm(Math.abs(zone))}` : "UTC";
-    const dateOf = s => new Date(Date.parse(s) + zone * 60000).toISOString().slice(0, 10);
-    const midnight = date => Date.parse(`${date}T00:00:00Z`) - zone * 60000;
-    // An interval on one date, in minutes from its midnight, or null when it misses the date.
-    const clip = (date, a, b) => { const t0 = midnight(date), x = (Date.parse(a) - t0) / 60000, y = (Date.parse(b) - t0) / 60000; return y < 0 || x > 1440 || isNaN(x) || isNaN(y) ? null : [Math.max(0, x), Math.min(1440, Math.max(y, x))]; };
-    const dates = [...new Set([...S.map(s => dateOf(s.from)), ...PRS.flatMap(p => [dateOf(p.opened), dateOf(p.merged)]),
+    // A working date runs from 05:00 to 05:00 local time, so work after midnight stays on the evening it belongs to: a moment's
+    // date is the local date of the moment five hours earlier. Minutes on the clock count from the date's 05:00.
+    const dateOf = s => new Date(Date.parse(s) + (zone - 300) * 60000).toISOString().slice(0, 10);
+    const dayStart = date => Date.parse(`${date}T05:00:00Z`) - zone * 60000;
+    const wall = m => hm((m + 300) % 1440);
+    // An interval on one date, in minutes from its 05:00, or null when it misses the date.
+    const clip = (date, a, b) => { const t0 = dayStart(date), x = (Date.parse(a) - t0) / 60000, y = (Date.parse(b) - t0) / 60000; return y < 0 || x > 1440 || isNaN(x) || isNaN(y) ? null : [Math.max(0, x), Math.min(1440, Math.max(y, x))]; };
+    // A pull request not merged yet has no end: its bar runs to the date's end.
+    const OPEN_TO = "9999-12-31T23:59:59Z";
+    const dates = [...new Set([...S.map(s => dateOf(s.from)), ...PRS.flatMap(p => [p.opened, p.merged || p.closed].filter(Boolean).map(dateOf)),
       ...DSESS.map(({ x }) => dateOf(x.start)), ...DMERGES.map(s => dateOf(s.merged)), ...(DPARKS || []).flatMap(i => [i.opened, i.closed || DCOUNT]).filter(Boolean).map(dateOf)])].sort();
     const laneKeys = LANES.filter(([k]) => k !== "other" || S.some(s => laneOf(s.agent) === "other"));
-    const bar = (cls, [a, b], t, b2, day) => ({ x: a / 14.4, w: (b - a) / 14.4, cls, t, b: b2, days: day ? [day] : [], mins: b - a, from: hm(a), to: hm(Math.min(b, 1439.99)) });
+    const bar = (cls, [a, b], t, b2, day) => ({ x: a / 14.4, w: (b - a) / 14.4, cls, t, b: b2, days: day ? [day] : [], mins: b - a, from: wall(a), to: wall(b) });
+    // Bars of one lane that overlap go on sub-rows: the first row free when the bar starts, three rows at most, and the third
+    // takes the rest, so every bar stays drawn and hoverable. A wait is drawn on its session's row (stackLane).
+    const stack = bars => { const ends = []; [...bars].sort((u, v) => u.x - v.x).forEach(b => { let r = ends.findIndex(e => e <= b.x + 1e-9);
+      if (r < 0) r = Math.min(ends.length, 2); ends[r] = r < ends.length ? Math.max(ends[r], b.x + b.w) : b.x + b.w; b.row = r; }); return bars; };
+    const stackLane = (bars, waits) => { stack(bars); waits.forEach(w => { const own = bars.find(b => b.src === w.src); w.row = own ? own.row : 0; }); return [...bars, ...waits]; };
     const prKind = p => p.kind in KINDS && p.kind !== "origin" ? p.kind : "other";
     // A pull request's checks: the stretches its workflow runs were running in, so the time between two pushes is in none
     // of them. Data written before the stretches were kept has only the first start and the last end.
@@ -777,8 +802,8 @@ function model(DATA) {
     const out = dates.map(date => {
       const days = new Set(), lanes = [], busy = [], rows = [];
       // The minute of this date the sessions are counted up to: all of it, none of it, or part of it.
-      const upTo = countedMs == null ? 1440 : Math.max(0, Math.min(1440, (countedMs - midnight(date)) / 60000));
-      const unseen = upTo <= 0 ? "not counted yet" : upTo < 1440 ? `nothing recorded up to ${hm(upTo)}` : "nothing recorded";
+      const upTo = countedMs == null ? 1440 : Math.max(0, Math.min(1440, (countedMs - dayStart(date)) / 60000));
+      const unseen = upTo <= 0 ? "not counted yet" : upTo < 1440 ? `nothing recorded up to ${wall(upTo)}` : "nothing recorded";
       const add = (name, bars, sub, busyFor) => { lanes.push({ name, sub, bars, busyFor }); bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([name, b.what || b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }); return bars; };
       const ran = RUNS.map(() => 0), who = s => s.agent === "main" ? "Main session" : s.agent;
       let counted = false;  // a stretch written before the waits were counted has no `ran`: the date then says nothing about them
@@ -789,43 +814,51 @@ function model(DATA) {
         // A wait of a minute or more has its own times and is cut to the date; only the rest of `ran`, the shorter waits, is shared by the part of the stretch on it.
         const bars = mine.map(({ s, c }) => { const mins = RUNS.map(([kind]) => { const long = (s.runs || []).filter(r => kindOf(r) === kind);
             return sum(long, r => { const x = clip(date, r[0], r[1]); return x ? x[1] - x[0] : 0; }) + Math.max(0, ((s.ran || {})[kind] || 0) / 60 - sum(long, whole)) * part(s, c); }), all = sum(mins);
-          return { ...bar("busy", c, `${who(s)} · busy ${hm(c[0])} to ${hm(c[1])}`, [`${plural(s.replies, "reply", "replies")}, with no gap longer than 5 minutes.`
-            + (all >= 1 ? ` ${span(all)} of it waiting on commands it ran: ${andList(RUNS.map(([, , word], i) => mins[i] >= 1 ? `${span(mins[i])} on ${word}` : "").filter(Boolean))}.` : "")], s.day), ran: mins, counted: Boolean(s.ran || s.runs) }; });
+          return { ...bar("busy", c, `${who(s)} · busy ${wall(c[0])} to ${wall(c[1])}`, [`${plural(s.replies, "reply", "replies")}, with no gap longer than 5 minutes.`
+            + (all >= 1 ? ` ${span(all)} of it waiting on commands it ran: ${andList(RUNS.map(([, , word], i) => mins[i] >= 1 ? `${span(mins[i])} on ${word}` : "").filter(Boolean))}.` : "")], s.day), ran: mins, counted: Boolean(s.ran || s.runs), src: s }; });
         const waits = mine.flatMap(({ s }) => (s.runs || []).map(([a, b, kind]) => { const c = clip(date, a, b), run = RUNS.find(r => r[0] === kind) || RUNS[2];
-          return c && { ...bar(`run ${run[0]}`, c, `${who(s)} · ${run[1]} ${hm(c[0])} to ${hm(c[1])}`, [`${span(c[1] - c[0])} inside a busy stretch: the session had run a command and was waiting for it to finish.`], s.day), what: `${who(s)}, ${run[1]}` }; }).filter(Boolean));
+          return c && { ...bar(`run ${run[0]}`, c, `${who(s)} · ${run[1]} ${wall(c[0])} to ${wall(c[1])}`, [`${span(c[1] - c[0])} inside a busy stretch: the session had run a command and was waiting for it to finish.`], s.day), what: `${who(s)}, ${run[1]}`, src: s }; }).filter(Boolean));
         busy.push(...bars);
         RUNS.forEach((_, i) => { ran[i] += sum(bars, b => b.ran[i]); });
         counted = counted || bars.some(b => b.counted);
         // Two sessions of a lane busy at once are one stretch of the clock, not two.
         const mins = covered(mine.map(x => x.c)), wait = Math.min(mins, sum(bars, b => sum(b.ran)));
-        add(name, [...bars, ...waits], bars.length ? `busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}` : unseen, bars.length ? span(mins) : "");
+        add(name, stackLane(bars, waits), bars.length ?`busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}` : unseen, bars.length ? span(mins) : "");
       });
-      const open = PRS.map(p => { const c = clip(date, p.opened, p.merged); if (!c) return null; const ch = p.checks;
-        return bar(prKind(p), c, `Pull request #${p.number} · ${p.branch} · open ${hm(c[0])} to ${hm(c[1])}`,
-          [`Open for ${span(whole([p.opened, p.merged]))} before it merged${c[0] === 0 && Date.parse(p.opened) < midnight(date) ? ", opened on an earlier date" : ""}.`,
-            ch ? `Its checks were running for ${span(sum(spansOf(ch), whole))}: ${runsSay(ch)}` : "No check is recorded for it."], p.day); }).filter(Boolean);
-      add("Pull request open", open, open.length ? `${plural(open.length, "pull request", "pull requests")}, ${span(sum(open, b => b.mins))} in all` : "none open");
+      // A pull request is drawn from its opening to its merge, to its close without a merge, or to the date's end while it is still open.
+      const open = PRS.map(p => { const c = clip(date, p.opened, p.merged || p.closed || OPEN_TO); if (!c) return null; const ch = p.checks, at = wall(c[0]), to = wall(c[1]),
+        earlier = c[0] === 0 && Date.parse(p.opened) < dayStart(date) ? ", opened on an earlier date" : "";
+        return { ...bar(prKind(p), c, `Pull request #${p.number} · ${p.branch} · ${p.merged ? `open ${at} to ${to}` : p.closed ? `closed without merging ${at} to ${to}` : `still open from ${at}`}`,
+          [p.merged ? `Open for ${span(whole([p.opened, p.merged]))} before it merged${earlier}.` : p.closed ? `Open for ${span(whole([p.opened, p.closed]))} before it was closed without merging${earlier}.`
+            : `Still open: not merged or closed yet${earlier}.`, ch ? `Its checks were running for ${span(sum(spansOf(ch), whole))}: ${runsSay(ch)}` : "No check is recorded for it."], p.day),
+          pr: p.number, state: p.merged ? "merged" : p.closed ? "closed" : "open" }; }).filter(Boolean);
+      const stillOpen = open.filter(b => b.state === "open").length, unmerged = open.filter(b => b.state === "closed").length;
+      add("Pull request open", stack(open), open.length ? `${plural(open.length, "pull request", "pull requests")}, ${span(sum(open, b => b.mins))} in all${stillOpen ? `, ${stillOpen} still open` : ""}${unmerged ? `, ${unmerged} closed without merging` : ""}` : "none open");
       const checks = PRS.flatMap(p => !p.checks ? [] : spansOf(p.checks).map(([a, b, failed]) => { const c = clip(date, a, b);
-        return c && { ...bar(failed ? "failed" : "ok", c, `Checks on pull request #${p.number} · ${hm(c[0])} to ${hm(c[1])}`, [`On this pull request in all: ${runsSay(p.checks)}`], p.day), pr: p.number }; }).filter(Boolean));
+        return c && { ...bar(failed ? "failed" : "ok", c, `Checks on pull request #${p.number} · ${wall(c[0])} to ${wall(c[1])}`, [`On this pull request in all: ${runsSay(p.checks)}`], p.day), pr: p.number }; }).filter(Boolean));
       busy.push(...checks);
       const checked = new Set(checks.map(b => b.pr)), red = new Set(checks.filter(b => b.cls === "failed").map(b => b.pr));
-      add("Checks running", checks, checks.length ? `on ${plural(checked.size, "pull request", "pull requests")}, running for ${span(covered(checks.map(b => [b.x * 14.4, b.x * 14.4 + b.mins])))}, ${red.size} with a failure` : "none");
-      const merged = PRS.filter(p => dateOf(p.merged) === date).map(p => ({ p, wait: (Date.parse(p.merged) - Date.parse(p.opened)) / 60000 }));
-      const merges = merged.map(({ p, wait }) => { const at = (Date.parse(p.merged) - midnight(date)) / 60000; return bar("merge", [at, at], `Merged pull request #${p.number} · at ${hm(at)}`, [`The maintainer merged it ${span(wait)} after it opened.`], p.day); });
+      // The date's pull requests with no check run on it are named, so a reader does not take the lane for all of them.
+      const unchecked = open.map(b => b.pr).filter(n => !checked.has(n));
+      add("Checks running", stack(checks), checks.length ? `on ${plural(checked.size, "pull request", "pull requests")}, running for ${span(covered(checks.map(b => [b.x * 14.4, b.x * 14.4 + b.mins])))}, ${red.size} with a failure${unchecked.length ? `; none on ${unchecked.map(n => `#${n}`).join(", ")}` : ""}` : "none");
+      const merged = PRS.filter(p => p.merged && dateOf(p.merged) === date).map(p => ({ p, wait: (Date.parse(p.merged) - Date.parse(p.opened)) / 60000 }));
+      const merges = merged.map(({ p, wait }) => { const at = (Date.parse(p.merged) - dayStart(date)) / 60000; return bar("merge", [at, at], `Merged pull request #${p.number} · at ${wall(at)}`, [`The maintainer merged it ${span(wait)} after it opened.`], p.day); });
       add("Maintainer merges", merges, plural(merges.length, "merge", "merges"));
       // The driver's lanes come first and are not busy time: a mark for each session it started, each merge it saw and each
       // crashed session (the run log does not say when it was on or off, so no lane shows that), and its parks as bars.
-      const minuteOf = t => (Date.parse(t) - midnight(date)) / 60000, sessionsOn = DSESS.filter(({ x }) => dateOf(x.start) === date);
-      const acts = [...sessionsOn.map(({ x, s }) => bar("act", [minuteOf(x.start), minuteOf(x.start)], `The driver started a session · ${hm(minuteOf(x.start))}`, [s.step], s.day)),
-        ...DMERGES.filter(s => dateOf(s.merged) === date).map(s => bar("act", [minuteOf(s.merged), minuteOf(s.merged)], `The driver saw pull request ${s.pr != null ? `#${s.pr}` : "a pull request"} merged · ${hm(minuteOf(s.merged))}`, [s.step], s.day))];
-      const crashes = sessionsOn.filter(({ x }) => x.crashed).map(({ x, s }) => bar("crash", [minuteOf(x.start), minuteOf(x.start)], `A session crashed · started ${hm(minuteOf(x.start))}`, ["The run log has no end for it."], s.day));
+      const minuteOf = t => (Date.parse(t) - dayStart(date)) / 60000, sessionsOn = DSESS.filter(({ x }) => dateOf(x.start) === date);
+      const acts = [...sessionsOn.map(({ x, s }) => bar("act", [minuteOf(x.start), minuteOf(x.start)], `The driver started a session · ${wall(minuteOf(x.start))}`, [s.step], s.day)),
+        ...DMERGES.filter(s => dateOf(s.merged) === date).map(s => bar("act", [minuteOf(s.merged), minuteOf(s.merged)], `The driver saw pull request ${s.pr != null ? `#${s.pr}` : "a pull request"} merged · ${wall(minuteOf(s.merged))}`, [s.step], s.day))];
+      const crashes = sessionsOn.filter(({ x }) => x.crashed).map(({ x, s }) => bar("crash", [minuteOf(x.start), minuteOf(x.start)], `A session crashed · started ${wall(minuteOf(x.start))}`, ["The run log has no end for it."], s.day));
       const parks = (DPARKS || []).map(i => { const end = i.closed || DCOUNT, c = end ? clip(date, i.opened, end) : null;
-        return c && bar("park", c, `Parked · ${hm(c[0])} to ${hm(c[1])}`, [i.closed ? `Waited ${span((Date.parse(i.closed) - Date.parse(i.opened)) / 60000)}: ${i.title}` : `Still waiting at the count: ${i.title}`], (stepOfPark(i) || {}).day); }).filter(Boolean);
-      const drv = DSTEPS ? [{ name: "Driver", sub: acts.length || crashes.length ? `${plural(acts.length, "act", "acts")}, ${plural(crashes.length, "crashed session", "crashed sessions")}` : unseen, bars: [...acts, ...crashes] },
-        { name: "Parked for the maintainer", sub: !DPARKS ? "the parked issues could not be read" : parks.length ? `${plural(parks.length, "park", "parks")}, ${span(sum(parks, b => b.mins))} in all` : "none", bars: parks }] : [];
+        return c && bar("park", c, `Parked · ${wall(c[0])} to ${wall(c[1])}`, [i.closed ? `Waited ${span((Date.parse(i.closed) - Date.parse(i.opened)) / 60000)}: ${i.title}` : `Still waiting at the count: ${i.title}`], (stepOfPark(i) || {}).day); }).filter(Boolean);
+      // A date with no driver step and no park has neither lane: the readout says so instead. A missing park list keeps its lane.
+      const quiet = DSTEPS && DPARKS && !acts.length && !crashes.length && !parks.length;
+      const drv = DSTEPS && !quiet ? [{ name: "Driver", sub: acts.length || crashes.length ? `${plural(acts.length, "act", "acts")}, ${plural(crashes.length, "crashed session", "crashed sessions")}` : unseen, bars: [...acts, ...crashes] },
+        { name: "Parked for the maintainer", sub: !DPARKS ? "the parked issues could not be read" : parks.length ? `${plural(parks.length, "park", "parks")}, ${span(sum(parks, b => b.mins))} in all` : "none", bars: stack(parks) }] : [];
       drv.forEach(l => l.bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([l.name, b.what || b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }));
       lanes.unshift(...drv);
-      const driverSay = DSTEPS && (sessionsOn.length || parks.length) ? `The driver started ${plural(sessionsOn.length, "session", "sessions")} and waited ${parks.length ? `${span(sum(parks, b => b.mins))} on ${plural(parks.length, "park", "parks")}` : "on no park"}.` : "";
+      const driverSay = quiet ? "The driver started no step and nothing was parked on this date." : DSTEPS && (sessionsOn.length || parks.length) ? `The driver started ${plural(sessionsOn.length, "session", "sessions")} and waited ${parks.length ? `${span(sum(parks, b => b.mins))} on ${plural(parks.length, "park", "parks")}` : "on no park"}.` : "";
       // What the date says as a whole: the merges and the typical wait, who was busy how long, the longest stretch with nothing running, the longest waits.
       const waits = merged.map(m => m.wait).sort((a, b) => a - b), median = waits.length ? waits[Math.floor((waits.length - 1) / 2)] : null;
       const was = lanes.filter(l => l.busyFor).map((l, i) => `${i ? "the " : "The "}${lower(l.name)} ${i ? "" : "was busy "}for ${l.busyFor}`);
@@ -835,13 +868,13 @@ function model(DATA) {
       const longest = merged.sort((a, b) => b.wait - a.wait).slice(0, 3);
       const read = { t: `${shortDate(date)}: ${plural(merged.length, "pull request", "pull requests")} merged${median != null ? `, half of them open for ${span(median)} or less` : ""}`,
         b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : upTo <= 0 ? `The sessions of this date are not counted yet: the count ends at ${countedSay}.` : "No session was recorded on this date.", was.length ? waited : "", driverSay,
-          upTo > 0 && upTo < 1440 ? `The sessions are counted up to ${hm(upTo)}: after that, only GitHub's pull requests and checks are in.` : "",
-          idle.gap >= 60 ? `Nothing ran from ${hm(idle.from)} to ${hm(idle.to)}.` : "", longest.length ? `The longest ${longest.length === 1 ? "wait" : "waits"} for a merge: ${andList(longest.map(m => `#${m.p.number} (${span(m.wait)})`))}.` : "",
+          upTo > 0 && upTo < 1440 ? `The sessions are counted up to ${wall(upTo)}: after that, only GitHub's pull requests and checks are in.` : "",
+          idle.gap >= 60 ? `Nothing ran from ${wall(idle.from)} to ${wall(idle.to)}.` : "", longest.length ? `The longest ${longest.length === 1 ? "wait" : "waits"} for a merge: ${andList(longest.map(m => `#${m.p.number} (${span(m.wait)})`))}.` : "",
           `Times are on the clock of the machine that recorded the sessions (${zoneText}).`].filter(Boolean) };
       return { date, label: shortDate(date), days: [...days].sort((a, b) => a - b), lanes, read, table: { head: none.head, rows } };
     });
     const at = out.length - 1;
-    return { dates: out, at, zone: zoneText, runs: RUNS.map(([k, text]) => [k, text]), hours: [0, 3, 6, 9, 12, 15, 18, 21].map(hh => ({ t: hm(hh * 60), x: hh * 60 / 14.4 })), read: out[at].read, table: out[at].table, driver: DSTEPS !== null };
+    return { dates: out, at, zone: zoneText, runs: RUNS.map(([k, text]) => [k, text]), hours: [6, 9, 12, 15, 18, 21, 0, 3].map(hh => ({ t: hm(hh * 60), x: ((hh * 60 - 300 + 1440) % 1440) / 14.4 })), read: out[at].read, table: out[at].table, driver: DSTEPS !== null };
   }
 
   // Graph 11: each step the driver started, one dot, placed by how it ended. A park's wait is its issue's opened to closed;
@@ -887,7 +920,7 @@ function model(DATA) {
     const ps = all.flatMap(s => s.parks || []), maint = ps.filter(p => p.by !== "fault").length, fault = ps.length - maint;
     const crashes = sum(all, s => s.crashes), crashed = all.filter(s => s.crashes > 0).length;
     const read = { t: !steps ? "No step of the driver is counted yet" : !steps.length ? "The driver has started no step yet" : !ended ? "No step has ended yet"
-        : `${plural(ended, "step", "steps")}, ${alone} of them with no person`,
+        : `${plural(ended, "step", "steps")} ended, ${alone} of them with no person${open ? `; ${open} more still open` : ""}`,
       b: !steps || !steps.length ? [] : [[ps.length ? `${plural(maint, "park", "parks")} for the maintainer and ${plural(fault, "park", "parks")} by a fault.` : "No park yet.",
         crashes ? `${plural(crashes, "crashed session", "crashed sessions")} in ${plural(crashed, "step", "steps")}.` : "No session crashed.",
         open ? `${plural(open, "step", "steps")} still open.` : "",
@@ -968,7 +1001,7 @@ function model(DATA) {
       rw: [...after].map(a => dayList.findIndex(d => d > a)).filter(i => i > 0).sort((a, b) => a - b), un };
     return { chart, say:`One stripe per commitment of \`plan.md\`, in the plan's order, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
       all, arms: [["p", `The plan as approved · ${P0.length}`], ["n", `Added later · ${N0.length}`], ["o", `Criteria no commitment asks for · ${off.length}`]].filter(([a]) => all.some(c => c.arm === a)),
-      sections: groups("p"), rows, filters, quotes, read, ladder,
+      sections: groups("p"), added_sections: groups("n"), rows, filters, quotes, read, ladder,
       table: { head: ["Commitment", "Section", "Owner Day", "Criteria", "Days", "State"],
         rows: cols.map(c => [c.t, c.section, c.rule ? "rule about people" : PL.commitments[at.get(c.key)].owner_day ?? "", c.n, c.days.sort((a, b) => a - b).join(", "), c.b[0].split(" · ").pop().replace(/\.$/, "")]) } };
   }
@@ -989,7 +1022,7 @@ function model(DATA) {
     if (!S || !S.all) return null;
     const view = (x, label) => x && { label, n: Math.round(x.score),
       parts: x.parts.map(p => ({ key: p.key, name: p.name, graph: p.graph, n: Math.round(p.pct), low: p.key === x.low })),
-      rows: x.parts.flatMap(p => p.counts.map(c => [p.name, c.name, c.m ? `${c.n} of ${c.m}` : c.note, Math.round(c.pct)])) };
+      rows: x.parts.flatMap(p => p.counts.map(c => [p.name, c.name, c.m ? `${c.n} of ${c.m}${c.note ? `, ${c.note}` : ""}` : c.note, Math.round(c.pct)])) };
     return { all: view(S.all, "the finished Days"),
       days: Object.fromEntries(Object.entries(S.days || {}).map(([d, x]) => [d, view(x, `Day ${d}`)])),
       abilities: Object.fromEntries(Object.entries(S.abilities || {}).filter(([, x]) => x)
@@ -1236,8 +1269,11 @@ function planBar(m, box, tip, panel, forDays, resets) {
       if (s.arm === "ref") { fill = s.n ? "var(--ink)" : k === "due" ? "url(#g12-due)" : k === "standing" ? "url(#g12-st)" : "var(--card)"; op = s.n ? .14 + .86 * Math.sqrt(s.n / maxN) : 1; }
       else if (k === "due" || k === "standing") fill = `url(#g12-${k === "due" ? "due" : "st"})`;
       else op = s.n ? Math.min(.55 + .2 * s.n, 1) : .13;
+      // A commitment no criterion names yet, owned by a later Day: white with a dotted outline, not the empty grey.
+      if (k === "later") { fill = "var(--card)"; op = 1; }
     }
     s.band = el("rect", { class: "band", x: s.x, y: CY, width: U, height: CH, fill, "fill-opacity": op, stroke: "var(--card)", "stroke-width": .6 }, null, gb[s.arm]);
+    if (s.u && s.u.kind === "later") el("rect", { x: s.x + .5, y: CY + .5, width: U - 1, height: CH - 1, fill: "none", stroke: "var(--muted)", "stroke-width": .7, "stroke-dasharray": "1 1.2" }, null, gb[s.arm]);
     const cx = s.x + U / 2;
     if (s.arm === "ref" && s.p.status === "changed") el("path", { d: `M${cx} ${CY + CH + 2} l-3 5.5 h6 z`, fill: "var(--c-out)" });
     if (s.arm === "ref" && s.p.status === "reworded") el("path", { d: `M${cx} ${CY + CH + 2.5} l-2.6 5 h5.2 z`, fill: "var(--card)", stroke: "var(--c-out)", "stroke-width": 1 });
@@ -1248,18 +1284,22 @@ function planBar(m, box, tip, panel, forDays, resets) {
     el("polygon", { points: `${ca},${CY + 5} ${cm},${cy - 2} ${cb},${CY + 5} ${cb},${CY + CH - 5} ${cm},${cy + 2} ${ca},${CY + CH - 5}`, fill: "var(--muted)" });
   }
 
-  // the plan's sections under the first arm
-  const secs = [];
-  slots.filter(s => s.arm === "ref").forEach(s => { const l = secs[secs.length - 1]; if (l && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ name: s.p.sec, x0: s.x, x1: s.x + U }); });
-  for (let i = secs.length - 1; i > 0; i--) if (secs[i].x1 - secs[i].x0 === U && secs[i - 1].x1 - secs[i - 1].x0 === U) { secs[i - 1].name += " · " + secs[i].name; secs[i - 1].x1 = secs[i].x1; secs.splice(i, 1); }
-  let lastX = -99, longest = 0; const by = CY + CH + 21, ly = by + 12;
-  secs.forEach(s => {
-    const c = (s.x0 + s.x1) / 2, lx = Math.max(c, lastX + 19); lastX = lx; longest = Math.max(longest, s.name.length);
-    el("line", { x1: s.x0 + 1, x2: s.x1 - 1, y1: by, y2: by, stroke: "var(--muted)", "stroke-width": 1.5 });
-    el("line", { x1: c, x2: lx, y1: by + 1, y2: ly - 5, stroke: "var(--muted)", "stroke-width": .75 });
-    el("text", { x: lx, y: ly, class: "faint", style: "font-size:10.5px", transform: `rotate(45 ${lx} ${ly})` }, s.name);
+  // the plan's sections under each arm: a tick per group, and a horizontal label cut to the group's width with its whole
+  // name in a title; a group narrower than 24 px gets its tick only
+  const by = CY + CH + 21, ly = by + 12, SECW = 5.6;
+  const fit = (name, w) => name.length * SECW <= w ? name : `${name.slice(0, Math.max(1, Math.floor(w / SECW) - 1))}…`;
+  ["ref", "add"].forEach(arm => {
+    const secs = [];
+    slots.filter(s => s.arm === arm).forEach(s => { const l = secs[secs.length - 1]; if (l && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ name: s.p.sec, x0: s.x, x1: s.x + U }); });
+    for (let i = secs.length - 1; i > 0; i--) if (secs[i].x1 - secs[i].x0 === U && secs[i - 1].x1 - secs[i - 1].x0 === U) { secs[i - 1].name += " · " + secs[i].name; secs[i - 1].x1 = secs[i].x1; secs.splice(i, 1); }
+    secs.forEach(s => {
+      const c = (s.x0 + s.x1) / 2, w = s.x1 - s.x0;
+      el("line", { x1: s.x0 + 1, x2: s.x1 - 1, y1: by, y2: by, stroke: "var(--muted)", "stroke-width": 1.5 });
+      el("line", { x1: c, x2: c, y1: by + 1, y2: ly - 5, stroke: "var(--muted)", "stroke-width": .75 });
+      if (w >= 24) el("title", {}, s.name, el("text", { x: s.x0, y: ly, class: "faint", style: "font-size:10.5px" }, fit(s.name, w)));
+    });
   });
-  const H = Math.ceil(ly + longest * 5 * .71 + 8);
+  const H = Math.ceil(ly + 8);
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
   // what needs a look: each chip is a set of bands
@@ -1338,7 +1378,7 @@ function planBar(m, box, tip, panel, forDays, resets) {
   draw();
 }
 
-// The bar's legend, as the mockup has it: four labelled rows.
+// The bar's legend, as the mockup has it: four labelled rows, folded under a summary so the chips above stay the first thing read.
 function legendBar() {
   const sw = (cls, style) => h("i", { class: `pc-sw ${cls || ""}`, style: style || null });
   const row = (label, items) => h("div", { class: "pc-legend" }, h("span", { class: "pc-lg" }, label), items.map(([k, t]) => h("span", null, k, t)));
@@ -1346,11 +1386,11 @@ function legendBar() {
     svgEl(s, "path", { d: "M6 1.5 L10.5 9 H1.5 Z", fill: fill ? "var(--c-out)" : "none", stroke: "var(--c-out)", "stroke-width": 1.2 }); return s; };
   const dash = () => { const s = document.createElementNS(SVG_NS, "svg"); s.setAttribute("class", "pc-glyph"); s.setAttribute("viewBox", "0 0 24 10"); s.setAttribute("width", "24"); s.setAttribute("height", "10");
     svgEl(s, "line", { x1: 0, x2: 24, y1: 5, y2: 5, stroke: "var(--c-out)", "stroke-dasharray": "4 3" }); return s; };
-  return h("div", null,
-    row("The long bar", [[h("i", { class: "pc-grad" }), "one stripe per commitment: the darker, the more criteria name it"], [sw("empty"), "no criterion names it"],
-      [sw("st"), "a rule about people, which no test can check"], [sw("due"), "should be covered by now, and is not"]]),
+  return h("details", { class: "pc-key" }, h("summary", null, "Key: what each colour and sign means"),
+    row("The long bar", [[h("i", { class: "pc-grad" }), "one stripe per commitment: the darker, the more criteria name it"], [sw("empty"), "no criterion names it (a stripe of the bar)"],
+      [sw("later"), "no criterion yet, owned by a later Day"], [sw("st"), "a rule about people, which no test can check"], [sw("due"), "should be covered by now, and is not"]]),
     row("Marks in a row", [[sw("", "background:var(--c-in)"), "a criterion of this Day names a commitment of the original plan"], [sw("", "background:var(--c-out)"), "names one added later"],
-      [sw("", "background:var(--c-unpl)"), "new work, Plan: none"], [sw("", "background:var(--c-guard);border:1px solid var(--muted)"), "safety check, Plan: none"]]),
+      [sw("", "background:var(--c-unpl)"), "new work, Plan: none"], [sw("", "background:var(--c-guard);border:1px solid var(--muted)"), "safety check (Plan: none, a row mark)"]]),
     row("Signs under the bar", [[tri(true), "the plan later rewrote this commitment"], [tri(false), "reworded only, same meaning"]]),
     row("Dashed line", [[dash(), "the plan was rewritten between these two Days"]]));
 }
@@ -1569,7 +1609,8 @@ function draw(M, DATA) {
       m.ahead.map(a => forDays(mark(h("button", { type: "button", class: "g1-col ahead" }, h("span", { class: "pt todo", style: `top:${px(a.yb * TOP)}` }),
         h("span", { class: "g1-under" }, a.close ? "✓" : a.label)), a), [a.day])));
     const lines = [...m.ticks.map(t => t.y * TOP), TOP, ...m.barTicks.map(t => ALL - t.h * 60), ALL].map((y, i, a) => h("div", { class: `g1-line${y === TOP || i === a.length - 1 ? " strong" : ""}`, style: `top:${px(y)}` }));
-    const today = h("div", { class: "g1-today", style: `left:${(100 * n / cols).toFixed(2)}%` }, h("span", null, "today"));
+    // Near the right edge the label goes left of the dashed line, where it has room (#213, B13).
+    const today = h("div", { class: `g1-today${n / cols > 0.85 ? " end" : ""}`, style: `left:${(100 * n / cols).toFixed(2)}%` }, h("span", null, "today"));
     const area = h("div", { class: "g1-area" }, lines, svg, colsEl, today);
     const after = h("div", { class: "g1-after" },
       m.unknown.map(u => forDays(mark(h("button", { type: "button", class: "g1-unknown" }, h("strong", null, `Day ${u.day}`), h("span", null, "no spec yet"),
@@ -1607,7 +1648,8 @@ function draw(M, DATA) {
     };
     const row = a => {
       const colour = a.colour ? `var(--l${a.colour})` : "var(--axis)";
-      const kids = [h("div", { class: "map-name" }, h("i", { class: "map-badge", style: `background:${colour}` }), a.name)];
+      const kids = [h("div", { class: "map-name" }, h("i", { class: "map-badge", style: `background:${colour}` }), a.name,
+        a.score != null && h("span", { class: "map-score", title: a.score_parts }, `score ${a.score}`))];
       a.cells.forEach((c, i) => {
         const size = 2 * (5 + Math.sqrt(c.n) * 1.7);
         const cell = h("div", { class: "map-cell", style: `grid-column:${i + 2}` },
@@ -1707,11 +1749,15 @@ function draw(M, DATA) {
       h("div", { class: "sieve-row head" }, h("div", { class: "sieve-day" }), h("div", { class: "sieve-gates" }, m.gates.map(g => h("div", { class: "sieve-gate" }, h("strong", null, g.name), h("span", null, g.sub)))),
         h("div", { class: "sieve-note" }, "Tags a second reader gave differently")),
       m.rows.map(r => forDays(h("div", { class: "sieve-row" }, h("div", { class: "sieve-day" }, `Day ${r.day}`),
-        h("div", { class: "sieve-gates" }, r.cells.map(list => h("div", { class: "sieve-cell" }, list.map(o => mark(h("button", { type: "button", class: `dot ${o.cause}${o.escaped ? " square" : ""}${o.back ? " ring" : ""}` }), o))))),
+        h("div", { class: "sieve-gates" }, r.cells.map(list => h("div", { class: "sieve-cell" }, list.slice(0, SIEVE_CAP).map(o => mark(h("button", { type: "button", class: `dot ${o.cause}${o.escaped ? " square" : ""}${o.back ? " ring" : ""}` }), o)),
+          list.length > SIEVE_CAP ? h("span", { class: "sieve-more" }, `+${list.length - SIEVE_CAP}`) : null))),
         h("div", { class: "sieve-note mono" }, r.note)), [r.day])));
     // The same dots one row per Day: the only view that sets the Days side by side, to see whether catches move earlier.
+    // Its own key, since it is read opened alone; a cell shows SIEVE_CAP dots and counts the rest, so one busy Day keeps its row's height.
+    const sieveKey = h("div", { class: "legend sieve-key" }, m.key.map(k => h("span", null, h("i", { class: k.cls }), k.text)),
+      h("span", null, `A cell shows at most ${SIEVE_CAP} dots; "+N" counts the rest. The share on the right: tags a blind reader gave differently, and ↑ or ↓ against the Day read before.`));
     put("g7-plot", pipeline);
-    put("g7-days", h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), h("div", { class: "scroll-x" }, sieve)));
+    put("g7-days", h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), sieveKey, h("div", { class: "scroll-x" }, sieve)));
   });
 
   /* Graphs 8 and 9: stacked bars over a shared baseline, with rows of counts under them */
@@ -1797,8 +1843,9 @@ function draw(M, DATA) {
       dates.forEach((c, j) => c.setAttribute("aria-pressed", j === i ? "true" : "false"));
       put("g10-plot", h("div", { class: "clock" },
         h("div", { class: "lane head" }, h("div", { class: "lane-name" }, m.zone), h("div", { class: "lane-bars" }, m.hours.map(x => h("span", { class: "hour", style: `left:${x.x.toFixed(2)}%` }, x.t)))),
-        d.lanes.map(l => h("div", { class: "lane" }, h("div", { class: "lane-name" }, h("strong", null, l.name), h("span", null, l.sub)),
-          h("div", { class: "lane-bars" }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `lane-bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%` }), b), b.days)))))));
+        d.lanes.map(l => { const rows = Math.max(1, ...l.bars.map(b => (b.row || 0) + 1));
+          return h("div", { class: "lane" }, h("div", { class: "lane-name" }, h("strong", null, l.name), h("span", null, l.sub)),
+            h("div", { class: "lane-bars", style: rows > 1 ? `height:${26 + 20 * (rows - 1)}px` : null }, l.bars.map(b => forDays(mark(h("button", { type: "button", class: `lane-bar ${b.cls}`, style: `left:${b.x.toFixed(2)}%;width:${b.w.toFixed(2)}%${b.row ? `;top:${4 + 20 * b.row}px` : ""}` }), b), b.days)))); })));
       table("g10-table", d.table);
       mark.base(d.read);
       relight();
