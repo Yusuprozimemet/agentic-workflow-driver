@@ -31,7 +31,9 @@ that changes behaviour in force without a `Replaces:` line is a finding.
    break cannot run here, and why.
 3. **Checks that check nothing:** a grep for something that is already absent, a test pattern
    that selects no tests, a command that stops before it reaches the tests, a criterion that
-   ticks itself.
+   ticks itself. And a criterion that only checks a document holds a sentence, or a page's
+   structure, when the `Plan:` commitment it serves is about behaviour: it proves the wording,
+   not the intent, and still counts as done (#212, S4). Say what run of the behaviour would check it.
 4. **Every factual claim:** counts ("today it finds two"), names, paths, file:line references,
    statuses, the number of call sites. Count them yourself and give the command.
 5. **What reading cannot settle,** settle by trying: a scratch test you delete, a throwaway

@@ -11,6 +11,60 @@ Spec-driven development. **No code without a spec. No spec without checkable acc
 4. Copy the acceptance criteria into the PR description and tick them.
 5. The day is done when every box is ticked and **Verify** passes on `main`.
 
+## Before the audit: the writer's self-check
+
+The auditors caught about the same number of spec defects every Day (Days 9 to 12: 20, 10, 18,
+24), each fixed one by one and never given back to the writer (#212, S4). These are the kinds that
+recurred among those 72, counted from the Defect lines on 2026-11-16, most frequent first. Before
+asking for the spec-auditor, go through the spec once per line and fix what it finds; say in the
+spec-change PR which lines found something, so the next count can tell whether the auditor's
+catches fall.
+
+- [ ] **Cases left unsaid (13; D09.12, D11.14, D12.10, D12.21).** For each new behaviour, list its
+      edge inputs (none, already done, resumed, failing twice, a second reader) and name the
+      criterion or Out of scope line that covers each.
+- [ ] **Claims about today's code (11; D09.17, D11.2, D12.1, D12.19).** For each statement of what
+      the code does, uses or calls today, grep for it and cite the file and line.
+- [ ] **The outside assumed (7; D09.6, D09.18, D10.11, D12.16).** For every behaviour of `claude`,
+      `gh`, `git`, argparse or Docker the spec relies on, quote it from a run or its source in an
+      `Assumed` line.
+- [ ] **Tag or Red today wrong (7; D10.6, D11.9, D11.10, D12.5).** Run each `new` criterion's
+      test against `main` as its track will start it, and paste what it reports as Red today.
+- [ ] **A check that cannot fail (7; D11.7, D11.13, D12.4, D12.18).** For each criterion, say which
+      test fails under its named break, and why it cannot pass with the break in. A criterion
+      whose commitment is about behaviour is checked by running the behaviour, not by finding its
+      sentence in a document (#212, S4).
+- [ ] **Collisions (7; D10.4, D11.5, D12.2, D12.14).** Grep the tests, fakes, frozen files and break
+      manifests for every name, key, line prefix and find the change adds or edits.
+- [ ] **Output with no source (6; D09.3, D11.3, D11.4, D12.9).** For each value a criterion's
+      output names, name the function and line that produces it.
+- [ ] **Wrong cross-references (6; D10.3, D11.1, D11.18, D12.24).** Run `behaviour-index.py` and
+      `plan-links.py`, and re-read each cited criterion, hand-off or Note at its source.
+- [ ] **What reading cannot settle.** A Day whose behaviour needs Docker, a real `claude -p` or
+      GitHub (Day 10: the spec-auditor caught 42%, four spec-change PRs) plans those live checks
+      into Track 0, so the environment's surprises show up first.
+
+## Reviewing a track's diff
+
+The main session's review of the implementer's diff caught 7 defects in 12 Days; 48 others whose
+cause was the code were caught later, by a break (16), the implementer itself (9), a test seen red
+(3), the close or an escape (#212, S5; counted 2026-11-16). Ask these of every track's diff
+before running the breaks, most frequent first, and record what the review catches as
+`found: review`:
+
+- [ ] **Timing (10; D10.18, D11.29, D12.35, D12.39).** Does a new or touched test depend on a poll,
+      a sleep, an exit code read too early or a wall-clock bound? It passes 10 of 10 under
+      `test-parallel.py --repeat 10` in a full run.
+- [ ] **Red for another reason (9; D05.7, D07.29, D10.14, D10.22).** On `main`'s code, does each new
+      test fail by an assertion, for the reason the spec gives, and not by an error in setup?
+- [ ] **A branch no test sees (8; D05.3, D06.6, D07.28, D12.38).** For each branch the diff adds,
+      which assertion fails if it is deleted or short-circuited?
+- [ ] **A report that differs between runs (7; D04.10, D05.8, D10.15, D12.32).** Could any failure
+      message hold a uuid, pid, hash, absolute path, path separator or set order?
+- [ ] **Collisions (3; D09.25, D09.28, D11.28).** Are changed signatures, new module names and
+      edited expressions grepped against their callers and every Day's break finds?
+      `brief-check.py` names the callers a brief misses.
+
 ## Size of change
 
 Take the lowest rung that qualifies, and say which in the PR.
