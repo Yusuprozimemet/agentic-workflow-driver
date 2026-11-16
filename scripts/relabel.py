@@ -87,7 +87,10 @@ def blind(paths, out):
     json.dump(rows, open(os.path.join(out, "key.json"), "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     with open(os.path.join(out, "blind.md"), "w", encoding="utf-8") as f:
         for r in rows:
-            f.write(f"### {r['id']} (Day {r['day']})\n{r['text']}\n\n")
+            # The ID's day, not the earlier line's tags: what the writer knew, and the rater did not.
+            again = re.match(r"D(\d+)\.", r["same-as"])
+            repeat = f"It repeats a defect recorded on Day {int(again.group(1))}.\n" if again else ""
+            f.write(f"### {r['id']} (Day {r['day']})\n{r['text']}\n{repeat}\n")
     return rows
 
 
