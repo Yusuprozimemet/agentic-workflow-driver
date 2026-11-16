@@ -521,8 +521,8 @@ footer { font-size: 12.5px; color: var(--muted); }
 .how-two > div { display: grid; gap: 3px; align-content: start; min-width: 0; }
 .how-two b { font-weight: 600; }
 .how-two p { font-size: 14px; color: var(--ink-2); }
-.how-rows { display: grid; border-top: 1px solid var(--line); margin-top: 8px; }
-.how-row { all: unset; box-sizing: border-box; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 20px; padding: 11px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.how-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; border-top: 1px solid var(--line); margin-top: 8px; }
+.how-row { all: unset; box-sizing: border-box; text-align: left; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: 4px 20px; padding: 11px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .how-row:hover { background: var(--wash); }
 .how-row strong { font-weight: 600; }
 .how-row span { color: var(--ink-2); font-size: 14px; }

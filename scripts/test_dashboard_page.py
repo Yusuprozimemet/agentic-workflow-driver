@@ -1140,12 +1140,12 @@ class DrawTest(unittest.TestCase):
         self.assertEqual(len([k for k in key["kids"] if isinstance(k, dict) and k["attrs"].get("class") == "pc-legend"]), 4)
 
     def test_graph_12_draws_the_added_commitments_section_label_under_the_added_arm(self):
-        self.assertEqual([n["text"] for n in self.labels(self.box())], ["A long…", "Later"])
+        self.assertEqual([n["text"] for n in self.labels(self.box())], ["A lon…", "Lat…"])  # 5 px kept between labels
 
     def test_graph_12_draws_section_labels_horizontal_truncated_with_the_full_name_in_a_title_and_none_under_24_px(self):
         box = self.box()
         labels = self.labels(box)
-        self.assertEqual([n["text"] for n in labels], ["A long…", "Later"])
+        self.assertEqual([n["text"] for n in labels], ["A lon…", "Lat…"])  # 5 px kept between labels
         self.assertEqual([[k["text"] for k in n["kids"] if isinstance(k, dict) and k["tag"] == "title"] for n in labels],
                          [["A long section name that cannot fit"], ["Later"]])
         self.assertEqual([n["attrs"].get("transform") for n in labels], [None, None])

@@ -1286,8 +1286,8 @@ function planBar(m, box, tip, panel, forDays, resets) {
 
   // the plan's sections under each arm: a tick per group, and a horizontal label cut to the group's width with its whole
   // name in a title; a group narrower than 24 px gets its tick only
-  const by = CY + CH + 21, ly = by + 12, SECW = 5.6;
-  const fit = (name, w) => name.length * SECW <= w ? name : `${name.slice(0, Math.max(1, Math.floor(w / SECW) - 1))}…`;
+  const by = CY + CH + 21, ly = by + 12, SECW = 5.8;  // a 10.5 px label's letter, a little over its average; fit() keeps 5 px between labels
+  const fit = (name, w) => name.length * SECW <= w - 5 ? name : `${name.slice(0, Math.max(1, Math.floor((w - 5) / SECW) - 1))}…`;
   ["ref", "add"].forEach(arm => {
     const secs = [];
     slots.filter(s => s.arm === arm).forEach(s => { const l = secs[secs.length - 1]; if (l && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ name: s.p.sec, x0: s.x, x1: s.x + U }); });
@@ -1299,7 +1299,7 @@ function planBar(m, box, tip, panel, forDays, resets) {
       if (w >= 24) el("title", {}, s.name, el("text", { x: s.x0, y: ly, class: "faint", style: "font-size:10.5px" }, fit(s.name, w)));
     });
   });
-  const H = Math.ceil(ly + 8);
+  const H = Math.ceil(Math.max(ly, CY + CH + 47) + 8);  // the quotes' last line sits inside the box too
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
   // what needs a look: each chip is a set of bands
@@ -1400,7 +1400,7 @@ function planLadder(G, box, tip) {
   svg.setAttribute("class", "pc-svg"); svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", `The original plan's ${G.ref.length} commitments as a ladder, today's plan and each Day as lanes beside it, and zones underneath for commitments added later and for criteria that name none.`);
   const el = (n, a, txt) => svgEl(svg, n, a, txt);
-  const nd = G.days.length, RH = 13, LAD = 158, PLN = 204, D0 = 256, DW = 26, TX = D0 + nd * DW + 24, W = TX + 280;
+  const nd = G.days.length, RH = 13, LAD = 158, PLN = 204, D0 = 256, DW = 26, TX = D0 + nd * DW + 24, W = TX + 400;
   const dayX = d => D0 + G.days.indexOf(d) * DW;
   const lanes = [[LAD, 40], [PLN, 40]].concat(G.days.map(d => [dayX(d), DW - 4]));
   const bg = lanes.map(([x, w]) => el("rect", { x, y: 36, width: w, height: 10, rx: 4, fill: "var(--c-grid)", "fill-opacity": .45 }));
@@ -1415,7 +1415,7 @@ function planLadder(G, box, tip) {
     r.addEventListener("pointerleave", () => { tip.hidden = true; });
   };
   const band = (x, w, y, fill, op) => el("rect", { x: x + 3, y: y - 2.5, width: w - 6, height: 5, rx: 2, fill, "fill-opacity": op == null ? 1 : op });
-  const label = (y, id, text) => { el("text", { x: TX, y: y + 4, class: "num faint" }, id); el("text", { x: TX + 34, y: y + 4, style: "font-size:11px" }, text); };
+  const label = (y, id, text) => { el("text", { x: TX, y: y + 4, class: "num faint" }, id); el("text", { x: TX + 46, y: y + 4, style: "font-size:11px" }, text); };
   const served = id => { const per = {}; G.C.forEach(c => { if (c.links.some(l => l.p === id)) (per[c.day] = per[c.day] || []).push(c); }); return per; };
 
   let y = 50, sec = null;
