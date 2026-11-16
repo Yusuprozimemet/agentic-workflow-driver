@@ -1053,9 +1053,10 @@ class HandOffTest(unittest.TestCase):
             found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2, 3, 4], repo.snaps[-1]["sha"], blobs))
         finally:
             repo.close()
-        self.assertEqual([(h["to"], h["id"], h["source"], h["picked"], h["text"]) for h in found], [
-            (3, "H01.1", "Day 02 spec", False, "Hand-off H01.1 → Day 03"),  # Day 02 restating it is no pick-up
-            (4, "H01.2", "Day 03 spec", False, "Hand-off H01.2 → Day 04")])
+        self.assertEqual([(h["to"], h["id"]) for h in found], [(3, "H01.1"), (4, "H01.2")])
+        self.assertEqual([(h["source"], h["picked"], h["text"]) for h in found], [
+            ("Day 02 spec", False, "Hand-off H01.1 → Day 03"),  # Day 02 restating it is no pick-up
+            ("Day 03 spec", False, "Hand-off H01.2 → Day 04")])
 
     def test_a_hand_off_with_an_id_is_picked_up_only_by_a_spec_citing_it(self):
         repo = Repo().merge({
