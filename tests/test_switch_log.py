@@ -51,10 +51,11 @@ class SwitchLogTest(unittest.TestCase):
         )
         lines = switches(run["state"])
         self.assertEqual(len(lines), 1)
-        self.assertEqual(
-            without_at(lines[0]),
-            {"event": "halt", "why": "STOP issue #9", "session": session},
-        )
+        # The run's session is shown as a fixed word, so that a failure's report holds no uuid.
+        seen = without_at(lines[0])
+        if "session" in seen:
+            seen["session"] = "<uuid>" if seen["session"] == session else "<another>"
+        self.assertEqual(seen, {"event": "halt", "why": "STOP issue #9", "session": "<uuid>"})
         self.assertIsNotNone(re.match(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$", lines[0].get("at", "")))
 
     def test_halt_and_clear_commands(self):

@@ -28,26 +28,29 @@ of its own over a `Replaces:` in Day 13.
 ## Acceptance criteria
 Tick each box in this PR once its evidence is in the PR body; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] S-switch-log.1 **new** — A STOP during a session (`OnceStopTest`'s set-up: STOP issue #9 added
+- [x] S-switch-log.1 **new** — A STOP during a session (`OnceStopTest`'s set-up: STOP issue #9 added
       once the fake session's pids are written) leaves `<state>/switches.jsonl` with exactly one
       line: event "halt", why "STOP issue #9", session the run log's `start` line's session, and an
       `at` stamp. The run log still holds `start`, `pid` only.
       Test: `SwitchLogTest.test_stop_during_session_names_the_session`.
       Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: a STOP's halt line names no session → AssertionError: {'event': 'halt', 'why': 'STOP issue #9'} != {'event': 'halt', 'why': 'STOP issue #9', 'session': '<uuid>'}
       Plan: N25 "every merge the driver made, every park and every refusal"
-- [ ] S-switch-log.2 **new** — `run-steps.py halt --state <dir>` with no driver running writes one
+- [x] S-switch-log.2 **new** — `run-steps.py halt --state <dir>` with no driver running writes one
       halt line, why "run-steps.py halt" and no `session` key; `clear` then writes one clear line;
       a second `clear`, with no halt set, writes nothing.
       Test: `SwitchLogTest.test_halt_and_clear_commands`.
       Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: clear writes no line → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt'}, {'event': 'clear'}]
       Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
-- [ ] S-switch-log.3 **new** — `on`, whose run's issue #1 is closed after the first merge
+- [x] S-switch-log.3 **new** — `on`, whose run's issue #1 is closed after the first merge
       (`OnTest.test_off_between_steps`'s set-up), leaves the events "on", then "off" with issue 1,
       in that order and nothing else.
       Test: `SwitchLogOnTest.test_on_then_off`.
       Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: the loop writes no off line → AssertionError: Lists differ: [{'event': 'on'}] != [{'event': 'on'}, {'event': 'off', 'issue': 1}]
       Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
-- [ ] S-switch-log.4 **new** — `scripts/driver-runs.py` on a run log whose session has no `end`
+- [x] S-switch-log.4 **new** — `scripts/driver-runs.py` on a run log whose session has no `end`
       line and no live process, beside a switch log whose halt names that session, counts it
       `crashed: false` and the step's `crashes` 0; the same run log with no switch log still counts
       it crashed; the document written with `--out` carries the switch log's lines as `switches`
@@ -56,6 +59,7 @@ Tick each box in this PR once its evidence is in the PR body; under a box left u
       `SwitchCountTest.test_the_document_carries_the_switches`.
       Red today: `count` takes no fourth argument, a TypeError, and the document has no
       `switches`, "None != [...]".
+      broken: a halted session counts as crashed → AssertionError: Lists differ: [True] != [False]
       Plan: N25 "every merge the driver made, every park and every refusal"
 
 ## Verify
