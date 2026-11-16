@@ -91,8 +91,10 @@ def main():
         if not specs:
             print("no closed day on main")
             return 0
+        # The page reads every break from replay-history.json alone: two replays disagreed (#211, N4).
         cache = ["--cache", args.cache] if args.cache else []
-        return subprocess.call([sys.executable, EVIDENCE, *specs, "--ref", "main", "--json", args.all, *cache])
+        return subprocess.call([sys.executable, EVIDENCE, *specs, "--ref", "main", "--json", args.all, *cache,
+                                "--no-breaks"])
     try:
         commit = args.commit
         if args.day:

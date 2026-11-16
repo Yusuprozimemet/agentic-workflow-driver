@@ -46,8 +46,12 @@ def deployment():
         return json.load(f)
 
 
-def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
-    """Join recorded evidence without treating an unavailable source as a negative result."""
+REPLAY_FAILED = ("code broken", "test weakened", "break no longer applies")
+
+
+def criterion_index(days, reports, handoffs, snaps, blobs, order=(), history=None):
+    """Join recorded evidence without treating an unavailable source as a negative result; history,
+    replay_history()'s, is where every break's replay is read."""
     names = {t for d in days for c in d["evidence"] for t in evidence_test_names(c["block"])}
     states = test_state(names, snaps[-1]["sha"], blobs, {old: new for _, old, new in moves(snaps)})
     report_days = {d["day"]: d for d in reports.get("days", [])}
@@ -131,6 +135,17 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=()):
         for target in row["replaces"]:
             if target in by_id:
                 by_id[target]["replaced_by"].append(row["id"])
+    # Every break's replay comes from recheck.yml's replay-history.json alone: the page's own replay of
+    # them disagreed with it (#211, N4). A criterion fails on its last re-checked merge, unless replaced.
+    if history and history.get("state") == "loaded":
+        prs = {m["n"]: m.get("pr") for m in history["merges"]}
+        last = {cell["criterion"]: cell for cell in history["cells"]}  # cells run by criterion, then merge
+        for cid, cell in last.items():
+            row = by_id.get(cid)
+            if row and not row["replaced_by"] and cell["state"] in REPLAY_FAILED:
+                why = "; ".join(f"{ch['check']}: {ch.get('detail') or ch['state']}"
+                                for ch in cell["checks"] if ch["state"] == cell["state"])
+                flag(row, "replay_failed", f"{cell['state']} at #{prs.get(cell['n'])}: {why}")
     severity = ("replay_failed", "replay_error", "replay_stale", "evidence_missing",
                 "not_seen_red", "test_not_found", "handoff_unclaimed", "not_breakable", "test_skippable")
     attention.sort(key=lambda a: (severity.index(a["reason"]), a["day"], a["id"]))

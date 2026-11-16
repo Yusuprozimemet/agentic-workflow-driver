@@ -347,9 +347,11 @@ def input_file(path):
     return record
 
 
-def check_spec(path, ref, only=None, new_needs_break=False):
+def check_spec(path, ref, only=None, new_needs_break=False, no_breaks=False):
     """One spec's record: what it was checked from and at, and its checks; only, a partial replay's criteria.
-    new_needs_break, the rehearsal's: a ticked `new` criterion with no break to replay fails too (#212, S21)."""
+    new_needs_break, the rehearsal's: a ticked `new` criterion with no break to replay fails too (#212, S21).
+    no_breaks, the dashboard's (close-evidence.py --all): its breaks, and the criteria a spec change added
+    after the close, are left to recheck.yml's replay-history.json, the page's one source for them (#211, N4)."""
     name = os.path.basename(path)
     record = {"spec": input_file(path), "day": None, "change": None, "close_sha": None, "verify_base_sha": None,
               "breaks": None, "criteria": list(only) if only else None, "checks": []}
@@ -395,7 +397,15 @@ def check_spec(path, ref, only=None, new_needs_break=False):
         found = {cid: lines for cid, lines in found.items() if cid in only}
         ticked = {cid: lines for cid, lines in ticked.items() if cid in only}
     # A Not proven: line counts as the close merged it, not as added to the spec since.
-    reasons = {cid: not_proven(lines) for cid, lines in criteria(spec_at(commit, path)).items()}
+    at_close = criteria(spec_at(commit, path))
+    reasons = {cid: not_proven(lines) for cid, lines in at_close.items()}
+    if no_breaks:
+        # A criterion a later spec change added names tests the close commit cannot have (C11.24).
+        for cid in [c for c in found if c not in at_close]:
+            add(f"{cid}/criterion", "criterion", "not_applicable", f"{cid} added after the close",
+                f"not in {name} at {commit[:7]}: replay-history.json checks it on later merges", cid)
+            del found[cid]
+            ticked.pop(cid, None)
 
     for cid, lines in found.items():
         reason = reasons.get(cid)
@@ -463,6 +473,9 @@ def check_spec(path, ref, only=None, new_needs_break=False):
                 if what == "none":
                     add(key, "break", "not_applicable", label, report.strip(), cid)
                     continue
+                if no_breaks:
+                    add(key, "break", "not_applicable", label, "replayed by recheck.yml: replay-history.json", cid)
+                    continue
                 if what not in recorded:
                     add(key, "break", "failed", label, f"no arguments in {breaks_file}", cid)
                     continue
@@ -494,7 +507,7 @@ def runner():
             "python": platform.python_version(), "platform": platform.platform()}
 
 
-def replay_key(path, ref):
+def replay_key(path, ref, no_breaks=False):
     """A hash of everything a spec's replay reads: the commit it replays at, its spec and breaks files,
     this checker's scripts, the project's dependency files and the Python running them; None when it
     has no close on ref. Two replays with the same key run the same checks on the same code."""
@@ -511,7 +524,7 @@ def replay_key(path, ref):
         return None
     if not commit:
         return None
-    h = hashlib.sha256(f"{commit}\n{platform.python_version()}\n".encode())
+    h = hashlib.sha256(f"{commit}\n{platform.python_version()}\n{'no breaks' if no_breaks else ''}".encode())
     # The repository root, as the spec path is relative to. PROJECT: add any other file the replayed
     # checks install from.
     for f in (path, breaks, os.path.abspath(__file__), BREAK, "pyproject.toml", "requirements.txt"):
@@ -557,6 +570,9 @@ def main(argv=None):
                    help="fail a ticked new criterion with no break to replay (the closing branch's rehearsal)")
     p.add_argument("--criterion", action="append", metavar="ID", type=criterion_id,
                    help="replay only this criterion's checks (repeatable; one spec only; skips the Verify block)")
+    p.add_argument("--no-breaks", action="store_true",
+                   help="the dashboard's replay: leave the breaks, and criteria added after the close, to "
+                   "recheck.yml's replay-history.json")
     a = p.parse_args(argv)
     if a.criterion and a.cache:
         p.error("--criterion cannot go with --cache: a partial replay is never kept")
@@ -572,14 +588,14 @@ def main(argv=None):
     for spec in a.specs:
         path, key, hit = spec.replace(os.sep, "/"), None, None
         try:
-            key = a.cache and replay_key(spec, a.ref)
+            key = a.cache and replay_key(spec, a.ref, a.no_breaks)
             hit = key and cache.get(path)
             if hit and hit.get("key") == key:
                 day = dict(hit["record"], reused_from=hit["replayed"])
                 print(f"reused  {path}: replayed {hit['replayed']}, nothing it reads has changed since")
             else:
                 hit = None
-                day = check_spec(spec, a.ref, a.criterion, a.new_needs_break)
+                day = check_spec(spec, a.ref, a.criterion, a.new_needs_break, a.no_breaks)
         except Exception as e:  # what the checker did not foresee still leaves a report
             key = None
             day = {"spec": {"path": path}, "checks": [

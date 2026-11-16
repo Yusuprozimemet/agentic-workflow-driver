@@ -179,6 +179,25 @@ class EvidenceTest(Repo):
         self.assertIn("reported 'AssertionError: broken', the spec says 'AssertionError: something else'",
                       run.stdout)
 
+    def test_the_dashboard_s_replay_leaves_every_break_to_replay_history(self):
+        # #211, N4: the page's replay and recheck.yml's disagreed; the page now reads breaks from one.
+        text = spec(report="AssertionError: something else")
+        self.close_with(text)
+        run = self.run_evidence(text, (BREAK,), "--no-breaks")
+        self.assertEqual(run.returncode, 0, run.stdout)
+        self.assertIn("C1.1 broken: the ok removed → replayed by recheck.yml: replay-history.json", run.stdout)
+
+    def test_the_dashboard_s_replay_skips_a_criterion_added_after_the_close(self):
+        # C11.24: added by a spec change after Day 11's close, its test is "not defined" at the close.
+        self.close_with(spec())
+        text = spec(more="- [x] C1.2 **hold** — Test: `CliTest.test_later`.\n")
+        run = self.run_evidence(text, (BREAK,), "--no-breaks")
+        self.assertEqual(run.returncode, 0, run.stdout)
+        self.assertIn("C1.2 added after the close → not in day-01-x.md at", run.stdout)
+        self.assertNotIn("test_later", run.stdout)
+        run = self.run_evidence(text)
+        self.assertIn("CliTest.test_later → not defined", run.stdout)
+
     def test_a_recorded_report_that_holds_a_uuid_still_replays(self):
         # the break runs once with --replay: a uuid in the report is compared with the spec, not refused
         message = "AssertionError: session 00000000-0000-4000-8000-000000000000 was not resumed"
