@@ -133,7 +133,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `UsageLimitTest.test_far_reset_parks`.
       Evidence: `UsageLimitTest.test_far_reset_parks` (#141); on `main`, `--limit-hours 40` exits 2, the argument parser (#141).
       seen red: python -m unittest tests.test_usage_limit.UsageLimitTest.test_far_reset_parks on main → AssertionError: Tuples differ: (1, 1, ['park: the session ended in an error: `unknown` (session `<uuid>`)']) != (1, 1, ['park: the usage limit resets at <when>, more than 6[28 chars]`)']) (#141)
-      broken: a reset past --limit-hours waited for, not parked (C09.3) → AssertionError: Tuples differ: (None, 1, ['limit: the usage limit was rea[43 chars]`)']) != (1, 1, ['park: the usage limit resets at <[46 chars]`)']) (#141)
+      broken: a reset past --limit-hours waited for, not parked (C09.3) → AssertionError: Tuples differ: (True, True, None, 1, ['limit']) != (True, True, 1, 1, ['park']) (#225)
 - [x] C09.4 **new** — As C09.1, with `resetsAt` 60 seconds ahead: the test writes `<state>/halt`
       during the wait; the driver prints "halt: the halt file was set during the wait for the
       usage limit (session `<id>`)" within 5 seconds of it, exits 1, starts the fake once, and
@@ -142,7 +142,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `UsageLimitTest.test_halt_during_wait`.
       Evidence: `UsageLimitTest.test_halt_during_wait` (#141).
       seen red: python -m unittest tests.test_usage_limit.UsageLimitTest.test_halt_during_wait on main → AssertionError: Tuples differ: (True, 1, ['park: the session ended in an error: `unk[25 chars]], 1) != (True, 1, ['halt: the halt file was set during the wa[42 chars]], 1) (#141)
-      broken: the halt file not read during the wait (C09.4) → AssertionError: Tuples differ: (True, None, ['limit: the usage limit was reache[43 chars]], 1) != (True, 1, ['halt: the halt file was set during t[47 chars]], 1) (#141)
+      broken: the halt file not read during the wait (C09.4) → AssertionError: Tuples differ: (True, False, None, ['limit'], 1) != (True, True, 1, ['halt'], 1) (#225)
 - [x] C09.5 **hold** — A session whose transcript is missing, or whose last `assistant` record
       carries no `apiError` (a limit record followed by a later `assistant` record included),
       keeps Day 4's outcome lines: the tests of `tests/test_once_outcome.py` pass unedited, and a
