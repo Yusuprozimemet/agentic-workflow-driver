@@ -119,6 +119,6 @@
 {"date":"2026-11-16","day":null,"model":"claude-haiku-5-5","agent":"implementer","input":266,"cache_write":346853,"cache_read":16962994,"output":187297,"replies":132,"bash":74,"cut":6,"reads":0,"whole":0,"cost":1.1909,"cost_past_150k":0.8445},
 {"date":"2026-11-16","day":null,"model":"claude-opus-5-5","agent":"Explore","input":144,"cache_write":121734,"cache_read":5236017,"output":26289,"replies":72,"bash":69,"cut":8,"reads":5,"whole":0,"cost":2.1822,"cost_past_150k":0},
 {"date":"2026-11-16","day":null,"model":"claude-opus-5-5","agent":"general-purpose","input":76,"cache_write":174586,"cache_read":2225641,"output":26960,"replies":35,"bash":24,"cut":3,"reads":15,"whole":15,"cost":1.8576,"cost_past_150k":0},
-{"date":"2026-11-16","day":null,"model":"claude-opus-5-5","agent":"main","input":1452,"cache_write":1779532,"cache_read":81302718,"output":423164,"replies":682,"bash":535,"cut":19,"reads":39,"whole":7,"cost":38.9659,"cost_past_150k":10.4184},
+{"date":"2026-11-16","day":null,"model":"claude-opus-5-5","agent":"main","input":1608,"cache_write":1924907,"cache_read":93104307,"output":480299,"replies":760,"bash":598,"cut":23,"reads":49,"whole":8,"cost":43.6325,"cost_past_150k":13.4588},
 {"date":"2026-11-16","day":12,"model":"claude-opus-5-5","agent":"main","input":290,"cache_write":233743,"cache_read":15734818,"output":86098,"replies":139,"bash":125,"cut":2,"reads":3,"whole":0,"cost":6.74,"cost_past_150k":1.2554}
 ]
