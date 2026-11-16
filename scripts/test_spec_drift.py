@@ -567,7 +567,7 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual(rows[2]["gap_chance"], rows[1]["gap_chance"])  # the same counts, shuffled
 
 CRITERIA = """- [x] **hold** — Refused: `contract/FooIT` passes. Broken on purpose: the check removed.
-      #2: `FooIT.refuses`.
+      Evidence: #2: `FooIT.refuses`.
       broken: the guard removed → `expected: 401 but was: 200`
 - [x] **new** — Saved in `BarIT`, or a case added to `FooIT`. Red today: no table.
       #3: a case in `FooIT.saves`.

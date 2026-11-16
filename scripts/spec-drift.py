@@ -109,7 +109,7 @@ CAVEATS = [
 # (load_cache) and counts as the script edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
            "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
-           "spec_drift_plan.py", "spec_drift_score.py")
+           "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_views.py")
 
 
 def load_cache(path):
