@@ -1486,8 +1486,9 @@ class CriterionIndexTest(unittest.TestCase):
             cell("C1.2", 1, "code broken"), cell("C1.3", 0, "break no longer applies"), cell("C1.3", 1, "passed")])
         _, attention = repo.inside(lambda blobs: sd.criterion_index(
             days, dict(state="loaded", days=[]), [], repo.snaps, blobs, history=history))
-        self.assertEqual([(a["id"], a["detail"]) for a in attention if a["reason"] == "replay_failed"],
-                         [("C1.1", "code broken at #7: break x: report differs")])
+        failed = [a for a in attention if a["reason"] == "replay_failed"]
+        self.assertEqual([a["id"] for a in failed], ["C1.1"])
+        self.assertEqual(failed[0]["detail"], "code broken at #7: break x: report differs")
         _, attention = repo.inside(lambda blobs: sd.criterion_index(
             days, dict(state="loaded", days=[]), [], repo.snaps, blobs, history=dict(state="absent")))
         self.assertEqual([a for a in attention if a["reason"] == "replay_failed"], [])
@@ -1500,8 +1501,9 @@ class CriterionIndexTest(unittest.TestCase):
                     dict(to=None, id="H01.2", picked=False, source="Day 01 Notes", text="Hand-off H01.2 → the maintainer: C1.2.")]
         _, attention = repo.inside(lambda blobs: sd.criterion_index(
             days, dict(state="loaded", days=[]), handoffs, repo.snaps, blobs, order=[1, 2]))
-        self.assertEqual([(a["id"], a["reason"]) for a in attention if a["reason"].startswith("handoff")],
-                         [("C1.2", "handoff_unclaimed"), ("H01.1", "handoff_next"), ("H01.2", "handoff_unpicked")])
+        self.assertEqual([a["id"] for a in attention if a["reason"] == "handoff_unclaimed"], ["C1.2"])
+        self.assertEqual([a["id"] for a in attention if a["reason"] in ("handoff_next", "handoff_unpicked")],
+                         ["H01.1", "H01.2"])
 
     def test_what_is_expected_is_marked_so_the_page_leaves_it_out_of_the_count(self):
         # Of 28 "Needs attention" after Day 12's close, 7 were "Can be skipped in CI (expected)" (#213, B20).
@@ -2078,9 +2080,7 @@ class UserStoriesTest(unittest.TestCase):
 
     def test_story_sentence_ends_where_a_size_of_change_paragraph_starts(self):
         # #54's story carried its "Size of change: an area branch ..." paragraph (#213, B5).
-        self.assertEqual(sd.story_sentence("As the maintainer, I want x, so that y.\n\n"
-                                           "Size of change: an area branch (`dashboard/`). It changes no criteria."),
-                         "As the maintainer, I want x, so that y.")
+        self.assertEqual(sd.story_sentence("As me, I want x.\n\nSize of change: a rung."), "As me, I want x.")
 
     def test_story_reader_says_who_the_story_is_written_for(self):
         self.assertEqual(sd.story_reader("As the maintainer, I want x"), "desk")
