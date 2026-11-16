@@ -32,7 +32,8 @@ Tick each box in this PR once its evidence is in the PR body; under a box left u
       Test: `SwitchLogTest.test_halt_and_clear_commands`,
       `SwitchLogHaltTreeTest.test_halt_names_the_session_the_lock_kill_ended`.
       Red today: `switches.jsonl` is not written, a FileNotFoundError.
-      broken: a halt names no session the lock's kill ended → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt', 'session': 's-tree'}]
+      Windows only, run locally (on Linux the session outlives `killpg`): a halt names no
+      session the lock's kill ended → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt', 'session': 's-tree'}]
       broken: clear writes no line → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt'}, {'event': 'clear'}]
       Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
 - [x] S-switch-log.3 **new** — `on`, whose run's issue #1 is closed after the first merge
@@ -74,3 +75,5 @@ python -m unittest tests.test_switch_log tests.test_switch_count
   session only when its own kill was tried; when the lock's kill had already ended it, the usual
   case, the line named none and the count still called it a crash. Seen while writing the PR body;
   fixed in this PR, with `SwitchLogHaltTreeTest` seen red first.
+- **Defect** — found: CI · cause: spec · made: none · a break recorded on Windows passed CI's Linux
+  replay (the session outlives `killpg` there); moved from the manifest to a Windows-only note.
