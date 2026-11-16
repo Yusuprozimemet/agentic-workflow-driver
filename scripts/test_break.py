@@ -146,7 +146,8 @@ class BreakTest(unittest.TestCase):
                                    ("F:/", "x", "--find")):
             run = self.run_break(find, replace)
             self.assertEqual(run.returncode, 2, (arg, run.stderr))
-            self.assertIn(f"{arg} holds", run.stderr)
+            # A fixed message: the refusal it replaces names the temporary file.
+            self.assertTrue(f"{arg} holds" in run.stderr, f"{arg} not refused as a rewritten path")
             self.assertIn("MSYS_NO_PATHCONV=1", run.stderr)
             self.assertEqual(self.contents(), self.original)
 

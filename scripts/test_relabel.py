@@ -102,6 +102,8 @@ class EntriesTest(unittest.TestCase):
                              "same-as: D21.2 ·\n  the grep matched comments again.\n")
         out = tempfile.mkdtemp()
         rows = relabel.blind([path], out)
+        text = open(os.path.join(out, "blind.md"), encoding="utf-8").read()
+        self.assertIn("It repeats a defect recorded on Day 21.", text)
         self.assertEqual("### D44-1 (Day 44)\nthe grep matched comments again.\n"
                          "It repeats a defect recorded on Day 21.\n\n",
                          open(os.path.join(out, "blind.md"), encoding="utf-8").read())
