@@ -287,9 +287,12 @@ class UsageLimitTest(unittest.TestCase):
         )
         began, over = stamp_of(pid), stamp_of(end)
         quick = began is not None and over is not None and 0 <= (over - began).total_seconds() <= 10
+        # The lines' first words first, so a failure's report is short and the same on every machine.
         self.assertEqual(
-            (ended, quick, code, len(starts_of(folder)), lines), (True, True, 1, 1, [far])
+            (ended, quick, code, len(starts_of(folder)), [line.split(":")[0] for line in lines]),
+            (True, True, 1, 1, ["park"]),
         )
+        self.assertEqual(lines, [far])
         folder, proc = self.start(runs, flags=["--limit-hours", "40"])
         ended = self.halt_after_end(folder)
         code, lines = self.finish(folder, proc)
@@ -306,10 +309,18 @@ class UsageLimitTest(unittest.TestCase):
         written = time.monotonic()
         code, lines, times = self.finish_timed(folder, proc)
         quick = len(lines) == len(times) > 0 and lines[-1] == HALT and 0 <= times[-1] - written <= 5
+        # The last line's first word first, so a failure's report is short and the same on every machine.
         self.assertEqual(
-            (ended, quick, code, lines[-1:], len(starts_of(folder))),
-            (True, True, 1, [HALT], 1),
+            (
+                ended,
+                quick,
+                code,
+                [line.split(":")[0] for line in lines[-1:]],
+                len(starts_of(folder)),
+            ),
+            (True, True, 1, ["halt"], 1),
         )
+        self.assertEqual(lines[-1:], [HALT])
         self.assertEqual(events(folder), ["start", "pid", "end"])
 
     def test_earlier_limit_is_not_the_last(self):
