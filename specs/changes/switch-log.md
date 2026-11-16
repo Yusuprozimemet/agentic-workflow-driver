@@ -1,0 +1,79 @@
+# The driver records its switches
+
+## What changes
+Each switch goes to `<state>/switches.jsonl`, one JSON object per line: `on` once its run passed its
+checks; `off` with the issue, when the loop sees the run's issue closed; every halt with its `why`,
+and the `session` it stopped; `clear` when it removes a halt. `scripts/driver-runs.py` reads it: a
+session a halt names is not crashed, and its document carries the lines as `switches`. Before, none
+was written, so a session a STOP killed (no `end` line) showed as a crash. `run.jsonl` is unchanged,
+and the driver never reads the new file to decide.
+
+## Why
+#211 N7: 11 Nov's crash (bearing's `8bef3bb2`) was the trial's own STOP #92. #212 S11: Day 14's
+record needs these events (N25). C04.12 and C05.11 require `run.jsonl` after a halt to be exactly
+`start`, `pid`, which makes the next run park; the maintainer chose a file of its own over a
+`Replaces:` in Day 13.
+
+## Acceptance criteria
+Tick each box in this PR once its evidence is in the PR body; under a box left unticked, write
+`Not proven: <why>` (`specs/README.md`, "Evidence at the close").
+- [x] S-switch-log.1 **new** — A STOP during a session (`OnceStopTest`'s set-up: STOP issue #9 added
+      once the fake session's pids are written) leaves `<state>/switches.jsonl` with exactly one
+      line: event "halt", why "STOP issue #9", session the run log's `start` line's session, and an
+      `at` stamp. The run log still holds `start`, `pid` only.
+      Test: `SwitchLogTest.test_stop_during_session_names_the_session`.
+      Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: a STOP's halt line names no session → AssertionError: {'event': 'halt', 'why': 'STOP issue #9'} != {'event': 'halt', 'why': 'STOP issue #9', 'session': '<uuid>'}
+      Plan: N25 "every merge the driver made, every park and every refusal"
+- [x] S-switch-log.2 **new** — `run-steps.py halt --state <dir>` with no driver running writes one
+      halt line, why "run-steps.py halt" and no `session` key; `clear` then writes one clear line;
+      a second `clear`, with no halt set, writes nothing. A `halt` while the lock names a live
+      driver and the run log a live session names that session, though the lock's kill ended it.
+      Test: `SwitchLogTest.test_halt_and_clear_commands`,
+      `SwitchLogHaltTreeTest.test_halt_names_the_session_the_lock_kill_ended`.
+      Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      Windows only, run locally (on Linux the session outlives `killpg`): a halt names no
+      session the lock's kill ended → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt', 'session': 's-tree'}]
+      broken: clear writes no line → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt'}, {'event': 'clear'}]
+      Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
+- [x] S-switch-log.3 **new** — `on`, whose run's issue #1 is closed after the first merge
+      (`OnTest.test_off_between_steps`'s set-up), leaves the events "on", then "off" with issue 1,
+      in that order and nothing else.
+      Test: `SwitchLogOnTest.test_on_then_off`.
+      Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: the loop writes no off line → AssertionError: Lists differ: [{'event': 'on'}] != [{'event': 'on'}, {'event': 'off', 'issue': 1}]
+      Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
+- [x] S-switch-log.4 **new** — `scripts/driver-runs.py` on a run log whose session has no `end`
+      line and no live process, beside a switch log whose halt names that session, counts it
+      `crashed: false` and the step's `crashes` 0; the same run log with no switch log still counts
+      it crashed; the document written with `--out` carries the switch log's lines as `switches`
+      (an empty list when there is no file).
+      Test: `SwitchCountTest.test_a_halted_session_did_not_crash`,
+      `SwitchCountTest.test_the_document_carries_the_switches`.
+      Red today: `count` takes no fourth argument, a TypeError, and the document has no
+      `switches`, "None != [...]".
+      broken: a halted session counts as crashed → AssertionError: Lists differ: [True] != [False]
+      Plan: N25 "every merge the driver made, every park and every refusal"
+
+## Verify
+```bash
+python -m unittest tests.test_switch_log tests.test_switch_count
+```
+
+## Notes
+- The page does not draw the switches yet: drawing `on`, `off`, `halt` and `clear` on the lane
+  "Can it run without a person?" is a `dashboard/` PR, left in #213. Until it lands, the page only
+  stops calling a halted session a crash.
+- `off` is written by the loop when it sees the run's issue closed, not by `run-steps.py off`: the
+  issue can be closed from the phone too, and `tests/test_off.py` runs `off` with no `--state`, so a
+  write there would land in this machine's own state folder.
+- **Defect** — found: self · cause: spec · made: none · the first design wrote an `end` line for
+  a halted session into `run.jsonl`; the next run would then start the step afresh instead of
+  parking, and C04.12 and C05.11 forbid any new line there. Changed to a file of its own before
+  any code.
+- **Defect** — found: self · cause: implementation · made: none · `run-steps.py halt` named the
+  session only when its own kill was tried; when the lock's kill had already ended it, the usual
+  case, the line named none and the count still called it a crash. Seen while writing the PR body;
+  fixed in this PR, with `SwitchLogHaltTreeTest` seen red first.
+- **Defect** — found: CI · cause: spec · made: none · a break recorded on Windows passed CI's Linux
+  replay (the session outlives `killpg` there); moved from the manifest to a Windows-only note.

@@ -1,4 +1,5 @@
-"""halt, clear and off, the switches a person pulls with run-steps.py. halt writes <state>/halt and,
+"""halt, clear and off, the switches a person pulls with run-steps.py; halt and clear also write
+the switch log (switchlog.py). halt writes <state>/halt and,
 when the lock names a live driver, kills that process's tree; it also kills a session the run log
 names as still alive, and the container the run log names for a session. Then it reports on the
 run's issue from <state>/run.json. clear removes the halt file and a stale lock, and refuses while a
@@ -11,7 +12,7 @@ import signal
 import subprocess
 import sys
 
-from driver import issues, lock, once, runlog
+from driver import issues, lock, once, runlog, switchlog
 
 TREE = "halt: set; killed pid {} and the processes it started"
 REPORT_KEYS = ("project", "gh", "issue", "step", "session")
@@ -45,6 +46,9 @@ def halt(state, docker="docker"):
     container_session, name = runlog.live_container(state)
     if name and _kill_container(docker, container_session, name):
         found = True
+    # Written after the kills. The session named is the one alive before them: the lock's kill ends it
+    # too, and then tried is false, though this halt stopped it.
+    switchlog.append(state, "halt", why="run-steps.py halt", session=session)
     if not found and not tried:
         print("halt: set; no driver is running")
     return code
@@ -164,6 +168,7 @@ def clear(state):
         print("clear: no halt is set")
         return 0
     os.remove(halt_file)
+    switchlog.append(state, "clear")
     print("clear: the halt is removed; the driver is off")
     return 0
 

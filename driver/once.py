@@ -29,7 +29,7 @@ import time
 import uuid
 from collections import namedtuple
 
-from driver import box, github, issues, livecheck, lock, runlog, status, stream, tree
+from driver import box, github, issues, livecheck, lock, runlog, status, stream, switchlog, tree
 from driver import home as driver_home
 from driver import settings as driver_settings
 from driver.config import load as load_config
@@ -91,17 +91,19 @@ def park_issue(project, gh, state, line, sentence, session, open_list, pr=None, 
     return number
 
 
-def write_halt(state, why):
+def write_halt(state, why, session=None):
     # Written as bytes, as the rest of the state is; the next --once refuses with this file.
     with open(os.path.join(state, "halt"), "wb") as halt:
         halt.write(f"halted at {lock.now().strftime(lock.STAMP)}: {why}".encode())
+    # The switch log names the session a halt stopped, so that the count does not call it a crash.
+    switchlog.append(state, "halt", why=why, session=session)
 
 
 def stop_session(proc, args, project, number, record, stop_number):
     # The halt file is written first, so that every tool call the session makes is refused from here
     # on. The report is written before the kill and cannot keep it: a report that fails or hangs
     # still ends in the kill. On POSIX the kill is --once's own group, so this does not return.
-    write_halt(args.state, f"STOP issue #{stop_number}")
+    write_halt(args.state, f"STOP issue #{stop_number}", record.get("session"))
     print(f"halt: the STOP issue #{stop_number} is open; the session is stopped", flush=True)
     try:
         reason = issues.close(project, args.gh, number, issues.report(project, record), timeout=10)

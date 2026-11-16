@@ -14,6 +14,7 @@ draws nothing of the driver without it:
 
     {"counted": "<when, on this machine's clock with its offset>",
      "level_2": {"run": <k>, "of": 15},
+     "switches": [the switch log's lines, as written],
      "steps": [one per step the log names, in the log's order:
        {"step": "<the kit's sentence>", "day": <its Day, or null>, "prefix": "<branch prefix, or null>",
         "sessions": [{"session": "<uuid>", "start": "<UTC>", "end": "<UTC, or null>", "cost": <dollars>,
@@ -28,11 +29,12 @@ A step is the sessions started for one branch prefix, with the parks written for
 before any session (the end of a phase, a sentence the driver does not know) is a step with no
 session. It ended "parked" when it has a park, whatever came after: it needed a person. Otherwise
 "fixed" when it merged after a fix round, "merged" when it merged with none, and "open" until then.
-A session crashed when its last line is not an end line and its process is gone. A park's wait is not
+A session crashed when its last line is not an end line and its process is gone, and no halt in the
+switch log names it. A park's wait is not
 here: it is how long its issue stayed open, which scripts/spec-drift.py reads from GitHub.
 The level_2 count is the one driver/status.py prints, published here so the page does not count it again.
 
-What the log does not hold is not here either: when the driver was switched on and off, and a halt.
+The switches are the lines of <state>/switches.jsonl (driver/switchlog.py), as they were written.
 The log does not name its project, so one state folder serves one project, or the count mixes them.
 """
 import argparse
@@ -45,7 +47,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, os.pardir))
 sys.path.insert(0, ROOT)
-from driver import runlog, status  # noqa: E402
+from driver import runlog, status, switchlog  # noqa: E402
 from driver.steps import classify  # noqa: E402
 
 FILE = os.path.join("docs", "dashboard", "driver-runs.json")
@@ -82,10 +84,16 @@ def text(value):
     return value if isinstance(value, str) else None
 
 
-def count(records, live=None, late=()):
+def count(records, live=None, late=(), switches=()):
     """The steps the log's records name, as the docstring above gives them. `live` is the session whose
     process still runs (runlog.live_session), which has no end line and has not crashed."""
     steps, sessions, by_pr = {}, {}, {}
+    # A session a halt names was stopped on purpose: it has no end line, and it did not crash.
+    halted = {
+        r.get("session")
+        for r in switches
+        if r.get("event") == "halt" and isinstance(r.get("session"), str)
+    }
 
     def step_of(sentence, prefix=None):
         sentence = text(sentence) or ""
@@ -134,7 +142,9 @@ def count(records, live=None, late=()):
             sessions[item["session"]][1]["denials"] += 1
     for step in steps.values():
         for run in step["sessions"]:
-            run["crashed"] = run["end"] is None and run["session"] != live
+            run["crashed"] = (
+                run["end"] is None and run["session"] != live and run["session"] not in halted
+            )
         step["fixes"] = sum(run["fixes"] for run in step["sessions"])
         step["crashes"] = sum(run["crashed"] for run in step["sessions"])
         step["ended"] = ("parked" if step["parks"] else "open" if step["merged"] is None
@@ -166,15 +176,25 @@ def main(argv=None, now=None):
     if records is None:
         print(f"{log}: no run log; nothing written")
         return 0
+    switches, reason = switchlog.read(args.state)
+    if reason:
+        print(f"{reason}; nothing written", file=sys.stderr)
+        return 2
     if not os.path.isdir(os.path.dirname(os.path.abspath(out))):
         print(f"{out}: its folder does not exist; nothing written", file=sys.stderr)
         return 2
-    steps = count(records, runlog.live_session(args.state)[0], runlog.late_refusals(args.state, records))
+    steps = count(
+        records,
+        runlog.live_session(args.state)[0],
+        runlog.late_refusals(args.state, records),
+        switches,
+    )
     at = (now or datetime.datetime.now()).astimezone().isoformat(timespec="seconds")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         rows = ",\n".join(json.dumps(step, separators=(",", ":"), ensure_ascii=False) for step in steps)
         level_2 = dict(run=status.level_2_run(records), of=status.LEVEL_2_RUN)
         f.write('{\n"counted":' + json.dumps(at) + ',\n"level_2":' + json.dumps(level_2, separators=(",", ":"))
+                + ',\n"switches":' + json.dumps(switches, separators=(",", ":"), ensure_ascii=False)
                 + ',\n"steps":[\n' + rows + "\n]\n}\n")
     print(f"{out}: counted up to {at}, {summary(steps)}")
     return 0
