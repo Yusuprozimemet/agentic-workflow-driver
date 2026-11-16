@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tests import test_once_stop
+from tests.test_halt import SwitchTest, new_group, stop
 from tests.test_merge_wait import run as run_answer
 from tests.test_on import OnCase
 
@@ -84,4 +85,26 @@ class SwitchLogOnTest(OnCase, unittest.TestCase):
         self.assertEqual(
             [without_at(line) for line in switches(self.state)],
             [{"event": "on"}, {"event": "off", "issue": 1}],
+        )
+
+
+class SwitchLogHaltTreeTest(SwitchTest):
+    # SwitchTest holds only helpers, so subclassing it runs no test of test_halt.py here.
+    def test_halt_names_the_session_the_lock_kill_ended(self):
+        # The lock names a live driver whose tree holds the session: the lock's kill ends the session
+        # before the halt looks at it again, and the halt line still names it.
+        runlog = __import__("driver.runlog", fromlist=["runlog"])
+        sleeper = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"], **new_group()
+        )
+        self.addCleanup(stop, sleeper)
+        self.write_lock(sleeper.pid)
+        started = self.lock.now().strftime(self.lock.STAMP)
+        runlog.start(self.state, "Day 13 Track A: x", "day-13/track-a", "s-tree", "1")
+        runlog.pid(self.state, "s-tree", sleeper.pid, started)
+        done = self.cli("halt")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        lines = [without_at(record) for record in switches(self.state)]
+        self.assertEqual(
+            lines, [{"event": "halt", "why": "run-steps.py halt", "session": "s-tree"}]
         )

@@ -38,9 +38,12 @@ Tick each box in this PR once its evidence is in the PR body; under a box left u
       Plan: N25 "every merge the driver made, every park and every refusal"
 - [x] S-switch-log.2 **new** — `run-steps.py halt --state <dir>` with no driver running writes one
       halt line, why "run-steps.py halt" and no `session` key; `clear` then writes one clear line;
-      a second `clear`, with no halt set, writes nothing.
-      Test: `SwitchLogTest.test_halt_and_clear_commands`.
+      a second `clear`, with no halt set, writes nothing. A `halt` while the lock names a live
+      driver and the run log a live session names that session, though the lock's kill ended it.
+      Test: `SwitchLogTest.test_halt_and_clear_commands`,
+      `SwitchLogHaltTreeTest.test_halt_names_the_session_the_lock_kill_ended`.
       Red today: `switches.jsonl` is not written, a FileNotFoundError.
+      broken: a halt names no session the lock's kill ended → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt', 'session': 's-tree'}]
       broken: clear writes no line → AssertionError: Lists differ: [{'event': 'halt', 'why': 'run-steps.py halt'}] != [{'event': 'halt', 'why': 'run-steps.py halt'}, {'event': 'clear'}]
       Plan: P58 "has the switches `on`, `off`, `status`, `halt`, `clear`"
 - [x] S-switch-log.3 **new** — `on`, whose run's issue #1 is closed after the first merge
@@ -78,3 +81,7 @@ python -m unittest tests.test_switch_log tests.test_switch_count
   a halted session into `run.jsonl`; the next run would then start the step afresh instead of
   parking, and C04.12 and C05.11 forbid any new line there. Changed to a file of its own before
   any code.
+- **Defect** — found: self · cause: implementation · made: none · `run-steps.py halt` named the
+  session only when its own kill was tried; when the lock's kill had already ended it, the usual
+  case, the line named none and the count still called it a crash. Seen while writing the PR body;
+  fixed in this PR, with `SwitchLogHaltTreeTest` seen red first.

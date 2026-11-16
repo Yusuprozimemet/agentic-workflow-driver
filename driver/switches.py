@@ -46,8 +46,9 @@ def halt(state, docker="docker"):
     container_session, name = runlog.live_container(state)
     if name and _kill_container(docker, container_session, name):
         found = True
-    # Written after the kills, so that the session it names is one this halt stopped.
-    switchlog.append(state, "halt", why="run-steps.py halt", session=session if tried else None)
+    # Written after the kills. The session named is the one alive before them: the lock's kill ends it
+    # too, and then tried is false, though this halt stopped it.
+    switchlog.append(state, "halt", why="run-steps.py halt", session=session)
     if not found and not tried:
         print("halt: set; no driver is running")
     return code
