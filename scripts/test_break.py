@@ -138,6 +138,25 @@ class BreakTest(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertIn("(lines 1, 2)", run.stderr)
 
+    def test_a_path_git_bash_rewrote_is_refused_with_the_cure(self):
+        # D05.5, D10.17, D11.22: Git Bash turned "/state/sessions" into a Windows path, so a find
+        # occurred 0 times or a replace put an absolute path in the report, three Days running.
+        for find, replace, arg in (("C:/Program Files/Git/state", "x", "--find"),
+                                   ("// ok", "// C:/Program Files/Git/state/sessions", "--replace"),
+                                   ("F:/", "x", "--find")):
+            run = self.run_break(find, replace)
+            self.assertEqual(run.returncode, 2, (arg, run.stderr))
+            # A fixed message: the refusal it replaces names the temporary file.
+            self.assertTrue(f"{arg} holds" in run.stderr, f"{arg} not refused as a rewritten path")
+            self.assertIn("MSYS_NO_PATHCONV=1", run.stderr)
+            self.assertEqual(self.contents(), self.original)
+
+    def test_a_windows_path_already_in_the_file_is_not_refused(self):
+        with open(self.file, "wb") as f:
+            f.write(b'String p = "C:/data"; // ok\r\n')
+        run = self.run_break('"C:/data"; // ok', '"C:/data"; // broken')
+        self.assertNotIn("MSYS_NO_PATHCONV", run.stderr)
+
     def test_a_multi_line_find_written_with_lf_breaks_a_crlf_file(self):
         # D08.68, D08.72: a two-line --find never matched a CRLF checkout, and was redone on one line.
         crlf = [sys.executable, "-c", f"import sys; t = open({self.file!r}, 'rb').read(); "

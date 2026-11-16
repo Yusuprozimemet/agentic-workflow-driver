@@ -65,6 +65,36 @@ before running the breaks, most frequent first, and record what the review catch
       edited expressions grepped against their callers and every Day's break finds?
       `brief-check.py` names the callers a brief misses.
 
+## Kinds that came back
+
+Each kind below came back at least once: 32 Defect lines carry `same-as:`, and the work itself
+(`found: self`, `review` or `Track <X>`) caught 74, outside any gate (#212, S13 and S14; counted
+2026-11-16). The gate named is what now catches the kind before a person has to notice it. A
+kind marked "none" needs its own gate if it comes back again.
+
+| Kind | Lines | Last | Gate now |
+|---|---|---|---|
+| A break's report differs between runs (pid, uuid, time) | D03.17, D04.6 and 9 more | Day 07 | `break.py` refuses the report |
+| A report holds Windows-only text | D06.23, D07.40, D08.83 | Day 08 | "A track's breaks replay", on Linux |
+| Git Bash rewrote a `/path` argument | D05.5, D10.17, D11.22 | Day 11 | `break.py` refuses it (this rung's PR) |
+| A multi-line find on a CRLF tree | D08.68, D08.72 | Day 08 | `break.py` writes it in the file's endings |
+| A test fails on and off under load | D07.27, D08.76, D10.18, D11.25, D11.29, D11.32, D12.34–36 | Day 12 | none: fixed in #222 and #225; "Timing" above |
+| A Red today the code no longer gives | D03.14, D06.10, D06.16, D06.20, D06.21 | Day 06 | `seen-red.py --expect` at the track's start |
+| Red by an error, not an assertion | D07.29, D07.32, D08.67, D10.14, D12.33 | Day 12 | `seen-red.py --expect`; "Red for another reason" above |
+| A PR over 400 changed lines | D06.5, D07.15, D07.17, D07.20, D07.33 | Day 07 | `pre-push.py`, "Diff stays reviewable" |
+| A brief names a name's wrong home or misses a caller | D07.24, D08.77, D09.28 | Day 09 | `brief-check.py` |
+| A brief's fake or expected count is wrong | D08.74, D09.22, D09.23, D11.24 | Day 11 | none: the implementer's first run |
+| A branch no test sees | D07.21, D07.28 | Day 07 | "A branch no test sees" above |
+| A new name collides with an old one | D09.25, D11.28 | Day 11 | `brief-check.py` callers; "Collisions" above |
+| Evidence worded so the replay cannot read it | D10.26, D11.33 | Day 11 | `close-evidence.py --rehearse` |
+| A branch started from a stale `main` | D06.7, D06.9 | Day 06 | none |
+| Output crashed on the cp1252 console | D02.11, D12.30 | Day 12 | none |
+
+A repeat's text names what failed, its cause and the Day that made it, as a line without
+`same-as:` would: `relabel.py` gives the blind rater only "It repeats a defect recorded on Day
+NN", and Day 12's three repeats that named neither (D12.34 to D12.36) made 9 of its 12
+disagreements (#212, S22).
+
 ## Size of change
 
 Take the lowest rung that qualifies, and say which in the PR.

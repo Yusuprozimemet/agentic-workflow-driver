@@ -95,13 +95,17 @@ class EntriesTest(unittest.TestCase):
         self.assertIn("### D44-3 (Day 44)\nDay 42's grep matched comments.", text)
         self.assertEqual(4, len(json.load(open(os.path.join(out, "key.json"), encoding="utf-8"))))
 
-    def test_the_blind_file_holds_no_same_as(self):
-        # same-as: names an earlier defect, whose tags the rater could otherwise look up.
+    def test_the_blind_file_holds_no_same_as_but_says_the_day_it_repeats(self):
+        # same-as: names an earlier defect, whose tags the rater could otherwise look up. Without
+        # it, Day 12's three repeated flaky tests read as new: 9 of its 12 disagreements (#212, S22).
         _, path = write_spec("## Notes\n- **Defect** D44.1 — found: close · cause: spec · made: Day 44 · "
                              "same-as: D21.2 ·\n  the grep matched comments again.\n")
         out = tempfile.mkdtemp()
         rows = relabel.blind([path], out)
-        self.assertEqual("### D44-1 (Day 44)\nthe grep matched comments again.\n\n",
+        text = open(os.path.join(out, "blind.md"), encoding="utf-8").read()
+        self.assertIn("It repeats a defect recorded on Day 21.", text)
+        self.assertEqual("### D44-1 (Day 44)\nthe grep matched comments again.\n"
+                         "It repeats a defect recorded on Day 21.\n\n",
                          open(os.path.join(out, "blind.md"), encoding="utf-8").read())
         self.assertEqual(("close", "D21.2"), (rows[0]["found"], rows[0]["same-as"]))
 

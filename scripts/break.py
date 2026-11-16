@@ -368,6 +368,17 @@ def endings(find, replace, original):
     return find, replace
 
 
+# What Git Bash makes of "/state/sessions" (its install root put in front) and of "/F" (a drive).
+MSYS_PATH = re.compile(r"[A-Za-z]:[/\\]Program Files[/\\]Git[/\\]|(?<![\w/])[A-Za-z]:/")
+
+
+def rewritten(text, original):
+    """The Windows path Git Bash's path conversion left in an argument, when the file holds no such
+    text: three Days lost a break to it (D05.5, D10.17, D11.22)."""
+    hit = MSYS_PATH.search(text)
+    return hit.group(0) if hit and hit.group(0).encode() not in original else None
+
+
 def lines_of(find, original):
     """The lines a find occurs on, each once, for a refusal to name."""
     found, at = set(), original.find(find)
@@ -445,6 +456,10 @@ def main(args=None):
     blob = blob_of(entry_of(a)["file"], original) if target else None
     if target and blob is None:
         return refuse(f"--record needs git to hash {a.file}: run it inside the repository")
+    for name, text in (("--find", a.find), ("--replace", a.replace)):
+        if hit := rewritten(text, original):
+            return refuse(f"{name} holds {hit!r}, not in {a.file}: Git Bash rewrites a /path argument into a "
+                          "Windows path; run break.py with MSYS_NO_PATHCONV=1")
     find, replace = endings(a.find.encode(), a.replace.encode(), original)
     if original.count(find) != 1:
         where = f" (lines {', '.join(map(str, lines_of(find, original)))})" if find in original else ""
