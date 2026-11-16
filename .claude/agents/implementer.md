@@ -33,8 +33,15 @@ do not guess which one is right.
     commit hash, time, duration, temporary name or absolute path, and no set printed in its own
     order. Compare a bool, a sorted list, or the value with `<uuid>`, `<head>` or `<pid>` put in
     its place.
-  - A test fails by an assertion, not by an error: read a key with `.get`, check a list's
-    length before indexing it. Under a break, `KeyError` or `IndexError` proves nothing.
+  - A test fails by an assertion, not by an error: assert a key is present (`assertIn`) before
+    indexing it, and a list's length before indexing it. Under a break, `KeyError` or
+    `IndexError` proves nothing; and `.get` turns a missing key into `None`, which fails for
+    another reason than the spec's Red today (D08.67).
+- **Tests first, seen red, then the code.** Write the brief's tests before any code, and run
+  `python scripts/seen-red.py --expect "<the brief's Red today>" -- <the test command>` (tests
+  under `tests/`; for a test elsewhere, run it on the unchanged code). If it exits 1, the test
+  passes on `main` or fails for another reason: stop and report it, with what it printed; do not
+  write the code. Otherwise put its `seen red:` line in your report, then write the code.
   - Every wait and poll has a bound that fails the test: a regression must not hang it.
   - A test that would pass on the code before your change does not test it: say which line of
     the old code it fails on.
@@ -56,6 +63,8 @@ Done: <one line: what now works, or what stopped you>
 
 Files changed
 - <path>: <what changed, one line>
+
+Seen red: <the `seen red:` line seen-red.py printed, before any code>
 
 Tests run
 - <command> → <tests run, failures, errors, from the reports> ; `ruff check . && ruff format --check .`: <exit code>

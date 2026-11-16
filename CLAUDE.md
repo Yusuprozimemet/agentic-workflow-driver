@@ -196,8 +196,11 @@ PR. CI's "Track tests seen red" re-runs each `new` criterion's test this way whe
 repository variable `TRACK_RED_RUNNER` names the project's runner (`docs/kit.md`, setup); unset, it fails
 a track that owns a `new` criterion and passes the rest.
 
-Run it at the track's start, not after its code: send the brief's tests first, run
-`seen-red.py --expect` on them, and only then send the code. A `new` test already green on `main`
+Run it at the track's start, not after its code: the brief gives the spec's Red today, and the
+implementer writes the tests, runs `seen-red.py --expect` on them and stops if they are not red
+for that reason, before any code (the maintainer's choice, #212 S6). Run it again yourself before
+the PR; breaks stay with the main session. Review the diff with the checklist in
+[Reviewing a track's diff](specs/README.md#reviewing-a-tracks-diff). A `new` test already green on `main`
 is a spec defect, a hold or a test that checks the wrong thing; four reached CI's check after their
 track's code was written (D09.26, D10.12, D10.13, D11.19), and the code was written for nothing.
 
