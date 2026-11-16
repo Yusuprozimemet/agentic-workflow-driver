@@ -1,7 +1,7 @@
 # agentic-workflow-driver plan: a driver runs the days, the maintainer owns the plan
 
 <!-- plan.md says what and why; the day specs in specs/ say how. It changes only in a
-plan-change PR. -->
+plan-change PR, and only when "Stopping points" allows it. -->
 
 Written 2026-11-06 in the [kit](https://github.com/Yusuprozimemet/agentic-workflow-kit) as
 `kit/automation-plan.md`, and moved here when this repository was set up from the kit at
@@ -127,7 +127,7 @@ may still run sessions on the PC, at level 1 only. The driver runs each session'
 with `docker run -i --rm --name <a name from the session's id>`, from an image the driver's
 repository builds: Claude Code at the live-checked version, Python under the name `python` (the
 kit's hooks call it so), git, `gh`, and the project's test tools. The step still goes in on
-standard input and the JSON result comes out on standard output. What the session can reach is
+standard input and its events come out on standard output, one JSON line each (`stream-json`). What the session can reach is
 what the driver mounts, and nothing else:
 
 - the project's checkout, writable: the one tree a step edits;
@@ -271,10 +271,10 @@ stateDiagram-v2
 
 ### Where am I, while a session runs
 
-Up to Day 10 a running session is a black box: the driver waits for it in `communicate()`, and
-`claude -p --output-format json` prints one object, at the end. Until then `status` names the
-step and shows its cost as $0.00, and nothing tells a session at work from one that hangs. Day 11
-makes it visible, in this order, the cheapest first:
+Up to Day 10 a running session was a black box: the driver waited for it in `communicate()`, and
+`claude -p --output-format json` printed one object, at the end. Until then `status` named the
+step and showed its cost as $0.00, and nothing told a session at work from one that hangs. Day 11
+made it visible, in this order, the cheapest first:
 
 1. **A heartbeat.** At each poll (`--poll`, 30 seconds by default) the driver rewrites
    `<state>/heartbeat.json`: the session, its step, when it started, the time of the poll, and
@@ -432,6 +432,12 @@ before the PR opened may have left no line.
 | `maintainer action:` hand-offs, deploys, destroying anything | maintainer | **maintainer** | |
 | Force-push | maintainer's OK | never | hook |
 
+**The merge gate is CI and the auditors; the maintainer's merge is a go-ahead.** CI's required
+checks and the auditors' reports are what a pull request must pass; the maintainer's merge says
+go ahead, not that a person read every line. Of the first 213 pull requests, the median went
+from open to merged in 4 minutes, CI included (#211, N3). At level 2 the driver's merge stands on
+the same gate, with the reviewer's verdict in place of the go-ahead.
+
 ## When the driver parks
 
 A park opens an issue labelled `parked` with the reason and stops the run. GitHub's phone app
@@ -458,9 +464,9 @@ shows it. The driver resumes when the maintainer's account closes the issue.
   permission mode ("Decisions for the maintainer").
 - The next step is "write its day spec": a manual hand-off for now; the maintainer writes the
   spec ("What the driver needs from the kit").
-- The usage limit is reached: the driver waits and retries, and parks only if that fails. Not
-  built at Phase 1's end (C08.15 is not met): such a session parks as one that ended with neither
-  a pull request nor `PARK:`. Day 9 builds the wait.
+- The usage limit is reached: when it resets at most `--limit-hours` (6 by default) away, the
+  driver waits for the reset and resumes the step's session, and parks if the limit is reached
+  again; it parks at once when the reset is further away (Day 9, C09.1 to C09.3).
 
 To answer a park that needs a conversation, open VS Code on that PC and work as today. Level 0
 stays available.
@@ -471,9 +477,11 @@ A restart must never start a second session for a step that has one, open a seco
 for it, or discard work nobody finished.
 
 **Where the state is.** Git and GitHub hold what happened: the branches, the pull requests, the
-merges, the `parked` and `STOP` issues. The run log holds only what they cannot: a step's session
-id, how many fixes it has had, the driver's lock. The driver decides from git and GitHub first.
-A lost or torn log makes it park, not guess.
+merges, the `parked` and `STOP` issues. The run log records each act of the driver (a session's
+start and end, its process or container, waits, parks, merges, closes, fixes, reviews), and the
+driver reads from it only what git and GitHub cannot hold: a step's session id, how many fixes it
+has had, a session that may still run. The lock is a file of its own. The driver decides from git
+and GitHub first. A lost or torn log makes it park, not guess.
 
 1. **Write before acting.** Before a session starts, the driver appends the step, its branch
    prefix and the session id it chose (`--session-id`) to the run log, and flushes the line. A
@@ -491,7 +499,8 @@ A lost or torn log makes it park, not guess.
    finds them by branch. An open PR on a branch of the step means the step reached its PR: the
    driver waits on it and starts nothing.
 6. **One park per reason.** Before it opens a `parked` issue the driver looks for an open one
-   for the same step and reason, and comments there.
+   for the same step and reason, and comments there. At a start, an open `parked` issue of the
+   step's own title is waited on, with no comment (the table's third row, C07.21).
 7. **No command that can lose work.** The driver's git commands are `status`, `rev-parse`,
    `for-each-ref`, `ls-remote`, `fetch`, and on a clean tree `switch main` and
    `merge --ff-only`; `symbolic-ref` and `ls-remote --get-url` read only. Never `reset`, a checkout of a path, `clean`, `stash`, `branch -D`, a
@@ -567,17 +576,17 @@ is built until the trial at level 1 has been read.
      that follows it;
    - runs, in the project's folder (from Day 10 in the session's container, "Where the driver
      lives"), with the step on standard input, `claude -p --model <the main session's>
-     --output-format json --max-budget-usd <n> --permission-mode auto --strict-mcp-config
-     --settings <the driver's>
+     --output-format stream-json --verbose --max-budget-usd <n> --permission-mode auto
+     --strict-mcp-config --settings <the driver's>
      --append-system-prompt-file <the driver's rules>`. `--strict-mcp-config` is there so that no
-     connector of the maintainer's claude.ai account loads in a session nobody watches. From
-     Day 11 `--output-format stream-json --verbose` in place of `json` (item 6);
+     connector of the maintainer's claude.ai account loads in a session nobody watches. Up to
+     Day 10 it was `--output-format json` (item 6);
    - writes the step, its branch prefix and the session's id (`--session-id`) to the run log
      before the session starts ("Recovery");
    - finds the step's PR on GitHub by its branch, not in the session's text;
    - polls the required checks (`gh pr checks <n> --required`) every `--poll` seconds, as Day 6
      built it in place of `--watch`. On a red check it resumes that step's session
-     (`--resume`, the id from the JSON output) with the failing lines, filtered and capped, twice
+     (`--resume`, the id it chose with `--session-id`) with the failing lines, filtered and capped, twice
      at most;
    - waits for the maintainer's merge, checks the evidence run after a close, pulls `main`.
 
@@ -608,7 +617,8 @@ repository.
    refuse it a git command that changes a repository and a `gh` command that is not a read. The
    driver takes HEAD, the refs, the stash and `git status` before and after it and parks on a
    difference: `auditor-guard.py` makes that comparison at `SubagentStop`, which a top-level
-   session does not fire.
+   session does not fire. The reviewer's findings go in one comment on the pull request
+   (decided 2026-11-15); a comment that fails does not stop the run.
 8. **The level 2 merge**: the path check against the human-only list, then
    `gh pr merge --match-head-commit <sha>`, the commit the checks and the reviewer saw.
 9. **Level 3**: the next phase starts when the plan-auditor names no plan change.
@@ -627,7 +637,7 @@ runs without them:
 
 ## Phases
 
-Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 9 have specs in
+Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 12 have specs in
 [`specs/`](specs/). The days after them are titles: each gets its spec when its turn comes.
 
 ### Phase 0 — The dry run
@@ -704,13 +714,38 @@ and the container's correction above it).
   Lifted by "Course correction after Phase 1".
 - **Day 14 (the level 2 trial's record) is a stopping point.** The same reading, before Phase 3.
 
+**When `plan.md` may change** (decided 2026-11-16). A plan-change PR that adds or moves work
+opens only at a phase's end or a stopping point named here, beside the plan-auditor's reading.
+Between them, a plan-change PR only makes `plan.md` say what the merged code and specs already
+do: a stale line, a contradiction settled toward the tested behaviour, a decision already taken.
+It adds no Day and moves none. A decision that becomes lasting behaviour becomes a commitment in
+the next plan-change PR; detail may stay `Plan: none` with its reason. Waiting for Day 14's stop:
+the Telegram remote (#212, S8).
+
 ## Course corrections
 
 <!-- Added by plan-change PRs, newest first: what a stopping point or audit found, and what the
 maintainer chose. Empty at the start. A stop's decisions go under their own heading,
 "## Course correction after Phase N", N the stop item's phase: that heading lifts the stop. -->
 
-### 2026-11-13: live session progress is Day 11; the reviewer, the merge and the trial move up one
+### 2026-11-16: when the plan may change; lines brought to the code
+
+`plan.md` changed four times after the start, three of them in two days, and the plan began to
+follow the work (#212, S7). From now on it changes as "Stopping points" says: work is added or
+moved only at a stop; between stops, only to match what merged. This change is of the second
+kind and adds no Day:
+
+- The merge gate is written down ("Who does what"), as `CLAUDE.md` says it since #219.
+- The reviewer's findings in one pull request comment, decided 2026-11-15, is a commitment (item 7).
+- Lines corrected to the code: the session's output is `stream-json` (item 2, "Where the
+  driver lives", "Where am I"); the run log records more than three things ("Recovery"); the
+  usage limit parks at once past `--limit-hours`; an open park of the step's own title is waited
+  on, not commented on; the repository is public; Days 1 to 12 have specs; the reviewer's start
+  is checked on 2.1.322.
+- Kept, for Day 13 to build: the driver never drives its own repository (P08) and the session
+  installs the project before its tests (N10).
+- The Telegram remote waits for Day 14's stop.
+
 
 The Day 8 trial's sessions ran for minutes with nothing to show for them: `status` named the
 step and a cost of $0.00, and a session at work looked like one that hangs. The maintainer asked
@@ -822,8 +857,9 @@ The driver is outside the kit and outside every project it drives.
 
 Decided 2026-11-06:
 
-- **The repository.** The driver has one of its own, private, `agentic-workflow-driver`, set up from the kit as a project
-  and built through day specs, with this document as the base of its `plan.md`. The kit stays
+- **The repository.** The driver has one of its own, `agentic-workflow-driver`, public (decided
+  private; public since GitHub Pages hosts its dashboard, corrected 2026-11-16), set up from the
+  kit as a project and built through day specs, with this document as the base of its `plan.md`. The kit stays
   the source of the workflow's rules.
 - **The order.** Level 1 is built first. The clean-tree checks stay. A day whose audit opens no
   spec-change PR parks.
@@ -899,8 +935,9 @@ Still not shown:
 - Which credential `git push` used: the git config sends it through `gh auth git-credential`.
   No merge has used the token; at level 1 the maintainer merges.
 - That a session follows rules passed with `--append-system-prompt-file` as it follows
-  `CLAUDE.md` (the trial's sessions followed them; nothing compared), and that `--agents` with
-  `--agent` starts the reviewer from a brief outside the project: checked only on 2.1.170.
+  `CLAUDE.md` (the trial's sessions followed them; nothing compared). That `--agents` with
+  `--agent` starts the reviewer from a brief outside the project is checked on 2.1.322 by
+  C12.21, a live test run by hand, not in CI.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
 - The container (the rest is shown in "Where the driver lives"): that the fine-grained token as
