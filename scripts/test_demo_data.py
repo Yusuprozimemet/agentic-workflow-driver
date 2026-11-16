@@ -78,7 +78,7 @@ class DemoData(unittest.TestCase):
         self.assertEqual(sorted({day for d in m["g10"]["dates"] for day in d["days"]}), [1, 2, 3, 4, 5, 6])
         # The board shows every state a re-check can find, and the trust strip a bar for each re-check.
         self.assertEqual(sorted({t["status"] for r in m["g4"]["rows"] for t in r["tiles"]}),
-                         ["broken", "building", "open", "proven", "repair", "skipped", "unproven"])
+                         ["broken", "building", "open", "proven", "repair", "replaced", "skipped", "unproven"])
         self.assertEqual(len(m["g4"]["hist"]), 3)
         # A defect at every gate, and the parks, which the notebook has not counted, read from the driver's steps.
         self.assertEqual([sum(len(r["cells"][i]) for r in m["g7"]["rows"]) for i in range(11)], [1] * 11)

@@ -353,7 +353,7 @@ def criteria(section_text):
         claim = excerpt(re.sub(r"^(\*\*\w+\*\*\s*—\s*)?", "", body[cid.end() if cid else 0:]), 140)
         out.append(dict(id=f"C{cid.group(1)}.{cid.group(2)}" if cid else None,
                         ticked=block.startswith("- [x]"), kind=tag.group(1) if tag else None,
-                        claim=claim, prs=sorted({int(n) for n in CITED_PR.findall(block)}),
+                        claim=claim, prs=cited_prs(block),
                         tests=sorted({c + ("." + m if m else "") for c, m in EVIDENCE_TEST.findall(block)}),
                         red=broke(block), broke_in=broke_in(block), block=block))
     return out
@@ -636,9 +636,25 @@ def removal_history(days, snaps, blobs, moved=None):
                  files=c["files"], found=c["found"]) for c in checks]
 
 
+# The labels a criterion's lines start with: the Evidence line runs on until the next of them.
+FIELD_LINE = r"(?:broken|seen[- ]red|Test|Red today|Plan|Replaces|Not proven|To break once|manifest|Evidence):"
+BROKEN_TRAIL = re.compile(r"\(#(\d+)\)\s*$")
+
+
 def criterion_evidence(block):
-    match = re.search(r"(?im)^\s*Evidence:\s*(.*(?:\n(?!\s*(?:broken:|Replaces:))\s+[^\n]+)*)", block)
+    match = re.search(rf"(?im)^\s*Evidence:\s*(.*(?:\n(?!\s*{FIELD_LINE})\s+[^\n]+)*)", block)
     return match.group(1) if match else ""
+
+
+def cited_prs(block):
+    """The pull requests a criterion cites: any #N on its Evidence line, and the trailing (#N) of each `broken:`
+    line. A number in the claim, a `seen red:` quote or a test's output is not a citation (C10.12 quoted #5)."""
+    prs = set(CITED_PR.findall(criterion_evidence(block)))
+    for m in BREAK_LINE.finditer(block):
+        trail = BROKEN_TRAIL.search(block[m.start():].split("\n", 1)[0])
+        if trail:
+            prs.add(trail.group(1))
+    return sorted(int(n) for n in prs)
 
 
 def track_criteria(work):

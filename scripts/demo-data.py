@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
+from spec_drift_views import criterion_states, gene  # noqa: E402
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -365,7 +366,7 @@ def plan_links():
     links = {"C1.1": ["P01"], "C1.2": ["P02"], "C1.3": [], "C2.1": ["P03"], "C2.2": ["P03"], "C2.3": ["P04"],
              "C3.1": ["P05"], "C3.2": ["P05", "P06"], "C3.3": [], "C4.1": ["P06"], "C4.2": ["N02"], "C4.3": ["P04", "P06"],
              "C5.1": ["P07"], "C5.2": [], "C5.3": ["P08"], "C6.1": ["N01"], "C6.2": ["N01"], "C6.3": []}
-    return dict(reference="demo", quotes=sum(len(v) for v in links.values()), links=links, unlined=[],
+    return dict(reference="demo", quotes=sum(len(v) for v in links.values()), links=links, unlined=[], replaced=["C1.2"],
                 rewrites=[dict(pr=9, after_day=3)],
                 commitments=[dict(id=i, short=s, section=sec, owner_day=o, rule=r, change=ch, text=f"Made-up commitment: {s.lower()}.")
                              for i, s, sec, o, r, ch in C])
@@ -375,6 +376,9 @@ def plan_links():
 def demo():
     rows = build_rows()
     days, index, attention, checks, removals = build_days(rows)
+    # One promise replaced: C5.2 took C1.2's place and names no commitment, so P02 is spliced out of the plan.
+    by_id = {c["id"]: c for c in index}
+    by_id["C5.2"]["replaces"], by_id["C1.2"]["replaced_by"] = ["C1.2"], ["C5.2"]
     merged = [r for r in rows if r["pr"]]
     files = ["plan.md"] + [f"specs/day-{d:02d}-{slug(d)}.md" for d in DAYS]
     # Hours open: a spec change waits on review, a close on its replay; one tooling PR beside them.
@@ -488,6 +492,8 @@ def demo():
                   break_line_from_pr=0, project=PROJECT, repo_url=None, phases=PHASES, stops=[], where=dict(rows=[], names={})))
     # Counted from the example Days' Defect lines as the real data is, so the two cannot drift apart.
     out["defect_counts"] = defect_counts(out["days"])
+    criterion_states(out["criteria_index"], out["days"], out["replay"])
+    out["gene"] = gene(out["plan"], out["criteria_index"], out["days"])
     out["score"] = quality_score(out)
     return out
 

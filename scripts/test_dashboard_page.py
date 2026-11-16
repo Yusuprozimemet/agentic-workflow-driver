@@ -20,6 +20,7 @@ SCRIPT = os.path.join(PAGE, "dashboard.js")
 spec = importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
 sd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sd)
+import spec_drift_views as views  # noqa: E402  (spec-drift.py put scripts/ on the path)
 
 # model() on the data from stdin, printed as JSON.
 MODEL = r"""
@@ -90,7 +91,9 @@ def node(harness, data):
 
 
 def model(data):
-    """What the page would draw and say for this data."""
+    """What the page would draw and say for this data, each criterion given its state as spec-drift.py gives it."""
+    if isinstance(data.get("criteria_index"), list):
+        views.criterion_states(data["criteria_index"], data.get("days") or [], data.get("replay"))
     return node(MODEL, data)
 
 

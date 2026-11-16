@@ -48,6 +48,16 @@ def plan_line_links(block):
     return None if pairs is None else [pid for pid, _ in pairs]
 
 
+def replaced(head, blobs):
+    """The criteria a later criterion's `Replaces:` line names at `head`: not in force, as `plan-links.py` reads it."""
+    days = {}
+    for name in run("git", "ls-tree", "--name-only", head, "specs/").split():
+        m = plan_links.DAY_FILE.fullmatch(os.path.basename(name))
+        if m:
+            days.setdefault(int(m.group(1)), []).extend(plan_links.CRITERION.findall(blobs.read(head, name)))
+    return sorted(plan_links.replaced(days))
+
+
 def criterion_links(head, blobs, backfill, said=None):
     """Every criterion of every day spec at `head`, with the commitments it says it serves: the backfill for the
     Days it covers, the criterion's own `Plan:` line from Day 11 on. A criterion with no readable line is left
@@ -104,4 +114,4 @@ def plan_graph(head, blobs, rows):
                         text=p.get("text", ""), note=p.get("change", ""))
                    for p in promises if isinstance(p, dict) and p.get("id")]
     return dict(reference=REFERENCE, commitments=commitments, links=links, said=said, quotes=quotes, unlined=unlined,
-                rewrites=plan_rewrites(head, rows))
+                replaced=replaced(head, blobs), rewrites=plan_rewrites(head, rows))

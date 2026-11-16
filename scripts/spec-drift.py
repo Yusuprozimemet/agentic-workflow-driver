@@ -75,6 +75,7 @@ from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
+from spec_drift_views import criterion_states, gene
 from spec_drift_score import quality_score
 
 
@@ -108,7 +109,7 @@ CAVEATS = [
 # (load_cache) and counts as the script edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
            "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
-           "spec_drift_plan.py", "spec_drift_score.py")
+           "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_views.py")
 
 
 def load_cache(path):
@@ -223,6 +224,8 @@ def main():
         attach_plain(index)
         stories = user_stories(listed)
         attach_abilities(index, stories["stories"])
+        criterion_states(index, days, replay)
+        planned = plan_graph(head, blobs, rows)
         tests = test_inventory(run("git", "ls-tree", "-r", "--name-only", head, "tests/", "scripts/").split("\n"),
                                lambda path: blobs.read(head, path))
         now = dict(generated=datetime.datetime.now().astimezone().isoformat(timespec="minutes"),
@@ -240,7 +243,7 @@ def main():
                     hand_offs=handoffs, look_ahead=look_ahead(snaps, days, index, order, blobs),
                     criteria_index=index, attention=attention, test_inventory=tests,
                     defect_recurrence=recurrence(days),
-                    user_stories=stories, plan=plan_graph(head, blobs, rows),
+                    user_stories=stories, plan=planned, gene=gene(planned, index, days),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     defect_counts=defect_counts(days),
                     other_groups=other_groups(rows),

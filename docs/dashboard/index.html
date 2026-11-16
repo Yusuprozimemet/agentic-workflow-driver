@@ -133,6 +133,37 @@
 
   <h2 class="chapter">Is the way of working sound?<small>plan against spec, spec against code, and what the checks catch</small></h2>
 
+  <section class="graph" id="gene" aria-label="Plan, spec and code, drawn as gene, transcript and protein">
+    <div class="graph-head">
+      <p class="graph-n">The gene · first in its chapter, above graph 12</p>
+      <h2>Does the plan reach proved code?</h2>
+      <p class="graph-say">Read from the top: the plan, the criteria that copy it, their tests and replay, and the code that is proved.</p>
+    </div>
+    <div class="reach">
+      <p class="of">Of the <b><span id="gene-total"></span> commitments</b> in <code>plan.md</code>:</p>
+      <div class="figs" id="gene-figs"></div>
+    </div>
+    <details class="exact"><summary>Key, and how to read it</summary>
+      <p class="graph-say">Read it from the top, the way a cell reads a gene. The plan is the gene. Each criterion copies a line of it, as a transcript does. Replacing a criterion is splicing: what the new one no longer quotes drops out. The code is the protein, and a break on purpose is the proof that it works. Between the two is translation: under each commitment still named, one cell per criterion in force, coloured by what its test and the replay say.</p>
+      <dl class="gene-key">
+        <dt>The plan <small>the gene</small></dt>
+        <dd><span><i class="gene-k g-s3"></i>one band per commitment: the darker, the more criteria name it</span><span><i class="gene-k g-rule"></i>a rule about people, which no test can check</span><span><i class="gene-k g-later"></i>not due yet</span><span><i class="gene-k g-due"></i>should be covered by now, and is not</span><span><i class="gene-k tri"></i>the plan later rewrote it (hollow: reworded only)</span></dd>
+        <dt>Criteria, as written <small>the first transcript</small></dt>
+        <dd><span><i class="gene-k dash"></i>one quote of the commitment</span><span><i class="gene-k dash gone"></i>in a criterion that a later one replaced</span></dd>
+        <dt>Replacement <small>splicing</small></dt>
+        <dd><span><i class="gene-k bead"></i>named by a criterion in force</span><span><i class="gene-k arc"></i>named only by replaced criteria: it drops out</span><span>bare strand: never named</span></dd>
+        <dt>Tests and replay <small>translation</small></dt>
+        <dd><span><i class="gene-k proven"></i>holds, and a break on purpose proved its test</span><span><i class="gene-k unproven"></i>holds, never seen to fail</span><span><i class="gene-k skipped"></i>the replay cannot run its check</span><span><i class="gene-k repair"></i>needs repair</span><span><i class="gene-k broken"></i>broken</span><span><i class="gene-k building"></i>written, not built yet</span><span><i class="gene-k proven back"></i>edged: the replay once saw it stop, and it came back</span></dd>
+        <dt>The code <small>the protein</small></dt>
+        <dd><span><i class="gene-sw proved"></i>proved</span><span><i class="gene-sw proved part"></i>proved for some of its criteria, not all</span><span><i class="gene-sw unproved"></i>never seen to fail</span><span><i class="gene-sw unreplayable"></i>the replay cannot run its check</span></dd>
+      </dl>
+      <p class="limit">Named is not done: a proved bead means a criterion that names the commitment holds and was proved, not that the whole commitment is delivered. The spliced-out commitments are a reading of the Plan: lines; nobody has checked whether the replacing criteria still cover them in substance. A criterion that quotes several commitments is drawn under each.</p>
+    </details>
+    <div class="gene-fig-box" id="gene-plot"></div>
+    <div class="readout" id="gene-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="gene-table"></table></div></details>
+  </section>
+
   <section class="graph" id="g12">
     <div class="graph-head">
       <p class="graph-n">Graph 12 · placed before graph 6: plan against spec, as 6 is spec against code</p>
