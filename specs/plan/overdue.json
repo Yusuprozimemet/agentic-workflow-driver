@@ -1,4 +1,5 @@
 [
-  {"id": "P08", "settled_by": 13, "why": "PR B (#211, N5) found no check that --project is not the driver's own repository: Day 13 adds it or the plan-change PR takes it out"},
-  {"id": "N10", "settled_by": 13, "why": "PR B (#211, N5) found no driver code that installs the project before its tests: Day 13 adds it or the plan-change PR takes it out"}
+  {"id": "P08", "settled_by": 13, "why": "PR B (#211, N5) found no check that --project is not the driver's own repository; the plan change of 2026-11-16 keeps it, so Day 13 adds it"},
+  {"id": "N10", "settled_by": 13, "why": "PR B (#211, N5) found no driver code that installs the project before its tests; the plan change of 2026-11-16 keeps it, so Day 13 adds it"},
+  {"id": "N35", "settled_by": 13, "why": "added by the plan change of 2026-11-16 for a decision Day 12 built: C12.10 tests it and says Plan: none, a line only a spec-change PR may change, so Day 13's spec change names it there"}
 ]
