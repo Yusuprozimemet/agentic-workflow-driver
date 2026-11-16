@@ -139,29 +139,58 @@
       <h2>Does the plan reach proved code?</h2>
       <p class="graph-say">Read from the top: the plan, the criteria that copy it, their tests and replay, and the code that is proved.</p>
     </div>
+    <svg class="gene-defs" width="0" height="0" aria-hidden="true"><defs>
+      <pattern id="gene-pat-rule" width="4" height="4" patternUnits="userSpaceOnUse"><rect class="pr-bg" width="4" height="4"/><path class="pr-l" d="M0 1H4"/></pattern>
+      <pattern id="gene-pat-over" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="po-bg" width="5" height="5"/><rect class="po-l" width="2.5" height="5"/></pattern>
+      <pattern id="gene-pat-norun" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="pn-bg" width="3" height="3"/><rect class="pn-l" width="1.4" height="3"/></pattern>
+      <linearGradient id="gene-half" x1="0" x2="1" y1="0" y2="0"><stop class="gh-a" offset="50%"/><stop class="gh-b" offset="50%"/></linearGradient>
+    </defs></svg>
     <div class="reach">
       <p class="of">Of the <b><span id="gene-total"></span> commitments</b> in <code>plan.md</code>:</p>
       <div class="figs" id="gene-figs"></div>
     </div>
-    <details class="exact"><summary>Key, and how to read it</summary>
-      <p class="graph-say">Read it from the top, the way a cell reads a gene. The plan is the gene. Each criterion copies a line of it, as a transcript does. Replacing a criterion is splicing: what the new one no longer quotes drops out. The code is the protein, and a break on purpose is the proof that it works. Between the two is translation: under each commitment still named, one cell per criterion in force, coloured by what its test and the replay say.</p>
-      <dl class="gene-key">
-        <dt>The plan <small>the gene</small></dt>
-        <dd><span><i class="gene-k g-s3"></i>one band per commitment: the darker, the more criteria name it</span><span><i class="gene-k g-rule"></i>a rule about people, which no test can check</span><span><i class="gene-k g-later"></i>not due yet</span><span><i class="gene-k g-due"></i>should be covered by now, and is not</span><span><i class="gene-k tri"></i>the plan later rewrote it (hollow: reworded only)</span></dd>
-        <dt>Criteria, as written <small>the first transcript</small></dt>
-        <dd><span><i class="gene-k dash"></i>one quote of the commitment</span><span><i class="gene-k dash gone"></i>in a criterion that a later one replaced</span></dd>
-        <dt>Replacement <small>splicing</small></dt>
-        <dd><span><i class="gene-k bead"></i>named by a criterion in force</span><span><i class="gene-k arc"></i>named only by replaced criteria: it drops out</span><span>bare strand: never named</span></dd>
-        <dt>Tests and replay <small>translation</small></dt>
-        <dd><span><i class="gene-k proven"></i>holds, and a break on purpose proved its test</span><span><i class="gene-k unproven"></i>holds, never seen to fail</span><span><i class="gene-k skipped"></i>the replay cannot run its check</span><span><i class="gene-k repair"></i>needs repair</span><span><i class="gene-k broken"></i>broken</span><span><i class="gene-k building"></i>written, not built yet</span><span><i class="gene-k proven back"></i>edged: the replay once saw it stop, and it came back</span></dd>
-        <dt>The code <small>the protein</small></dt>
-        <dd><span><i class="gene-sw proved"></i>proved</span><span><i class="gene-sw proved part"></i>proved for some of its criteria, not all</span><span><i class="gene-sw unproved"></i>never seen to fail</span><span><i class="gene-sw unreplayable"></i>the replay cannot run its check</span></dd>
-      </dl>
-      <p class="limit">Named is not done: a proved bead means a criterion that names the commitment holds and was proved, not that the whole commitment is delivered. The spliced-out commitments are a reading of the Plan: lines; nobody has checked whether the replacing criteria still cover them in substance. A criterion that quotes several commitments is drawn under each.</p>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>The plan</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>Criteria, as written</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>Replacement</span><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>Criteria in force</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>Tests and replay</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>The code</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="stale" width="10" height="10" rx="2"/></svg>Off the plan</span></p>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+      <div>
+        <p class="graph-say">Read it from the top, the way a cell reads a gene. The plan is the gene. Each criterion copies a line of it, as a transcript does. Replacing a criterion is splicing: what the new one no longer quotes drops out. The code is the protein, and a break on purpose is the proof that it works. Between the two is translation: under each commitment still named, one cell per criterion in force, coloured by what its test and the replay say.</p>
+        <dl class="lg">
+          <dt>The plan <small>the gene</small></dt>
+          <dd><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>one band per commitment: the darker, the more criteria name it</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="rule" y="3" width="10" height="6"/></svg>a rule about people, which no test can check</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="notdue" x=".5" y=".5" width="9" height="11"/></svg>not due yet</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="overdue" width="10" height="12"/></svg>should be covered by now, and no criterion ever named it</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri changed" d="M4.5 7.5 l4 -6.5 h-8 z"/></svg>the plan later rewrote it</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri reworded" d="M4.5 7 l3.4 -5.5 h-6.8 z"/></svg>reworded only</span></dd>
+          <dt>Criteria, as written <small>the first transcript</small></dt>
+          <dd><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>one quote of the commitment, in a criterion for new work</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd hold" width="12" height="5" rx="2"/></svg>in a safety check</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd replaced" x=".5" y=".5" width="11" height="4" rx="2"/></svg>in a criterion that a later one replaced</span></dd>
+          <dt>Replacement <small>splicing</small></dt>
+          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>named at least once</span><span><svg width="24" height="16" viewBox="0 0 24 16" aria-hidden="true"><path class="arc" d="M1 13 Q12 -8 23 13"/><rect class="ex skip" x="8" y="7" width="8" height="8" rx="2"/></svg>named only by replaced criteria: it drops out</span><span><svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true"><path class="strand" d="M0 5H22"/></svg>bare strand: never named</span></dd>
+          <dt>Criteria in force <small>the mature transcript</small></dt>
+          <dd><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>what is still named, closed up, so this strand is shorter than the plan</span></dd>
+          <dt>Tests and replay <small>translation</small></dt>
+          <dd><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>one criterion in force that names the commitment: it holds, and a break on purpose proved its test</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unproved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>holds, never seen to fail</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc norun" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>the replay cannot run its check</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc stale" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>its test needs repair, or it is broken</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unbuilt" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>written, not built yet</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved scar" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>edged: the replay once saw it stop, and it came back (on the ring too)</span></dd>
+          <dt>The code <small>the protein</small></dt>
+          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>every criterion that names it holds and was proved by a break on purpose</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="part" cx="5" cy="5" r="3.9"/></svg>proved for some of those criteria, not all</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="unproved" cx="5" cy="5" r="3.8"/></svg>holds, never seen to fail</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="norun" cx="5" cy="5" r="4.2"/></svg>the replay cannot run its check</span></dd>
+          <dt>Off the plan <small>a plasmid</small></dt>
+          <dd><span>outer ring: a criterion that names no commitment, by Day</span><span>inner ring: its code, for each one in force</span></dd>
+        </dl>
+        <p class="hint">Point at a band to follow one commitment down to its code. Point at a quote to light up the other quotes of the same criterion. Point at a cell under Criteria in force for its tests, its merges and what the replay saw. Sections are in the plan's order, as on graph 12. The Day buttons at the top of the page fade every quote and cell that is not that Day's.</p>
+      </div>
     </details>
-    <div class="gene-fig-box" id="gene-plot"></div>
+    <div class="scroll" id="gene-plot"></div>
     <div class="readout" id="gene-read" aria-live="polite"></div>
+    <details class="exact mock-key"><summary>Where the plan does not reach proved code · Gaps that are expected · Where the model bends</summary>
+      <div><div class="cols">
+        <div>
+          <h3>Where the plan does not reach proved code</h3>
+          <ul class="finds" id="gene-finds"></ul>
+          <p class="hint">Point at a line to light up its commitments above.</p>
+        </div>
+        <div>
+          <h3>Gaps that are expected</h3>
+          <ul class="plain" id="gene-expected"></ul>
+          <h3>Where the model bends</h3>
+          <ul class="plain" id="gene-bends"></ul>
+        </div>
+      </div></div>
+    </details>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="gene-table"></table></div></details>
+    <div id="gene-tip" hidden></div>
   </section>
 
   <section class="graph" id="g12">

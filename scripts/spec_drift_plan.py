@@ -19,6 +19,7 @@ _spec.loader.exec_module(plan_links)
 
 PROMISES = "specs/plan/promises.json"
 BACKFILL = "specs/plan/links-days-01-10.json"
+OVERDUE = "specs/plan/overdue.json"
 # The plan a person approved: the first commit, which landed with Day 1's spec. P01 to P69 come from it.
 REFERENCE = "2d64383"
 
@@ -113,5 +114,9 @@ def plan_graph(head, blobs, rows):
                         change=p.get("first_plan") if p.get("first_plan") in ("changed", "reworded") else None,
                         text=p.get("text", ""), note=p.get("change", ""))
                    for p in promises if isinstance(p, dict) and p.get("id")]
+    owed = _json(blobs.read(head, OVERDUE))
     return dict(reference=REFERENCE, commitments=commitments, links=links, said=said, quotes=quotes, unlined=unlined,
-                replaced=replaced(head, blobs), rewrites=plan_rewrites(head, rows))
+                replaced=replaced(head, blobs), rewrites=plan_rewrites(head, rows),
+                # the commitments recorded as overdue, and the Day each is to be settled by
+                overdue={x["id"]: x.get("settled_by") for x in owed if isinstance(x, dict) and x.get("id")}
+                if isinstance(owed, list) else {})

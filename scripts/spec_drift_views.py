@@ -38,11 +38,27 @@ def _cells(replay):
     return out
 
 
+def _stops(seen, pr_of):
+    """Each time the replay saw a criterion stop holding (broken, or needing repair): the pull request it was first
+    reported at, what the replay reported, and the pull request it was seen holding again by, None if never."""
+    out, last = [], None
+    for cell in seen:
+        group = REPLAY_GROUP.get(cell.get("state"))
+        if group in FAILED_GROUPS and last is None:
+            last = dict(pr=pr_of.get(cell.get("n")), state=cell.get("state"), held=None)
+            out.append(last)
+        elif group in ("proven", "unproven") and last is not None:
+            last["held"], last = pr_of.get(cell.get("n")), None
+    return out
+
+
 def criterion_states(index, days, replay):
-    """Give each criterion of `index` its `state`, as the page's promise tiles read it, and `back`: the replay saw
-    it stop holding (broken, or needing repair) at an earlier merge, and it holds now."""
+    """Give each criterion of `index` its `state`, as the page's promise tiles read it; `back`: the replay saw
+    it stop holding (broken, or needing repair) at an earlier merge, and it holds now; and `seen`: how many merges
+    the replay ran it at, the last one's pull request, and each stop (`_stops`)."""
     by_day = {d.get("day"): d for d in days}
     cells = _cells(replay)
+    pr_of = {m.get("n"): m.get("pr") for m in (replay or {}).get("merges") or []}
     for c in index:
         if not isinstance(c, dict):
             continue
@@ -53,6 +69,8 @@ def criterion_states(index, days, replay):
                       else group or "unchecked")
         c["back"] = bool(group in ("proven", "unproven")
                          and any(REPLAY_GROUP.get(x.get("state")) in FAILED_GROUPS for x in seen[:-1]))
+        c["seen"] = dict(merges=len(seen), last=pr_of.get(seen[-1].get("n")) if seen else None,
+                         stops=_stops(seen, pr_of))
     return index
 
 
@@ -67,28 +85,35 @@ def _class(states):
     return "unbuilt"
 
 
+def _quote(c, text=""):
+    """One quote of the plan as the gene draws it: the criterion that makes it, and the words it quotes."""
+    return dict(id=c["id"], day=c.get("day"), tag=c.get("tag"), state=c.get("state"), back=bool(c.get("back")),
+                gone=bool(c.get("replaced_by")), quote=text)
+
+
 def gene(plan, index, days):
     """The gene: every commitment of the plan in exactly one class, read down from the plan through the criteria that
     quote it (as written, then in force) to the state of their code. `uncovered` is what is due by the last
-    finished Day and named by no criterion in force: graph 12's "should be covered by now" set. None with no plan."""
+    finished Day and named by no criterion in force: graph 12's "should be covered by now" set. `ring` is every
+    criterion whose Plan: line names no commitment, and `off` the ones of them in force. None with no plan."""
     if not plan or not plan.get("commitments"):
         return None
-    links = plan.get("links") or {}
+    links, said, owed = plan.get("links") or {}, plan.get("said") or {}, plan.get("overdue") or {}
     crit = {c["id"]: c for c in index if isinstance(c, dict) and c.get("id") in links}
     closed_to = max([d["day"] for d in days if d.get("status") in FINISHED], default=0)
     naming = {}
     for cid, named in links.items():
-        for pid in named:
-            naming.setdefault(pid, []).append(cid)
-    cell = lambda c: dict(id=c["id"], day=c.get("day"), state=c.get("state"), back=bool(c.get("back")))  # noqa: E731
+        words = said.get(cid) or []
+        for k, pid in enumerate(named if cid in crit else []):
+            naming.setdefault(pid, []).append(_quote(crit[cid], words[k] if k < len(words) else ""))
     rows, counts = [], dict.fromkeys(GENE_CLASSES, 0)
     for p in plan["commitments"]:
-        written = [crit[cid] for cid in naming.get(p["id"], []) if cid in crit]
-        live = [c for c in written if not c.get("replaced_by")]
+        written = naming.get(p["id"], [])
+        live = [q for q in written if not q["gone"]]
         owner, rule = p.get("owner_day"), bool(p.get("rule"))
         if live:
-            cls = _class([c.get("state") for c in live])
-            sub = ("full" if all(c.get("state") == "proven" for c in live) else "part") if cls == "proved" else None
+            cls = _class([q["state"] for q in live])
+            sub = ("full" if all(q["state"] == "proven" for q in live) else "part") if cls == "proved" else None
         elif written:
             cls, sub = "spliced", None
         else:
@@ -97,13 +122,21 @@ def gene(plan, index, days):
         counts[cls] += 1
         rows.append(dict(id=p["id"], short=p.get("short", ""), section=p.get("section", ""),
                          arm="first" if p["id"].startswith("P") else "added", rule=rule, owner_day=owner,
-                         change=p.get("change"), written=[c["id"] for c in written],
-                         replaced=[c["id"] for c in written if c.get("replaced_by")],
-                         cells=[cell(c) for c in live], cls=cls, sub=sub,
+                         change=p.get("change"), note=p.get("note", ""), text=p.get("text", ""),
+                         settled_by=owed.get(p["id"]), written=written, cells=live, cls=cls, sub=sub,
+                         criteria=len({q["id"] for q in written}),
+                         tally={s: sum(1 for q in live if q["state"] == s) for s in sorted({q["state"] for q in live})},
                          uncovered=not rule and owner is not None and owner <= closed_to and not live))
-    off = [cell(c) | dict(tag=c.get("tag")) for cid, c in sorted(crit.items(), key=lambda kv: (kv[1].get("day") or 0, kv[0]))
-           if not links[cid] and not c.get("replaced_by")]
-    return dict(closed_to=closed_to, commitments=rows, counts=counts, off=off,
+    # an arm keeps a section's commitments together, where the section first comes up: one the plan added later
+    # sits with its section, not at the end
+    first = {}
+    for i, r in enumerate(rows):
+        first.setdefault((r["arm"], r["section"]), i)
+    rows.sort(key=lambda r: (r["arm"] != "first", first[(r["arm"], r["section"])]))
+    ring = [_quote(c) for cid, c in sorted(crit.items(), key=lambda kv: (kv[1].get("day") or 0, kv[0])) if not links[cid]]
+    quoting = {q["id"]: q for r in rows for q in r["written"]}
+    in_force = [q for q in quoting.values() if not q["gone"]]
+    return dict(closed_to=closed_to, commitments=rows, counts=counts, ring=ring, off=[q for q in ring if not q["gone"]],
                 proved_full=sum(1 for r in rows if r["sub"] == "full"),
                 untranscribed={k: sum(1 for r in rows if r["cls"] == "untranscribed" and r["sub"] == k)
                                for k in ("rule", "later", "due")},
@@ -111,4 +144,10 @@ def gene(plan, index, days):
                             cells=max([len(r["cells"]) for r in rows], default=0)),
                 uncovered=[r["id"] for r in rows if r["uncovered"]],
                 quotes=sum(len(r["written"]) for r in rows), live_quotes=sum(len(r["cells"]) for r in rows),
-                criteria=len(crit), in_force=sum(1 for c in crit.values() if not c.get("replaced_by")))
+                criteria=len(crit), in_force=sum(1 for c in crit.values() if not c.get("replaced_by")),
+                # the criteria that quote the plan at least once: how many, and of those in force, how they stand
+                quoting=dict(criteria=len(quoting), in_force=len(in_force),
+                             not_proved=sum(1 for q in in_force if q["state"] != "proven"),
+                             came_back=sum(1 for q in in_force if q["back"])),
+                named=sum(1 for r in rows if r["written"]), live=sum(1 for r in rows if r["cells"]),
+                changed=sum(1 for r in rows if r["change"]), rewrites=len(plan.get("rewrites") or []))

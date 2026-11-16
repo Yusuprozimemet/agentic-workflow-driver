@@ -667,80 +667,100 @@ footer { font-size: 12.5px; color: var(--muted); }
 .wt.key.stop { margin-right: 6px; }
 .wt.key.stop::after { right: -5px; width: 3px; }
 
-/* ---------- the gene: the plan read down to proved code. Every rule is under #gene, in the page's tokens. ---------- */
-#gene .reach { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-#gene .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 24px; }
-#gene .gene-fig .num { display: flex; align-items: center; gap: 8px; font: 700 26px/1.1 var(--display); }
-#gene .gene-fig .what { font-weight: 600; font-size: 13px; }
-#gene .gene-fig .sub { font-size: 12px; color: var(--ink-2); }
-#gene .gene-sw { display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--proven); background: var(--proven); }
-#gene .gene-sw.part { background: linear-gradient(90deg, var(--proven) 50%, var(--card) 50%); }
-#gene .gene-sw.unproved { background: var(--card); }
-#gene .gene-sw.unreplayable { border-color: var(--hatch-a); background: repeating-linear-gradient(45deg, var(--hatch-a) 0 2px, var(--hatch-b) 2px 4px); }
-#gene .gene-sw.repair { border-color: var(--repair); background: var(--repair); }
-#gene .gene-sw.fails { border-color: var(--broken); background: var(--broken); }
-#gene .gene-sw.unbuilt { border: 1.5px dashed var(--pending); background: var(--card); }
-#gene .gene-sw.spliced { border-radius: 8px 8px 0 0; border-color: var(--repair); border-bottom: 0; background: none; }
-#gene .gene-sw.untranscribed { border-radius: 2px; border: 1.5px dashed var(--pending); background: none; }
-#gene .gene-key { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: 6px 16px; margin: 8px 0; font-size: 12.5px; }
-#gene .gene-key dt { font-weight: 600; } #gene .gene-key dt small { display: block; font-weight: 400; color: var(--muted); }
-#gene .gene-key dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); }
-#gene .gene-key dd span { display: inline-flex; align-items: center; gap: 6px; }
-#gene .gene-k { display: inline-block; width: 10px; height: 12px; border-radius: 2px; }
-#gene .gene-k.dash { width: 10px; height: 3px; background: var(--spec); } #gene .gene-k.dash.gone { background: none; border: 1px solid var(--spec); }
-#gene .gene-k.bead { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--spec); background: var(--card); }
-#gene .gene-k.arc { width: 10px; height: 6px; border: 1.5px solid var(--repair); border-bottom: 0; border-radius: 6px 6px 0 0; }
-#gene .gene-k.tri { width: 0; height: 0; border-radius: 0; border: 5px solid transparent; border-top: 6px solid var(--repair); }
-#gene .gene-k.proven, #gene .gene-k.unproven, #gene .gene-k.skipped, #gene .gene-k.repair, #gene .gene-k.broken, #gene .gene-k.building { height: 5px; width: 10px; }
-#gene .gene-k.proven { background: var(--proven); } #gene .gene-k.unproven { background: var(--unproven-2); }
-#gene .gene-k.skipped { background: var(--hatch-a); } #gene .gene-k.repair { background: var(--repair); } #gene .gene-k.broken { background: var(--broken); }
-#gene .gene-k.building { border: 1px dashed var(--pending); }
-#gene .gene-k.back { box-shadow: 0 0 0 1.5px var(--ink); }
-#gene .gene-k.g-s3 { background: var(--s3); } #gene .gene-k.g-rule { background: repeating-linear-gradient(0deg, var(--hatch-a) 0 1px, var(--card) 1px 3px); border: 1px solid var(--hatch-a); }
-#gene .gene-k.g-later { border: 1px dashed var(--pending); } #gene .gene-k.g-due { background: repeating-linear-gradient(45deg, var(--repair) 0 2px, var(--card) 2px 4px); }
-#gene .gene-svg { display: block; min-width: 900px; width: 100%; height: auto; font-family: var(--sans); }
-#gene .gene-svg text { fill: var(--ink-2); font-size: 11px; }
-#gene .gene-svg .g-lab { fill: var(--ink); font-weight: 600; font-size: 12px; }
-#gene .gene-svg .g-sub { fill: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
-#gene .gene-svg .g-arm { fill: var(--ink); font-weight: 600; font-size: 12px; }
-#gene .gene-svg .g-sec { font-size: 10px; fill: var(--muted); }
-#gene .gene-svg .g-big { fill: var(--ink); font: 700 22px var(--display); }
-#gene .gene-svg .g-due { fill: var(--ink); font-size: 9.5px; font-family: var(--mono); }
-#gene .g-brk { fill: none; stroke: var(--axis); }
-#gene .g-chrom { fill: var(--card); stroke: var(--ink); stroke-width: 1.4; }
-#gene .g-band { stroke: none; }
-#gene .g-s0 { fill: var(--wash); } #gene .g-s1 { fill: var(--s1); } #gene .g-s2 { fill: var(--s2); } #gene .g-s3 { fill: var(--s3); } #gene .g-s4 { fill: var(--s4); }
-#gene .g-rule { fill: var(--hatch-b); stroke: var(--hatch-a); stroke-dasharray: 1 2; }
-#gene .g-later { fill: var(--card); stroke: var(--pending); stroke-dasharray: 2 2; }
-#gene .g-due { fill: var(--repair); }
-#gene rect.g-due { fill: var(--repair); opacity: .8; }
-#gene .g-change { fill: var(--repair); } #gene .g-reword { fill: none; stroke: var(--repair); }
-#gene .g-dash { fill: var(--spec); } #gene .g-dash.gone { fill: none; stroke: var(--spec); stroke-width: .8; }
-#gene .g-strand { stroke: var(--axis); stroke-width: 1.4; fill: none; }
-#gene .g-bead { fill: var(--card); stroke: var(--spec); stroke-width: 1.5; }
-#gene .g-arc { fill: none; stroke: var(--repair); stroke-width: 1.6; }
-#gene .g-link { stroke: var(--axis); stroke-width: .7; fill: none; }
-#gene .g-live { fill: var(--spec); }
-#gene .g-cell { fill: var(--pending); }
-#gene .g-cell.proven, #gene .g-ring.proven { fill: var(--proven); stroke: var(--proven); }
-#gene .g-cell.unproven, #gene .g-ring.unproven { fill: var(--unproven-2); stroke: var(--unproven-2); }
-#gene .g-cell.skipped, #gene .g-ring.skipped { fill: var(--hatch-a); stroke: var(--hatch-a); }
-#gene .g-cell.repair, #gene .g-ring.repair { fill: var(--repair); stroke: var(--repair); }
-#gene .g-cell.broken, #gene .g-ring.broken { fill: var(--broken); stroke: var(--broken); }
-#gene .g-cell.building, #gene .g-cell.open, #gene .g-cell.unchecked { fill: var(--card); stroke: var(--pending); stroke-dasharray: 1.5 1; stroke-width: .8; }
-#gene .g-cell.back { stroke: var(--ink); stroke-width: 1; }
-#gene .g-ring { fill: none; stroke-width: 10; stroke: var(--pending); }
-#gene .g-ring.building, #gene .g-ring.open, #gene .g-ring.unchecked { stroke: var(--wash); }
-#gene .g-ring.back { stroke-dasharray: none; filter: drop-shadow(0 0 1px var(--ink)); }
-#gene .g-code { fill: var(--proven); stroke: var(--proven); stroke-width: 1.5; }
-#gene .g-code.part { fill: var(--card); }
-#gene .g-code.unproved { fill: var(--card); }
-#gene .g-code.unreplayable { fill: var(--hatch-a); stroke: var(--hatch-a); }
-#gene .g-code.repair { fill: var(--repair); stroke: var(--repair); }
-#gene .g-code.fails { fill: var(--broken); stroke: var(--broken); }
-#gene .g-code.unbuilt { fill: var(--card); stroke: var(--pending); stroke-dasharray: 1.5 1; }
-#gene .g-hit { fill: transparent; }
-#gene .g-col { cursor: pointer; outline: none; }
-#gene .g-col:hover .g-hit, #gene .g-col.on .g-hit, #gene .g-col:focus-visible .g-hit { fill: var(--hot); fill-opacity: .55; }
-#gene .g-col.dim { opacity: .22; }
-@media (max-width: 560px) { #gene .gene-key { grid-template-columns: minmax(0, 1fr); } }
+/* ---------- the gene: the plan read down to proved code. Every rule is under #gene; the colours are the page's
+   tokens, and only the ones it lacks are defined here. ---------- */
+.mk-line { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 0; font-size: 12px; color: var(--ink-2); align-items: center; }
+.mk-line span { display: inline-flex; align-items: center; gap: 6px; }
+.mk-line svg { flex: none; overflow: visible; }
+.mock-key > div { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+#gene { --spec-hold: #9cc3f2; --spec-pale: #d6e7fb; --g1: #cfd5dd; --g2: #9aa3b1; --g3: #5b6372; --g4: #262b34; --shadow: rgba(14, 17, 22, .16); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #gene { --spec-hold: #2c5a94; --spec-pale: #1b3558; --g1: #39404b; --g2: #5c6471; --g3: #969eab; --g4: #e3e7ec; --shadow: rgba(0, 0, 0, .5); } }
+:root[data-theme="dark"] #gene { --spec-hold: #2c5a94; --spec-pale: #1b3558; --g1: #39404b; --g2: #5c6471; --g3: #969eab; --g4: #e3e7ec; --shadow: rgba(0, 0, 0, .5); }
+#gene .gene-defs { position: absolute; }
+#gene h3 { font: 600 16px/1.25 var(--display); margin: 0 0 10px; text-wrap: balance; }
+/* the figures: how far the commitments reach */
+#gene .reach { border-block: 1px solid var(--line); padding: 14px 0; }
+#gene .of { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+#gene .figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px 26px; }
+#gene .num { font: 700 30px/1 var(--display); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 9px; }
+#gene .num svg { flex: none; overflow: visible; }
+#gene .what { font-weight: 600; margin-top: 6px; }
+#gene .sub { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+/* the key */
+#gene .lg { display: grid; grid-template-columns: max-content 1fr; gap: 9px 20px; margin: 0; font-size: 12.5px; color: var(--ink-2); }
+#gene .lg dt { font: 500 11px/20px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+#gene .lg dt small { display: block; font: 400 11px/1.2 var(--sans); letter-spacing: 0; text-transform: none; }
+#gene .lg dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; min-width: 0; }
+#gene .lg dd span { display: inline-flex; align-items: center; gap: 7px; }
+#gene .lg svg { flex: none; overflow: visible; }
+@media (max-width: 640px) { #gene .lg { grid-template-columns: 1fr; gap: 2px 0; } #gene .lg dd { margin-bottom: 10px; } }
+#gene .hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+/* the picture */
+#gene .scroll { overflow-x: auto; min-width: 0; margin-top: 8px; }
+#gene .fig { display: block; width: 100%; height: auto; }
+#gene .fig text { font-family: var(--sans); }
+#gene .t-arm { font: 600 13px var(--sans); fill: var(--ink); }
+#gene .t-sec { font: 400 10px var(--sans); fill: var(--muted); }
+#gene .t-row { font: 600 12.5px var(--sans); fill: var(--ink); }
+#gene .t-bio { font: 500 9px var(--mono); letter-spacing: .07em; fill: var(--muted); }
+#gene .t-n { font: 400 11px var(--sans); fill: var(--ink-2); }
+#gene .t-id { font: 500 9.5px var(--mono); fill: var(--ink); paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
+#gene .t-day { font: 500 8.5px var(--mono); fill: var(--muted); }
+#gene .t-big { font: 700 22px var(--display); fill: var(--ink); }
+#gene .brk { stroke: var(--s2); stroke-width: 1.2; fill: none; }
+#gene .cap-bg { fill: var(--card); }
+#gene .cap { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+#gene .gs1 { fill: var(--g1); } #gene .gs2 { fill: var(--g2); } #gene .gs3 { fill: var(--g3); } #gene .gs4 { fill: var(--g4); }
+#gene .rule { fill: url(#gene-pat-rule); stroke: var(--s3); stroke-width: .8; }
+#gene .notdue { fill: var(--card); stroke: var(--s3); stroke-width: 1; stroke-dasharray: 2.2 1.6; }
+#gene .overdue { fill: url(#gene-pat-over); }
+#gene .pinch { fill: var(--s3); }
+#gene .tri.changed { fill: var(--ink-2); }
+#gene .tri.reworded { fill: none; stroke: var(--ink-2); stroke-width: 1.1; }
+#gene .rd.new { fill: var(--spec); }
+#gene .rd.hold { fill: var(--spec-hold); }
+#gene .rd.replaced { fill: none; stroke: var(--s2); stroke-width: .9; pointer-events: all; }
+#gene .strand { stroke: var(--s2); stroke-width: 1.4; fill: none; }
+#gene .ex.pre { fill: var(--spec-pale); stroke: var(--spec); stroke-width: 1; }
+#gene .ex.skip { fill: var(--card); stroke: var(--repair); stroke-width: 1.2; stroke-dasharray: 2 1.5; }
+#gene .arc { fill: none; stroke: var(--repair); stroke-width: 1.7; stroke-linecap: round; }
+#gene .fun { stroke: var(--s2); stroke-width: .6; fill: none; }
+#gene .ex.mat { fill: var(--spec); }
+#gene .bond { stroke: var(--s2); stroke-width: 1.4; }
+#gene .tick { stroke: var(--s2); stroke-width: .7; }
+#gene .proved { fill: var(--proven); }
+#gene .unproved { fill: var(--card); stroke: var(--proven); stroke-width: 1.6; }
+#gene .norun { fill: url(#gene-pat-norun); stroke: var(--pending); stroke-width: 1; }
+#gene .stale { fill: var(--repair); }
+#gene .broken { fill: var(--broken); }
+#gene .unbuilt { fill: var(--card); stroke: var(--pending); stroke-width: 1; stroke-dasharray: 2 1.5; }
+#gene .lead { stroke: var(--s3); stroke-width: .8; }
+#gene .tc.unproved { stroke-width: .9; }
+#gene .tc.norun { stroke-width: .7; }
+#gene .tc.unbuilt { stroke-width: .8; stroke-dasharray: 1.6 1.2; }
+#gene .tc.scar, #gene .rk.scar { stroke: var(--ink); stroke-width: 1.1; }
+#gene .part { fill: url(#gene-half); stroke: var(--proven); stroke-width: 1.2; }
+#gene .gh-a { stop-color: var(--proven); } #gene .gh-b { stop-color: var(--card); }
+#gene .pr-bg, #gene .po-bg, #gene .pn-bg { fill: var(--card); }
+#gene .pr-l { stroke: var(--s3); stroke-width: 1.2; }
+#gene .po-l { fill: var(--repair); }
+#gene .pn-l { fill: var(--pending); }
+#gene .fig .b:focus { outline: none; }
+#gene .fig .b:focus-visible { stroke: var(--link); stroke-width: 2; }
+#gene .fig.foc [data-p]:not(.lit), #gene .fig.focc .rd:not(.lit), #gene .fig.focc .rk:not(.lit), #gene .fig.focc .tc:not(.lit) { opacity: .16; }
+@media (prefers-reduced-motion: no-preference) { #gene .fig [data-p], #gene .fig [data-c] { transition: opacity .15s; } }
+/* the lists under the picture */
+#gene .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px 32px; border-top: 1px solid var(--line); padding-top: 16px; }
+#gene .cols > div { min-width: 0; }
+#gene .finds { margin: 0 0 10px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+#gene .finds li { font-size: 13.5px; color: var(--ink-2); border-radius: 4px; cursor: default; padding-left: 12px; border-left: 2px solid var(--s2); overflow-wrap: anywhere; }
+#gene .finds li:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+#gene .finds b, #gene .plain b { color: var(--ink); font-weight: 600; }
+#gene .plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+#gene .plain + h3 { margin-top: 22px; }
+/* the pointer's box */
+#gene-tip { position: fixed; z-index: 20; left: 0; top: 0; max-width: min(340px, calc(100vw - 24px)); background: var(--card); color: var(--ink-2); border: 1px solid var(--s2); border-radius: 7px;
+  box-shadow: 0 8px 26px var(--shadow); padding: 10px 12px; font-size: 12.5px; line-height: 1.4; pointer-events: none; }
+#gene-tip .t { font: 600 12px/1.35 var(--mono); color: var(--ink); margin-bottom: 4px; }
+#gene-tip .q { margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--s2); }
+#gene-tip .st { margin-top: 6px; color: var(--ink); font-weight: 500; }
