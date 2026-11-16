@@ -715,14 +715,20 @@ function model(DATA) {
           ...aheadOut.map(a => [a.close ? "close" : `track ${a.label}`, "not merged", a.day, a.built, written, ""])] } };
   }
 
+  // What is known and accepted (a test CI may skip, a check no break can reach) is listed apart, folded, and
+  // left out of the count, so the number means "look at this" (#213, B20).
   function attention() {
-    const groups = [];
-    (DATA.attention || []).forEach(a => {
-      const label = REASONS[a.reason] || a.reason, detail = a.detail || "";
-      const g = groups.find(x => x.label === label && x.detail === detail) || groups[groups.push({ label, detail, ids: [] }) - 1];
-      g.ids.push(a.id);
-    });
-    return { total: (DATA.attention || []).length, groups };
+    const group = list => {
+      const groups = [];
+      list.forEach(a => {
+        const label = REASONS[a.reason] || a.reason, detail = a.detail || "";
+        const g = groups.find(x => x.label === label && x.detail === detail) || groups[groups.push({ label, detail, ids: [] }) - 1];
+        g.ids.push(a.id);
+      });
+      return groups;
+    };
+    const all = DATA.attention || [], open = all.filter(a => !a.expected), known = all.filter(a => a.expected);
+    return { total: open.length, groups: group(open), expected: known.length, known: group(known) };
   }
 
   // Graph 10: one date on the clock. The sessions (sessions.json on the dashboard-data branch) are stamped with the offset of the
@@ -1462,9 +1468,13 @@ function draw(M, DATA) {
   put("now", h("strong", null, "Now: "), H.now, " ", h("strong", null, "Next step: "), rich(H.next));
   if (H.took) $("words-took").textContent = H.took;
   const A = M.attention;
-  $("attention").hidden = !A.total;
-  put("attention-n", `Needs attention: ${plural(A.total, "item", "items")}`);
-  put("attention-list", A.groups.map(g => h("li", null, h("b", null, `${g.label} (${g.ids.length})`), " ", g.detail ? [rich(g.detail), ": "] : null, g.ids.join(", "))));
+  const items = groups => groups.map(g => h("li", null, h("b", null, `${g.label} (${g.ids.length})`), " ", g.detail ? [rich(g.detail), ": "] : null, g.ids.join(", ")));
+  $("attention").hidden = !A.total && !A.expected;
+  put("attention-n", `Needs attention: ${plural(A.total, "item", "items")}` + (A.expected ? ` · ${A.expected} expected` : ""));
+  put("attention-list", items(A.groups));
+  $("attention-known").hidden = !A.expected;
+  put("attention-known-n", `Expected, not counted: ${plural(A.expected, "item", "items")}`);
+  put("attention-known-list", items(A.known));
 
   /* the quality score: the finished Days', or the chosen Day's */
   const Q = M.quality && !M.quality.error ? M.quality : null;

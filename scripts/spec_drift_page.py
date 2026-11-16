@@ -47,6 +47,8 @@ def deployment():
 
 
 REPLAY_FAILED = ("code broken", "test weakened", "break no longer applies")
+# Known and accepted, so outside "Needs attention"'s count, in a folded list of their own (#213, B20).
+EXPECTED = ("test_skippable", "not_breakable")
 
 
 def criterion_index(days, reports, handoffs, snaps, blobs, order=(), history=None):
@@ -57,7 +59,8 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=(), history=Non
     report_days = {d["day"]: d for d in reports.get("days", [])}
     rows, attention = [], []
     def flag(row, reason, detail):
-        attention.append(dict(id=row["id"], reason=reason, detail=detail, day=row["day"]))
+        attention.append(dict(id=row["id"], reason=reason, detail=detail, day=row["day"],
+                              **({"expected": True} if reason in EXPECTED else {})))
 
     for day in days:
         report = report_days.get(day["day"], {})
@@ -127,8 +130,8 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=(), history=Non
                                        + [t for t, s in day_states.items() if s == "skippable"]))
             if skips:
                 flag(row, "test_skippable", ", ".join(skips))
-            for h in handoffs:
-                if not h["picked"] and re.search(rf"\b{re.escape(c['id'])}\b", h["text"]):
+            for h in handoffs:  # one a Day ahead still takes is listed as that Day's below, not as unclaimed
+                if not h["picked"] and h.get("to") is None and re.search(rf"\b{re.escape(c['id'])}\b", h["text"]):
                     flag(row, "handoff_unclaimed", h["text"])
     by_id = {r["id"]: r for r in rows}
     for row in rows:
@@ -229,7 +232,9 @@ def story_ability(section):
 
 def story_sentence(section):
     """The story's own words: the section with the Ability: line removed; "" when that is only the template's
-    placeholders, so a PR that left the template as it was has no story."""
+    placeholders, so a PR that left the template as it was has no story. It ends where a "Size of change"
+    paragraph starts: #54 put its rung in the story's section (#213, B5)."""
+    section = re.split(r"\**Size of change\b", section, maxsplit=1, flags=re.I)[0]
     text = " ".join(re.sub(r"Ability:\s*(\[[^\]]*\]|\S+)", "", section, flags=re.I).split())
     return "" if not text or STORY_TEMPLATE.fullmatch(text) else text
 

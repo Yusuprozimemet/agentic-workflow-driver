@@ -1014,7 +1014,8 @@ class HandOffTest(unittest.TestCase):
                          {17, 18, 19, 21, 24})
         self.assertEqual(sd.days_named("Days 26–28, or Day 30"), {26, 27, 28, 30})
 
-    def test_a_hand_off_is_picked_up_by_the_spec_that_names_its_day_or_its_file(self):
+    def test_a_code_comment_is_picked_up_by_the_spec_that_names_its_file_and_a_notes_item_without_an_id_is_none(self):
+        # Day 11's "Picks up no hand-off" and Day 10's Defect lines naming Day 13 were listed as hand-offs (#212, S2).
         repo = Repo().merge({
             "specs/day-01-a.md": "## Notes\n- For Day 03: the key.\n- Day 02's findings for Day 04 are there.\n"
                                  "- Day 05 has nothing from this day.\n",
@@ -1032,12 +1033,29 @@ class HandOffTest(unittest.TestCase):
         finally:
             repo.close()
         self.assertEqual([(h["to"], h["source"], h["picked"]) for h in found], [
-            (3, "Day 01 Notes", True),          # in run order, open ones first within a day
             (4, "src/Bar.java:1", False),       # Day 04 never names Bar
-            (4, "Day 01 Notes", True),          # points to Day 02, which Day 04 names
-            (5, "Day 01 Notes", False),
             (5, "src/Foo.java:1", True)])       # the code line after it is not a comment
-        self.assertEqual(found[4]["text"], "Day 05 moves this.")
+        self.assertEqual(found[1]["text"], "Day 05 moves this.")
+
+    def test_a_later_spec_restating_a_hand_off_moves_it_to_the_day_it_names(self):
+        # Day 13's spec restates H09.2 and H10.2 → Day 14 (#212, S2); the latest restatement wins.
+        repo = Repo().merge({
+            "specs/day-01-a.md": "## Notes\n- **Hand-off** H01.1 → Day 02: the key.\n"
+                                 "- **Hand-off** H01.2 → Day 02: the queue, for Day 03 too.\n",
+            "specs/day-02-b.md": "# Day 02\n\n- **Hand-off** H01.1 → Day 03: not this day.\n"
+                                 "- **Hand-off** H01.2 → Day 03: later.\n",
+            "specs/day-03-c.md": "# Day 03\n\n- **Hand-off** H01.2 → Day 04: later still.\n",
+            "src/Foo.java": "// Day 01 wrote this.\n",
+        })
+        days = [dict(day=n, file=f"specs/day-0{n}-{c}.md", status="done" if n < 2 else "ready")
+                for n, c in zip(range(1, 4), "abc")]
+        try:
+            found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 2, 3, 4], repo.snaps[-1]["sha"], blobs))
+        finally:
+            repo.close()
+        self.assertEqual([(h["to"], h["id"], h["source"], h["picked"], h["text"]) for h in found], [
+            (3, "H01.1", "Day 02 spec", False, "Hand-off H01.1 → Day 03"),  # Day 02 restating it is no pick-up
+            (4, "H01.2", "Day 03 spec", False, "Hand-off H01.2 → Day 04")])
 
     def test_a_hand_off_with_an_id_is_picked_up_only_by_a_spec_citing_it(self):
         repo = Repo().merge({
@@ -1111,7 +1129,7 @@ class HandOffTest(unittest.TestCase):
             found = repo.inside(lambda blobs: sd.hand_offs(days, [1, 3], repo.snaps[-1]["sha"], blobs))
         finally:
             repo.close()
-        self.assertEqual([(h["to"], h["id"], h["text"][:12]) for h in found], [(3, "H01.2", "**Hand-off**")])
+        self.assertEqual([(h["to"], h["id"], h["text"][:12]) for h in found], [(3, "H01.2", "Hand-off H01")])
 
     def test_a_hand_off_range_names_every_id_in_it(self):
         self.assertEqual(sd.hand_off_ids("H34.1–H34.3 and H35.2-4, H36.7"),
@@ -1356,7 +1374,8 @@ class CriterionIndexTest(unittest.TestCase):
                 dict(criterion=None, status="error", diagnostic="runner crashed")]),
             dict(day=2, state="stale", why=["spec changed"], checks=[]),
             dict(day=3, state="not checked")])
-        handoffs = [dict(to=4, picked=False, text="C3.1 needs follow-up", source="Day 03 Notes")]
+        handoffs = [dict(to=None, picked=False, text="C3.1 needs follow-up", source="Day 03 Notes"),
+                    dict(to=4, picked=False, text="C3.2 for Day 04, which takes it", source="Day 03 Notes")]
         rows, attention = repo.inside(lambda blobs: sd.criterion_index(days, reports, handoffs, repo.snaps, blobs))
         self.assertEqual(len(rows), 12)
         by_id = {row["id"]: row for row in rows}
@@ -1383,7 +1402,7 @@ class CriterionIndexTest(unittest.TestCase):
             *((f"C2.{n}", "replay_stale") for n in range(1, 5)),
             ("C1.4", "evidence_missing"), *((f"C3.{n}", "evidence_missing") for n in range(1, 5)),
             ("C2.1", "not_seen_red"),
-            ("C2.2", "test_not_found"), ("C3.1", "handoff_unclaimed")])
+            ("C2.2", "test_not_found"), ("C3.1", "handoff_unclaimed"), ("Day 03 Notes", "handoff_unpicked")])
         self.assertEqual([a["detail"] for a in attention if a["id"] == "Day 01"], ["runner crashed"])
         self.assertEqual([a["id"] for a in attention if a["reason"] == "replay_error"
                           and a["id"].startswith("C1.")], ["C1.2"])
@@ -1452,6 +1471,45 @@ class CriterionIndexTest(unittest.TestCase):
             dict(id="H01.1", reason="handoff_next", detail="Day 02: **Hand-off** H01.1 → Day 2: do x."),
             dict(id="H01.3", reason="handoff_unpicked", detail="**Hand-off** H01.3 → the maintainer: y.")])
 
+    def test_a_break_fails_on_its_last_re_checked_merge_in_replay_history_unless_replaced(self):
+        # The page's own replay of breaks disagreed with recheck.yml's (#211, N4); C08.1 stayed "code broken"
+        # though C10.31 replaces it (#213, Unclear).
+        repo, days = self.one_day("- [x] C1.1 **hold** — One.\n      broken: x → y (#1)\n"
+                                  "- [x] C1.2 **hold** — Two.\n      broken: x → y (#1)\n"
+                                  "- [x] C1.3 **hold** — Three.\n      broken: x → y (#1)\n"
+                                  "- [x] C1.4 **hold** — Four.\n      broken: x → y (#1)\n"
+                                  "      Replaces: C1.2 — was: two\n")
+        cell = lambda cid, n, state: dict(criterion=cid, n=n, state=state, checks=[
+            dict(check="break x", state=state, detail="report differs" if state != "passed" else None)])
+        history = dict(state="loaded", merges=[dict(n=0, pr=5), dict(n=1, pr=7)], cells=[
+            cell("C1.1", 0, "passed"), cell("C1.1", 1, "code broken"),
+            cell("C1.2", 1, "code broken"), cell("C1.3", 0, "break no longer applies"), cell("C1.3", 1, "passed")])
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(
+            days, dict(state="loaded", days=[]), [], repo.snaps, blobs, history=history))
+        self.assertEqual([(a["id"], a["detail"]) for a in attention if a["reason"] == "replay_failed"],
+                         [("C1.1", "code broken at #7: break x: report differs")])
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(
+            days, dict(state="loaded", days=[]), [], repo.snaps, blobs, history=dict(state="absent")))
+        self.assertEqual([a for a in attention if a["reason"] == "replay_failed"], [])
+
+    def test_a_hand_off_a_day_ahead_takes_is_not_unclaimed(self):
+        # H12.4 → Day 13 was listed for Day 13 and flagged unclaimed on C01.3 too (#212, S2).
+        repo, days = self.one_day("- [x] C1.1 **hold** — Claim.\n      broken: x → y (#1)\n"
+                                  "- [x] C1.2 **hold** — Claim.\n      broken: x → y (#1)\n")
+        handoffs = [dict(to=2, id="H01.1", picked=False, source="Day 01 Notes", text="Hand-off H01.1 → Day 2: C1.1's x."),
+                    dict(to=None, id="H01.2", picked=False, source="Day 01 Notes", text="Hand-off H01.2 → the maintainer: C1.2.")]
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(
+            days, dict(state="loaded", days=[]), handoffs, repo.snaps, blobs, order=[1, 2]))
+        self.assertEqual([(a["id"], a["reason"]) for a in attention if a["reason"].startswith("handoff")],
+                         [("C1.2", "handoff_unclaimed"), ("H01.1", "handoff_next"), ("H01.2", "handoff_unpicked")])
+
+    def test_what_is_expected_is_marked_so_the_page_leaves_it_out_of_the_count(self):
+        # Of 28 "Needs attention" after Day 12's close, 7 were "Can be skipped in CI (expected)" (#213, B20).
+        repo, days = self.one_day("- [x] C1.1 **hold** — Claim.\n      broken: none → outside the repository\n")
+        _, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
+        self.assertEqual([(a["reason"], a.get("expected")) for a in attention if a["reason"] != "evidence_missing"],
+                         [("not_breakable", True)])
+
     def test_a_named_test_ci_can_skip_is_noted_last(self):
         live = ("import os, unittest\n\n\n@unittest.skipUnless(os.environ.get('DRIVER_LIVE_CLI'), 'live')\n"
                 "class LiveTest(unittest.TestCase):\n    def test_live(self): pass\n")
@@ -1459,7 +1517,7 @@ class CriterionIndexTest(unittest.TestCase):
                                   "      broken: x → y (#1)\n", live)
         rows, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
         self.assertTrue(rows[0]["test_found"])
-        self.assertEqual(attention[-1], dict(id="C1.1", reason="test_skippable", detail="LiveTest.test_live"))
+        self.assertEqual(attention[-1], dict(id="C1.1", reason="test_skippable", detail="LiveTest.test_live", expected=True))
         # "Tests on main" counts the names the whole block gives (C04.14 names LiveOnceTest in its claim).
         days[0]["evidence"][0]["tests"] = {"LiveTest.test_live": "skippable", "LiveOnceTest": "skippable"}
         _, attention = repo.inside(lambda blobs: sd.criterion_index(days, dict(state="loaded", days=[]), [], repo.snaps, blobs))
@@ -2017,6 +2075,12 @@ class UserStoriesTest(unittest.TestCase):
         self.assertEqual(sd.story_sentence("As the maintainer, I want x, so that y. Ability: loop"),
                          "As the maintainer, I want x, so that y.")
         self.assertEqual(sd.story_sentence(self.TEMPLATE), "")
+
+    def test_story_sentence_ends_where_a_size_of_change_paragraph_starts(self):
+        # #54's story carried its "Size of change: an area branch ..." paragraph (#213, B5).
+        self.assertEqual(sd.story_sentence("As the maintainer, I want x, so that y.\n\n"
+                                           "Size of change: an area branch (`dashboard/`). It changes no criteria."),
+                         "As the maintainer, I want x, so that y.")
 
     def test_story_reader_says_who_the_story_is_written_for(self):
         self.assertEqual(sd.story_reader("As the maintainer, I want x"), "desk")
