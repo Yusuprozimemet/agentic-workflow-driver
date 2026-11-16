@@ -10,6 +10,7 @@ from spec_drift_common import (
     CRITERION,
     DAY_REF,
     FINISHED,
+    HAND_OFF_HEAD,
     HAND_OFF_LINE,
     HAND_OFF_RANGE,
     PHASE_READ,
@@ -59,34 +60,42 @@ def hand_offs(days, order, sha, blobs):
     A Notes item with an ID of its day (H28.1) is picked up only by a spec that cites the ID; with
     no day ahead to take it and no spec citing it, it is listed with `to` None, as no later day
     picks it up. A day is ahead once plan.md puts it in the order and it is not finished, its spec
-    written or not: a day writes its own spec, so between days the next one has none. An item
-    without one is picked up when the receiving spec names its day, or a finished day the item
-    names (Day 39 points to Day 38's findings); a code comment, when the spec names its file. A
-    code comment is not handed to the day whose own PR wrote it: a workflow's
+    written or not: a day writes its own spec, so between days the next one has none. Its target is
+    what the line names before its colon, or what the latest later spec restating the line names.
+    A Notes item without an ID is no hand-off. A code comment naming a day ahead is, picked up when
+    that day's spec names its file; it is not handed to the day whose own PR wrote it: a workflow's
     "(Day 35)" written by Day 35."""
     finished = {d["day"] for d in days if d["status"] in FINISHED}
     text = {d["day"]: blobs.read(sha, d["file"]) for d in days}
     ahead = {d: i for i, d in enumerate(order) if d not in finished and d not in PLACEHOLDERS}
     cited = {t: hand_off_ids(text[t]) for t in text}
+    # Only a numbered line, "**Hand-off** H09.2 → Day 13: ...", is a hand-off: a Notes item that only
+    # names a day ("Picks up no hand-off", a Defect line) is not one (#212, S2). A later day's spec may
+    # restate the line with a new target; the latest restatement, in run order, is the one in force.
+    rank = {d: i for i, d in enumerate(order)}
+    restated = {}
+    for t in sorted(text, key=lambda t: (rank.get(t, len(order)), t)):
+        for m in HAND_OFF_HEAD.finditer(text[t]):
+            if int(m.group(1)[1:].split(".")[0]) != t:
+                restated[m.group(1)] = (t, days_named(m.group(2)), m.group(0))
     out = []
     for d in days:
         if d["day"] not in finished:
             continue
         for item in re.split(r"\n(?=\s*- )", section(text[d["day"]], "Notes")):
-            named = days_named(item)
-            ids = sorted(i for i in hand_off_ids(item) if int(i[1:].split(".")[0]) == d["day"])
-            if ids and not HAND_OFF_LINE.match(item):
-                continue  # cites its day's hand-off, "(H1.2)", and is not one
-            if ids:
-                cites = {t for t in text if t != d["day"] and set(ids) & cited[t]}
-                for t in named & set(ahead) - {d["day"]}:
-                    out.append(dict(to=t, id=ids[0], source=f"Day {d['day']:02d} Notes", picked=t in cites, text=item))
-                if not cites and not named & set(ahead) - {d["day"]}:
-                    out.append(dict(to=None, id=ids[0], source=f"Day {d['day']:02d} Notes", picked=False, text=item))
-                continue
-            for t in named & set(ahead):
-                picked = bool(({d["day"]} | named & finished) & days_named(text.get(t, "")))
-                out.append(dict(to=t, source=f"Day {d['day']:02d} Notes", picked=picked, text=item))
+            head = HAND_OFF_HEAD.match(item)
+            if not head or int(head.group(1)[1:].split(".")[0]) != d["day"]:
+                continue  # not a hand-off, or one citing its day's, "(H1.2)", or another day's
+            hid, named, source = head.group(1), days_named(head.group(2)), f"Day {d['day']:02d} Notes"
+            by = {d["day"]}
+            if hid in restated:
+                t, named, line = restated[hid]
+                by, source, item = by | {t}, f"Day {t:02d} spec", line
+            cites = {t for t in text if t not in by and hid in cited[t]}
+            for t in named & set(ahead) - {d["day"]}:
+                out.append(dict(to=t, id=hid, source=source, picked=t in cites, text=item))
+            if not cites and not named & set(ahead) - {d["day"]}:
+                out.append(dict(to=None, id=hid, source=source, picked=False, text=item))
     listed = run("git", "grep", "-n", "-I", "-E", r"\bDays? [0-9]+\b", sha, "--", ".", ":(exclude)*.md",
                  ":(exclude)docs/dashboard", ":(exclude)data")
     for line in listed.splitlines():
@@ -100,7 +109,7 @@ def hand_offs(days, order, sha, blobs):
             for t in named:
                 out.append(dict(to=t, source=f"{path}:{number}", picked=stem in text.get(t, ""), text=code))
     for h in out:
-        h["text"] = excerpt(re.sub(r"^\s*(- |//|/\*+|\*|--|#|<!--)\s*", "", h["text"]), 160)
+        h["text"] = excerpt(re.sub(r"^\s*(- |//|/\*+|\*|--|#|<!--)\s*", "", h["text"]).replace("**", ""), 160)
     return sorted(out, key=lambda h: (ahead.get(h["to"], len(order)), h["picked"], h["source"]))
 
 

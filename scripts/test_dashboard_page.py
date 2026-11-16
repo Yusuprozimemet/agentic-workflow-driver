@@ -181,10 +181,13 @@ class ModelTest(unittest.TestCase):
     def test_what_needs_attention_is_grouped_by_reason_and_detail(self):
         got = model(data(attention=[dict(id="C1.1", reason="evidence_missing", detail="Replay report: absent"),
                                     dict(id="C1.2", reason="evidence_missing", detail="Replay report: absent"),
-                                    dict(id="Day 2", reason="a_new_reason", detail="x")]))["attention"]
+                                    dict(id="Day 2", reason="a_new_reason", detail="x"),
+                                    dict(id="C1.3", reason="test_skippable", detail="LiveTest", expected=True)]))["attention"]
+        self.assertEqual(got["total"], 3)  # the expected item is listed apart and not counted (#213, B20)
         self.assertEqual(got, dict(total=3, groups=[
             dict(label="Evidence missing", detail="Replay report: absent", ids=["C1.1", "C1.2"]),
-            dict(label="a_new_reason", detail="x", ids=["Day 2"])]))
+            dict(label="a_new_reason", detail="x", ids=["Day 2"])], expected=1, known=[
+            dict(label="Can be skipped in CI (expected)", detail="LiveTest", ids=["C1.3"])]))
 
     def test_graph_3_counts_each_abilitys_pull_requests_by_day_and_outside_any_day(self):
         story = lambda n, day, ability: dict(number=n, day=day, ability=ability, title="t")

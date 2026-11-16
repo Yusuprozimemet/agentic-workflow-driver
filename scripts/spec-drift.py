@@ -218,7 +218,8 @@ def main():
         boundaries(rows, snaps, blobs)
         handoffs = hand_offs(days, order, head, blobs)
         checks = evidence_checks(days, snaps)
-        index, attention = criterion_index(days, checks, handoffs, snaps, blobs, order)
+        replay = replay_history()
+        index, attention = criterion_index(days, checks, handoffs, snaps, blobs, order, replay)
         attach_plain(index)
         stories = user_stories(listed)
         attach_abilities(index, stories["stories"])
@@ -247,7 +248,7 @@ def main():
                     verification=verification(prs, runs),
                     infra=infra(INFRA_WORKFLOW),
                     deployment=deployment(),
-                    evidence_checks=checks, replay=replay_history(),
+                    evidence_checks=checks, replay=replay,
                     conclusion=concluded, yardsticks=yardsticks(concluded, tokens),
                     clock=clock(prs, runs), counted=counted(), driver_runs=driver_runs(parked_issues(note)),
                     data=data_source(),

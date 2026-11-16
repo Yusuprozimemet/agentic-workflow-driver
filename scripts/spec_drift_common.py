@@ -80,6 +80,8 @@ DAY_REF = re.compile(r"\bDays? (\d+)((?:\s*(?:[–-]|,|and|or)\s*\d+)*)")
 CRITERION_ID = re.compile(r"^C(\d+)\.(\d+)\s+")
 # A spec may cite a range of them, H34.1–H34.3 or H35.2-4: the second end may leave its day out.
 HAND_OFF_LINE = re.compile(r"\s*- \**Hand-off\b")  # a Notes item that is one, not one citing it
+# A numbered hand-off line, its ID and its target up to the colon: "- **Hand-off** H09.2 → Day 13: ...".
+HAND_OFF_HEAD = re.compile(r"^[ \t]*- \**Hand-off\**[ \t]+(H\d+\.\d+)[ \t]*→[ \t]*([^:\n]*)", re.M)
 HAND_OFF_RANGE = re.compile(r"\bH(\d+)\.(\d+)(?:\s*[–-]\s*(?:H\1\.)?(\d+)\b)?")
 # A track a PR names ("**E1c** (next, ...)"), not a grep's -A3 or Day 14's A1. A criterion ID
 # (C32.5) is not a track either, so a match followed by ".<digit>" is rejected.
