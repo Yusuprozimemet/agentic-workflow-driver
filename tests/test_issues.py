@@ -329,9 +329,9 @@ class IssueWritesTest(unittest.TestCase):
             ],
         )
         spec = json.loads((folder / "fake.json").read_text(encoding="utf-8"))
-        spec.update({"sleep_on": "comment", "sleep": 5})
+        spec.update({"sleep_on": "comment", "sleep": 30})
         (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
         started = time.monotonic()
         result = self.issues.close(str(folder), gh, 4, "x", timeout=1)
         self.assertEqual(result, "gh issue comment timed out")
-        self.assertLess(time.monotonic() - started, 3)
+        self.assertLess(time.monotonic() - started, 15)

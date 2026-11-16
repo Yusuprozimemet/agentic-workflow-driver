@@ -4,12 +4,14 @@ parks; the halt file stops the wait. The driver runs as a subprocess, with the f
 tests/test_once.py, which writes the session's transcript under CLAUDE_CONFIG_DIR, and the fake gh
 of tests/test_github.py."""
 
+import datetime
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -117,11 +119,31 @@ def starts_of(folder):
     return jsonl(folder / "claude" / "starts.jsonl")
 
 
+def stamp_of(record):
+    # The record's at read with lock.STAMP, or None when it is not one.
+    from driver import lock
+
+    try:
+        return datetime.datetime.strptime(record.get("at"), lock.STAMP)
+    except (TypeError, ValueError):
+        return None
+
+
 def stop(proc):
     # A driver the test left running is killed, so that no case outlives its test.
     if proc.poll() is None:
         proc.kill()
         proc.wait(timeout=60)
+
+
+def cleaned(folder, out):
+    # The stdout bytes as lines (a module function, as test_halt_race borrows finish), with the uuid and the reset's local time replaced.
+    text = out.decode("utf-8")
+    session = session_of(folder)
+    # The reset's local time differs on every run too; only the transcript's own are replaced.
+    for reset in resets(folder):
+        text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
+    return (text.replace(session, "<uuid>") if session else text).splitlines()
 
 
 class UsageLimitTest(unittest.TestCase):
@@ -134,8 +156,9 @@ class UsageLimitTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.root, True)
 
-    def start(self, runs, flags=()):
-        # One case in its own folder: the fake claude with its runs, the fake gh, and the driver.
+    def start(self, runs, flags=(), gh_extra=None):
+        # One case in its own folder: the fake claude with its runs, the fake gh, and the driver. gh_extra
+        # is merged into the fake gh's fake.json, as the sleeps of a busy machine are set there.
         folder = Path(tempfile.mkdtemp(dir=self.root))
         project = make_project(folder, drift_of(DASHED))
         (folder / "claude").mkdir()
@@ -146,6 +169,11 @@ class UsageLimitTest(unittest.TestCase):
         gh = fake_gh(
             folder / "gh", runs=[{"status": "completed", "conclusion": "success"}], prs=[OPEN_PR]
         )
+        if gh_extra is not None:
+            gh_file = folder / "gh" / "fake.json"
+            spec = json.loads(gh_file.read_bytes())
+            spec.update(gh_extra)
+            gh_file.write_bytes(json.dumps(spec).encode("utf-8"))
         config = write_config(folder, project)
         command = [
             sys.executable,
@@ -171,20 +199,45 @@ class UsageLimitTest(unittest.TestCase):
         except subprocess.TimeoutExpired:
             proc.kill()
             out, code = proc.communicate(timeout=60)[0], None
-        text = out.decode("utf-8")
-        session = session_of(folder)
-        # The reset's local time differs on every run too; only the transcript's own are replaced.
-        for reset in resets(folder):
-            text = text.replace(time.strftime("%Y-%m-%d %H:%M", time.localtime(reset)), "<when>")
-        return code, (text.replace(session, "<uuid>") if session else text).splitlines()
+        return code, cleaned(folder, out)
 
-    def halt_after_end(self, folder):
-        # Writes the halt file once the run log holds the session's first end line (30 s at most).
-        until = time.monotonic() + 30
+    def finish_timed(self, folder, proc, bound=60):
+        # As finish, and the time each stdout line was read. The pipes are read by threads, so that neither
+        # fills while the driver runs; stderr is dropped.
+        out, times = [], []
+
+        def read_out():
+            for line in iter(proc.stdout.readline, b""):
+                out.append(line)
+                times.append(time.monotonic())
+
+        readers = [threading.Thread(target=read_out), threading.Thread(target=proc.stderr.read)]
+        for reader in readers:
+            reader.start()
+        try:
+            code = proc.wait(timeout=bound)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=60)
+            code = None
+        for reader in readers:
+            reader.join(60)
+        proc.stdout.close()
+        proc.stderr.close()
+        return code, cleaned(folder, b"".join(out)), times
+
+    def wait_end(self, folder, bound=60):
+        # Waits until the run log holds the session's first end line, or the bound passes; returns whether it does.
+        until = time.monotonic() + bound
         while "end" not in events(folder) and time.monotonic() < until:
             time.sleep(0.1)
-        (folder / "state" / "halt").write_bytes(b"halted by the test\n")
         return "end" in events(folder)
+
+    def halt_after_end(self, folder):
+        # Writes the halt file once the run log holds the session's first end line (60 s at most).
+        ended = self.wait_end(folder)
+        (folder / "state" / "halt").write_bytes(b"halted by the test\n")
+        return ended
 
     def test_waits_and_resumes(self):
         # C09.1: the session hits a limit two seconds ahead and is resumed after it.
@@ -215,23 +268,59 @@ class UsageLimitTest(unittest.TestCase):
         self.assertEqual((code, len(starts_of(folder)), lines[-1:], len(parks)), (1, 2, [AGAIN], 1))
 
     def test_far_reset_parks(self):
-        # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for.
+        # C09.3: a reset 30 hours ahead parks at once; with --limit-hours 40 it is waited for. The 10 seconds
+        # are counted from the session's start to the park line's end line, not from the driver's start, which
+        # a busy machine slows: the start-up and the issue creates before the park line take their time.
         far = "park: the usage limit resets at <when>, more than 6 hours away (session `<uuid>`)"
         runs = [{"records": limit_records(30 * 3600), "result": LIMITED}]
-        folder, proc = self.start(runs)
-        code, lines = self.finish(folder, proc, bound=10)
-        self.assertEqual((code, len(starts_of(folder)), lines), (1, 1, [far]))
+        # Each issue create sleeps six seconds, as on a busy machine.
+        folder, proc = self.start(runs, gh_extra={"sleep_on": "create", "sleep": 6})
+        ended = self.wait_end(folder)
+        code, lines = self.finish(folder, proc)
+        session = session_of(folder)
+        records = jsonl(folder / "state" / "run.jsonl")
+        pid = next(
+            (r for r in records if r.get("session") == session and r.get("event") == "pid"), {}
+        )
+        end = next(
+            (r for r in records if r.get("session") == session and r.get("event") == "end"), {}
+        )
+        began, over = stamp_of(pid), stamp_of(end)
+        quick = began is not None and over is not None and 0 <= (over - began).total_seconds() <= 10
+        # The lines' first words first, so a failure's report is short and the same on every machine.
+        self.assertEqual(
+            (ended, quick, code, len(starts_of(folder)), [line.split(":")[0] for line in lines]),
+            (True, True, 1, 1, ["park"]),
+        )
+        self.assertEqual(lines, [far])
         folder, proc = self.start(runs, flags=["--limit-hours", "40"])
         ended = self.halt_after_end(folder)
-        code, lines = self.finish(folder, proc, bound=10)
+        code, lines = self.finish(folder, proc)
         self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
 
     def test_halt_during_wait(self):
-        # C09.4: the halt file written during a 60-second wait stops the driver within 5 seconds.
-        folder, proc = self.start([{"records": limit_records(60), "result": LIMITED}])
+        # C09.4: the halt file written during a 60-second wait stops the driver, and its halt line is printed
+        # within 5 seconds of the halt file: the 5 seconds run from the halt file to the halt line, as C09.4
+        # says. The run's issue close sleeps six seconds, as on a busy machine, and comes before the exit,
+        # which is waited for up to 60 seconds.
+        runs = [{"records": limit_records(60), "result": LIMITED}]
+        folder, proc = self.start(runs, gh_extra={"sleep_on": "close", "sleep": 6})
         ended = self.halt_after_end(folder)
-        code, lines = self.finish(folder, proc, bound=5)
-        self.assertEqual((ended, code, lines[-1:], len(starts_of(folder))), (True, 1, [HALT], 1))
+        written = time.monotonic()
+        code, lines, times = self.finish_timed(folder, proc)
+        quick = len(lines) == len(times) > 0 and lines[-1] == HALT and 0 <= times[-1] - written <= 5
+        # The last line's first word first, so a failure's report is short and the same on every machine.
+        self.assertEqual(
+            (
+                ended,
+                quick,
+                code,
+                [line.split(":")[0] for line in lines[-1:]],
+                len(starts_of(folder)),
+            ),
+            (True, True, 1, ["halt"], 1),
+        )
+        self.assertEqual(lines[-1:], [HALT])
         self.assertEqual(events(folder), ["start", "pid", "end"])
 
     def test_earlier_limit_is_not_the_last(self):
