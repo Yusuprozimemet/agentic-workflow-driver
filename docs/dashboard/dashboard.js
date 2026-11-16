@@ -1522,23 +1522,34 @@ function geneDraw(m, box, mark, forDays) {
   const live = cols.map((c, i) => [c, i]).filter(([c]) => c.cells.length);
   const xl = k => X0 + k * U + U / 2;
   const writtenRows = Math.min(m.stacks.written, 16), cellRows = Math.min(m.stacks.cells, 16);
-  const Y = { band: 150 }; Y.dash = Y.band + 26; Y.rep = Y.dash + writtenRows * DASH + 24; Y.live = Y.rep + 56; Y.cell = Y.live + 12;
+  const Y = { band: 178 }; Y.dash = Y.band + 26; Y.rep = Y.dash + writtenRows * DASH + 24; Y.live = Y.rep + 56; Y.cell = Y.live + 12;
   Y.code = Y.cell + cellRows * CELL + 16;
-  const ringR = 56, RX = Math.max(right, xl(live.length) + 40) + 30 + ringR, RY = Y.live + ringR + 6, W = RX + ringR + 60, H = Math.max(Y.code + 30, RY + ringR + 50);
+  const ringR = 56, RX = Math.max(right, xl(live.length) + 40) + 30 + ringR, RY = Y.live + ringR + 6, W = RX + ringR + 60, H = Math.max(Y.code + 36, RY + ringR + 60);
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "gene-svg"); svg.setAttribute("role", "group");
   svg.setAttribute("aria-label", "The plan drawn as a gene, the criteria as its transcript, the code as its protein");
-  // labels down the left, one per strand
-  [["The plan", "the gene", Y.band + 10], ["Criteria, as written", "the first transcript", Y.dash + 4], ["Replacement", "splicing", Y.rep],
-    ["Criteria in force", "the mature transcript", Y.live], ["Tests and replay", "translation", Y.cell + 8], ["The code", "the protein", Y.code]]
-    .forEach(([a, b, y]) => { el("text", { x: 0, y, class: "g-lab" }, a); el("text", { x: 0, y: y + 12, class: "g-sub" }, b); });
-  // the sections of the plan, above the strand
+  // labels down the left, one per strand, each at least a label and its subtitle below the one above
+  let below = -Infinity;
+  [["The plan", "the gene", Y.band + 6], ["Criteria, as written", "the first transcript", Y.dash + 14], ["Replacement", "splicing", Y.rep],
+    ["Criteria in force", "the mature transcript", Y.live - 2], ["Tests and replay", "translation", Y.cell + 14], ["The code", "the protein", Y.code]]
+    .forEach(([a, b, y]) => { y = Math.max(y, below + 28); below = y;
+      el("text", { x: 0, y, class: "g-lab" }, a); el("text", { x: 0, y: y + 12, class: "g-sub" }, b); });
+  // ids under a strand: one closer than a label's width to the last steps a line further off the strand
+  const idLabel = () => { let lastX = -Infinity, step = 0;
+    return (cx, y, dir, id) => { step = cx - lastX < 24 ? (step + 1) % 2 : 0; lastX = cx;
+      el("text", { x: cx, y: y + dir * step * 10, "text-anchor": "middle", class: "g-due" }, id); }; };
+  const repId = idLabel(), codeId = idLabel();
+  // the sections of the plan, above the strand: a tick for every run, its name once, and none on top of the last
+  const SEC = Y.band - 12;
   const arm = (list, label) => {
     if (!list.length) return;
-    const x0 = x(list[0].from) - U / 2, x1 = x(list[list.length - 1].to) + U / 2;
+    const x0 = x(list[0].from) - U / 2, x1 = x(list[list.length - 1].to) + U / 2, named = new Set();
+    let lastMid = -Infinity;
     el("text", { x: (x0 + x1) / 2, y: 12, "text-anchor": "middle", class: "g-arm" }, label);
     list.forEach(s => { const a = x(s.from) - U / 2 + 1, b = x(s.to) + U / 2 - 1, mid = (a + b) / 2;
-      el("path", { d: `M${a} 138 H${b} M${mid} 138 V134`, class: "g-brk" });
-      el("text", { transform: `translate(${mid + 2} 130) rotate(-52)`, class: "g-sec" }, s.label); });
+      el("path", { d: `M${a} ${SEC} H${b} M${mid} ${SEC} V${SEC - 4}`, class: "g-brk" });
+      if (named.has(s.label) || mid - lastMid < 20) return;
+      named.add(s.label); lastMid = mid;
+      el("text", { transform: `translate(${mid + 2} ${SEC - 8}) rotate(-52)`, class: "g-sec" }, s.label); });
   };
   arm(m.sections, `The original plan · ${firstN} commitments`);
   arm(m.added_sections, `Added later · ${cols.length - firstN}`);
@@ -1559,7 +1570,7 @@ function geneDraw(m, box, mark, forDays) {
     // the splice: a bead on the strand if a criterion in force names it, an arc if only replaced ones do
     if (c.cells.length) el("circle", { cx, cy: Y.rep, r: 3, class: "g-bead" }, null, g);
     else if (c.cls === "spliced") el("path", { d: `M${cx - 4} ${Y.rep} A4 6 0 0 1 ${cx + 4} ${Y.rep}`, class: "g-arc" }, null, g);
-    if (c.uncovered) el("text", { x: cx, y: Y.rep - (c.cls === "spliced" ? 10 : -14), "text-anchor": "middle", class: "g-due" }, c.id);
+    if (c.uncovered) repId(cx, c.cls === "spliced" ? Y.rep - 10 : Y.rep + 14, c.cls === "spliced" ? -1 : 1, c.id);
     el("rect", { x: cx - U / 2, y: Y.band - 10, width: U, height: Y.rep - Y.band + 16, class: "g-hit" }, null, g);
     mark(forDays(g, c.days), c.r);
   });
@@ -1573,7 +1584,7 @@ function geneDraw(m, box, mark, forDays) {
     c.cells.slice(0, 16).forEach((z, j) => forDays(el("rect", { x: cx - 3, y: Y.cell + j * CELL, width: 6, height: 3.6, rx: 1, class: `g-cell ${z.state}${z.back ? " back" : ""}` }, null, g), [z.day]));
     el("circle", { cx, cy: Y.code, r: 3.2, class: `g-code ${c.cls}${c.sub ? " " + c.sub : ""}` }, null, g);
     if (c.sub === "part") el("path", { d: `M${cx} ${Y.code - 3.2} A3.2 3.2 0 0 0 ${cx} ${Y.code + 3.2} Z`, class: "g-code" }, null, g);
-    if (c.cls !== "proved") el("text", { x: cx, y: Y.code + 16, "text-anchor": "middle", class: "g-due" }, c.id);
+    if (c.cls !== "proved") codeId(cx, Y.code + 16, 1, c.id);
     el("rect", { x: cx - U / 2, y: Y.live - 8, width: U, height: Y.code - Y.live + 14, class: "g-hit" }, null, g);
     mark(forDays(g, c.days), c.r);
   });
@@ -1590,7 +1601,8 @@ function geneDraw(m, box, mark, forDays) {
     el("text", { x: RX, y: RY + 4, "text-anchor": "middle", class: "g-big" }, String(n));
     el("text", { x: RX, y: RY + 20, "text-anchor": "middle", class: "g-sub" }, n === 1 ? "criterion" : "criteria");
     el("text", { x: RX, y: RY + ringR + 22, "text-anchor": "middle", class: "g-lab" }, "Off the plan");
-    el("text", { x: RX, y: RY + ringR + 36, "text-anchor": "middle", class: "g-sub" }, "a plasmid: criteria that name no commitment");
+    el("text", { x: RX, y: RY + ringR + 36, "text-anchor": "middle", class: "g-sub" }, "a plasmid");
+    el("text", { x: RX, y: RY + ringR + 50, "text-anchor": "middle" }, "criteria that name no commitment");
   }
   box.replaceChildren(h("div", { class: "scroll-x" }, svg));
 }
