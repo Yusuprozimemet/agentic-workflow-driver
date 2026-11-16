@@ -1010,14 +1010,15 @@ function model(DATA) {
   }
 
   /* The gene: the plan read down to proved code. Every figure is counted in scripts/spec_drift_views.py (gene);
-     this only words it and hands the drawing its columns. */
+     this only words it and hands the drawing its columns, its labels and what the pointer says. */
   function geneGraph() {
     const G = DATA.gene;
     if (!G || !(G.commitments || []).length) return { empty: "this project keeps no `specs/plan/promises.json`, so nothing reads the plan down to the code.",
       read: { t: "Not measured yet", b: [] }, table: { head: [], rows: [] } };
-    const C = G.counts || {}, U = G.untranscribed || {}, total = G.commitments.length;
+    const C = G.counts || {}, U = G.untranscribed || {}, Q = G.quoting || {}, total = G.commitments.length, ring = G.ring || G.off || [];
+    const K = new Map((DATA.criteria_index || []).map(c => [c.id, c])), part = (C.proved || 0) - G.proved_full;
     const CLASS = {
-      proved: ["reach proved code", `a criterion in force names them, and a break on purpose proved its test. For ${G.proved_full} of them that is every criterion that names them; for ${(C.proved || 0) - G.proved_full}, only some`],
+      proved: ["reach proved code", `a criterion in force names them, and a break on purpose proved its test. For ${G.proved_full} of them that is every criterion that names them; for ${part}, only some`],
       unproved: [C.unproved === 1 ? "reaches code never seen to fail" : "reach code never seen to fail", "the criterion holds, but no break was recorded for it"],
       unreplayable: [C.unreplayable === 1 ? "reaches a check nobody can replay" : "reach a check nobody can replay", "every criterion that names it needs a live run or another computer, which the replay cannot give"],
       repair: [C.repair === 1 ? "reaches a test that needs repair" : "reach a test that needs repair", "its recorded break no longer applies, or its test stopped catching it"],
@@ -1028,30 +1029,85 @@ function model(DATA) {
         [U.rule && plural(U.rule, "rule about people", "rules about people"), U.later && `${U.later} not due yet`, U.due && `${U.due} overdue`].filter(Boolean).join(", ") || "no criterion ever named it"]};
     const ALWAYS = ["proved", "unproved", "unreplayable", "spliced", "untranscribed"];
     const figs = Object.keys(CLASS).filter(k => ALWAYS.includes(k) || C[k]).map(k => ({ cls: k, n: C[k] || 0, what: CLASS[k][0], sub: CLASS[k][1] }));
-    const WORD = { proven: "holds, proved by a break on purpose", unproven: "holds, never seen to fail", skipped: "the replay cannot run its check",
-      repair: "needs repair", broken: "broken", building: "written, not built yet", open: "left unticked", unchecked: "not re-checked yet", replaced: "replaced" };
-    const says = { proved: "reaches proved code", unproved: "reaches code never seen to fail", unreplayable: "reaches a check nobody can replay", repair: "reaches a test that needs repair",
-      fails: "reaches code that is broken", unbuilt: "is named, not built yet", spliced: "is spliced out: only replaced criteria name it",
-      untranscribed: "was never transcribed" };
-    const cols = G.commitments.map(c => {
-      const why = c.cls === "untranscribed" ? { rule: "a rule about people, which no test can check", later: c.owner_day != null ? `not due until Day ${c.owner_day}` : "no Day owns it yet",
-        due: `due by Day ${c.owner_day}, and no criterion names it` }[c.sub] : c.cls === "proved" ? (c.sub === "full" ? "every criterion in force that names it is proved" : "proved for some of its criteria, not all") : says[c.cls];
-      return { ...c, days: [...new Set([...c.cells.map(x => x.day)])],
-        r: { t: `${c.id} · ${c.short}`, b: [`${c.section} · ${c.cls === "untranscribed" ? why : `${says[c.cls]}${c.cls === "proved" ? `; ${why}` : ""}`}${c.uncovered ? " · due, and named by no criterion in force" : ""}.`,
-          c.written.length ? `Named as written by ${andList(c.written)}${c.replaced.length ? `; ${andList(c.replaced)} ${c.replaced.length === 1 ? "was" : "were"} replaced` : ""}.` : "",
-          ...c.cells.map(x => `${x.id} (Day ${x.day}): ${WORD[x.state] || x.state}${x.back ? "; the replay once saw it stop, and it came back" : ""}.`)].filter(Boolean) } };
-    });
-    const off = (G.off || []).map(x => ({ ...x, r: { t: `${x.id} · off the plan`, b: [`Day ${x.day}, tagged ${x.tag || "untagged"}: its Plan: line names no commitment.`, `${WORD[x.state] || x.state}${x.back ? "; the replay once saw it stop, and it came back" : ""}.`] } }));
-    const groups = arm => cols.reduce((g, c, i) => { if (c.arm !== arm) return g; const last = g[g.length - 1];
-      if (last && last.label === c.section) last.to = i; else g.push({ label: c.section, from: i, to: i }); return g; }, []);
+    const WORD = { proven: "holds, and a break on purpose proved its test", unproven: "holds; its test was never seen to fail", skipped: "the replay cannot run this check",
+      repair: "its test needs repair (the recorded break no longer applies, or the test stopped catching it)", broken: "not holding at the newest replay",
+      building: "written, not built yet", open: "left unticked", unchecked: "not re-checked yet", replaced: "replaced" };
+    const REST = { unproven: "never seen to fail", skipped: "the replay cannot run", repair: "needing repair", broken: "broken", building: "not built yet", open: "left unticked", unchecked: "not re-checked yet" };
+    const says = { unproved: "Reaches code that holds, but no test for it was ever seen to fail.", unreplayable: "Reaches a check the replay cannot run.",
+      repair: "Reaches a test that needs repair.", fails: "Reaches code that is not holding at the newest replay.", unbuilt: "Named, and not built yet." };
+    const owed = c => c.settled_by != null ? ` Recorded in specs/plan/overdue.json, to be settled by Day ${c.settled_by}.` : "";
+    const reach = c => c.cls === "untranscribed" ? { rule: "A rule about people, which no test can check. No criterion is expected.",
+        later: c.owner_day != null ? `Not due yet (Day ${c.owner_day}), and no criterion names it.` : "No Day owns it yet, and no criterion names it.",
+        due: `Overdue: due by Day ${c.owner_day}, and no criterion names it.${owed(c)}` }[c.sub]
+      : c.cls === "spliced" ? `Spliced out: every criterion that named it was replaced, and the replacement does not name it.${owed(c)}`
+      : c.cls !== "proved" ? says[c.cls]
+      : c.sub === "full" ? "Reaches code that holds, and a break on purpose proved a test for it."
+      : `Reaches code that holds. A break on purpose proved ${(c.tally || {}).proven || 0} of the ${c.cells.length} criteria in force that name it; the rest: ${Object.entries(c.tally || {}).filter(([k]) => k !== "proven").map(([k, n]) => `${n} ${REST[k] || k}`).join(", ")}.`;
+    const cols = G.commitments.map(c => ({ ...c, reach: reach(c),
+      tip: [["t", `${c.id} · ${c.short}`], c.text && ["", c.text],
+        ["q", `Section: ${c.section}${c.rule ? " · a rule about people" : c.owner_day != null ? ` · due by Day ${c.owner_day}` : ""}`], ["st", reach(c)],
+        c.written.length && ["q", `Named in ${plural(c.written.length, "quote", "quotes")} by ${plural(c.criteria, "criterion", "criteria")}, replaced ones included`],
+        c.change && ["q", `${c.change === "changed" ? "The plan later rewrote it." : "Reworded only."} ${c.note || ""}`.trim()]].filter(Boolean) }));
+    // what the pointer says of one criterion: the same lines wherever the criterion is drawn, and the quote of the commitment under it
+    const crit = Object.fromEntries([...cols.flatMap(c => c.written), ...ring].map(q => {
+      const c = K.get(q.id) || {}, S = c.seen || {}, prs = c.prs || [];
+      return [q.id, { head: `${q.id} · Day ${q.day}${c.track ? ` · track ${c.track}` : ""} · ${q.tag === "hold" ? "safety check" : "new work"}`, text: c.plain || c.claim || "",
+        code: q.gone ? `Code: replaced by ${andList(c.replaced_by || [])}; the replay no longer runs it` : `Code: ${WORD[q.state] || q.state}${S.last ? ` (last replayed at #${S.last})` : ""}`,
+        more: [!q.gone && `Names ${plural((c.tests || []).length, "test", "tests")}${prs.length ? `. Evidence in ${prs.map(n => `#${n}`).join(", ")}` : ""}. The replay ran it at ${plural(S.merges || 0, "merge", "merges")}.`,
+          ...(S.stops || []).map(s => `At #${s.pr} the replay first reported “${s.state}”, ${s.held ? `and it held again by #${s.held}.` : "and it was not seen holding again."}`)].filter(Boolean) }];
+    }));
+    // the names down the left of the picture, each with its counts
+    const code = [[G.proved_full, "proved in full"], [part, "proved in part"], [C.unproved, "never seen to fail"], [C.unreplayable, "cannot be replayed"],
+      [C.repair, "needing repair"], [C.fails, "broken"], [C.unbuilt, "not built yet"]].filter(([n]) => n).map(([n, w]) => `${n} ${w}`);
+    const rows = { plan: ["The plan", "the gene", [plural(total, "commitment", "commitments")]],
+      written: ["Criteria, as written", "the first transcript", [`${plural(G.quotes, "quote", "quotes")} of the plan`, `in ${plural(Q.criteria || 0, "criterion", "criteria")}`]],
+      splice: ["Replacement", "splicing", [`${G.named} named at least once,`, `${C.spliced || 0} ${C.spliced === 1 ? "loses" : "lose"} every criterion`]],
+      live: ["Criteria in force", "the mature transcript", [plural(G.live, "commitment", "commitments")]],
+      tests: ["Tests and replay", "translation", [`${plural(G.live_quotes, "quote", "quotes")} in force,`, `${plural(Q.not_proved || 0, "criterion", "criteria")} not proved,`, `${Q.came_back || 0} stopped once`]],
+      code: ["The code", "the protein", code] };
+    // under the picture: where the plan stops short of proved code, a line for each kind, with the commitments it lights
+    const them = n => n === 1 ? "it" : "them", by = f => [...cols.reduce((g, c) => { const k = f(c); if (k != null) g.set(k, [...(g.get(k) || []), c]); return g; }, new Map())];
+    const cls = k => cols.filter(c => c.cls === k), ids = list => andList(list.map(c => c.id)), one = c => `${c.id}, ${c.short}.`;
+    const spliced = cls("spliced"), settle = [...new Set(spliced.map(c => c.settled_by))];
+    const weak = q => ["building", "open", "broken", "repair", "unchecked"].includes(q.state);
+    const back = [...new Set([...cols.flatMap(c => c.cells), ...ring].filter(q => q.back && !q.gone).map(q => q.id))];
+    const finds = [
+      ...cols.filter(c => c.cls === "untranscribed" && c.sub === "due").map(c => ({ ids: [c.id], b: one(c),
+        text: `Due by Day ${c.owner_day}, and no criterion names it. The gene has it; nothing was ever transcribed.${c.settled_by != null ? ` \`specs/plan/overdue.json\` records it, to be settled by Day ${c.settled_by}.` : ""}` })),
+      spliced.length && { ids: spliced.map(c => c.id), b: `${ids(spliced)}.`,
+        text: `Spliced out. Every criterion that named ${them(spliced.length)} was replaced by a later one, and the later one does not name ${them(spliced.length)}.`
+          + (settle.length === 1 && settle[0] != null ? ` \`specs/plan/overdue.json\` records ${them(spliced.length)}, to be settled by Day ${settle[0]}.` : "") + ` Graph 12 lists ${them(spliced.length)} under "should be covered by now".` },
+      ...cls("unreplayable").map(c => ({ ids: [c.id], b: one(c), text: `${c.cells.length === 1 ? "Its only criterion in force is" : "Its criteria in force are"} ${andList(c.cells.map(q => q.id))}, which the replay cannot run.` })),
+      ...by(c => c.cls === "unproved" ? c.cells.map(q => q.id).join(" ") : null).map(([k, list]) => ({ ids: list.map(c => c.id), b: `${ids(list)}.`,
+        text: k.includes(" ") ? `The criteria in force that name ${them(list.length)} (${andList(k.split(" "))}) hold, but none of their tests was ever seen to fail.`
+          : `The only criterion in force that names ${them(list.length)}, ${k}, holds, but its test was never seen to fail.` })),
+      ...["repair", "fails", "unbuilt"].flatMap(k => cls(k).map(c => ({ ids: [c.id], b: one(c), text: `${says[k]} Its criteria in force: ${andList(c.cells.map(q => q.id))}.` }))),
+      ...[...new Set(cols.filter(c => c.cls === "proved").flatMap(c => c.cells.filter(weak).map(q => q.id)))].map(id => {
+        const on = cols.filter(c => c.cls === "proved" && c.cells.some(q => q.id === id)), q = on[0].cells.find(z => z.id === id);
+        return { ids: on.map(c => c.id), b: `${id}, on ${ids(on)}.`, text: `Day ${q.day}'s criterion: ${WORD[q.state] || q.state}. ${ids(on)} still ${on.length === 1 ? "reaches" : "reach"} proved code through other criteria.` }; }),
+      ...ring.filter(q => !q.gone && weak(q)).map(q => ({ ids: [], b: `${q.id}, on the ring.`, text: `Day ${q.day}'s criterion: ${WORD[q.state] || q.state}. It names no commitment, so no band of the plan shows it.` })),
+      part && { ids: cols.filter(c => c.sub === "part").map(c => c.id), b: `${plural(part, "commitment is", "commitments are")} proved in part.`,
+        text: `${part === 1 ? "It is" : "Each is"} named by a proved criterion and by at least one that is not. ${part === 1 ? "It is the half bead" : "They are the half beads"}: ${cols.filter(c => c.sub === "part").map(c => c.id).join(", ")}.` },
+      back.length && { ids: cols.filter(c => c.cells.some(q => q.back)).map(c => c.id), b: `${back.join(", ")}.`,
+        text: `The replay once saw ${back.length === 1 ? "this criterion" : "each of these"} stop holding, or its recorded break stop applying, and ${back.length === 1 ? "it" : "each"} came back. ${back.length === 1 ? "It is" : "They are"} in force and ${back.length === 1 ? "holds" : "hold"} now; the edge is ${back.length === 1 ? "its" : "their"} history.` }].filter(Boolean);
+    const rules = cols.filter(c => c.sub === "rule"), later = cols.filter(c => c.sub === "later"), gone = G.criteria - G.in_force;
+    const expected = [rules.length && [`${plural(rules.length, "rule about people", "rules about people")}`, `, which no test can check: ${ids(rules)}. In the model these are regulatory regions: they steer the work and never appear in the product.`],
+      later.length && [`${later.length} not due yet`, `: ${later.map(c => c.owner_day != null ? `${c.id} (Day ${c.owner_day})` : `${c.id} (no Day yet)`).join(", ")}.`],
+      gone && [`${gone} of the ${G.criteria} criteria ${gone === 1 ? "was" : "were"} replaced`, " by a later one. Their quotes are the hollow dashes. Most of what they named is still named by another criterion."]].filter(Boolean);
+    const bends = [["Named is not done.", " A filled bead means a criterion that names the commitment holds and was proved. It does not mean the whole commitment is delivered."],
+      spliced.length && [`The ${spliced.length === 1 ? "one" : spliced.length} spliced out ${spliced.length === 1 ? "is" : "are"} a reading of the \`Plan:\` lines.`, " Nobody has checked yet whether the replacing criteria still cover them in substance."],
+      ["A criterion can quote several commitments.", ` ${plural(Q.criteria || 0, "criterion makes", "criteria make")} ${plural(G.quotes, "quote", "quotes")}, so one criterion is drawn once under each commitment it names.`],
+      G.changed && ["A cell reads one way; this project does not.", ` When the code shows the plan is wrong, the plan is rewritten. Those are the triangles on the gene: ${plural(G.changed, "commitment", "commitments")} so far, over ${plural(G.rewrites, "plan change", "plan changes")}.`],
+      ["No time.", " This is a cross-section at one commit. An edged cell says a criterion once stopped; the pointer says at which merge. When a criterion was written is on graph 12."],
+      ["Tests and merges are in the pointer, not in the picture.", " A column is a few pixels wide, so a criterion's tests and the merges it cites show when you point at its cell."]].filter(Boolean);
     const read = { t: `${C.proved || 0} of ${total} commitments reach proved code`,
       b: [G.uncovered.length ? `${plural(G.uncovered.length, "commitment is", "commitments are")} due by Day ${G.closed_to} and named by no criterion in force: ${andList(G.uncovered)}. Graph 12's "should be covered by now" lists the same.`
         : `Every commitment due by Day ${G.closed_to} is named by a criterion in force.`,
         `${plural(G.criteria, "criterion", "criteria")} make ${plural(G.quotes, "quote", "quotes")} of the plan; ${G.in_force} of them are in force and make ${G.live_quotes}.`] };
-    return { figs, cols, off, total, sections: groups("first"), added_sections: groups("added"), stacks: G.stacks || { written: 0, cells: 0 }, read, uncovered: G.uncovered,
+    return { figs, cols, ring, off: (G.off || []).length, crit, rows, finds, expected, bends, total, stacks: G.stacks || { written: 0, cells: 0 }, read, uncovered: G.uncovered,
       table: { head: ["Commitment", "Section", "Reaches", "Criteria as written", "In force, and their state"],
-        rows: cols.map(c => [`${c.id} · ${c.short}`, c.section, c.cls === "proved" ? `proved code (${c.sub === "full" ? "in full" : "in part"})` : c.cls === "untranscribed" ? `never transcribed (${c.sub})` : says[c.cls],
-          c.written.join(", "), c.cells.map(x => `${x.id} ${x.state}${x.back ? ", came back" : ""}`).join("; ")]) } };
+        rows: cols.map(c => [`${c.id} · ${c.short}`, c.section, c.cls === "proved" ? `proved code (${c.sub === "full" ? "in full" : "in part"})` : c.cls === "untranscribed" ? `never transcribed (${c.sub})` : c.cls === "spliced" ? "spliced out" : says[c.cls],
+          c.written.map(q => q.id).join(", "), c.cells.map(q => `${q.id} ${q.state}${q.back ? ", came back" : ""}`).join("; ")]) } };
   }
 
   function notMeasured(yard, clock, run, plan) {
@@ -1510,101 +1566,156 @@ function planLadder(G, box, tip) {
   box.replaceChildren(h("div", { class: "scroll-x" }, svg));
 }
 
-/* The gene, drawn: the plan as a banded strand, the criteria as written under it, the splice, the criteria in force
-   closed up, their states, and the code; the criteria off the plan as a ring beside it. Layout only: every class and
-   state comes from the data. Colours are the page's tokens, in dashboard.css under #gene. */
-function geneDraw(m, box, mark, forDays) {
+/* The gene, drawn: the plan as two banded arms, each criterion's quotes under the commitment it names, the splice,
+   the commitments still named closed up, a cell per criterion in force, and the code as a row of beads; the criteria
+   off the plan as a ring beside it. Layout only: every class, state and count comes from the model. The marks carry
+   data-p (a commitment) and data-c (a criterion), which the pointer follows. Colours are in dashboard.css, under #gene. */
+const GENE_CELL = { proven: "proved", unproven: "unproved", skipped: "norun", repair: "stale", broken: "broken" };
+const GENE_BEAD = { unproved: "unproved", unreplayable: "norun", repair: "stale", fails: "broken", unbuilt: "unbuilt" };
+function geneDraw(m, box, tip, forDays) {
   const svg = document.createElementNS(SVG_NS, "svg"), el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
-  const cols = m.cols, U = 8, X0 = 150, GAP = 24, DASH = 4, CELL = 5;
-  const firstN = cols.filter(c => c.arm === "first").length;
-  const x = i => X0 + i * U + (i >= firstN ? GAP : 0) + U / 2;
-  const right = x(cols.length - 1) + U;
-  const live = cols.map((c, i) => [c, i]).filter(([c]) => c.cells.length);
-  const xl = k => X0 + k * U + U / 2;
-  const writtenRows = Math.min(m.stacks.written, 16), cellRows = Math.min(m.stacks.cells, 16);
-  const Y = { band: 178 }; Y.dash = Y.band + 26; Y.rep = Y.dash + writtenRows * DASH + 24; Y.live = Y.rep + 56; Y.cell = Y.live + 12;
-  Y.code = Y.cell + cellRows * CELL + 16;
-  const ringR = 56, RX = Math.max(right, xl(live.length) + 40) + 30 + ringR, RY = Y.live + ringR + 6, W = RX + ringR + 60, H = Math.max(Y.code + 36, RY + ringR + 60);
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "gene-svg"); svg.setAttribute("role", "group");
-  svg.setAttribute("aria-label", "The plan drawn as a gene, the criteria as its transcript, the code as its protein");
-  // labels down the left, one per strand, each at least a label and its subtitle below the one above
-  let below = -Infinity;
-  [["The plan", "the gene", Y.band + 6], ["Criteria, as written", "the first transcript", Y.dash + 14], ["Replacement", "splicing", Y.rep],
-    ["Criteria in force", "the mature transcript", Y.live - 2], ["Tests and replay", "translation", Y.cell + 14], ["The code", "the protein", Y.code]]
-    .forEach(([a, b, y]) => { y = Math.max(y, below + 28); below = y;
-      el("text", { x: 0, y, class: "g-lab" }, a); el("text", { x: 0, y: y + 12, class: "g-sub" }, b); });
-  // ids under a strand: one closer than a label's width to the last steps a line further off the strand
-  const idLabel = () => { let lastX = -Infinity, step = 0;
-    return (cx, y, dir, id) => { step = cx - lastX < 24 ? (step + 1) % 2 : 0; lastX = cx;
-      el("text", { x: cx, y: y + dir * step * 10, "text-anchor": "middle", class: "g-due" }, id); }; };
-  const repId = idLabel(), codeId = idLabel();
-  // the sections of the plan, above the strand: a tick for every run, its name once, and none on top of the last
-  const SEC = Y.band - 12;
-  const arm = (list, label) => {
-    if (!list.length) return;
-    const x0 = x(list[0].from) - U / 2, x1 = x(list[list.length - 1].to) + U / 2, named = new Set();
-    let lastMid = -Infinity;
-    el("text", { x: (x0 + x1) / 2, y: 12, "text-anchor": "middle", class: "g-arm" }, label);
-    list.forEach(s => { const a = x(s.from) - U / 2 + 1, b = x(s.to) + U / 2 - 1, mid = (a + b) / 2;
-      el("path", { d: `M${a} ${SEC} H${b} M${mid} ${SEC} V${SEC - 4}`, class: "g-brk" });
-      if (named.has(s.label) || mid - lastMid < 20) return;
-      named.add(s.label); lastMid = mid;
-      el("text", { transform: `translate(${mid + 2} ${SEC - 8}) rotate(-52)`, class: "g-sec" }, s.label); });
-  };
-  arm(m.sections, `The original plan · ${firstN} commitments`);
-  arm(m.added_sections, `Added later · ${cols.length - firstN}`);
-  el("rect", { x: X0 - 4, y: Y.band - 4, width: right - X0 + 8, height: 28, rx: 14, class: "g-chrom" });
-  // the strand, one band per commitment, and what hangs under it
-  const shade = n => n >= 7 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : n ? 1 : 0;
-  el("path", { d: `M${X0} ${Y.rep} H${right}`, class: "g-strand" });
+  const cols = m.cols, U = 6.4, P = 7.85, X0 = 150, DASH = 4.4, CELL = 4.6, r1 = n => Math.round(n * 10) / 10;
+  // where each band stands: one slot is left empty between two sections, and two where the plan's second arm begins
+  const X = [], XL = [], live = cols.map((c, i) => i).filter(i => cols[i].cells.length), at = new Map(live.map((i, k) => [i, k]));
+  cols.forEach((c, i) => { const p = cols[i - 1]; X.push(i ? X[i - 1] + P + (c.arm !== p.arm ? 2 * P : c.section !== p.section ? P : 0) : X0); });
+  live.forEach((i, k) => { const c = cols[i], p = cols[live[k - 1]]; XL.push(k ? XL[k - 1] + P + (c.arm !== p.arm || c.section !== p.section ? P : 0) : X0); });
+  const right = X[X.length - 1] + U, liveRight = live.length ? XL[XL.length - 1] + U : X0, mid = i => X[i] + U / 2;
+  const Y = { band: 186, dash: 218 };
+  Y.rep = Math.max(300, Y.dash + m.stacks.written * DASH + 16); Y.live = Y.rep + 78; Y.cell = Y.live + 12;
+  Y.code = Math.max(Y.live + 86, Y.cell + m.stacks.cells * CELL + 10);
+  const ring = m.ring.length, RX = Math.max(right - 40.5, liveRight + 150), RY = Y.live + 50, W = Math.max(ring ? Math.max(right + 111.5, RX + 152) : right + 24, 560);
+  const shade = n => n >= 7 ? 4 : n >= 4 ? 3 : n >= 2 ? 2 : 1;
+  const kind = q => q.gone ? "replaced" : q.tag === "hold" ? "hold" : "new", cell = q => `${GENE_CELL[q.state] || "unbuilt"}${q.back ? " scar" : ""}`;
+
+  // the plan: each arm's name, its sections above it, and its bands inside a rounded cap
+  const arms = ["first", "added"].map(a => [...cols.keys()].filter(i => cols[i].arm === a)).filter(a => a.length);
+  let titled = 0;   // where the last arm's name ends, by a rough width: a short arm's name must not run into the next
+  arms.forEach((a, k) => {
+    const x0 = X[a[0]], x1 = X[a[a.length - 1]] + U, cap = { x: r1(x0 - 3), y: Y.band, width: r1(x1 - x0 + 6), height: 24, rx: 12 };
+    const title = cols[a[0]].arm === "first" ? `The original plan · ${plural(a.length, "commitment", "commitments")}` : `Added later · ${a.length}`;
+    el("text", { class: "t-arm", x: r1(Math.max(x0, titled)), y: 12 }, title); titled = Math.max(x0, titled) + title.length * 7.4 + 16;
+    let from = a[0];
+    a.forEach((i, j) => {
+      const next = a[j + 1], name = cols[i].section;
+      if (next != null && cols[next].section === name) return;
+      const s0 = X[from], s1 = X[i] + U, c = (s0 + s1) / 2;
+      el("path", { class: "brk", d: `M${r1(s0)} 172 H${r1(s1)} M${r1(c)} 172 V168` });
+      el("text", { class: "t-sec", transform: `translate(${r1(c + 2)} 166) rotate(-52)` }, name.length > 38 ? `${name.slice(0, 37)}…` : name);
+      from = next;
+    });
+    el("rect", cap, null, el("clipPath", { id: `gene-cap${k}` }));
+    el("rect", { ...cap, class: "cap-bg" });
+    const g = el("g", { "clip-path": `url(#gene-cap${k})` });
+    a.forEach(i => {
+      const c = cols[i], x = r1(X[i]);
+      const band = c.sub === "rule" ? { class: "b rule", x, y: Y.band + 6, width: U, height: 12 } : c.sub === "later" ? { class: "b notdue", x: r1(X[i] + 0.6), y: Y.band + 2.5, width: 5.2, height: 19 }
+        : { class: `b ${c.sub === "due" ? "overdue" : `gs${shade(c.written.length)}`}`, x, y: Y.band, width: U, height: 24 };
+      el("rect", { ...band, "data-p": c.id, "data-id": c.id, tabindex: 0, "aria-label": `${c.id} · ${c.short}: ${c.reach}` }, null, g);
+    });
+    el("rect", { ...cap, class: "cap" });
+  });
+  if (arms.length === 2) { const c = r1((X[arms[0][arms[0].length - 1]] + U + X[arms[1][0]]) / 2), y = Y.band;
+    el("path", { class: "pinch", d: `M${r1(c - 9.55)} ${y + 5} L${c} ${y + 10} L${r1(c + 9.55)} ${y + 5} V${y + 19} L${c} ${y + 14} L${r1(c - 9.55)} ${y + 19} Z` }); }
+  cols.forEach((c, i) => { if (c.change) el("path", { class: `tri ${c.change}`, "data-p": c.id, d: `M${r1(mid(i))} ${Y.band - 3} l4 -6.5 h-8 z` }); });
+
+  // the criteria as written: one dash per quote, under the commitment it quotes; a name under each one that is overdue
+  let lastX = -Infinity, step = 0;
   cols.forEach((c, i) => {
-    const cx = x(i), g = el("g", { class: "g-col", tabindex: "0" });
-    const band = c.cls === "untranscribed" ? `g-${c.sub}` : `g-s${shade(c.written.length)}`;
-    el("rect", { x: cx - U / 2 + 0.5, y: Y.band, width: U - 1, height: 20, class: `g-band ${band}` }, null, g);
-    if (c.change) el("path", { d: `M${cx - 3} ${Y.band - 9} H${cx + 3} L${cx} ${Y.band - 5} Z`, class: c.change === "reworded" ? "g-reword" : "g-change" }, null, g);
-    c.written.slice(0, 16).forEach((id, k) => {
-      const gone = c.replaced.includes(id), cell = c.cells.find(z => z.id === id);
-      const d = el("rect", { x: cx - 2.5, y: Y.dash + k * DASH, width: 5, height: 2.6, rx: 1, class: gone ? "g-dash gone" : "g-dash" }, null, g);
-      if (cell) forDays(d, [cell.day]);
-    });
-    // the splice: a bead on the strand if a criterion in force names it, an arc if only replaced ones do
-    if (c.cells.length) el("circle", { cx, cy: Y.rep, r: 3, class: "g-bead" }, null, g);
-    else if (c.cls === "spliced") el("path", { d: `M${cx - 4} ${Y.rep} A4 6 0 0 1 ${cx + 4} ${Y.rep}`, class: "g-arc" }, null, g);
-    if (c.uncovered) repId(cx, c.cls === "spliced" ? Y.rep - 10 : Y.rep + 14, c.cls === "spliced" ? -1 : 1, c.id);
-    el("rect", { x: cx - U / 2, y: Y.band - 10, width: U, height: Y.rep - Y.band + 16, class: "g-hit" }, null, g);
-    mark(forDays(g, c.days), c.r);
+    c.written.forEach((q, k) => forDays(el("rect", { class: `rd ${kind(q)}`, "data-p": c.id, "data-c": q.id, x: r1(X[i]), y: r1(Y.dash + k * DASH), width: U, height: 3.2, rx: 1.4 }), [q.day]));
+    if (c.sub !== "due") return;
+    step = mid(i) - lastX < 70 ? step + 1 : 0; lastX = mid(i);
+    el("text", { class: "t-id", "data-p": c.id, x: r1(mid(i)), y: r1(Y.dash + 24.2 + 12 * step), "text-anchor": "middle" }, `${c.id} overdue`);
   });
-  // the criteria in force, closed up: each named commitment once, its cells under it, its code at the foot
-  el("path", { d: `M${X0} ${Y.live} H${xl(Math.max(0, live.length - 1)) + U / 2}`, class: "g-strand" });
-  el("path", { d: `M${X0} ${Y.code} H${xl(Math.max(0, live.length - 1)) + U / 2}`, class: "g-strand" });
-  live.forEach(([c, i], k) => {
-    const cx = xl(k), g = el("g", { class: "g-col", tabindex: "0" });
-    el("path", { d: `M${x(i)} ${Y.rep + 3} L${cx} ${Y.live - 4}`, class: "g-link" }, null, g);
-    el("rect", { x: cx - U / 2 + 1, y: Y.live - 3, width: U - 2, height: 6, rx: 1.5, class: "g-live" }, null, g);
-    c.cells.slice(0, 16).forEach((z, j) => forDays(el("rect", { x: cx - 3, y: Y.cell + j * CELL, width: 6, height: 3.6, rx: 1, class: `g-cell ${z.state}${z.back ? " back" : ""}` }, null, g), [z.day]));
-    el("circle", { cx, cy: Y.code, r: 3.2, class: `g-code ${c.cls}${c.sub ? " " + c.sub : ""}` }, null, g);
-    if (c.sub === "part") el("path", { d: `M${cx} ${Y.code - 3.2} A3.2 3.2 0 0 0 ${cx} ${Y.code + 3.2} Z`, class: "g-code" }, null, g);
-    if (c.cls !== "proved") codeId(cx, Y.code + 16, 1, c.id);
-    el("rect", { x: cx - U / 2, y: Y.live - 8, width: U, height: Y.code - Y.live + 14, class: "g-hit" }, null, g);
-    mark(forDays(g, c.days), c.r);
+
+  // the splice: a box on the strand for each commitment ever named, a line down to where it stands among those still
+  // named, and an arc over the ones that only replaced criteria name
+  el("path", { class: "strand", d: `M${X0} ${Y.rep} H${r1(right)}` });
+  cols.forEach((c, i) => {
+    if (!c.written.length) return;
+    const on = c.cells.length > 0;
+    el("rect", { class: on ? "ex pre" : "ex skip", "data-p": c.id, "data-id": c.id, x: r1(X[i] + (on ? 0 : 0.5)), y: Y.rep - 5, width: on ? U : 5.4, height: 10, rx: 2 });
+    if (on) el("path", { class: "fun", "data-p": c.id, d: `M${r1(mid(i))} ${Y.rep + 6} L${r1(XL[at.get(i)] + U / 2)} ${Y.live - 7}` });
   });
-  // off the plan: a ring, one arc per criterion that names no commitment, by Day
-  if (m.off.length) {
-    const n = m.off.length, step = 2 * Math.PI / n, pad = Math.min(0.04, step * 0.2);
-    const arcAt = (a0, a1, r) => `M${RX + r * Math.sin(a0)} ${RY - r * Math.cos(a0)} A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${RX + r * Math.sin(a1)} ${RY - r * Math.cos(a1)}`;
-    m.off.forEach((z, k) => {
-      const a0 = k * step + pad, a1 = (k + 1) * step - pad;
-      const g = el("g", { class: "g-col", tabindex: "0" });
-      el("path", { d: arcAt(a0, a1, ringR), class: `g-ring ${z.state}${z.back ? " back" : ""}` }, null, g);
-      mark(forDays(g, [z.day]), z.r);
+  const out = [...cols.keys()].filter(i => cols[i].cls === "spliced");
+  out.forEach((i, k) => {
+    if (k && X[i] - X[out[k - 1]] < 28) return;   // close enough to share the last one's arc and its name
+    let j = k; while (out[j + 1] != null && X[out[j + 1]] - X[out[j]] < 28) j++;
+    const a = mid(i) - 5.8, b = mid(out[j]) + 5.8;
+    el("path", { class: "arc", d: `M${r1(a)} ${Y.rep - 6} Q${r1((a + b) / 2)} ${Y.rep - 30} ${r1(b)} ${Y.rep - 6}` });
+    el("text", { class: "t-id", x: r1((a + b) / 2), y: Y.rep - 22, "text-anchor": "middle" }, out.slice(k, j + 1).map(z => cols[z].id).join(", "));
+  });
+
+  // the criteria in force, closed up: each commitment still named, a cell per criterion in force, and its code as a bead
+  if (live.length) { el("path", { class: "strand", d: `M${X0} ${Y.live} H${r1(liveRight)}` }); el("path", { class: "bond", d: `M${r1(XL[0] + U / 2)} ${Y.code} H${r1(liveRight - U / 2)}` }); }
+  lastX = -Infinity; step = 0;
+  live.forEach((i, k) => {
+    const c = cols[i], x = r1(XL[k]), cx = r1(XL[k] + U / 2);
+    el("rect", { class: "ex mat", "data-p": c.id, "data-id": c.id, x, y: Y.live - 6, width: U, height: 12, rx: 2 });
+    c.cells.forEach((q, j) => forDays(el("rect", { class: `tc ${cell(q)}`, "data-p": c.id, "data-c": q.id, x, y: r1(Y.cell + j * CELL), width: U, height: 3.4, rx: 1.4 }), [q.day]));
+    el("path", { class: "tick", "data-p": c.id, d: `M${cx} ${r1(Y.cell + c.cells.length * CELL + 0.3)} V${Y.code - 5.5}` });
+    el("circle", { class: `bead ${c.cls === "proved" ? (c.sub === "part" ? "part" : "proved") : GENE_BEAD[c.cls] || "unbuilt"}`, "data-p": c.id, "data-id": c.id, cx, cy: Y.code, r: 3.7 });
+    if (c.cls === "proved") return;
+    step = cx - lastX < 24 ? step + 1 : 0; lastX = cx;
+    el("path", { class: "lead", d: `M${cx} ${Y.code + 5.5} V${Y.code + 6 + 11 * step}` });
+    el("text", { class: "t-id", "data-p": c.id, x: cx, y: Y.code + 15 + 11 * step, "text-anchor": "middle" }, c.id);
+  });
+
+  // each strand's name down the left, with its counts: never closer than a line to the one above
+  let floor = 0;
+  const label = ([name, bio, lines], y) => { y = Math.max(y, floor);
+    el("text", { class: "t-row", x: 0, y }, name); el("text", { class: "t-bio", x: 0, y: y + 13 }, bio.toUpperCase());
+    lines.forEach((s, k) => el("text", { class: "t-n", x: 0, y: y + 27 + 13 * k }, s));
+    floor = y + 45 + 13 * Math.max(0, lines.length - 1); return floor - 18; };
+  label(m.rows.plan, 178); label(m.rows.written, 228); label(m.rows.splice, Y.rep - 2); label(m.rows.live, Y.live - 4); label(m.rows.tests, Y.live + 41);
+  const H = Math.max(label(m.rows.code, Y.code + 28) + 32, ring ? RY + 162 : 0);
+
+  // off the plan: a ring, the criteria that name no commitment by Day (outside), and the state of each one in force (inside)
+  if (ring) {
+    const days = new Set(m.ring.map(q => q.day)).size, u = 2 * Math.PI / (ring + days * 0.5), pad = Math.min(0.012, u * 0.1);
+    const pt = (r, a) => `${r1(RX + r * Math.sin(a))} ${r1(RY - r * Math.cos(a))}`;
+    const sector = (r, s, a0, a1) => { const big = a1 - a0 > Math.PI ? 1 : 0; return `M${pt(r, a0)} A${r} ${r} 0 ${big} 1 ${pt(r, a1)} L${pt(s, a1)} A${s} ${s} 0 ${big} 0 ${pt(s, a0)} Z`; };
+    const name = (day, a0, a1) => el("text", { class: "t-day", x: r1(RX + 74.5 * Math.sin((a0 + a1) / 2)), y: r1(RY - 74.5 * Math.cos((a0 + a1) / 2) + 3), "text-anchor": "middle" }, `D${day}`);
+    let a = 0.25 * u, day = null, start = a;
+    m.ring.forEach(q => {
+      if (q.day !== day) { if (day != null) { name(day, start, a); a += 0.5 * u; } day = q.day; start = a; }
+      forDays(el("path", { class: `rd rg ${kind(q)}`, "data-c": q.id, d: sector(63, 52, a + pad, a + u - pad) }), [q.day]);
+      if (!q.gone) forDays(el("path", { class: `rk ${cell(q)}`, "data-c": q.id, d: sector(49, 39.5, a + pad, a + u - pad) }), [q.day]);
+      a += u;
     });
-    el("text", { x: RX, y: RY + 4, "text-anchor": "middle", class: "g-big" }, String(n));
-    el("text", { x: RX, y: RY + 20, "text-anchor": "middle", class: "g-sub" }, n === 1 ? "criterion" : "criteria");
-    el("text", { x: RX, y: RY + ringR + 22, "text-anchor": "middle", class: "g-lab" }, "Off the plan");
-    el("text", { x: RX, y: RY + ringR + 36, "text-anchor": "middle", class: "g-sub" }, "a plasmid");
-    el("text", { x: RX, y: RY + ringR + 50, "text-anchor": "middle" }, "criteria that name no commitment");
+    name(day, start, a);
+    const hollow = ring - m.off;
+    [["t-big", 4, String(m.off)], ["t-n", 18, m.off === 1 ? "criterion" : "criteria"], ["t-row", 98, "Off the plan"], ["t-bio", 111, "A PLASMID"],
+      ["t-n", 125, "criteria in force that name no commitment"], hollow && ["t-n", 138, `${hollow} more ${hollow === 1 ? "was" : "were"} replaced: the hollow arcs`]]
+      .filter(Boolean).forEach(([cls, dy, s]) => el("text", { class: cls, x: r1(RX), y: RY + dy, "text-anchor": "middle" }, s));
   }
-  box.replaceChildren(h("div", { class: "scroll-x" }, svg));
+  svg.setAttribute("viewBox", `0 0 ${r1(W)} ${r1(H)}`); svg.setAttribute("class", "fig"); svg.id = "gene-fig"; svg.setAttribute("role", "group");
+  svg.setAttribute("aria-label", "The plan drawn as a gene, the criteria as its transcript, the code as its protein");
+  svg.style.cssText = `min-width:${Math.round(Math.min(1080, W * 0.85))}px;max-width:${Math.round(W * 1.15)}px`;
+  box.replaceChildren(svg);
+
+  // the pointer: what a mark is, and every other mark of the same commitment or the same criterion lit
+  const byId = new Map(cols.map(c => [c.id, c])), line = (cls, s) => h("div", { class: cls || null }, s);
+  const fill = t => {
+    const col = byId.get(t.dataset.p), c = m.crit[t.dataset.c];
+    if (c) { const q = col && col.written.find(z => z.id === t.dataset.c);
+      tip.replaceChildren(line("t", c.head), line("", c.text), line("q", q ? `Names ${col.id} (${col.short})${q.quote ? `: “${q.quote}”` : ""}` : "Plan: none"), line("st", c.code), ...c.more.map(s => line("q", s))); }
+    else if (col) tip.replaceChildren(...col.tip.map(([cls, s]) => line(cls, s)));
+    return !!(c || col);
+  };
+  const place = (x, y) => { tip.hidden = false;
+    const w = tip.offsetWidth, hgt = tip.offsetHeight, top = y + 18;
+    tip.style.left = `${Math.max(8, Math.min(x + 14, innerWidth - w - 8))}px`; tip.style.top = `${top + hgt > innerHeight - 8 ? Math.max(8, y - hgt - 12) : top}px`; };
+  const clear = () => { svg.classList.remove("foc", "focc"); svg.querySelectorAll(".lit").forEach(e => e.classList.remove("lit")); };
+  const light = (sel, cls) => { clear(); const hit = svg.querySelectorAll(sel); if (!hit.length) return; hit.forEach(e => e.classList.add("lit")); svg.classList.add(cls); };
+  const follow = t => t.dataset.c ? light(`[data-c="${t.dataset.c}"]`, "focc") : t.dataset.p ? light(`[data-p="${t.dataset.p}"]`, "foc") : clear();
+  const hide = () => { tip.hidden = true; clear(); };
+  svg.addEventListener("pointerover", e => { const t = e.target.closest("[data-c],[data-id]"); if (t && fill(t)) { place(e.clientX, e.clientY); follow(t); } else hide(); });
+  svg.addEventListener("pointermove", e => { if (!tip.hidden) place(e.clientX, e.clientY); });
+  svg.addEventListener("pointerleave", hide);
+  svg.addEventListener("focusin", e => { const b = e.target.closest(".b"); if (b && fill(b)) { const r = b.getBoundingClientRect(); place(r.left, r.bottom); follow(b); } });
+  svg.addEventListener("focusout", hide);
+  document.addEventListener("pointerdown", e => { if (!svg.contains(e.target)) tip.hidden = true; });
+  return { light: ids => light(ids.map(id => `[data-p="${id}"]`).join(","), "foc"), clear };
 }
 
 function draw(M, DATA) {
@@ -2019,12 +2130,24 @@ function draw(M, DATA) {
 
   /* Graph 12, drawn beside graph 6: the plan against the specs, as the by-script mockup draws it (SVG) */
   /* The gene, first in its chapter: the plan read down to proved code */
-  graph("gene", (m, mark) => {
+  graph("gene", m => {
     if (m.empty) { put("gene-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
-    put("gene-figs", m.figs.map(f => h("div", { class: "gene-fig" }, h("div", { class: "num" }, h("i", { class: `gene-sw ${f.cls}` }), String(f.n)),
-      h("div", { class: "what" }, f.what), h("div", { class: "sub" }, f.sub))));
+    // each class's sign beside its figure, as the picture draws it
+    const sign = (w, hgt, ...marks) => { const s = document.createElementNS(SVG_NS, "svg"); s.setAttribute("width", w); s.setAttribute("height", hgt);
+      s.setAttribute("viewBox", `0 0 ${w} ${hgt}`); s.setAttribute("aria-hidden", "true"); marks.forEach(([tag, attrs]) => svgEl(s, tag, attrs)); return s; };
+    const dot = (cls, r) => sign(14, 14, ["circle", { class: cls, cx: 7, cy: 7, r }]);
+    const SIGN = { proved: () => dot("proved", 6), unproved: () => dot("unproved", 5.2), unreplayable: () => dot("norun", 5.5), repair: () => dot("stale", 6), fails: () => dot("broken", 6),
+      unbuilt: () => dot("unbuilt", 5.5), spliced: () => sign(22, 14, ["path", { class: "arc", d: "M1 12 Q11 -6 21 12" }], ["rect", { class: "ex skip", x: 7, y: 7, width: 8, height: 6, rx: 1.5 }]),
+      untranscribed: () => sign(12, 16, ["rect", { class: "notdue", x: 1, y: 1, width: 10, height: 14 }]) };
+    put("gene-figs", m.figs.map(f => h("div", null, h("div", { class: "num" }, SIGN[f.cls](), String(f.n)), h("div", { class: "what" }, f.what), h("div", { class: "sub" }, f.sub))));
     $("gene-total").textContent = String(m.total);
-    geneDraw(m, $("gene-plot"), mark, forDays);
+    const fig = geneDraw(m, $("gene-plot"), $("gene-tip"), forDays);
+    put("gene-finds", m.finds.map(f => {
+      const li = h("li", { tabindex: f.ids.length ? 0 : null }, h("b", null, f.b), " ", rich(f.text));
+      if (f.ids.length) { [["pointerenter", "focus"], ["pointerleave", "blur"]].forEach(([a, b], off) => [a, b].forEach(ev => li.addEventListener(ev, () => off ? fig.clear() : fig.light(f.ids)))); }
+      return li; }));
+    const plain = list => list.map(([b, text]) => h("li", null, h("b", null, rich(b)), rich(text)));
+    put("gene-expected", plain(m.expected)); put("gene-bends", plain(m.bends));
   });
 
   graph("g12", m => {

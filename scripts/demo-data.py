@@ -366,8 +366,10 @@ def plan_links():
     links = {"C1.1": ["P01"], "C1.2": ["P02"], "C1.3": [], "C2.1": ["P03"], "C2.2": ["P03"], "C2.3": ["P04"],
              "C3.1": ["P05"], "C3.2": ["P05", "P06"], "C3.3": [], "C4.1": ["P06"], "C4.2": ["N02"], "C4.3": ["P04", "P06"],
              "C5.1": ["P07"], "C5.2": [], "C5.3": ["P08"], "C6.1": ["N01"], "C6.2": ["N01"], "C6.3": []}
+    short = {i: s for i, s, *_ in C}
     return dict(reference="demo", quotes=sum(len(v) for v in links.values()), links=links, unlined=[], replaced=["C1.2"],
-                rewrites=[dict(pr=9, after_day=3)],
+                rewrites=[dict(pr=9, after_day=3)], overdue={"P02": 7},
+                said={cid: [short[p].lower() for p in named] for cid, named in links.items()},
                 commitments=[dict(id=i, short=s, section=sec, owner_day=o, rule=r, change=ch, text=f"Made-up commitment: {s.lower()}.")
                              for i, s, sec, o, r, ch in C])
 
