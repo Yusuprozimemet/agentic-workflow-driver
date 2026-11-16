@@ -94,6 +94,21 @@ class BoxPreflightTest(OnCase, unittest.TestCase):
             [["version", "--format", "{{.Server.Version}}"]],
         )
 
+    def test_docker_not_found(self):
+        # --docker names a program on no PATH: the line names it as given, and nothing runs (#213, B4).
+        self.box("not-found")
+        self.flags = [*self.flags[:-2], "--docker", "no-such-docker"]
+        code, out, err = self.run_steps("--once")
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertEqual(
+            err.splitlines(),
+            ["cannot start: Docker does not run: no-such-docker is not found"],
+        )
+        self.assertFalse(self.claude_ran())
+        self.assertFalse(self.issue_read())
+        self.assertEqual(docker_calls(self.folder / "docker"), [])
+
     def test_no_image(self):
         self.box("no-image", image={"stderr": "Error: No such image: img:1\n", "code": 1})
         code, out, err = self.run_steps("--once")
