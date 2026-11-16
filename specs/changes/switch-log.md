@@ -1,29 +1,18 @@
 # The driver records its switches
 
 ## What changes
-The driver writes each switch a person pulls, or a STOP from the phone sets, to a file of its own,
-`<state>/switches.jsonl`: one JSON object per line, fsynced as the run log's are. `on` writes
-`{"event": "on", "at": …}` once its run has passed its checks; the loop writes
-`{"event": "off", "at": …, "issue": <n>}` when it ends because the run's issue was closed; every halt
-writes `{"event": "halt", "at": …, "why": …}`, with `"session": <uuid>` when it killed a session
-(a STOP during a session, or `run-steps.py halt` while one lives); `clear` writes
-`{"event": "clear", "at": …}` when it removes a halt. `scripts/driver-runs.py` reads the file: a
-session a halt names is not counted as crashed, and its document carries the lines as `switches`.
-
-Before: none of these was written anywhere. A session a STOP killed has no `end` line, so the
-count, and the page's lane "Can it run without a person?", showed it as a crash (bearing's
-session `8bef3bb2`, 10 Nov 23:47Z, the trial's own STOP #92).
-
-The run log (`<state>/run.jsonl`) does not change: after a halt it still holds `start`, `pid` and
-no `end`, so the next run still parks on that session for a person (C04.12, C05.11). The driver
-never reads `switches.jsonl` to decide anything; it is a record for the count.
+Each switch goes to `<state>/switches.jsonl`, one JSON object per line: `on` once its run passed its
+checks; `off` with the issue, when the loop sees the run's issue closed; every halt with its `why`,
+and the `session` it stopped; `clear` when it removes a halt. `scripts/driver-runs.py` reads it: a
+session a halt names is not crashed, and its document carries the lines as `switches`. Before, none
+was written, so a session a STOP killed (no `end` line) showed as a crash. `run.jsonl` is unchanged,
+and the driver never reads the new file to decide.
 
 ## Why
-#211 N7 asked for the cause of 11 Nov's crash: it was the trial's phone STOP, not a fault. #212 S11:
-Day 14's record must name every merge, park and refusal (N25), and the run log has no on, off or
-halt events. Writing them into `run.jsonl` would break two held criteria, C04.12 and C05.11, whose
-frozen tests require the log after a halt to be exactly `start`, `pid`; the maintainer chose a file
-of its own over a `Replaces:` in Day 13.
+#211 N7: 11 Nov's crash (bearing's `8bef3bb2`) was the trial's own STOP #92. #212 S11: Day 14's
+record needs these events (N25). C04.12 and C05.11 require `run.jsonl` after a halt to be exactly
+`start`, `pid`, which makes the next run park; the maintainer chose a file of its own over a
+`Replaces:` in Day 13.
 
 ## Acceptance criteria
 Tick each box in this PR once its evidence is in the PR body; under a box left unticked, write
