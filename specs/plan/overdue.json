@@ -1,5 +1,10 @@
 [
   {"id": "P08", "settled_by": 13, "why": "PR B (#211, N5) found no check that --project is not the driver's own repository; the plan change of 2026-11-16 keeps it, so Day 13 adds it"},
   {"id": "N10", "settled_by": 13, "why": "PR B (#211, N5) found no driver code that installs the project before its tests; the plan change of 2026-11-16 keeps it, so Day 13 adds it"},
-  {"id": "N35", "settled_by": 13, "why": "added by the plan change of 2026-11-16 for a decision Day 12 built: C12.10 tests it and says Plan: none, a line only a spec-change PR may change, so Day 13's spec change names it there"}
+  {"id": "N35", "settled_by": 13, "why": "added by the plan change of 2026-11-16 for a decision Day 12 built: C12.10 tests it and says Plan: none, a line only a spec-change PR may change, so Day 13's spec change names it there"},
+  {"id": "P04", "settled_by": 13, "why": "named only by replaced criteria once plan-links.py counted only criteria in force (the dashboard port's PR 1): C04.9 -> C05.8 -> C11.1, and C10.15 -> C11.1; C11.1's Plan: line names only N30, so Day 13's spec changes it or writes its own criterion"},
+  {"id": "P07", "settled_by": 13, "why": "named only by replaced criteria once plan-links.py counted only criteria in force (the dashboard port's PR 1): C01.7 -> C07.20, whose link sits in links-days-01-10.json, so Day 13's spec changes it or writes its own criterion"},
+  {"id": "P60", "settled_by": 13, "why": "named only by replaced criteria once plan-links.py counted only criteria in force (the dashboard port's PR 1): C04.9 -> C05.8 -> C11.1, and C10.15 -> C11.1; C11.1's Plan: line names only N30, so Day 13's spec changes it or writes its own criterion"},
+  {"id": "N13", "settled_by": 13, "why": "named only by replaced criteria once plan-links.py counted only criteria in force (the dashboard port's PR 1): C06.2 -> C08.5, whose link sits in links-days-01-10.json, so Day 13's spec changes it or writes its own criterion"},
+  {"id": "N14", "settled_by": 13, "why": "named only by replaced criteria once plan-links.py counted only criteria in force (the dashboard port's PR 1): C04.9 -> C05.8 -> C11.1; C11.1's Plan: line names only N30, so Day 13's spec changes it or writes its own criterion"}
 ]

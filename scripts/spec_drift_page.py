@@ -23,6 +23,7 @@ from spec_drift_git import (
 )
 from spec_drift_specs import (
     broke,
+    cited_prs,
     criterion_evidence,
     evidence,
     evidence_test_names,
@@ -103,7 +104,7 @@ def criterion_index(days, reports, handoffs, snaps, blobs, order=(), history=Non
             row = dict(id=c["id"], day=day["day"], phase=day.get("phase"), tag=c["kind"], claim=" ".join(claim.split()),
                        ticked=bool(c["ticked"]),
                        spec=day["file"] + "#acceptance-criteria", track=track,
-                       prs=sorted({int(n) for n in CITED_PR.findall(evidence_text)}), tests=tests,
+                       prs=cited_prs(block), tests=tests,
                        cited=cited, test_found=found, seen_red=dict(state=red, lines=red_lines, none=none), replay=replay,
                        replaces=[i for _, ids in replacement_lines(block) for i in ids], replaced_by=[])
             rows.append(row)

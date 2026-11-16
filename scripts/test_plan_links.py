@@ -154,10 +154,28 @@ class PlanLinksTests(unittest.TestCase):
         self.links["C01.1"] = []
         self.assertTrue(self.run_check()[0], "P01 is overdue and nothing said so")
         self.assertEqual(self.run_check()[0], [
-            "P01: overdue, due on Day 1, the current Day is 1, and no criterion names it: name it in a Plan: "
+            "P01: overdue, due on Day 1, the current Day is 1, and no criterion in force names it: name it in a Plan: "
             "line, or record it in specs/plan/overdue.json with the Day that settles it"])
         self.promises[0]["owner_day"] = 2
         self.assertEqual(self.run_check()[0], [], "due on a later Day: not overdue yet")
+
+    def test_a_commitment_named_only_by_a_replaced_criterion_is_overdue(self):
+        self.files["specs/day-02-preflight.md"] = ("## Acceptance criteria\n\n- [x] C02.1 **new** — x\n"
+                                                   "      Replaces: C01.1 — was: parks at a stopping point.\n")
+        self.links["C02.1"] = []
+        self.assertEqual(self.run_check()[0], [
+            "P01: overdue, due on Day 1, the current Day is 2, and no criterion in force names it: name it in a Plan: "
+            "line, or record it in specs/plan/overdue.json with the Day that settles it"])
+        self.files["specs/plan/overdue.json"] = json.dumps([{"id": "P01", "settled_by": 3, "why": "spliced out"}])
+        self.assertEqual(self.run_check()[0], [], "an exception for it is not 'named by a criterion now'")
+
+    def test_a_plan_line_of_a_replaced_criterion_names_nothing(self):
+        self.links["C01.1"] = []
+        self.files["specs/day-12-close.md"] = ("## Acceptance criteria\n\n- [x] C12.1 **new** — x\n"
+                                               "      Replaces: C11.1 — was: the reviewer.\n      Plan: none\n")
+        problems = self.day11('Plan: P01 "parks when the next step"')[0]
+        self.assertEqual([p.split(", the current")[0] for p in problems], ["P01: overdue, due on Day 1"])
+        self.assertIn("no criterion in force names it", problems[0])
 
     def test_an_exception_holds_only_before_the_day_that_settles_it(self):
         self.links["C01.1"] = []
@@ -166,7 +184,7 @@ class PlanLinksTests(unittest.TestCase):
         self.files["specs/day-02-preflight.md"] = "## Acceptance criteria\n\n- [x] C02.1 **new** — x\n"
         self.links["C02.1"] = []
         self.assertEqual(self.run_check()[0], [
-            "P01: overdue, due on Day 1, the current Day is 2, and no criterion names it: name it in a Plan: "
+            "P01: overdue, due on Day 1, the current Day is 2, and no criterion in force names it: name it in a Plan: "
             "line (its exception ran out at Day 2)"])
 
     def test_an_exception_for_a_named_unknown_or_not_yet_due_commitment_fails(self):

@@ -19,8 +19,9 @@ From Day 11 on, each criterion of a day spec says it in its own `Plan:` line ins
 or one in neither form fails, and its quotes are checked as the backfill's are.
 
 A commitment is overdue when its `owner_day` is at or before the current Day (the highest Day
-with a spec in `specs/`) and no criterion names it: that fails too, since a commitment no
-criterion names has no test that can fail (#211, N5). `specs/plan/overdue.json` records the ones
+with a spec in `specs/`) and no criterion in force names it: that fails too, since a commitment no
+criterion names has no test that can fail (#211, N5). A criterion a later one's `Replaces:` line
+names is not in force: what only it named is named by none. `specs/plan/overdue.json` records the ones
 known and not yet settled, each with the Day that settles it (`settled_by`) and why; an entry
 holds only while the current Day is before that Day, so the spec of that Day goes red unless it,
 or a spec change before it, names the commitment. An entry for a commitment that is named, not
@@ -46,6 +47,7 @@ PLAN_LINK = re.compile(r'([PN]\d\d) "([^"]+)"')
 PLAN_NONE = re.compile(r"none(?: — .+)?")
 DAY_FILE = re.compile(r"day-(\d+)-[^/\\]+\.md")
 FIELDS = {"id", "short", "section", "owner_day", "rule_about_people", "quote", "text"}
+REPLACES = re.compile(r"^[ \t]*Replaces:(.*)$", re.M)
 BACKFILL_DAYS = range(1, 11)
 PLAN_LINES_FROM = 11
 OVERDUE = os.path.join("specs", "plan", "overdue.json")
@@ -69,6 +71,17 @@ def spec_criteria(specs_dir):
         if m:
             days.setdefault(int(m.group(1)), []).extend(CRITERION.findall(read(os.path.join(specs_dir, name))))
     return days
+
+
+def replaced(days):
+    """The criteria a later criterion's `Replaces:` line names (the ids before its em dash): no longer in force,
+    so what they name counts as named by none."""
+    gone = set()
+    for criteria in days.values():
+        for _, block in criteria:
+            for line in REPLACES.findall(block):
+                gone.update(re.findall(r"\bC\d+\.\d+\b", line.split("—")[0]))
+    return gone
 
 
 def link_problems(cid, pid, quote, texts, seen):
@@ -111,7 +124,7 @@ def overdue(promises, named, today, excepted):
         until = excepted.get(pid, {}).get("settled_by")
         if isinstance(until, int) and today < until:
             continue
-        problems.append(f"{pid}: overdue, due on Day {day}, the current Day is {today}, and no criterion names "
+        problems.append(f"{pid}: overdue, due on Day {day}, the current Day is {today}, and no criterion in force names "
                         f"it: name it in a Plan: line" + (f" (its exception ran out at Day {until})" if until
                         else f", or record it in {OVERDUE.replace(os.sep, '/')} with the Day that settles it"))
     for pid, entry in excepted.items():
@@ -171,7 +184,8 @@ def check(root):
             problems.append(f'{pid}: quote not in plan.md: "{quote}"')
 
     known = {c for criteria in days.values() for c, _ in criteria}
-    named = {link.get("p") for served in links.values() for link in served}
+    gone = replaced(days)
+    named = {link.get("p") for cid, served in links.items() if cid not in gone for link in served}
     for cid, served in links.items():
         if cid not in known:
             problems.append(f"{cid}: no such criterion in specs/")
@@ -187,7 +201,9 @@ def check(root):
         for cid, block in days[day]:
             found, made = plan_line(cid, block, texts)
             problems += found
-            lines, count, named = lines + 1, count + len(made), named | set(made)
+            lines, count = lines + 1, count + len(made)
+            if cid not in gone:
+                named |= set(made)
     path = os.path.join(root, OVERDUE)
     excepted = {e.get("id"): e for e in json.loads(read(path))} if os.path.exists(path) else {}
     problems += overdue(promises, named, max(days, default=0), excepted)
