@@ -145,6 +145,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .g1-under { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .g1-today { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--ink); pointer-events: none; }
 .g1-today span { position: absolute; top: 2px; left: 4px; font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.g1-today.end span { left: auto; right: 4px; }
 .g1-after { flex: none; display: flex; align-items: flex-start; gap: 8px; padding-top: 22px; }
 .g1-unknown { flex: none; width: 100px; height: 280px; padding: 8px; border: 1px solid var(--axis); border-radius: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
   background: repeating-linear-gradient(45deg, var(--axis) 0 2px, var(--wash) 2px 7px); text-align: left; font-size: 12px; color: var(--ink-2); }
@@ -197,6 +198,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .map-row > * { grid-row: 1; min-width: 0; }
 .map-name { grid-column: 1; display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; line-height: 1.25; min-height: 24px; padding-right: 8px; }
 .map-badge { flex: none; width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.map-score { font-size: 11px; font-weight: 400; color: var(--muted); white-space: nowrap; }
 .legend .map-badge { width: 22px; height: 6px; border-radius: 3px; background: var(--l1); }
 .map-h { text-align: center; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .map-h small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; min-height: 14px; }
@@ -264,6 +266,8 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .sieve-gate strong { display: block; font-size: 12px; line-height: 1.25; }
 .sieve-gate span { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; }
 .sieve-cell { flex: 1 1 0; min-width: 0; min-height: 34px; background: var(--well); border-radius: 6px; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+.sieve-more { font-size: 11px; color: var(--muted); align-self: center; }
+.sieve-key { margin: 8px 0; }
 .sieve-note { flex: 0 0 120px; font-size: 11px; color: var(--muted); line-height: 1.3; display: flex; align-items: center; padding-bottom: 4px; }
 .sieve-note.mono { font-size: 12px; color: var(--ink-2); padding: 0; }
 .dot { width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%; background: var(--other); flex: none; }
@@ -517,8 +521,8 @@ footer { font-size: 12.5px; color: var(--muted); }
 .how-two > div { display: grid; gap: 3px; align-content: start; min-width: 0; }
 .how-two b { font-weight: 600; }
 .how-two p { font-size: 14px; color: var(--ink-2); }
-.how-rows { display: grid; border-top: 1px solid var(--line); margin-top: 8px; }
-.how-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 4px 20px; padding: 11px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.how-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; border-top: 1px solid var(--line); margin-top: 8px; }
+.how-row { all: unset; box-sizing: border-box; text-align: left; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; gap: 4px 20px; padding: 11px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .how-row:hover { background: var(--wash); }
 .how-row strong { font-weight: 600; }
 .how-row span { color: var(--ink-2); font-size: 14px; }
@@ -571,6 +575,8 @@ footer { font-size: 12.5px; color: var(--muted); }
 .pc-sw.st { background: repeating-linear-gradient(0deg, var(--muted) 0 1px, transparent 1px 4px); border: 1px solid var(--muted); }
 .pc-sw.due { background: repeating-linear-gradient(135deg, var(--c-unpl) 0 2px, transparent 2px 4.5px); border: 1px solid var(--c-unpl); }
 .pc-sw.empty { background: var(--card); border: 1px solid var(--muted); }
+.pc-sw.later { background: var(--card); border: 1px dotted var(--muted); }
+.pc-key > summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .pc-grad { width: 44px; height: 13px; border-radius: 3px; display: inline-block; border: 1px solid var(--c-grid);
   background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 14%, transparent), var(--ink)); }
 .pc-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; background: var(--card); border: 1.5px solid var(--ink); }
