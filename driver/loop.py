@@ -14,7 +14,7 @@ import os
 import re
 from time import monotonic, sleep
 
-from driver import github, issues, livecheck, once, review, runlog, tree
+from driver import github, issues, livecheck, once, review, runlog, switchlog, tree
 from driver import home as driver_home
 from driver.preflight import image_claude, kit_lines
 from driver.steps import Step
@@ -43,6 +43,7 @@ def read_switches(args, project, record):
             print(f"halt: no report on #{record['issue']}: {reason}", flush=True)
         return f"halt: the STOP issue #{number} is open; nothing more starts", 1, None
     if record["issue"] not in [issue["number"] for issue in open_list]:
+        switchlog.append(args.state, "off", issue=record["issue"])
         return f"off: the run's issue #{record['issue']} is closed; nothing new starts", 0, None
     return None, None, None
 
@@ -350,6 +351,7 @@ def steps(args, home, project, read_facts, config):
     reason = once.settle(args, project)
     if reason:
         return once.refuse([f"cannot read the project: {reason}"])
+    switchlog.append(args.state, "on")
     record, count, open_list, shown = None, 0, [], None
 
     def end(line, code, **keys):
