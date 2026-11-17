@@ -121,8 +121,8 @@ CACHE_PARTS = dict(git=("spec_drift_git.py",), code=COUNTED_BY, flags=COUNTED_BY
                    comments=("spec_drift_git.py", "spec_drift_handoffs.py"))
 
 
-def load_cache(path, scripts=os.path.dirname(os.path.abspath(__file__))):
-    made_by = {}
+def load_cache(path):
+    scripts, made_by = os.path.dirname(os.path.abspath(__file__)), {}
     for part, names in CACHE_PARTS.items():
         version = hashlib.sha256()
         for name in names:
