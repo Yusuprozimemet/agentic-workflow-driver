@@ -622,3 +622,267 @@ def reading(d):
         longest=sorted(stretch, key=lambda s: -s["n"])[:3],
         cut=sorted(([x["day"], x["frags"]] for x in days if x["frags"] > 1), key=lambda x: -x[1])[:3],
         unbroken=[x["day"] for x in days if x["frags"] == 1], strayed=[x["day"] for x in days if x["strays"]])
+
+
+# Which way is better for each yardstick: lower, for these. This is the maintainer's judgement, not something the data
+# states (it moved here unchanged from dashboard.js's LOWER_BETTER). Refusals are left unjudged: no direction is better.
+LOWER_BETTER = ("cost", "replies", "escapes", "parks", "gates", "reread")
+
+
+def _parks_from_runs(row, steps, days):
+    """The parks row with the driver's run log standing in for a Day the lab notebook has no figure for, as graph 2
+    does (dashboard.js, parksFromRuns): the parks over that Day's steps. Only the Days with a lane are filled."""
+    values = {v.get("day"): v for v in row.get("values") or []}
+    for day in sorted({s.get("day") for s in steps if s.get("day") in days}):
+        if (values.get(day) or {}).get("value") is not None:
+            continue
+        n = sum(len(s.get("parks") or []) for s in steps if s.get("day") == day)
+        values[day] = dict(
+            day=day,
+            value=n,
+            text=f"{n} {'park' if n == 1 else 'parks'}, counted from the driver's run "
+            "log; the lab notebook has no figure for this Day yet.",
+        )
+    return values
+
+
+def _slope(points):
+    """The sign of a straight line fitted to (day, value) points: up, down or flat; None under two points."""
+    if len(points) < 2:
+        return None
+    mx, my = sum(x for x, _ in points) / len(points), sum(y for _, y in points) / len(points)
+    s = sum((x - mx) * (y - my) for x, y in points)
+    return "up" if s > 1e-9 else "down" if s < -1e-9 else "flat"
+
+
+def gel(d):
+    """Graph 2 as a gel: one panel per yardstick, a lane per Day it is counted at, and a ladder lane with the kit's
+    figure (where the kit recorded one) and the average so far. Each panel's last figure is judged against its average
+    where lower is better (LOWER_BETTER); the headline counts those below it, and the Days above the kit's figure."""
+    Y = d.get("yardsticks") or {}
+    days, rows = sorted(Y.get("days") or []), Y.get("rows") or []
+    if not rows or not days:
+        return dict(empty="no yardstick is counted yet, so there is no gel to run.")
+    steps = (d.get("driver_runs") or {}).get("steps") or []
+    panels = []
+    for r in rows:
+        values = (
+            _parks_from_runs(r, steps, days)
+            if r.get("key") == "parks" and steps
+            else {v.get("day"): v for v in r.get("values") or []}
+        )
+        lanes = [
+            dict(
+                day=day,
+                value=(values.get(day) or {}).get("value"),
+                text=_plain((values.get(day) or {}).get("text")),
+            )
+            for day in days
+        ]
+        got = [x for x in lanes if x["value"] is not None]
+        avg = next((a for a in reversed(r.get("average") or []) if a is not None), None)
+        last = dict(day=got[-1]["day"], value=got[-1]["value"]) if got else None
+        better, kit = r.get("key") in LOWER_BETTER, r.get("baseline")
+        verdict = (
+            None
+            if not last or avg is None
+            else "flat"
+            if not better
+            else "better"
+            if last["value"] < avg
+            else "worse"
+            if last["value"] > avg
+            else "even"
+        )
+        panels.append(
+            dict(
+                key=r.get("key"),
+                name=_plain(r.get("name") or r.get("key")),
+                unit=r.get("unit") or "",
+                decimals=r.get("decimals") or 0,
+                lower_better=better,
+                kit=kit,
+                average=avg,
+                average_over=r.get("average_over"),
+                source=r.get("source"),
+                lanes=lanes,
+                last=last,
+                verdict=verdict,
+                counted=len(got),
+                empty=len(lanes) - len(got),
+                above_kit=None if kit is None else sum(1 for x in got if x["value"] > kit),
+                drift=_slope([(x["day"], x["value"]) for x in got]),
+            )
+        )
+    judged = [p for p in panels if p["lower_better"]]
+    return dict(
+        _stamp(d),
+        days=days,
+        panels=panels,
+        named=len(panels),
+        judged=len(judged),
+        below=[p["key"] for p in judged if p["verdict"] == "better"],
+        kit=[
+            dict(key=p["key"], above=p["above_kit"], of=p["counted"], kit=p["kit"], last=p["last"])
+            for p in panels
+            if p["kit"] is not None
+        ],
+    )
+
+
+# The replay's states that count as re-checked: graph 3's ring and its trust strip count the same five.
+RECHECKED = ("proven", "unproven", "repair", "broken", "skipped")
+
+# What the driver's run log shows of each ability in use. This is the maintainer's mapping, as the mockup at #228
+# draws it, not something the data states: a step that reached its merge with no park used "loop"; every park used
+# "park"; a step with a crash used "recover"; a step that ended stopped used "stop" (none has yet); the run log keeps
+# no rehearsal, so "rehearse" is not counted. A rail is needed at every level and is no step of a run.
+RUN_USE = {
+    "loop": "loop",
+    "park": "park",
+    "recover": "recover",
+    "stop": "stop",
+    "rehearse": "uncounted",
+}
+
+
+def _order(cid):
+    """A criterion's place in the order built: its Day, then its number."""
+    return tuple(
+        int(x) for x in "".join(ch if ch.isdigit() else " " for ch in str(cid)).split()
+    ) or (0,)
+
+
+def _runs(steps):
+    """The run log's steps, read by RUN_USE: a step may be in more than one (a crash that parked)."""
+    return dict(
+        loop=[s.get("pr") for s in steps if s.get("ended") == "merged" and not s.get("parks")],
+        park=[
+            dict(pr=s.get("pr"), day=s.get("day"), by=p.get("by"), line=_plain(p.get("line")))
+            for s in steps
+            for p in s.get("parks") or []
+        ],
+        stop=[s.get("pr") for s in steps if s.get("ended") == "stopped"],
+        recover=[
+            dict(
+                pr=s.get("pr"),
+                crashes=s.get("crashes"),
+                sessions=len(s.get("sessions") or []),
+                ended=s.get("ended"),
+            )
+            for s in steps
+            if (s.get("crashes") or 0) > 0
+        ],
+        open=[s.get("pr") for s in steps if s.get("ended") == "open"],
+    )
+
+
+def _tally(cells):
+    out = {}
+    for x in cells:
+        out[x["state"]] = out.get(x["state"], 0) + 1
+    return out
+
+
+def protein(d):
+    """Graphs 3 to 5 as proteins: one chain per ability, one cell per criterion in the order built (its Day, then its
+    number), each in the state criterion_states gave it; the criteria that name no ability make a chain of their own.
+    A criterion is drawn once, under the first ability it names (the folded graph 5's rule, so the two count the
+    same cells per ability); naming none, it sits in the chain of its own. `proven` of `rechecked` counts only the states the replay re-checks; a criterion in
+    force outside them (written and not built, or not re-checked yet) is in `outside`."""
+    index = [c for c in d.get("criteria_index") or [] if isinstance(c, dict)]
+    us = d.get("user_stories") or {}
+    named, stories = us.get("abilities") or [], us.get("stories") or []
+    if not index:
+        return dict(empty="no criterion is on record yet, so there is no chain to fold.")
+    keys = [a.get("key") for a in named]
+    steps = (d.get("driver_runs") or {}).get("steps") or []
+    runs, scores = _runs(steps), (d.get("score") or {}).get("abilities") or {}
+    cells = {}
+    for c in sorted(index, key=lambda c: _order(c.get("id"))):
+        mine = [a for a in c.get("abilities") or [] if a in keys]
+        seen = c.get("seen") or {}
+        cells.setdefault(mine[0] if mine else None, []).append(
+            dict(
+                id=c.get("id"),
+                day=c.get("day"),
+                tag=c.get("tag"),
+                state=c.get("state") or "unchecked",
+                back=bool(c.get("back")),
+                text=_plain(c.get("plain") or c.get("claim")),
+                prs=c.get("prs") or [],
+                last=seen.get("last"),
+                stops=seen.get("stops") or [],
+                replaced_by=c.get("replaced_by") or [],
+                also=mine[1:],
+            )
+        )
+
+    def run(a):
+        how = "rail" if a.get("role") == "rail" else RUN_USE.get(a.get("key"), "uncounted")
+        got = runs.get(how)
+        return dict(
+            how=how,
+            n=None if got is None else len(got),
+            of=len(steps),
+            prs=[x["pr"] if isinstance(x, dict) else x for x in got or []],
+            parks=runs["park"],
+            crashes=runs["recover"],
+            open=runs["open"],
+            merged=runs["loop"],
+        )
+
+    chains = []
+    for a in named + ([dict(key=None, name="Not tied to an ability yet")] if None in cells else []):
+        k, mine = a.get("key"), cells.get(a.get("key"), [])
+        own = [s for s in stories if s.get("ability") == k] if k is not None else []
+        by_day = {}
+        for s in own:
+            if s.get("day") is not None:
+                by_day.setdefault(s["day"], []).append(s.get("number"))
+        n = _tally(mine)
+        chains.append(
+            dict(
+                key=k,
+                name=_plain(a.get("name")),
+                role=a.get("role"),
+                cells=mine,
+                counts=n,
+                proven=n.get("proven", 0),
+                rechecked=sum(n.get(s, 0) for s in RECHECKED),
+                score=_round((scores.get(k) or {}).get("score")) if k is not None else None,
+                prs=[[day, sorted(by_day[day])] for day in sorted(by_day)],
+                between=sorted(s.get("number") for s in own if s.get("day") is None),
+                run=run(a) if k is not None else None,
+            )
+        )
+    every = [x for list_ in cells.values() for x in list_]
+    n = _tally(every)
+    rate = lambda c: (c["proven"] / c["rechecked"], c["rechecked"])  # noqa: E731
+    ranked = [c for c in chains if c["key"] is not None and c["rechecked"]]
+    pick = lambda c: dict(
+        key=c["key"], name=c["name"], proven=c["proven"], rechecked=c["rechecked"]
+    )  # noqa: E731
+    rungs = [c for c in chains if c["role"] == "rung"]
+    runs_of = d.get("driver_runs") or {}
+    return dict(
+        _stamp(d),
+        chains=chains,
+        counts=n,
+        written=len(every),
+        replaced=n.get("replaced", 0),
+        in_force=sum(v for s, v in n.items() if s != "replaced"),
+        proven=n.get("proven", 0),
+        rechecked=sum(n.get(s, 0) for s in RECHECKED),
+        back=sum(1 for x in every if x["back"] and x["state"] == "proven"),
+        outside=[
+            x["id"] for x in every if x["state"] not in RECHECKED and x["state"] != "replaced"
+        ],
+        weakest=pick(min(ranked, key=rate)) if ranked else None,
+        strongest=pick(max(ranked, key=rate)) if ranked else None,
+        used=dict(
+            n=sum(1 for c in rungs if (c["run"] or {}).get("n")), of=len(rungs), steps=len(steps)
+        ),
+        source=runs_of.get("source"),
+        counted=runs_of.get("counted"),
+    )

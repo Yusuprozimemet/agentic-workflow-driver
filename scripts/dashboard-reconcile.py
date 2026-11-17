@@ -102,7 +102,53 @@ def reading_line(m):
                    f"look-ahead {theirs[0]} hand-offs, {theirs[1]} open, {theirs[2]} numbered: " + ("agree" if agree else "DISAGREE"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line]
+def gel_line(m):
+    """The gel against graph 2 (folded under it): each yardstick's last figure, its Day and its average so far, on the
+    Days the gel has lanes for (the Days the yardsticks are counted at; graph 2 has a column for a Day in progress too)."""
+    g, two = m.get("gel") or {}, m.get("g2") or {}
+    if g.get("error") or two.get("error"):
+        return False, f"gel: not drawn ({g.get('error') or two.get('error')})"
+    if g.get("empty"):
+        agree = not two.get("rows")
+        return agree, "gel: no yardsticks | graph 2: " + ("none either: agree" if agree else "DISAGREE")
+    ours = {p["key"]: (p["last"] and (p["last"]["day"], p["last"]["value"]), p["average"]) for p in g["panels"]}
+    theirs = {}
+    for r in two.get("rows") or []:
+        got = [c for c in r.get("cells") or [] if c.get("value") is not None and c.get("day") in g["days"]]
+        avg = [a["value"] for a in r.get("avg") or [] if a.get("value") is not None]
+        theirs[r["key"]] = ((got[-1]["day"], got[-1]["value"]) if got else None, avg[-1] if avg else None)
+    differ = sorted(k for k in set(ours) | set(theirs) if ours.get(k) != theirs.get(k))
+    return not differ, (f"gel: {len(ours)} yardsticks, each one's last figure and average on Days {g['days'][0]} to {g['days'][-1]} | "
+                        f"graph 2: {len(theirs)} rows: "
+                        + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
+
+
+def prt_line(m):
+    """The proteins' headline (proven, of the criteria re-checked) against the trust strip's last column (graph 3's,
+    folded) and the merge graph's verdict tiles. The strip counts at a merge the replay ran on: an older one than the
+    last merge is said, and never agrees."""
+    p, b, g = m.get("prt") or {}, m.get("g4") or {}, m.get("mrg") or {}
+    for x, name in ((p, "proteins"), (b, "trust strip"), (g, "merge graph")):
+        if x.get("error"):
+            return False, f"proteins: not drawn ({name}: {x['error']})"
+    if p.get("empty"):
+        agree = not (b.get("hist") or [])
+        return agree, "proteins: no criteria | trust strip: " + ("none either: agree" if agree else "DISAGREE")
+    last = (b.get("hist") or [None])[-1]
+    tiles = {t["sw"]: t["n"] for t in (g.get("all") or {}).get("verdict") or []}
+    seen = sum(tiles.get(k, 0) for k in ("st ok", "st un", "st bad", "st none"))
+    ours = [p["proven"], p["rechecked"], p["rechecked"] + p["counts"].get("unchecked", 0)]
+    strip = [last["counts"]["proven"], last["total"]] if last else [None, None]
+    agree = ours[:2] == strip and [ours[0], ours[2]] == [tiles.get("st ok"), seen]
+    why = ""
+    if last and not agree and p.get("last_pr") is not None and last["pr"] < p["last_pr"]:
+        why = f"; the strip's last column is #{last['pr']}, older than the last merge #{p['last_pr']}, and the replay has not run since"
+    return agree, (f"proteins: {ours[0]} of {ours[1]} proven | trust strip at #{last['pr'] if last else '?'}: "
+                   f"{strip[0]} of {strip[1]}, merge graph {tiles.get('st ok', 0)} proven of {seen} in force and built: "
+                   + ("agree" if agree else f"DISAGREE{why}"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line]
 
 
 def main(argv=None):

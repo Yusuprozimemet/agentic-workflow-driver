@@ -253,7 +253,40 @@
     </details>
   </section>
 
-  <section class="graph" id="g2">
+  <section class="graph" id="gel">
+    <div class="graph-head">
+      <p class="graph-n">Graph 2 · drawn as a gel; the old graph 2 is folded below</p>
+      <h2>Is it meeting what the plan judges it on?</h2>
+      <p class="graph-say">One small gel per yardstick: each Day runs in its own lane, and the first lane holds the kit's figure and the average.</p>
+    </div>
+    <div class="figs" id="gel-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>A Day's figure</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>What to read it against</span><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>Which way is good</span></p>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+<div><p class="graph-say">One small gel for each yardstick the plan names, each on its own scale. Inside a gel every Day has a lane, and the Day's figure is one band: the lower the band, the lower the figure, and lower is better. Read a band against the first lane, the ladder, which holds the average so far and, where the kit recorded one, the figure reached with a person driving every step.</p>
+<dl class="lg">
+    <dt>A Day's figure <small>a band in its lane</small></dt>
+    <dd><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>the last Day counted; its number is bold</span><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band earlier" y="1.5" width="16" height="5" rx="2.5"/></svg>an earlier Day</span><span><svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><rect class="box" x=".5" y=".5" width="15" height="17" rx="3"/><rect class="well" x="4" y="3" width="8" height="2.5" rx="1"/></svg>an empty lane, its number faded: no figure that Day. A band on the floor is a zero</span></dd>
+    <dt>What to read it against <small>the ladder, lane "ref"</small></dt>
+    <dd><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>the kit's figure: what the kit reached with a person driving every step (<span id="gel-k-kit"></span>)</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band avg" x=".6" y="1.5" width="11" height="5" rx="2.5"/><path class="across avg" d="M15 4H38"/></svg>the average so far</span></dd>
+    <dt>Which way is good <small>the direction of the run</small></dt>
+    <dd><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>lower on the gel is a lower figure, and lower is better</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri better" d="M.5 .5h9l-4.5 7z"/></svg>green: the last figure is below its average</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri worse" d="M.5 7.5h9l-4.5-7z"/></svg>amber: above it</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri flat" d="M.5 7.5h9l-4.5-7z"/></svg>grey: no direction is better (refused calls)</span></dd>
+  </dl>
+<p class="hint">Point at a lane, or reach it with the Tab key, for the Day, its figure and what was recorded for it. The scale's top and bottom are printed at the left of each gel. A panel compares with itself only: the same height in two panels is two different figures.</p>
+<p class="stamp" id="gel-stamp"></p></div>
+    </details>
+    <div class="scroll" id="gel-scroll"><svg class="fig" id="gel-fig" viewBox="0 0 1198 307" role="group"></svg></div>
+    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="gel-finds"></ul><p class="hint" id="gel-drift"></p></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="gel-bends"></ul></div>
+      </div></div>
+    </details>
+    <div id="gel-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g2-fold">
+    <details class="exact"><summary>Graph 2 as it was, folded: one row per yardstick</summary>
+    <div id="g2">
     <div class="graph-head">
       <p class="graph-n">Graph 2</p>
       <h2>Is it meeting what the plan judges it on?</h2>
@@ -263,12 +296,51 @@
     <div class="scroll-x" id="g2-plot"></div>
     <div class="readout" id="g2-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g2-table"></table></div></details>
+  </div>
+    </details>
   </section>
 
   <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, and the promises behind them</small></h2>
 
-  <section class="graph" id="g3">
+  <section class="graph" id="prt">
     <span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
+    <div class="graph-head">
+      <p class="graph-n">Graphs 3–5 · drawn as proteins; the old graphs are folded below</p>
+      <h2>What can the driver do, and can I rely on it?</h2>
+      <p class="graph-say">One chain per ability, one cell per promise in the order built, marked by what its test and the replay say.</p>
+    </div>
+    <div class="figs" id="prt-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>An ability</span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg>A promise</span><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>A Day</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg>used in a real run</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg>never yet in one</span></p>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+<div><p class="graph-say">Each box is one ability, drawn as a protein: a chain with one cell for every promise the specs made for it. Read a chain from the dot, row by row, in the order the promises were built. A filled green cell is a promise that holds and whose test was seen to fail when the code was broken on purpose. The more of a chain is filled, the more you can rely on that ability.</p>
+<dl class="lg">
+    <dt>An ability <small>a protein</small></dt>
+    <dd><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>one chain per ability, read from the dot; the same cell size in every box, so a longer chain is a larger protein</span><span><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="40.06 53.41" transform="rotate(-90 11 11)"/></svg>proven, of the promises the last re-check counted: graph 3's ring</span></dd>
+    <dt>A promise <small>a residue</small></dt>
+    <dd><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg><span><b id="prt-k-proven"></b> holds, and a break on purpose proved its test <em>graph 3 says “Proven”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unproved" x="0.8" y="0.8" width="11.4" height="11.4" rx="3.2"/></svg><span><b id="prt-k-unproven"></b> holds, never seen to fail <em>graph 3 says “Passes, not yet proven”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m norun" x="0.5" y="0.5" width="12" height="12" rx="3.2"/></svg><span><b id="prt-k-skipped"></b> the replay cannot run its check <em>graph 3 says “Not checked here”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unbuilt" x="0.6" y="0.6" width="11.9" height="11.9" rx="3.2"/></svg><span><b id="prt-k-open"></b> written, not built <em>graph 3 says “Left unticked”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m stale" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M6.5 2.9v4.2 M6.5 9.9v.1"/></svg><span><b id="prt-k-repair"></b> its recorded break no longer applies <em>graph 3 says “Needs repair”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m broken" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M3.9 3.9l5.2 5.2 M9.1 3.9l-5.2 5.2"/></svg><span><b id="prt-k-broken"></b> does not hold <em>graph 3 says “Broken”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m replaced" x="0.5" y="0.5" width="12.1" height="12.1" rx="3.2"/></svg><span><b id="prt-k-replaced"></b> replaced by a later promise <em>graph 3 says “Replaced”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved scar" x="0.7" y="0.7" width="11.7" height="11.7" rx="3.2"/></svg><span><b id="prt-k-back"></b> of the proven are edged: the replay once saw it stop, and it came back <em>graph 3 has no mark for this</em></span></span></dd>
+    <dt>A Day <small>where in the chain</small></dt>
+    <dd><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>a wider gap and a small number where the chain passes into a new Day</span><span id="prt-k-all"></span></dd>
+    <dt>In real runs <small>the protein at work</small></dt>
+    <dd><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>used</b> the driver's own run log counts a step that used the ability</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>never yet</b> the count could show it, and does not</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm na" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>not counted</b> or <b>does not apply</b> the run log has no line for it</span></span></dd>
+  </dl>
+<p class="hint">Point at a cell for the promise, its state and the pull requests it cites. With the keyboard, Tab reaches a chain and the arrow keys walk along it. The Day buttons at the top of the page light one Day's promises. Point at a score, at "n of m proven" or at the pull requests for what is behind each. A box's shape says nothing: only the order along the chain does.</p>
+<p class="stamp" id="prt-stamp"></p></div>
+    </details>
+    <p class="say" id="prt-say" aria-live="polite"></p>
+    <div class="scroll" id="prt-scroll"><svg class="fig" id="prt-fig" viewBox="0 0 1196 645" role="group" aria-label="One folded chain per ability, one cell per promise, marked by what its test and the replay say"></svg></div>
+    <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
+    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="prt-finds"></ul><p class="hint">Point at a line to light up its cells above.</p></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="prt-bends"></ul></div>
+      </div></div>
+    </details>
+    <div id="prt-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g3-fold">
+    <details class="exact"><summary>Graphs 3 to 5 as they were, folded: one line per ability</summary>
+    <div id="g3">
     <div class="graph-head">
       <p class="graph-n">Graphs 3–5</p>
       <h2>What can the driver do, and can I rely on it?</h2>
@@ -283,7 +355,6 @@
       </div>
       <p class="trust-n" id="g3-hist-n"></p>
     </div>
-    <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
     <div class="readout" id="g3-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary>
       <p class="graph-say small">Pull requests, by ability and Day</p>
@@ -292,6 +363,8 @@
       <div class="scroll-x"><table id="g4-table"></table></div>
       <p class="graph-say small">Promises, by ability and state</p>
       <div class="scroll-x"><table id="g5-table"></table></div>
+    </details>
+  </div>
     </details>
   </section>
 

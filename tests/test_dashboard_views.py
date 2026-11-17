@@ -1037,5 +1037,222 @@ class RingAndReadingPageTest(unittest.TestCase):
         self.assertEqual(self.drawn(data)["tip"]["q"], text)
 
 
+def gel_data():
+    """Three Days of three yardsticks: cost with the kit's figure, parks with only Day 2 in the notebook and a driver
+    step on Day 3 (and one on Day 14, a Day of the driven project with no lane), refusals, which are not judged."""
+
+    def row(key, unit, decimals, baseline, values, average, over="days"):
+        vals = [{"day": i + 1, "value": v, "text": f"{key} {i + 1}"} for i, v in enumerate(values)]
+        return {
+            "key": key,
+            "name": f"The {key}",
+            "unit": unit,
+            "decimals": decimals,
+            "baseline": baseline,
+            "source": "notebook",
+            "values": vals,
+            "average": average,
+            "average_over": over,
+        }
+
+    rows = [
+        row("cost", "$", 2, 1.5, [1.2, 1.8, 1.4], [1.2, 1.5, 1.47], "pull requests"),
+        row("parks", "", 0, None, [None, 2, None], [None, 2.0, 2.0]),
+        row("refusals", "", 0, None, [3, 5, 6], [3.0, 4.0, 4.67]),
+    ]
+
+    def step(day, parks):
+        return {"step": f"Day {day}", "day": day, "parks": [{"by": "fault", "line": "x"}] * parks}
+
+    return {
+        "yardsticks": {"days": [1, 2, 3], "problems": [], "rows": rows},
+        "driver_runs": {"steps": [step(3, 1), step(14, 2)]},
+        "now": {"head": "abcdef1", "last_pr": 9},
+    }
+
+
+class GelTest(unittest.TestCase):
+    """gel(): graph 2 as one small gel per yardstick, a lane per Day and a ladder lane."""
+
+    def gel(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").gel(data or gel_data())
+
+    def test_one_panel_per_yardstick_with_a_lane_per_day_and_the_ladder(self):
+        g = self.gel()
+        self.assertEqual([p["key"] for p in g["panels"]], ["cost", "parks", "refusals"])
+        self.assertEqual(g["days"], [1, 2, 3])
+        for p in g["panels"]:
+            self.assertEqual([x["day"] for x in p["lanes"]], [1, 2, 3], p["key"])
+        cost, parks, _ = g["panels"]
+        self.assertEqual((cost["kit"], cost["average"]), (1.5, 1.47))
+        self.assertEqual((parks["kit"], parks["average"]), (None, 2.0))
+        self.assertEqual([x["value"] for x in cost["lanes"]], [1.2, 1.8, 1.4])
+        self.assertEqual(
+            (cost["last"], cost["above_kit"], cost["counted"]), ({"day": 3, "value": 1.4}, 1, 3)
+        )
+
+    def test_which_way_is_better_is_the_maintainers_judgement_the_old_list_unchanged(self):
+        views = load("spec_drift_views", "spec_drift_views.py")
+        # dashboard.js's LOWER_BETTER up to #236
+        old = ["cost", "replies", "escapes", "parks", "gates", "reread"]
+        self.assertEqual(list(views.LOWER_BETTER), old)
+        self.assertEqual([p["lower_better"] for p in self.gel()["panels"]], [True, True, False])
+        demo = demo_data.demo()
+        self.assertEqual(
+            [(p["key"], p["lower_better"]) for p in views.gel(demo)["panels"]],
+            [(r["key"], r["key"] in old) for r in demo["yardsticks"]["rows"]],
+        )
+
+    def test_the_parks_lane_is_filled_from_the_run_log_where_the_notebook_has_no_figure(self):
+        parks = self.gel()["panels"][1]
+        self.assertEqual([x["value"] for x in parks["lanes"]], [None, 2, 1])
+        self.assertIn("run log", parks["lanes"][2]["text"])
+        self.assertEqual(parks["lanes"][1]["text"], "parks 2")
+        self.assertEqual((parks["last"], parks["empty"]), ({"day": 3, "value": 1}, 1))
+
+    def test_the_headline_judges_the_lower_better_yardsticks_against_their_average(self):
+        g = self.gel()
+        self.assertEqual([p["verdict"] for p in g["panels"]], ["better", "better", "flat"])
+        self.assertEqual((g["named"], g["judged"], g["below"]), (3, 2, ["cost", "parks"]))
+        kit = {"key": "cost", "above": 1, "of": 3, "kit": 1.5, "last": {"day": 3, "value": 1.4}}
+        self.assertEqual(g["kit"], [kit])
+
+    def test_no_yardsticks_draw_no_gel(self):
+        self.assertIn("empty", self.gel({"yardsticks": {"days": [], "rows": []}}))
+
+
+def prt_data():
+    """Six abilities and nine criteria: one replaced, one written and not built, one naming no ability, one that
+    grows two; and the driver's five steps: two merged, a crash that parked on a fault, the park when every Day was
+    done, and one still open."""
+    names = {
+        "rehearse": "Shows",
+        "stop": "Stops",
+        "loop": "Loops",
+        "park": "Parks",
+        "recover": "Recovers",
+        "see": "Sees",
+    }
+    abilities = [
+        {"key": k, "name": v, "role": "rail" if k == "see" else "rung"} for k, v in names.items()
+    ]
+
+    def crit(cid, abilities, state, **more):
+        c = {
+            "id": cid,
+            "day": int(cid[1]),
+            "tag": "new",
+            "plain": f"{cid} holds.",
+            "abilities": abilities,
+            "state": state,
+            "back": False,
+            "replaced_by": [],
+            "prs": [],
+            "seen": {"last": None, "stops": []},
+            "ticked": True,
+        }
+        return {**c, **more}
+
+    index = [
+        crit("C1.10", ["loop"], "proven"),
+        crit("C1.1", ["loop"], "proven", back=True),
+        crit("C1.2", ["see", "loop"], "unproven"),
+        crit("C1.3", ["park"], "proven"),
+        crit("C2.1", ["loop"], "replaced", replaced_by=["C2.3"]),
+        crit("C2.2", ["park"], "open", ticked=False),
+        crit("C2.3", ["loop"], "skipped"),
+        crit("C2.4", [], "repair"),
+        crit("C2.5", ["see"], "proven"),
+    ]
+    stories = [
+        {"number": n, "day": day, "ability": a}
+        for n, day, a in ((1, 1, "loop"), (2, 2, "loop"), (3, None, "loop"), (4, 1, "park"))
+    ]
+
+    def step(pr, ended, crashes=0, parks=()):
+        return {
+            "step": f"Step {pr}",
+            "day": 13 if pr else None,
+            "pr": pr,
+            "ended": ended,
+            "crashes": crashes,
+            "sessions": [{}] * (1 + crashes),
+            "parks": [{"by": b, "line": f"park: {b}"} for b in parks],
+        }
+
+    steps = [
+        step(90, "merged"),
+        step(91, "merged"),
+        step(96, "parked", 1, ["fault"]),
+        step(None, "parked", 0, ["maintainer"]),
+        step(101, "open"),
+    ]
+    return {
+        "criteria_index": index,
+        "user_stories": {"abilities": abilities, "stories": stories},
+        "driver_runs": {"steps": steps},
+        "score": {"abilities": {"loop": {"score": 81.6}}},
+        "now": {"head": "abc", "last_pr": 9},
+    }
+
+
+class ProteinTest(unittest.TestCase):
+    """protein(): graphs 3 to 5 as one folded chain per ability, one cell per criterion in the order built."""
+
+    def prt(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").protein(data or prt_data())
+
+    def test_one_chain_per_ability_and_one_for_the_criteria_naming_none(self):
+        p = self.prt()
+        keys = ["rehearse", "stop", "loop", "park", "recover", "see", None]
+        self.assertEqual([c["key"] for c in p["chains"]], keys)
+        chains = {c["key"]: c for c in p["chains"]}
+        loop = chains["loop"]
+        self.assertEqual([x["id"] for x in loop["cells"]], ["C1.1", "C1.10", "C2.1", "C2.3"])
+        self.assertEqual([x["id"] for x in chains[None]["cells"]], ["C2.4"])
+        # drawn under the first ability it names (graph 5's rule), though "loop" is listed before "see",
+        # and says it grows the other
+        self.assertEqual([x["id"] for x in chains["see"]["cells"]], ["C1.2", "C2.5"])
+        self.assertEqual(chains["see"]["cells"][0]["also"], ["loop"])
+        self.assertEqual(loop["cells"][0]["back"], True)
+        self.assertEqual((loop["proven"], loop["rechecked"], loop["score"]), (2, 3, 82))
+        self.assertEqual((loop["prs"], loop["between"]), ([[1, [1]], [2, [2]]], [3]))
+
+    def test_the_headline_counts_only_the_criteria_the_replay_rechecks(self):
+        p = self.prt()
+        counts = {"proven": 4, "unproven": 1, "skipped": 1, "repair": 1, "open": 1, "replaced": 1}
+        self.assertEqual(p["counts"], counts)
+        self.assertEqual((p["proven"], p["rechecked"], p["in_force"], p["written"]), (4, 7, 8, 9))
+        self.assertEqual(p["outside"], ["C2.2"])
+        self.assertEqual((p["weakest"]["key"], p["strongest"]["key"]), ("see", "park"))
+
+    def test_in_real_runs_is_the_maintainers_mapping_of_the_run_log(self):
+        p = self.prt()
+        runs = {c["key"]: c["run"] for c in p["chains"]}
+        want = {
+            "rehearse": ("uncounted", None, 5),
+            "stop": ("stop", 0, 5),
+            "loop": ("loop", 2, 5),
+            "park": ("park", 2, 5),
+            "recover": ("recover", 1, 5),
+            "see": ("rail", None, 5),
+        }
+        self.assertEqual(sorted(k for k, r in runs.items() if r), sorted(want))
+        for k, w in want.items():  # one ability at a time, so a failure names a short pair
+            self.assertEqual((runs[k]["how"], runs[k]["n"], runs[k]["of"]), w, k)
+        self.assertEqual(runs[None], None)
+        # the open step (#101) is in neither; the crash that parked (#96) is in both recover and park
+        self.assertEqual(runs["loop"]["prs"], [90, 91])
+        parks = [(x["pr"], x["by"]) for x in runs["park"]["parks"]]
+        self.assertEqual(parks, [(96, "fault"), (None, "maintainer")])
+        self.assertEqual(runs["recover"]["prs"], [96])
+        self.assertEqual(runs["loop"]["open"], [101])
+        self.assertEqual(p["used"], {"n": 3, "of": 5, "steps": 5})
+
+    def test_no_criteria_draw_no_chains(self):
+        data = {"criteria_index": [], "user_stories": {"abilities": [], "stories": []}}
+        self.assertIn("empty", self.prt(data))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1116,3 +1116,184 @@ footer { font-size: 12.5px; color: var(--muted); }
 @media (prefers-reduced-motion:reduce){#rdg .fig .ho,#rdg .fig .cell{transition:none}}
 /* a closed hand-off is drawn only while it is lit: its merge or the arc pointed at, or a Day of it chosen */
 #rdg .fig .ho:not(.open):not(.lit):not(.day) { display: none; }
+
+/* Graph 2 as a gel (gelDraw), ported from the mockup at #228. */
+#gel, #prt { scroll-margin-top: 12px; }
+#gel{--shadow:rgba(14,17,22,.16);--gel:var(--wash);--gel-lane:rgba(255,255,255,.55);--gel-quiet:.72}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #gel{--shadow:rgba(0,0,0,.5);--gel:var(--well);--gel-lane:rgba(255,255,255,.04);--gel-quiet:1}}
+:root[data-theme="dark"] #gel{--shadow:rgba(0,0,0,.5);--gel:var(--well);--gel-lane:rgba(255,255,255,.04);--gel-quiet:1}
+
+#gel .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:0}
+#gel h3{font:600 16px/1.25 var(--display);margin:0 0 10px;text-wrap:balance}
+
+/* the line of figures */
+#gel .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 26px;border-block:1px solid var(--line);padding:14px 0}
+#gel .figs>div{min-width:0}
+#gel .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#gel .figs .num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:5px}
+#gel .figs .what{font-weight:600;margin-top:6px;color:var(--ink)}
+#gel .figs .sub{display:block;font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:0}
+
+/* the key to the marks */
+#gel .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#gel .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#gel .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#gel .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#gel .lg dd span{display:inline-flex;align-items:center;gap:7px}
+#gel .lg svg{flex:none;overflow:visible}
+@media (max-width:640px){#gel .lg{grid-template-columns:1fr;gap:2px 0}#gel .lg dd{margin-bottom:10px}}
+
+/* the figure */
+#gel .scroll{overflow-x:auto;min-width:0}
+#gel .fig{display:block;width:100%;min-width:1198px;height:auto}
+#gel .fig text{font-family:var(--sans)}
+#gel .t-name{font:600 11.5px var(--sans);fill:var(--ink)}
+#gel .t-val{font:700 22px var(--display);fill:var(--ink);font-variant-numeric:tabular-nums}
+#gel .t-val.better{fill:var(--proven)}
+#gel .t-val.worse{fill:var(--repair)}
+#gel .t-sub{font:400 10.5px var(--sans);fill:var(--muted)}
+#gel .t-ax{font:400 9px var(--mono);fill:var(--muted)}
+#gel .t-ref{font:500 9px var(--sans);fill:var(--ink-2)}
+#gel .t-day{font:400 9px var(--mono);fill:var(--ink-2)}
+#gel .t-day.last{font-weight:700;fill:var(--ink)}
+#gel .t-day.none{fill:var(--s2)}
+#gel .t-day.ref{font:500 9px var(--sans);fill:var(--muted)}
+#gel .tri.better{fill:var(--proven)}
+#gel .tri.worse{fill:var(--repair)}
+#gel .tri.flat{fill:var(--s3)}
+#gel .box{fill:var(--gel);stroke:var(--axis);stroke-width:1}
+#gel .track{fill:var(--gel-lane)}
+#gel .well{fill:var(--s1)}
+#gel .tick{fill:none;stroke:var(--s2);stroke-width:1}
+#gel .band.last{fill:var(--ink)}
+#gel .band.earlier{fill:var(--s3);fill-opacity:var(--gel-quiet)}
+#gel .band.kit{fill:var(--ink)}
+#gel .band.avg{fill:var(--card);stroke:var(--ink);stroke-width:1.2}
+#gel .across{fill:none;stroke:var(--s3);stroke-width:.9}
+#gel .across.kit{stroke-dasharray:5 3}
+#gel .across.avg{stroke-dasharray:.1 3.2;stroke-linecap:round;stroke-width:1.3}
+#gel .hit{fill:var(--ink);fill-opacity:0}
+#gel .fig .b{cursor:default}
+#gel .fig .b:focus{outline:none}
+#gel .fig .b:hover .hit{fill-opacity:.07}
+#gel .fig .b:focus-visible .hit{fill-opacity:.07;stroke:var(--link);stroke-width:1.6}
+#gel .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* lists */
+#gel .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px 32px;border-top:1px solid var(--line);padding-top:16px}
+#gel .cols>div{min-width:0}
+#gel .finds{margin:0 0 10px;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#gel .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#gel .finds li.better{border-left-color:var(--proven)}
+#gel .finds li.worse{border-left-color:var(--repair)}
+#gel .finds b,#gel .plain b{color:var(--ink);font-weight:600}
+#gel .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#gel #gel-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#gel #gel-tip[hidden]{display:none}
+#gel #gel-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#gel #gel-tip .l{margin-top:4px}
+#gel #gel-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2);overflow-wrap:anywhere}
+
+/* Graphs 3 to 5 as proteins (protDraw), ported from the mockup at #228. */
+#prt{--shadow:rgba(14,17,22,.16)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #prt{--shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #prt{--shadow:rgba(0,0,0,.5)}
+
+#prt .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:0}
+#prt h3{font:600 16px/1.25 var(--display);margin:0 0 10px;text-wrap:balance}
+
+/* the line of figures */
+#prt .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 26px;border-block:1px solid var(--line);padding:14px 0}
+#prt .figs>div{min-width:0}
+#prt .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#prt .figs .num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:5px}
+#prt .figs .what{font-weight:600;margin-top:6px;color:var(--ink)}
+#prt .figs .sub{font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:0}
+
+/* legend */
+#prt .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#prt .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#prt .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#prt .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:flex-start;gap:5px 22px;min-width:0}
+#prt .lg dd>span{display:inline-flex;align-items:flex-start;gap:7px}
+#prt .lg dd>span>svg{margin-top:2px}
+#prt .lg svg{flex:none;overflow:visible}
+#prt .lg b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+#prt .lg em{font-style:normal;color:var(--muted);white-space:nowrap}
+#prt .lg em::before{content:"· "}
+@media (max-width:640px){#prt .lg{grid-template-columns:1fr;gap:2px 0}#prt .lg dd{margin-bottom:10px}#prt .lg em{white-space:normal}}
+
+#prt .say{font-size:12.5px;color:var(--ink-2);margin:0;min-height:1.4em}
+
+/* the figure */
+#prt .scroll{overflow-x:auto;min-width:0}
+#prt .fig{display:block;width:100%;min-width:1080px;height:auto}
+#prt .fig text{font-family:var(--sans)}
+#prt .t-grp{font:600 11px var(--sans);letter-spacing:.04em;fill:var(--muted)}
+#prt .t-name{font:600 12.5px var(--sans);fill:var(--ink)}
+#prt .t-sub{font:400 10.5px var(--sans);fill:var(--muted)}
+#prt .t-sub .sc{fill:var(--ink-2);font-weight:500}
+#prt .rdiv{stroke:var(--line);stroke-width:1;fill:none}
+#prt .rhit{fill:transparent}
+#prt .t-run{font:400 10.5px var(--sans);fill:var(--muted)}
+#prt .t-run .rv{font-weight:600;fill:var(--ink)}
+#prt .rm{stroke-width:1.2}
+#prt .rm.seen{fill:var(--ink-2);stroke:var(--ink-2)}
+#prt .rm.never{fill:var(--card);stroke:var(--pending);stroke-dasharray:2 1.6}
+#prt .rm.na{fill:url(#prt-pat-norun);stroke:var(--axis)}
+#prt .run{cursor:default}
+#prt .run:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+#prt .t-day{font:500 9px var(--mono);fill:var(--muted)}
+#prt .t-ring{font:600 12px var(--sans);fill:var(--ink);font-variant-numeric:tabular-nums}
+#prt .t-pr{font:400 10.5px var(--sans);fill:var(--ink-2)}
+#prt .t-bt{font:400 10.5px var(--sans);fill:var(--muted)}
+#prt .t-key{font:400 11px var(--sans);fill:var(--ink-2)}
+#prt .t-kn{font:600 9px var(--mono);fill:var(--card)}
+#prt .kn{fill:var(--s3)}
+#prt .tl{fill:var(--card);stroke:var(--line);stroke-width:1}
+#prt .rule{stroke:var(--line);stroke-width:1;fill:none}
+#prt .bone{fill:none;stroke:var(--s2);stroke-width:1.5}
+#prt .nterm{fill:var(--s3)}
+#prt .hit{fill:none;pointer-events:all}
+#prt .m.proved{fill:var(--proven)}
+#prt .m.proved.scar{stroke:var(--ink);stroke-width:1.3}
+#prt .m.unproved{fill:var(--card);stroke:var(--proven);stroke-width:1.6}
+#prt .m.norun{fill:url(#prt-pat-norun);stroke:var(--pending);stroke-width:1}
+#prt .m.unbuilt{fill:var(--card);stroke:var(--s3);stroke-width:1.1;stroke-dasharray:2.2 1.6}
+#prt .m.stale{fill:var(--repair)}
+#prt .m.broken{fill:var(--broken)}
+#prt .m.replaced{fill:var(--card);stroke:var(--s2);stroke-width:.9}
+#prt .sign{fill:none;stroke:var(--card);stroke-width:1.7;stroke-linecap:round}
+#prt .pn-bg{fill:var(--card)}
+#prt .pn-l{fill:var(--pending)}
+#prt .ring-bg{fill:none;stroke:var(--wash);stroke-width:4.5}
+#prt .ring-fg{fill:none;stroke:var(--proven);stroke-width:4.5}
+#prt .fig .b{cursor:default}
+#prt .fig .b:focus{outline:none}
+#prt .fig g.rs:focus-visible .m{stroke:var(--link);stroke-width:2.2;stroke-dasharray:none}
+#prt .fig g.arc:focus-visible .t-ring,#prt .fig text.b:focus-visible,#prt .fig tspan.b:focus-visible{fill:var(--link);text-decoration:underline}
+#prt .fig .rs,#prt .fig .t-day{transition:opacity .15s}
+#prt .fig .rs.off{opacity:.13}
+#prt .fig .t-day.off{opacity:.3}
+#prt .fig.foc .rs:not(.lit){opacity:.16}
+#prt .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* lists */
+#prt .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px 32px;border-top:1px solid var(--line);padding-top:16px}
+#prt .cols>div{min-width:0}
+#prt .finds{margin:0 0 10px;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#prt .finds li{font-size:13.5px;color:var(--ink-2);border-radius:4px;cursor:default;padding-left:12px;border-left:2px solid var(--s2)}
+#prt .finds b,#prt .plain b{color:var(--ink);font-weight:600}
+#prt .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#prt #prt-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#prt #prt-tip[hidden]{display:none}
+#prt #prt-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#prt #prt-tip .l{margin-top:4px}
+#prt #prt-tip .st{margin-top:6px;color:var(--ink);font-weight:500}
+#prt #prt-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2)}
+@media (prefers-reduced-motion:reduce){#prt .fig .rs,#prt .fig .t-day{transition:none}}
+#prt .finds li:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+#prt .finds li[data-t]{cursor:default}
+@media (prefers-reduced-motion:reduce){#prt .fig .rs,#prt .fig .t-day{transition:none}}
