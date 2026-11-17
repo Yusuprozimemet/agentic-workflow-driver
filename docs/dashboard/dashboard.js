@@ -3504,8 +3504,11 @@ function rngDraw(R, get, onDay) {
 }
 
 /* Graph 10 as an actogram: every date on one clock, 05:00 to 05:00, a row each. Every figure is counted in Python
-   (spec_drift_views.actogram); this lays the rows out and words them. A row opens graph 10, folded below, at its date. */
-const ACT_GEO = { w: 1232, x0: 160, x1: 1000, head: 22, foot: 8 };
+   (spec_drift_views.actogram); this lays the rows out and words them. A row has five lanes, top to bottom: the main
+   session, the sub-agents, the pull requests open, their checks, the merges. A lane is [its offset from the row's top,
+   its height]; an hour is 35 px. A row opens graph 10, folded below, at its date. */
+const ACT_GEO = { w: 1232, x0: 160, x1: 1000, top: 30, rh: 58, lanes: [[6, 10], [19, 7], [29, 7], [39, 7], [49, 6]] };
+const ACT_LANES = [["main session", 14.3], ["sub-agents", 25.8], ["pull request", 35.8], ["checks", 45.8], ["merge", 55.3]];
 function actDraw(A, get, onDay, onDate) {
   if (!A || A.empty) return null;
   const $ = id => get("act-" + id), fig = $("fig"), tip = $("tip"), G = ACT_GEO, D = A.dates, T = A.totals;
@@ -3515,41 +3518,71 @@ function actDraw(A, get, onDay, onDate) {
   const hm = m => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`, wall = m => hm((m + 300) % 1440);
   const hrs = m => `${(m / 60).toFixed(1)} h`, dur = m => { const r = Math.round(m); return r >= 60 ? `${Math.floor(r / 60)} h ${r % 60} min` : `${Math.max(r, m > 0 ? 1 : 0)} min`; };
   const pct = (a, b) => b ? Math.round(100 * a / b) : 0, sumRan = x => sum(x.ran);
-  const daysOf = x => x.days.length ? daySpan(x.days) : "no Day";
+  const daysOf = x => x.days.length ? daySpan(x.days) : "outside any Day", dateOf = x => [x.weekday, x.label].filter(Boolean).join(" ");
   const RUN_WORD = ["tests", "GitHub's checks", "other commands"];
   fig.replaceChildren();
   const pat = el("pattern", { id: "act-hatch", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, el("defs", {}));
-  el("rect", { class: "act-hatch", width: 1.6, height: 5 }, null, pat);
-  // one row per date, the whole about 400 px high
-  const rh = Math.min(30, 360 / Math.max(1, D.length)), H = G.head + D.length * rh + G.foot, one = rh < 26;
-  fig.setAttribute("viewBox", `0 0 ${G.w} ${f(H)}`);
-  el("text", { class: "act-t-col", x: 4, y: 14 }, `Times ${A.zone}`);
-  const HOURS = [6, 9, 12, 15, 18, 21, 0, 3].map(hh => [hh, X(((hh * 60 - 300) + 1440) % 1440)]);
-  HOURS.forEach(([hh, x]) => el("text", { class: "act-t-hr", x: f(x), y: 14, "text-anchor": "middle" }, hm(hh * 60)));
-  [["busy", 1040], ["waiting", 1104], ["merged · median wait", 1150]].forEach(([t, x]) => el("text", { class: "act-t-col", x, y: 14, "text-anchor": x < 1150 ? "end" : null }, t));
+  el("rect", { class: "act-hatch", width: 1.4, height: 5 }, null, pat);
+  fig.setAttribute("viewBox", `0 0 ${G.w} ${G.top + G.rh * D.length + 6}`);
+  // the head: the clock's hours over the lanes, the columns of figures at the right
+  const W = G.x1 - G.x0, MID = X(1140), HOURLY = Array.from({ length: 25 }, (_, k) => X(k * 60));
+  el("text", { class: "act-t-col", x: 8, y: 23 }, "date and Day worked on");
+  el("text", { class: "act-t-hr", x: 147, y: 23 }, "05:00");
+  [6, 9, 12, 15, 18, 21, 0, 3].forEach(hh => el("text", { class: "act-t-hr", x: f(X((hh * 60 - 300 + 1440) % 1440)), y: 23, "text-anchor": "middle" }, hm(hh * 60)));
+  el("text", { class: "act-t-hr", x: G.x1, y: 23, "text-anchor": "middle" }, "05:00");
+  el("text", { class: "act-t-col", x: 1012, y: 11 }, "a session busy");
+  el("text", { class: "act-t-col", x: 1096, y: 11 }, "of it waiting");
+  el("text", { class: "act-t-col", x: 1228, y: 11, "text-anchor": "end" }, "merged");
+  // a stretch as a closed box of a path, at least `min` wide; the small bar at the right draws every row on one scale
+  const box = (a, b, y, ht, min) => { const w = Math.max(min, X(b) - X(a)); return `M${f(X(a))} ${f(y)}h${f(w)}v${f(ht)}h-${f(w)}z`; };
+  const SCALE = 150 / Math.max(1, ...D.map(d => d.busy));
   const rows = D.map((d, i) => {
-    const y = G.head + i * rh, top = y + 2, mid = y + rh / 2, bot = y + rh - 2;
+    const y = G.top + i * G.rh, L = G.lanes.map(([at, ht]) => [y + at, ht]), w = sumRan(d);
     const longest = d.merges.length ? d.merges.reduce((a, b) => b.wait > a.wait ? b : a) : null;
     const g = el("g", { class: "act-row b", "data-k": i, tabindex: 0, role: "button",
-      "aria-label": `${d.label}, ${daysOf(d)}: busy ${hrs(d.busy)}, ${pct(sumRan(d), d.busy)}% of it waiting on commands; ${n(d.merged, "pull request", "pull requests")} merged. Opens graph 10 at this date.` });
-    el("rect", { class: "act-bg", x: 0, y: f(y), width: G.w, height: f(rh) }, null, g);
-    if (one) { const t = el("text", { class: "act-t-date", x: 8, y: f(mid + 4) }, d.label, g); el("tspan", { class: "act-t-day", dx: 8 }, daysOf(d), t); }
-    else { el("text", { class: "act-t-date", x: 8, y: f(mid - 2) }, d.label, g); el("text", { class: "act-t-day", x: 8, y: f(mid + 11) }, daysOf(d), g); }
-    el("rect", { class: "act-trk", x: G.x0, y: f(top), width: G.x1 - G.x0, height: f(bot - top) }, null, g);
-    d.segs.forEach(([a, b, k]) => el("rect", { class: k === "main" ? "act-s" : "act-mini", x: f(X(a)), y: f(top), width: f(Math.max(0.6, X(b) - X(a))), height: f(mid - top) }, null, g));
-    d.wait_segs.forEach(([a, b]) => el("rect", { class: "act-w", x: f(X(a)), y: f(top), width: f(Math.max(0.6, X(b) - X(a))), height: f(mid - top) }, null, g));
-    d.merges.forEach(m => { if (X(m.at) - X(m.from) >= 1) el("path", { class: "act-ml", d: `M${f(X(m.from))} ${f((mid + bot) / 2)} H${f(X(m.at))}` }, null, g);
-      el("rect", { class: "act-m", x: f(X(m.at) - 0.75), y: f(mid + 1), width: 1.5, height: f(Math.max(1, bot - mid - 1)) }, null, g); });
-    if (d.up_to < 1440) el("rect", { class: "act-unc", x: f(X(d.up_to)), y: f(top), width: f(G.x1 - X(d.up_to)), height: f(bot - top) }, null, g);
-    const num = (x, big, small, anchor) => { const t = el("text", { class: "act-t-num", x, y: f(mid + 4), "text-anchor": anchor }, big, g); if (small) el("tspan", { class: "act-pct" }, small, t); };
-    num(1040, (d.busy / 60).toFixed(1), " h", "end");
-    num(1104, String(pct(sumRan(d), d.busy)), "%", "end");
-    num(1150, String(d.merged), d.median != null ? ` · ${dur(d.median)}` : "", null);
+      "aria-label": `${dateOf(d)}, ${daysOf(d)}. A session busy for ${hrs(d.busy)}, ${hrs(w)} of it waiting on commands. ${n(d.merged, "pull request", "pull requests")} merged. Opens graph 10 at this date.` });
+    el("rect", { class: "act-bg", x: 1, y: f(y + 0.5), width: G.w - 2, height: G.rh - 1 }, null, g);
+    el("path", { class: "act-trk", d: L.slice(0, 4).map(([at, ht]) => `M${G.x0} ${f(at)}h${W}v${ht}h-${W}z`).join("") }, null, g);
+    el("path", { class: "act-base", d: `M${G.x0} ${f(y + 55.5)}H${G.x1}` }, null, g);
+    el("path", { class: "act-grid", d: HOURLY.filter(x => x !== MID).map(x => `M${f(x)} ${y + 2}v54`).join("") }, null, g);
+    el("path", { class: "act-mid", d: `M${f(MID)} ${y + 1}v56` }, null, g);
+    el("text", { class: "act-t-date", x: 10, y: y + 20 }, dateOf(d), g);
+    el("text", { class: "act-t-day", x: 10, y: y + 34 }, daysOf(d), g);
+    ACT_LANES.forEach(([name, at]) => el("text", { class: "act-t-ln", x: 154, y: f(y + at), "text-anchor": "end" }, name, g));
+    // lanes 0 and 1: a session busy, fainter while it waits on a command; over lane 0, a strip while two main sessions were busy
+    const busy = (list, k) => list.forEach(([a, b]) => el("rect", { class: "act-s", x: f(X(a)), y: f(L[k][0]), width: f(Math.max(0.6, X(b) - X(a))), height: L[k][1] }, null, g));
+    const path = (cls, list, at, ht, min) => { if (list.length) el("path", { class: cls, d: list.map(([a, b]) => box(a, b, at, ht, min)).join("") }, null, g); };
+    const waits = k => (d.wait_segs || []).filter(s => (s[3] || 0) === k);
+    busy(d.segs.filter(s => s[2] === "main"), 0);
+    path("act-w", waits(0), L[0][0], L[0][1], 0.6);
+    path("act-two", d.two || [], y + 3, 2.2, 0.8);
+    busy(d.subs || [], 1);
+    path("act-w", waits(1), L[1][0], L[1][1], 0.6);
+    // lanes 2 to 4: each pull request open (one opened while another is open at half height), its checks, the merges
+    (d.prs || []).forEach((p, j) => el("rect", { class: `act-b b act-p${p.half ? " act-p2" : ""} act-k-${p.kind}`, "data-k": `${i}:p:${j}`, x: f(X(p.from)),
+      y: f(p.half ? y + 32.5 : L[2][0]), width: f(Math.max(1, X(p.to) - X(p.from))), height: p.half ? 3.5 : L[2][1] }, null, g));
+    (d.checks || []).forEach(([a, b, failed], j) => el("rect", { class: `act-b b ${failed ? "act-failed" : "act-ok"}`, "data-k": `${i}:c:${j}`, x: f(X(a)),
+      y: f(L[3][0]), width: f(Math.max(1, X(b) - X(a))), height: failed ? 7 : 4 }, null, g));
+    d.merges.forEach((m, j) => el("rect", { class: "act-b b act-m", "data-k": `${i}:m:${j}`, x: f(X(m.at) - 0.8), y: f(L[4][0]), width: 1.6, height: L[4][1] }, null, g));
+    // after the last count of the sessions: hatched over their two lanes, a dashed mark where the count ends
+    if (d.up_to < 1440) { const x = X(d.up_to), rest = f(G.x1 - x);
+      el("path", { class: "act-unc", d: [0, 1].map(k => `M${f(x)} ${f(L[k][0])}h${rest}v${L[k][1]}h-${rest}z`).join("") }, null, g);
+      if (d.up_to > 0) { const say = `sessions counted to ${wall(d.up_to)}`, past = x + 6 + say.length * 4.8 > G.x1;
+        el("path", { class: "act-cnt", d: `M${f(x)} ${y + 2}V${y + 27}` }, null, g);
+        el("text", { class: "act-t-cnt", x: f(past ? x - 6 : x + 6), y: f(y + 14.5), "text-anchor": past ? "end" : null }, say, g); }
+      else el("text", { class: "act-t-cnt", x: G.x0 + 6, y: f(y + 14.5) }, "sessions not counted yet", g); }
+    // at the right: the hours busy, the hours of them waiting with their share, the merges, and both hours as one small bar
+    el("text", { class: "act-t-num", x: 1012, y: y + 20 }, hrs(d.busy), g);
+    el("tspan", { class: "act-pct" }, ` ${pct(w, d.busy)}%`, el("text", { class: "act-t-num", x: 1096, y: y + 20 }, hrs(w), g));
+    el("text", { class: "act-t-num", x: 1228, y: y + 20, "text-anchor": "end" }, String(d.merged), g);
+    const mini = SCALE * d.busy, miniW = SCALE * Math.min(w, d.busy);
+    el("rect", { class: "act-mini", x: 1012, y: y + 28, width: f(mini), height: 5 }, null, g);
+    el("rect", { class: "act-mini-w", x: f(1012 + mini - miniW), y: y + 28, width: f(miniW), height: 5 }, null, g);
     return { g, d, longest };
   });
-  // the 3-hour grid and midnight go over the rows, or each row's track would hide them
-  HOURS.forEach(([hh, x]) => el("path", { class: hh === 0 ? "act-mid" : "act-grid", d: `M${f(x)} ${G.head} V${f(H - G.foot)}` }));
-  fig.setAttribute("aria-label", `${n(D.length, "date", "dates")}, one row each, on one clock from 05:00 to 05:00 (${A.zone}): when sessions were busy, and when each pull request merged with a line back to when it opened.`);
+  // a line between two rows, on the figure and not in a row
+  D.forEach((d, i) => { if (i) el("path", { class: "act-sep", d: `M0 ${G.top + i * G.rh}H${G.w}` }); });
+  fig.setAttribute("aria-label", `An actogram: one row for each of ${n(D.length, "date", "dates")}, on one clock from 05:00 to 05:00 (${A.zone}). In each row five lanes: the main session busy, sub-agents busy, pull requests open, their checks running, and the merges. At the right of each row, its hours with a session busy, the hours of that waiting on commands, and the pull requests merged.`);
 
   // the line of figures
   const fig4 = (num, small, what, sub) => h("div", null, h("div", { class: "act-num" }, num, small ? h("small", null, small) : null), h("div", { class: "act-what" }, what), h("div", { class: "act-sub" }, sub));
@@ -3574,28 +3607,47 @@ function actDraw(A, get, onDay, onDate) {
     li(finds, `${pct(ranAll, T.busy)}% of the busy time was a wait on a command.`, ` Most of it on ${RUN_WORD[k]}: ${hrs(R[k])} of ${hrs(ranAll)}.`); }
   if (T.merged) li(finds, `Half the pull requests merged within ${dur(T.median)} of opening.`, ` ${T.over_hour} of the ${T.merged} waited over an hour; the longest, #${T.longest.pr}, ${dur(T.longest.wait)}.`);
   if (T.whole && T.after_midnight) li(finds, "Work runs past midnight.", ` On ${wholeSay}, a session was still busy after 00:00.`);
+  if (T.two >= 1) { const most = D.reduce((a, b) => (b.two_min || 0) > (a.two_min || 0) ? b : a);
+    li(finds, `Two main sessions were busy at once for ${dur(T.two)}.`, ` The strip over the main session's lane marks it; the most on ${dateOf(most)}, ${dur(most.two_min)}.`); }
   [["A gap is not a rest.", " Only this repository's sessions are drawn; the maintainer's reading and typing leave no mark."],
     ["Two waits at once count twice.", " The waiting share is every session's waits, sub-agents' included, over the busy time counted once: two sessions waiting at the same time count twice, as graph 10 counts them."],
+    R[1] >= 1 ? ["One wait is drawn twice.", ` A session waiting on GitHub's checks is fainter in its own lane (${dur(R[1])} in all), and the same minutes are a bar in the checks lane.`] : null,
     ["A date runs 05:00 to 05:00.", " Work after midnight stays on the evening it belongs to, so a row is a working day, not a calendar one."],
-    ["Times are on the clock of the machine that recorded the sessions.", ` ${A.zone}; GitHub's times are moved to it.`]].forEach(([b, t]) => li(bends, b, t));
+    ["Times are on the clock of the machine that recorded the sessions.", ` ${A.zone}; GitHub's times are moved to it.`]].filter(Boolean).forEach(([b, t]) => li(bends, b, t));
 
   // the exact numbers
   const td = v => h("td", { class: "r" }, v);
-  $("table").replaceChildren(h("tr", null, ["Date", "Days", "Busy", "Main session", "Waiting", "Waiting share", "Merged", "Median wait"].map(x => h("th", null, x))),
-    ...D.map(d => h("tr", null, h("td", null, d.label), h("td", null, daysOf(d)), td(hrs(d.busy)), td(hrs(d.main)), td(dur(sumRan(d))),
-      td(`${pct(sumRan(d), d.busy)}%`), td(String(d.merged)), td(d.median == null ? "–" : dur(d.median)))));
+  $("table").replaceChildren(h("tr", null, ["Date", "Days", "A session busy", "Main session", "Sub-agents", "Two main at once", "Waiting on commands", "Share", "Pull requests open", "Checks running",
+    "Merged", "Median wait"].map(x => h("th", null, x))),
+    ...D.map(d => h("tr", null, h("td", null, dateOf(d)), h("td", null, daysOf(d)), td(hrs(d.busy)), td(hrs(d.main)), td(hrs(d.sub || 0)), td(dur(d.two_min || 0)), td(dur(sumRan(d))),
+      td(`${pct(sumRan(d), d.busy)}%`), td(String(d.open || 0)), td(dur(d.checks_min || 0)), td(String(d.merged)), td(d.median == null ? "–" : dur(d.median)))));
 
-  // what the pointer says
-  const fill = key => { const r = rows[+key]; if (!r) return false; const d = r.d, w = sumRan(d);
-    tip.replaceChildren(h("div", { class: "t" }, `${d.label} · ${daysOf(d)}`),
-      h("div", { class: "l" }, `Busy ${hrs(d.busy)}, two sessions at once counted once; the main session alone ${hrs(d.main)}.`),
-      h("div", { class: "l" }, `Waiting on commands ${dur(w)}, ${pct(w, d.busy)}%: tests ${dur(d.ran[0])}, GitHub's checks ${dur(d.ran[1])}, other commands ${dur(d.ran[2])}.`),
-      h("div", { class: "l" }, `${n(d.merged, "pull request", "pull requests")} merged${d.median != null ? `, median wait ${dur(d.median)}` : ""}.`),
-      r.longest ? h("div", { class: "l" }, `The longest wait: #${r.longest.pr}, ${dur(r.longest.wait)}${r.longest.cut ? ", opened on an earlier date" : ""}.`) : null,
-      d.up_to < 1440 ? h("div", { class: "l" }, `Counted up to ${wall(d.up_to)}.`) : null);
+  // what the pointer says: a pull request, a check or a merge says its own; anywhere else in a row, the date's figures
+  const early = x => x.cut ? "; it opened on an earlier date" : "";
+  const said = { p: (d, p) => [`Pull request #${p.pr} · ${KINDS[p.kind] || p.kind}`,
+      p.state === "merged" ? `Open ${wall(p.from)} to ${wall(p.to)}, ${dur(p.wait)} before it merged${early(p)}.`
+        : p.state === "closed" ? `Open ${wall(p.from)} to ${wall(p.to)}, ${dur(p.wait)} before it was closed without merging${early(p)}.`
+          : `Open from ${wall(p.from)}: still open, not merged or closed yet${early(p)}.`,
+      p.half ? "Drawn at half height: it opened while another pull request was open." : null],
+    c: (d, c) => [`Checks on pull request #${c[3]}`, `${wall(c[0])} to ${wall(c[1])}: ${c[2] ? "a run failed" : "passed"}.`],
+    m: (d, m) => [`Merged #${m.pr} at ${wall(m.at)}`, `${dur(m.wait)} after it opened${early(m)}.`] };
+  const dateSaid = r => { const d = r.d, w = sumRan(d);
+    return [`${dateOf(d)} · ${daysOf(d)}`,
+      `Busy ${hrs(d.busy)}, two sessions at once counted once; the main session alone ${hrs(d.main)}.`,
+      `Sub-agents busy ${dur(d.sub || 0)}; two main sessions at once ${dur(d.two_min || 0)}.`,
+      `Waiting on commands ${dur(w)}, ${pct(w, d.busy)}%: tests ${dur(d.ran[0])}, GitHub's checks ${dur(d.ran[1])}, other commands ${dur(d.ran[2])}.`,
+      `${n(d.open || 0, "pull request", "pull requests")} open; checks running ${dur(d.checks_min || 0)}.`,
+      `${n(d.merged, "pull request", "pull requests")} merged${d.median != null ? `, median wait ${dur(d.median)}` : ""}.`,
+      r.longest ? `The longest wait: #${r.longest.pr}, ${dur(r.longest.wait)}${r.longest.cut ? ", opened on an earlier date" : ""}.` : null,
+      d.up_to < 1440 ? `Counted up to ${wall(d.up_to)}.` : null]; };
+  const fill = key => { const [at, kind, j] = String(key).split(":"), r = rows[+at]; if (!r) return false;
+    const mark = kind ? ({ p: r.d.prs, c: r.d.checks, m: r.d.merges }[kind] || [])[+j] : null;
+    if (kind && !mark) return false;
+    // a line left out is not handed over: a browser writes a null as the word
+    tip.replaceChildren(...(mark ? said[kind](r.d, mark) : dateSaid(r)).filter(Boolean).map((t, k) => h("div", { class: k ? "l" : "t" }, t)));
     tip.hidden = false; return true; };
   pointerBox(fig, tip, key => key != null ? fill(key) : false, b => b.getAttribute("data-k"));
-  // a row opens graph 10, folded below, at its date
+  // a row opens graph 10, folded below, at its date; a click on a mark opens its row's
   const open = g => { const r = rows[+g.getAttribute("data-k")]; if (!r) return; (onDate || []).forEach(fn => fn(r.d.date)); openFolds(get("g10")); };
   const rowOf = e => e.target && e.target.closest ? e.target.closest(".act-row") : null;
   fig.addEventListener("click", e => { const g = rowOf(e); if (g) open(g); });

@@ -6,6 +6,7 @@ booted on a document that accepts anything, to see that drawing does not throw. 
 
     python scripts/test_dashboard_page.py
 """
+import datetime
 import importlib.util
 import json
 import os
@@ -1286,34 +1287,48 @@ class CostAndRingsPageTest(unittest.TestCase):
 
 # actDraw() on the model of the data from stdin, on a document that keeps every node it is given and the listeners
 # put on it: its rows, merge ticks, wait marks and hatching, its words, the rows the Day buttons dim, and what a click
-# on the first row does (graph 10 turned to its date, its fold opened).
+# on the first row does (graph 10 turned to its date, its fold opened). A lane's waits are one path: `waits` counts
+# the stretches in it. `n` counts the marks by class, `said` is each row's date and Days as written, `lanes` the first
+# row's lane names, `head` the table's headings, and `tips` what the pointer box says on row `tip_row` for the row,
+# its first pull request, its first check with a failed run and its first merge.
 ACT_DRAW = r"""
 const fs = require("fs"), vm = require("vm"), els = {};
 const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", open: false, parentNode: null, on: {}, dim: false,
   classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle(c, on) { if (c === "mk-dim") n.dim = !!on; }, contains() { return false; } },
   setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
-  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
-  addEventListener(t, fn) { n.on[t] = fn; }, scrollIntoView() { n.scrolled = true; } };
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text");
+    if (c.some(k => k == null)) throw new Error("replaceChildren() given null: a browser writes it as text"); this.kids = c; },
+  addEventListener(t, fn) { n.on[t] = fn; }, scrollIntoView() { n.scrolled = true; }, getBoundingClientRect: () => ({ left: 0, bottom: 0 }) };
   Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
   return n; };
 const document = { createElementNS: (ns, tag) => node(tag), createElement: node, addEventListener() {}, getElementById: id => els[id] || null };
 const $ = id => els[id] || (els[id] = node(id));
-const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, innerWidth: 1200, innerHeight: 800 });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
   const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
   const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c)));
   const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const tidy = t => t.replace(/\\s+/g, " ").trim();
   const M = model(DATA), days = [], dates = [], A = M.act;
   const drew = !A.error && !A.empty ? (actDraw(A, $, days, [d => dates.push(d)]), true) : false;
   const f = $("act-fig"), rows = is(f, ["act-row", "b"]);
-  let dimmed = null, opened = null;
+  let dimmed = null, opened = null, tips = null;
   if (drew) {
     days.forEach(fn => fn(DATA.dim_day)); dimmed = rows.filter(r => r.dim).length;
     const r = rows[0]; r.closest = () => r; f.on.click({ target: r }); opened = [dates, !!$("g10").scrolled];
+    const at = rows[DATA.tip_row || 0];
+    tips = [at, ...["act-p", "act-failed", "act-m"].map(c => is(at, [c])[0])].map(e => { if (!e) return null;
+      e.closest = () => e; f.on.focusin({ target: e }); return $("act-tip").kids.map(words).map(tidy); });
   }
-  ({ drew, empty: A.empty || null, error: A.error || null, rows: rows.length, merges: is(f, ["act-m"]).length, waits: is(f, ["act-w"]).length,
+  const CLS = ["act-s", "act-w", "act-two", "act-p", "act-p2", "act-ok", "act-failed", "act-m", "act-t-ln", "act-mini", "act-mini-w", "act-sep", "act-trk", "act-cnt", "act-t-cnt", "act-ml"];
+  ({ drew, empty: A.empty || null, error: A.error || null, rows: rows.length, merges: is(f, ["act-m"]).length,
+     waits: is(f, ["act-w"]).reduce((s, e) => s + (e.attrs.d.match(/M/g) || []).length, 0),
      hatched: is(f, ["act-unc"]).length, words: [$("act-figs"), $("act-finds"), $("act-bends")].map(words).join(" ").replace(/\\s+/g, " "),
-     table: is($("act-table"), []).filter(e => e.tag === "tr").length, onDay: days.length, dimmed, opened })`, ctx)));
+     table: is($("act-table"), []).filter(e => e.tag === "tr").length, onDay: days.length, dimmed, opened,
+     n: Object.fromEntries(CLS.map(c => [c, is(f, [c]).length])), box: f.attrs.viewBox || null,
+     said: rows.map(r => [is(r, ["act-t-date"]), is(r, ["act-t-day"])].map(t => t.map(words).map(tidy).join(" | "))),
+     lanes: rows.length ? is(rows[0], ["act-t-ln"]).map(e => e.textContent) : [],
+     head: is($("act-table"), []).filter(e => e.tag === "th").map(words).map(tidy), tips })`, ctx)));
 """
 
 
@@ -1329,8 +1344,112 @@ def act_data(**source):
     return data
 
 
+def act_lanes_data():
+    """act_data() and what the example data lacks. On its first date: a second main session busy for 20 minutes while
+    the first is, a sub-agent waiting on GitHub's checks, and two pull requests in the evening, the second opened while the
+    first is open, the first's checks running twice with a failed run the first time. Two dates before it, a date
+    whose only session and pull request are of no Day."""
+    data = demo_data()
+    c = data["clock"]
+    first = c["sessions"][0]
+    at = first["from"][:11]
+    first["runs"] = [[at + "07:00:00Z", at + "07:20:00Z", "tests"]]
+    first["ran"] = {"tests": 1200}
+    sub = next(s for s in c["sessions"] if s["agent"] == "implementer")
+    sub["runs"] = [[at + "08:22:00Z", at + "08:30:00Z", "checks"]]
+    sub["ran"] = {"checks": 480}
+    c["sessions"].append({"date": at[:10], "day": first["day"], "agent": "main", "from": at + "09:00:00+02:00", "to": at + "09:20:00+02:00", "replies": 4})
+    before = (datetime.date.fromisoformat(at[:10]) - datetime.timedelta(days=2)).isoformat() + "T"
+    c["sessions"].append({"date": before[:10], "day": None, "agent": "main", "from": before + "10:00:00+02:00", "to": before + "11:00:00+02:00", "replies": 4})
+
+    def pr(number, day, kind, on, opened, merged, spans, failed=0):
+        return dict(number=number, day=day, kind=kind, branch=f"b{number}", opened=f"{on}{opened}:00Z", merged=f"{on}{merged}:00Z",
+                    checks=dict(start=f"{on}{spans[0][0]}:00Z", end=f"{on}{spans[-1][1]}:00Z", runs=4 * len(spans), failed=failed, pushes=len(spans),
+                                spans=[[f"{on}{a}:00Z", f"{on}{b}:00Z", bad] for a, b, bad in spans]))
+    c["prs"] += [pr(901, first["day"], "code", at, "18:00", "19:00", [("18:01", "18:05", 1), ("18:30", "18:35", 0)], failed=1),
+                 pr(902, first["day"], "spec", at, "18:10", "18:20", [("18:11", "18:15", 0)]),
+                 pr(903, None, "other", before, "09:00", "09:30", [("09:01", "09:04", 0)])]
+    data["actogram"] = views.actogram(data)
+    return data
+
+
 class ActogramPageTest(unittest.TestCase):
     """actDraw(): a row for each date, its marks, its figures, the Day buttons, and graph 10 opened at a row's date."""
+
+    def test_a_row_has_five_lanes_and_a_mark_for_each_stretch_the_actogram_counted(self):
+        data = act_lanes_data()
+        A, out = data["actogram"], node(ACT_DRAW, data)
+        D, n = A["dates"], out["n"]
+        self.assertEqual((out["drew"], out["error"], out["rows"]), (True, None, len(D)))
+        self.assertEqual(out["box"], f"0 0 1232 {30 + 58 * len(D) + 6}")
+        self.assertEqual(out["lanes"], ["main session", "sub-agents", "pull request", "checks", "merge"])
+        self.assertEqual((n["act-t-ln"], n["act-trk"], n["act-mini"], n["act-mini-w"], n["act-sep"]), (5 * len(D), len(D), len(D), len(D), len(D) - 1))
+        # lanes 0 and 1: a bar for each stretch the main session was busy and each the sub-agents were, a strip on a
+        # date with two main sessions at once, and the waits of a lane as one path
+        self.assertEqual(n["act-s"], sum(sum(1 for s in d["segs"] if s[2] == "main") + len(d["subs"]) for d in D))
+        self.assertEqual(n["act-two"], sum(1 for d in D if d["two"]))
+        self.assertEqual(n["act-w"], sum(len({w[3] for w in d["wait_segs"]}) for d in D))
+        self.assertEqual(out["waits"], sum(len(d["wait_segs"]) for d in D))
+        # lanes 2 to 4: every pull request open, the ones opened while another is open at half height; its checks,
+        # passed or with a failed run; the merges
+        self.assertEqual((n["act-p"], n["act-p2"]), (sum(len(d["prs"]) for d in D), sum(1 for d in D for p in d["prs"] if p["half"])))
+        self.assertEqual((n["act-ok"], n["act-failed"]), (sum(1 for d in D for c in d["checks"] if not c[2]), sum(1 for d in D for c in d["checks"] if c[2])))
+        self.assertEqual(n["act-m"], sum(len(d["merges"]) for d in D))
+        # and the data has each of them
+        self.assertEqual((n["act-two"], n["act-w"], out["waits"]), (1, 2, 2))
+        for cls in ("act-p2", "act-failed", "act-ok", "act-m"):
+            self.assertGreaterEqual(n[cls], 1, cls)
+        # the last date is counted to 18:00: hatched from there, with the dashed mark and its words
+        self.assertEqual((out["hatched"], n["act-cnt"], n["act-t-cnt"]), (1, 1, 1))
+        # nothing of the old strip is drawn
+        self.assertEqual(n["act-ml"], 0)
+        self.assertEqual(out["head"], ["Date", "Days", "A session busy", "Main session", "Sub-agents", "Two main at once", "Waiting on commands", "Share",
+                                       "Pull requests open", "Checks running", "Merged", "Median wait"])
+        self.assertEqual(out["table"], len(D) + 1)
+        for w in ("Two main sessions were busy at once for 20 min", "One wait is drawn twice."):
+            self.assertIn(w, out["words"])
+
+    def test_a_row_says_its_date_with_its_weekday_and_its_days_or_that_it_is_outside_any_day(self):
+        data = act_lanes_data()
+        A, out = data["actogram"], node(ACT_DRAW, data)
+        self.assertEqual(out["said"][:2], [["Tue 29 Sep", "outside any Day"], ["Thu 1 Oct", "Day 1"]])
+        self.assertEqual([s[0] for s in out["said"]], [f"{d['weekday']} {d['label']}" for d in A["dates"]])
+        self.assertNotIn("no Day", " ".join(s[1] for s in out["said"]))
+
+    def test_the_pointer_box_says_a_rows_date_and_a_marks_own(self):
+        data = act_lanes_data()
+        data["tip_row"] = 1
+        row, pr, check, merge = node(ACT_DRAW, data)["tips"]
+        self.assertEqual(row[0], "Thu 1 Oct · Day 1")
+        self.assertIn("Sub-agents busy 1 h 25 min; two main sessions at once 20 min.", row)
+        self.assertIn("3 pull requests open; checks running 17 min.", row)
+        self.assertEqual(pr[0], "Pull request #101 · spec")
+        self.assertEqual(pr, ["Pull request #101 · spec", "Open 11:47 to 12:42, 55 min before it merged."])
+        self.assertEqual(check, ["Checks on pull request #901", "20:01 to 20:05: a run failed."])
+        self.assertEqual(merge, ["Merged #101 at 12:42", "55 min after it opened."])
+
+    def test_the_example_page_draws_a_mark_in_each_of_the_five_lanes(self):
+        data = demo_data()
+        data["actogram"] = A = views.actogram(data)
+        n = node(ACT_DRAW, data)["n"]
+        main, subs = sum(1 for d in A["dates"] for s in d["segs"] if s[2] == "main"), sum(len(d["subs"]) for d in A["dates"])
+        self.assertGreaterEqual(main, 1)
+        self.assertGreaterEqual(subs, 1)
+        self.assertEqual(n["act-s"], main + subs)
+        for cls in ("act-p", "act-ok", "act-failed", "act-m"):
+            self.assertGreaterEqual(n[cls], 1, cls)
+
+    def test_the_key_names_what_each_lane_draws_and_nothing_is_left_of_the_old_strip(self):
+        html = read("index.html")
+        section = html[html.index('<section class="graph" id="act">'):html.index('<section class="graph mock-fold" id="g10-fold">')]
+        key = section[section.index('<div class="act-key">'):section.index('<div class="act-scroll"')]
+        self.assertIn('<span class="act-lead">In each row, top to bottom:</span>', key)
+        for cls in ("act-s", "act-w", "act-two", "act-k-spec", "act-k-code", "act-k-close", "act-k-other", "act-ok", "act-failed", "act-m", "act-unc", "act-cnt"):
+            self.assertRegex(key, rf'class="{cls}"')
+        self.assertEqual(key.count('<i class="act-sep" aria-hidden="true"></i>'), 3)
+        self.assertIn("a half-height bar", section)
+        for name in ("index.html", "dashboard.css", "dashboard.js"):
+            self.assertNotIn("act-ml", read(name), name)
 
     def test_a_row_for_each_date_and_a_mark_for_each_merge_and_wait(self):
         data = act_data()
@@ -1367,6 +1486,7 @@ class ActogramPageTest(unittest.TestCase):
         for source in (dict(absent=["sessions.json"]), dict(commit=None)):
             out = node(ACT_DRAW, act_data(**source))
             self.assertEqual((out["drew"], out["rows"]), (False, 0))
+            self.assertEqual((sum(out["n"].values()), out["box"]), (0, None))
             self.assertRegex(out["empty"], r"^the dashboard-data branch (has no sessions\.json|is missing), so no session is drawn\.$")
         loop = read("dashboard.js")
         loop = loop[loop.index('["rng", rngDraw], ["act", actDraw]]'):]

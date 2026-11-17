@@ -1497,16 +1497,24 @@ footer { font-size: 12.5px; color: var(--muted); }
 /* the short key */
 #act .act-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 16px;font-size:12.5px;color:var(--ink-2)}
 #act .act-key>span{display:inline-flex;align-items:center;gap:6px}
+#act .act-key .act-lead{color:var(--muted)}
+#act .act-key .act-sep{width:1px;height:14px;background:var(--line)}
 #act .act-key svg{flex:none;overflow:visible}
 
 /* the marks, in the figure and in the key */
 #act .act-s{fill:var(--bar)}
-#act .act-mini{fill:var(--bar);fill-opacity:.45}
 #act .act-w{fill:var(--bar-2);pointer-events:none}
+#act .act-two{fill:var(--ink);pointer-events:none}
+#act .act-k-spec{fill:var(--spec)}
+#act .act-k-code{fill:var(--code)}
+#act .act-k-other{fill:var(--other)}
+#act .act-k-close{fill:var(--card);stroke:var(--ink);stroke-width:1}
+#act .act-ok{fill:var(--other)}
+#act .act-failed{fill:var(--broken)}
 #act .act-m{fill:var(--ink)}
-#act .act-ml{fill:none;stroke:var(--ink);stroke-opacity:.18;stroke-width:1.2}
+#act .act-cnt{fill:none;stroke:var(--s3);stroke-width:1.2;stroke-dasharray:3 2.5;pointer-events:none}
 #act .act-unc{fill:url(#act-hatch);pointer-events:none}
-#act .act-hatch{fill:var(--line)}
+#act .act-hatch{fill:var(--hatch-a)}
 
 /* the figure */
 #act .act-scroll{overflow-x:auto;min-width:0}
@@ -1516,12 +1524,20 @@ footer { font-size: 12.5px; color: var(--muted); }
 #act .act-t-hr{font:400 10.5px var(--mono);fill:var(--muted)}
 #act .act-t-date{font:600 12.5px var(--sans);fill:var(--ink)}
 #act .act-t-day{font:400 11px var(--sans);fill:var(--muted)}
+#act .act-t-ln{font:400 9.5px var(--sans);fill:var(--muted)}
 #act .act-t-num{font:600 12.5px var(--sans);fill:var(--ink);font-variant-numeric:tabular-nums}
 #act .act-t-num .act-pct{font-weight:400;font-size:10.5px;fill:var(--muted)}
+#act .act-t-cnt{font:500 9.5px var(--sans);fill:var(--ink-2);paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
 #act .act-bg{fill:var(--card)}
 #act .act-trk{fill:var(--wash)}
-#act .act-grid{fill:none;stroke:var(--axis);stroke-width:1;opacity:.6;pointer-events:none}
-#act .act-mid{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:3 3;pointer-events:none}
+#act .act-base{fill:none;stroke:var(--line);stroke-width:1}
+#act .act-grid{fill:none;stroke:var(--line);stroke-width:1}
+#act .act-mid{fill:none;stroke:var(--s3);stroke-width:1;stroke-dasharray:2 3}
+#act .act-sep{fill:none;stroke:var(--line);stroke-width:1}
+#act .act-mini{fill:var(--bar)}
+#act .act-mini-w{fill:var(--bar-2)}
+#act .act-b:focus{outline:none}
+#act .act-fig .act-b:hover,#act .act-fig .act-b:focus{stroke:var(--link);stroke-width:1.6;paint-order:stroke}
 #act .act-row{cursor:pointer;transition:opacity .15s}
 #act .act-row:focus{outline:none}
 #act .act-row:focus-visible>.act-bg{stroke:var(--link);stroke-width:2}
