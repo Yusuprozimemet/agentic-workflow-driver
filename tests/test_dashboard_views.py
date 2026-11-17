@@ -1960,5 +1960,367 @@ class ActogramTest(unittest.TestCase):
             self.assertRegex(line, r"^actogram: \d+ dates, busy [\d.]+ h .*: agree$")
 
 
+def runs_data(absent=(), commit="abc"):
+    """The example data with the driver's run log as the trial's first five steps had it: two merged untouched, one
+    parked by a fault after its first session crashed and merged after the next, one parked for the maintainer
+    with no session, one still open."""
+    data = demo_data.demo()
+
+    def ses(a, b, cost, denials=0):
+        return {
+            "session": f"s-{a}",
+            "start": a,
+            "end": b,
+            "cost": cost,
+            "denials": denials,
+            "fixes": 0,
+            "crashed": b is None,
+        }
+
+    steps = [
+        {
+            "step": "Day 13 Track A: C13.1–C13.3, C13.8–C13.9: `bearing/cli.py`, `tests/test_stderr.py`",
+            "day": 13,
+            "prefix": "day-13/track-a",
+            "sessions": [ses("2026-11-10T23:16:41Z", "2026-11-10T23:31:48Z", 0.896, 1)],
+            "fixes": 0,
+            "crashes": 0,
+            "pr": 90,
+            "merged": "2026-11-10T23:32:54Z",
+            "parks": [],
+            "ended": "merged",
+        },
+        {
+            "step": "Day 13 Track B: C13.4–C13.6: `bearing/cli.py`, `tests/test_ingest_limit.py`",
+            "day": 13,
+            "prefix": "day-13/track-b",
+            "sessions": [ses("2026-11-10T23:35:00Z", "2026-11-10T23:44:40Z", 0.7278)],
+            "fixes": 0,
+            "crashes": 0,
+            "pr": 91,
+            "merged": "2026-11-10T23:46:18Z",
+            "parks": [],
+            "ended": "merged",
+        },
+        {
+            "step": "Day 13: the closing PR",
+            "day": 13,
+            "prefix": "day-13/close-the-day",
+            "sessions": [
+                ses("2026-11-10T23:47:55Z", None, 0.0),
+                ses("2026-11-11T00:00:59Z", "2026-11-11T00:20:40Z", 1.1593),
+            ],
+            "fixes": 0,
+            "crashes": 1,
+            "pr": 96,
+            "merged": "2026-11-11T00:31:46Z",
+            "ended": "parked",
+            "parks": [
+                {
+                    "at": "2026-11-10T23:56:17Z",
+                    "by": "fault",
+                    "line": "park: the run log names session `s-1` for this step, with no end",
+                }
+            ],
+        },
+        {
+            "step": "Every day is done.",
+            "day": None,
+            "prefix": None,
+            "sessions": [],
+            "fixes": 0,
+            "crashes": 0,
+            "pr": None,
+            "merged": None,
+            "parks": [
+                {
+                    "at": "2026-11-11T00:33:55Z",
+                    "line": "park: every day is done",
+                    "by": "maintainer",
+                }
+            ],
+            "ended": "parked",
+        },
+        {
+            "step": "Day 14 Track A: C14.1–C14.3: `bearing/ingest/text.py`, `tests/test_sentences.py`",
+            "day": 14,
+            "prefix": "day-14/track-a",
+            "sessions": [ses("2026-11-12T23:14:39Z", "2026-11-12T23:21:05Z", 0.5558, 1)],
+            "fixes": 0,
+            "crashes": 0,
+            "pr": 101,
+            "merged": None,
+            "parks": [],
+            "ended": "open",
+        },
+    ]
+    data["driver_runs"] = {
+        "source": "docs/dashboard/driver-runs.json",
+        "counted": "2026-11-16T15:06:00+01:00",
+        "level_2": {"run": 0, "of": 15},
+        "steps": steps,
+        "parks": None,
+    }
+    data["data"] = dict(
+        data.get("data") or {}, branch="dashboard-data", commit=commit, absent=list(absent)
+    )
+    views = load("spec_drift_views", "spec_drift_views.py")
+    data["protein"], data["reflex"] = views.protein(data), views.reflex(data)
+    return data
+
+
+class ReflexTest(unittest.TestCase):
+    """reflex(): graph 11 as reflex arcs, one row per step the driver started, counted from its run log."""
+
+    def views(self):
+        return load("spec_drift_views", "spec_drift_views.py")
+
+    def test_its_counts_are_the_proteins_in_real_runs(self):
+        v = self.views()
+        for data in (demo_data.demo(), runs_data()):
+            r = v.reflex(data)
+            run = next(c["run"] for c in v.protein(data)["chains"] if c["run"])
+            c = r["counts"]
+            self.assertEqual(
+                [c["steps"], c["parks"], c["crashed"], c["open"], c["merged"]],
+                [
+                    run["of"],
+                    len(run["parks"]),
+                    len(run["crashes"]),
+                    len(run["open"]),
+                    len(run["merged"]),
+                ],
+            )
+        self.assertEqual(
+            [c["steps"], c["parks"], c["crashed"], c["open"], c["merged"]], [5, 2, 1, 1, 2]
+        )
+
+    def test_one_row_per_step_in_run_log_order_with_its_sessions_parks_and_pull_request(self):
+        r = self.views().reflex(runs_data())
+        self.assertEqual(r["zone"], "UTC+1")
+        self.assertEqual(
+            [[x["label"], x["sub"]] for x in r["rows"]],
+            [
+                ["Day 13 Track A", "project's Day 13 · C13.1–C13.3, C13.8–C13.9"],
+                ["Day 13 Track B", "project's Day 13 · C13.4–C13.6"],
+                ["Day 13: the closing PR", "project's Day 13"],
+                ["Every day is done.", "no project Day"],
+                ["Day 14 Track A", "project's Day 14 · C14.1–C14.3"],
+            ],
+        )
+        self.assertEqual(
+            [[s["crashed"] for s in x["sessions"]] for x in r["rows"]],
+            [[False], [False], [True, False], [], [False]],
+        )
+        self.assertEqual(
+            [[[p["by"], p["up"], p["back"]] for p in x["parks"]] for x in r["rows"]],
+            [[], [], [["fault", 0, 1]], [["maintainer", None, None]], []],
+        )
+        self.assertEqual(
+            [[x["pr"]["number"], x["pr"]["state"]] if x["pr"] else None for x in r["rows"]],
+            [[90, "merged"], [91, "merged"], [96, "merged"], None, [101, "open"]],
+        )
+        self.assertEqual(
+            [x["fin"] for x in r["rows"]], ["merged", "merged", "fault", "maint", "still"]
+        )
+        self.assertEqual(
+            [x["end"] for x in r["rows"]],
+            [
+                "Merged, with no park",
+                "Merged, with no park",
+                "Parked by a fault, then merged",
+                "Parked for the maintainer",
+                "Still open, no park so far",
+            ],
+        )
+        self.assertEqual(r["rows"][2]["end_sub"], "2 sessions, 1 crashed · 20 min · $1.16")
+
+    def test_a_park_says_when_the_next_session_started_and_never_a_wait(self):
+        r = self.views().reflex(runs_data())
+        self.assertEqual(
+            [re.findall(r"\d+ minutes? later", p["later"]) for x in r["rows"] for p in x["parks"]],
+            [["5 minutes later"], []],
+        )
+        self.assertEqual(
+            [p["later"] for x in r["rows"] for p in x["parks"]],
+            [
+                "the next session started 5 minutes later",
+                "no session started after it in this step",
+            ],
+        )
+        self.assertEqual(r["tips"]["s2p0"]["t"], "Parked by a fault · 11 Nov 00:56 (UTC+1)")
+        self.assertEqual(
+            r["tips"]["s2p0"]["l"][1:],
+            [
+                "It came back down at session 2: the next session started 5 minutes later.",
+                "How long a person was needed is not known: the park names no issue.",
+            ],
+        )
+        self.assertEqual(
+            r["tips"]["s3p0"]["l"][1],
+            "It did not come back: no session started after it in this step.",
+        )
+        words = json.dumps(r, ensure_ascii=False).lower()
+        self.assertEqual(re.findall(r"\bwait(?:ed|ing)?\b|\banswer\w*", words), [])
+
+    def test_the_figures_line_counts_steps_parks_sessions_and_merges(self):
+        r = self.views().reflex(runs_data())
+        self.assertEqual(
+            [[f["num"], f["small"], f["what"]] for f in r["figs"]],
+            [
+                ["5", None, "steps the driver started"],
+                ["2", "of 4 ended", "finished without a park"],
+                ["1", None, "session a step, at the median"],
+                ["3", "of 4 opened", "pull requests merged"],
+            ],
+        )
+        self.assertEqual(
+            r["figs"][0]["sub"],
+            "3 on the project's Day 13, 1 on Day 14 and 1 with no Day. All on 2 dates: too few to judge by.",
+        )
+        self.assertEqual(r["level_2"], {"run": 0, "of": 15})
+
+    def test_with_the_run_log_or_the_data_branch_missing_it_says_so_and_draws_nothing(self):
+        v = self.views()
+        self.assertEqual(
+            [
+                bool(v.reflex(runs_data(**k))["missing"])
+                for k in ({}, {"commit": None}, {"absent": ["driver-runs.json"]})
+            ],
+            [False, True, True],
+        )
+        self.assertEqual(
+            v.reflex(runs_data(commit=None))["missing"],
+            "the dashboard-data branch is missing, so no step of the driver is drawn.",
+        )
+        self.assertEqual(
+            v.reflex(runs_data(absent=["driver-runs.json"]))["missing"],
+            "the dashboard-data branch has no driver-runs.json, so no step of the driver is drawn.",
+        )
+        data = runs_data()
+        data["driver_runs"] = {
+            "source": "docs/dashboard/driver-runs.json",
+            "counted": None,
+            "level_2": None,
+            "steps": None,
+            "parks": None,
+        }
+        self.assertEqual(
+            v.reflex(data)["missing"],
+            "the driver's run log is not counted for this project yet, so no step is drawn.",
+        )
+        self.assertEqual(v.reflex(data)["rows"], [])
+        self.assertIsNone(v.reflex(runs_data())["missing"])
+
+
+# rfxDraw() from dashboard.js on the data from stdin, on a document that keeps every node it makes: the marks drawn by
+# kind, the rows' labels and what the pointer box says for a park.
+RFX = r"""
+const fs = require("fs"), vm = require("vm"), els = {}, made = [];
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, dataset: {}, hidden: false, on: {}, classList: { add() {}, remove() {} },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("array"); this.kids = c; },
+  addEventListener(t, fn) { this.on[t] = fn; }, getBoundingClientRect: () => ({ left: 0, bottom: 0 }) };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  made.push(n); return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node, addEventListener() {} };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, made, innerWidth: 1200, innerHeight: 800 });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const M = model(DATA), R = M.rfx, is = c => made.filter(e => (e.attrs.class || "").split(" ").includes(c));
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  if (!R.empty && !R.error) rfxDraw(R, $);
+  const fig = $("rfx-fig"), park = is("b").find(g => /p0$/.test(g.attrs["data-k"] || ""));
+  if (park) { park.closest = () => park; fig.on.focusin({ target: park }); }
+  ({ empty: R.empty || null, error: R.error || null, rows: is("t-lab").map(t => t.textContent), sessions: is("x-ses").length + is("x-crash").length + is("x-fix").length,
+     crashed: is("x-crash").length, branches: is("x-br").length, pills: is("x-pill").length, awaited: is("x-go").filter(e => /await/.test(e.attrs.class)).length,
+     l2: is("x-l2").length, l2run: is("x-l2").filter(e => /run/.test(e.attrs.class)).length, box: fig.attrs.viewBox,
+     tip: park ? $("rfx-tip").kids.map(words) : null, figs: $("rfx-figs").kids.length })`, ctx)));
+"""
+
+
+class ReflexPageTest(unittest.TestCase):
+    """Graph 11's reflex arcs drawn by the page: a mark for every step, session, park and pull request reflex() counted."""
+
+    def draw(self, data):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        out = subprocess.run(
+            ["node", "-e", RFX, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[-600:])
+        return json.loads(out.stdout)
+
+    def test_a_mark_for_every_step_session_park_and_pull_request(self):
+        v = load("spec_drift_views", "spec_drift_views.py")
+        for data in (demo_data.demo(), runs_data()):
+            data["reflex"] = r = v.reflex(data)
+            got = self.draw(data)
+            self.assertEqual(len(got["rows"]), len(r["rows"]))
+            self.assertEqual(
+                [got["sessions"], got["crashed"], got["branches"], got["pills"]],
+                [
+                    sum(len(x["sessions"]) for x in r["rows"]),
+                    r["counts"]["crashed_sessions"],
+                    r["counts"]["parks"],
+                    sum(1 for x in r["rows"] if x["pr"]),
+                ],
+            )
+            self.assertEqual(got["rows"], [x["label"] for x in r["rows"]])
+        self.assertEqual(
+            [got["awaited"], got["l2"], got["l2run"], got["box"], got["figs"]],
+            [1, 15, 0, "0 0 1198 211", 4],
+        )
+        self.assertEqual(
+            got["tip"][1:3],
+            [
+                "The driver or the kit was at fault. It went up at session 1 of 2, which crashed.",
+                "It came back down at session 2: the next session started 5 minutes later.",
+            ],
+        )
+
+    def test_with_the_run_log_missing_nothing_is_drawn(self):
+        data = runs_data(absent=["driver-runs.json"])
+        data["reflex"] = load("spec_drift_views", "spec_drift_views.py").reflex(data)
+        got = self.draw(data)
+        self.assertEqual(
+            [got["empty"], got["rows"], got["branches"]],
+            [
+                "the dashboard-data branch has no driver-runs.json, so no step of the driver is drawn.",
+                [],
+                0,
+            ],
+        )
+
+    def test_the_reflex_and_the_cell_reconcile_with_graph_11_the_proteins_and_the_panel(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        v = load("spec_drift_views", "spec_drift_views.py")
+        data = runs_data()
+        data["reflex"] = v.reflex(data)
+        m = reconcile.model(data)
+        self.assertEqual(
+            reconcile.rfx_line(m),
+            (
+                True,
+                (
+                    "reflex: 5 steps, 2 parks, 1 crashed (1 session), 1 open | proteins' real runs: "
+                    "5, 2, 1, 1 | graph 11: 5 steps, 2 parks, 1 crashed sessions, 1 open: agree"
+                ),
+            ),
+        )
+        self.assertEqual(
+            reconcile.cel_line(m),
+            (True, "cell: 7 stations, 4 loops | panel: 7 steps, 4 ways back: agree"),
+        )
+        for line in (
+            reconcile.rfx_line(reconcile.model(demo_data.demo())),
+            reconcile.cel_line(reconcile.model(demo_data.demo())),
+        ):
+            self.assertTrue(line[0], line[1])
+
+
 if __name__ == "__main__":
     unittest.main()

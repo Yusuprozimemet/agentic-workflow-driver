@@ -246,7 +246,39 @@ def act_line(m):
                    + ("agree" if agree else f"DISAGREE{' (busy outside its lanes on ' + ', '.join(bad) + ')' if bad else ''}"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line]
+def rfx_line(m):
+    """The reflex arcs against the proteins' "In real runs" (graphs 3 to 5, from the same _runs()) and graph 11's table
+    (folded under it): the same steps, parks, crashes and open steps."""
+    r, p, g11 = m.get("rfx") or {}, m.get("prt") or {}, m.get("g11") or {}
+    for x, name in ((r, "reflex"), (p, "proteins"), (g11, "graph 11")):
+        if x.get("error"):
+            return False, f"reflex: not drawn ({name}: {x['error']})"
+    rows = (g11.get("table") or {}).get("rows") or []
+    head = (g11.get("table") or {}).get("head") or []
+    col = lambda name: sum(row[head.index(name)] for row in rows) if name in head else 0  # noqa: E731
+    table = [sum(sum(row[1:6]) for row in rows), col("Parks"), col("Crashed sessions"), col("Still open")]
+    if r.get("empty"):
+        agree = not any(table)
+        return agree, f"reflex: not drawn ({r['empty']}) | graph 11: {table[0]} steps: " + ("agree" if agree else "DISAGREE")
+    c = r["counts"]
+    run = next((ch["run"] for ch in p.get("chains") or [] if ch.get("run")), None)
+    ours = [c["steps"], c["parks"], c["crashed_sessions"], c["open"]]
+    prt = [run["of"], len(run["parks"]), len(run["crashes"]), len(run["open"])] if run else None
+    agree = ours == table and (prt is None or prt == [c["steps"], c["parks"], c["crashed"], c["open"]])
+    return agree, (f"reflex: {ours[0]} steps, {ours[1]} parks, {c['crashed']} crashed ({ours[2]} {'session' if ours[2] == 1 else 'sessions'}), {ours[3]} open | "
+                   f"proteins' real runs: {', '.join(map(str, prt)) if prt else 'none'} | graph 11: {table[0]} steps, {table[1]} parks, "
+                   f"{table[2]} crashed sessions, {table[3]} open: " + ("agree" if agree else "DISAGREE"))
+
+
+def cel_line(m):
+    """The cell against the folded panel: a station for each of its steps, in its order, and a loop for each way back."""
+    cel, how = m.get("cel") or {}, m.get("how") or {}
+    agree = cel.get("stations") == how.get("steps") and cel.get("loops") == how.get("back")
+    return agree, (f"cell: {len(cel.get('stations') or [])} stations, {len(cel.get('loops') or [])} loops | panel: "
+                   f"{len(how.get('steps') or [])} steps, {len(how.get('back') or [])} ways back: " + ("agree" if agree else "DISAGREE"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line, cel_line]
 
 
 def main(argv=None):
