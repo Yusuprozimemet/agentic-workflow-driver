@@ -48,7 +48,32 @@ def gene_line(m):
                    + ("agree" if agree else f"DISAGREE (gene {', '.join(uncovered) or 'none'}; graph 12 {', '.join(due) or 'none'})"))
 
 
-SECTIONS = [gene_line]
+# The merge graph's verdict tiles and the promise tiles' states they count: the same criteria in each.
+MERGE_TILES = (("st ok", "hold proved", ("proven",)), ("st un", "hold unproved", ("unproven",)),
+               ("st bad", "not holding", ("broken", "repair")), ("st none", "not run", ("skipped", "unchecked")),
+               ("st due", "not built", ("open", "building")), ("tri", "replaced", ("replaced",)))
+
+
+def merge_line(m):
+    """The merge graph against the promise tiles (graphs 3 to 5): each verdict tile counts the criteria in the tile
+    states it stands for, and all of them every criterion."""
+    g, p = m.get("mrg") or {}, m.get("promises") or {}
+    if g.get("error") or p.get("error"):
+        return False, f"merge graph: not drawn ({g.get('error') or p.get('error')})"
+    states = p.get("states") or {}
+    if g.get("empty"):
+        agree = not sum(states.values())
+        return agree, "merge graph: no criteria | promise tiles: " + ("none either: agree" if agree else "DISAGREE")
+    tiles = {t["sw"]: t["n"] for t in g["all"]["verdict"]}
+    ours = [(word, tiles.get(sw, 0)) for sw, word, _ in MERGE_TILES]
+    theirs = [("+".join(group), sum(states.get(s, 0) for s in group)) for _, _, group in MERGE_TILES]
+    agree = [n for _, n in ours] == [n for _, n in theirs] and sum(n for _, n in ours) == sum(states.values())
+    say = lambda pairs: ", ".join(f"{n} {w}" for w, n in pairs)  # noqa: E731
+    return agree, (f"merge graph: {sum(n for _, n in ours)} criteria ({say(ours)}) | "
+                   f"promise tiles: {sum(states.values())} ({say(theirs)}): " + ("agree" if agree else "DISAGREE"))
+
+
+SECTIONS = [gene_line, merge_line]
 
 
 def main(argv=None):

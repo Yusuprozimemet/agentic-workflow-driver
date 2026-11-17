@@ -1009,6 +1009,12 @@ function model(DATA) {
         rows: cols.map(c => [c.t, c.section, c.rule ? "rule about people" : PL.commitments[at.get(c.key)].owner_day ?? "", c.n, c.days.sort((a, b) => a - b).join(", "), c.b[0].split(" · ").pop().replace(/\.$/, "")]) } };
   }
 
+  /* The merge graph: counted in scripts/spec_drift_views.py (merge_graph), drawn by mergeDraw as it stands. */
+  function mrgGraph() {
+    const G = DATA.merge_graph;
+    return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
+  }
+
   /* The gene: the plan read down to proved code. Every figure is counted in scripts/spec_drift_views.py (gene);
      this only words it and hands the drawing its columns, its labels and what the pointer says. */
   function geneGraph() {
@@ -1133,11 +1139,12 @@ function model(DATA) {
         .map(([k, x]) => [k, { n: Math.round(x.score), parts: x.parts.map(p => `${p.name.toLowerCase()} ${Math.round(p.pct)}`).join(" · ") }])) };
   }
 
-  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph), gene = safe(geneGraph);
+  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles) },
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+      states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
 
@@ -1718,6 +1725,359 @@ function geneDraw(m, box, tip, forDays) {
   return { light: ids => light(ids.map(id => `[data-p="${id}"]`).join(","), "foc"), clear };
 }
 
+/* The merge graph, drawn, in graph 6's place: the spec as one long bar, one stripe per criterion, and above it a row
+   per Day (or per merge) marking the criteria each merge gave evidence for and the times the replay saw one stop
+   holding. Layout only, as the mockup at #228 drew it: every count it prints is in DATA.merge_graph, counted by
+   scripts/spec_drift_views.py (merge_graph), for all Days (`all`) and for each Day (`by_day`). `get` finds an element
+   by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #mrg. */
+function mergeDraw(D, get, onDay) {
+  const NS = "http://www.w3.org/2000/svg";
+  const crit = D.crit, merges = D.merges, events = D.events;
+  const $ = id => get("mrg-" + id);
+  const comma = n => n.toLocaleString("en-US");
+  const plural = (n, w) => `${comma(n)} ${w}${n === 1 ? "" : "s"}`;
+  const criteria = n => n === 1 ? "1 criterion" : `${comma(n)} criteria`;
+  const dayName = d => d === 0 ? "Start" : "Day " + d;
+  const prI = new Map(merges.map((m, i) => [m.pr, i]));
+  const byId = new Map(crit.map(c => [c.id, c]));
+  const at = p => merges[prI.get(p)];
+  crit.forEach((c, i) => { c.i = i; });
+  const loose = merges.filter(m => m.loose);
+  const STALE = "break no longer applies";
+  // a merge drawn only because the replay looked there: it first noticed a stop, or saw one hold again, at it
+  const NOCITE = { stop: "no criterion cites this merge; the replay first noticed the stop here, at a sampled merge",
+    held: "no criterion cites this merge; the replay first saw it hold again here, at a sampled merge" };
+  // the suspect window of one stop: the merges after the last replay where it held, up to the one where it failed
+  const hash = ps => ps.map(p => "#" + p).join(", ");
+  const winText = e => e.lo == null ? "It was not holding at its first replay, so there is no window." : `Last held at #${e.lo}. The window up to #${e.pr} holds ${plural(e.wn, "merge")}; ${e.sus.length ? `product code changed in ${e.sus.length}: ${hash(e.sus)}` : "none changed product code"}.`;
+  const dayTitle = {}; D.days.forEach(d => { dayTitle[d.day] = d.title; });
+  // a later criterion naming an earlier merge: sometimes a hold citing the work it guards, sometimes a number in its own wording
+  const early = (m, i) => m.early.includes(i);
+  const down = c => c.st === "bad" || c.st === "stale";
+  const chain = c => { const out = []; let cur = c; while (cur.rep.length && out.length < 9) { const nx = byId.get(cur.rep[0]); if (!nx) break; out.push(nx); cur = nx; } return out; };
+  const stWord = c => c.st === "ok" ? "holds" : c.st === "un" ? "holds, with no break on purpose recorded" : down(c) ? `is not holding ("${c.why}")` : c.lp ? `is not run by the replay ("${c.why}")` : "was never run by the replay";
+
+  // one finding per criterion that ever stopped holding and one per uncited merge, numbered left to right as drawn
+  const finds = D.finds.map(f => f.kind === "loose" ? { kind: f.kind, n: f.n, m: at(f.pr) } : { kind: f.kind, n: f.n, c: crit[f.c], ev: events.filter(e => e.c === f.c) });
+  const view = () => state.day == null ? D.all : D.by_day[state.day];
+
+  const svg = $("g"), tip = $("tip");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || svg).appendChild(e); return e; };
+  const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
+  // push labels apart along one line until none overlap
+  const spread = (xs, s, lo, hi) => {
+    const p = xs.slice(); if (!p.length) return p;
+    for (let it = 0; it < 200; it++) { let moved = false;
+      for (let i = 1; i < p.length; i++) { const d = p[i] - p[i - 1]; if (d < s - .01) { const sh = (s - d) / 2; p[i - 1] -= sh; p[i] += sh; moved = true; } }
+      if (p[0] < lo) { p[0] = lo; moved = true; } if (p[p.length - 1] > hi) { p[p.length - 1] = hi; moved = true; }
+      if (!moved) break; }
+    return p;
+  };
+  const state = { view: "day", day: null };
+
+  function draw() {
+    svg.replaceChildren();
+    const zoom = state.day, big = zoom != null, byMerge = big || state.view === "merge", V = view();
+    svg.setAttribute("class", big ? "g" : state.view === "merge" ? "g all tight" : "g all");
+    const cs = crit.filter(c => !big || c.day === zoom), inC = new Set(cs.map(c => c.i));
+    const evs = events.filter(e => inC.has(e.c));
+    const ms = V.merges.map(at), ls = V.loose.map(at);
+    const fs = finds.filter(f => V.finds[f.kind].includes(f.n));
+    // rows, each with the counts merge_graph gave it
+    let rows;
+    if (byMerge) rows = ms.map(m => ({ day: m.day, label: "#" + m.pr, ms: [m], ran: m.rp ? 1 : 0, drawn: 1, stopped: V.stopped[m.pr] || 0, nocite: m.nocite.length ? 1 : 0 }));
+    else { const by = new Map(); ms.forEach(m => { if (!by.has(m.day)) by.set(m.day, []); by.get(m.day).push(m); }); rows = [...by.keys()].sort((a, b) => a - b).map(d => Object.assign({ day: d, label: dayName(d), ms: by.get(d) }, V.rows.find(q => q.day === d))); }
+    const X0 = big ? 326 : 160, U = big ? Math.max(22, Math.min(46, Math.floor(640 / cs.length))) : 5, DG = 6, T0 = 50;
+    const RH = big ? 16 : byMerge ? 11 : 17, RG = byMerge ? 5 : 0, CH = big ? 30 : 26, UL = big ? 20 : 12, BW = 96, SH = 9, BR = big ? 8.5 : 7.5;
+    let y = T0; rows.forEach((r, i) => { if (i && rows[i - 1].day !== r.day) y += RG; r.y = y; r.i = i; y += RH; });
+    const CY = y + 8, SY = CY + CH + 4, TY = SY + SH + 2, BY = SY + SH + 21 + BR;
+    const stag = big && U < 42, IDY = BY + BR + 15, DLY = big ? IDY + (stag ? 12 : 0) : BY + BR + 16;
+    const rowOf = new Map(); rows.forEach(r => r.ms.forEach(m => rowOf.set(m.pr, r.i)));
+    // columns
+    const cols = {}; let x = X0;
+    cs.forEach((c, k) => { if (k && cs[k - 1].day !== c.day) x += DG; c.x = x; (cols[c.day] = cols[c.day] || { x0: x }).x1 = x + U; x += U; });
+    const SPX1 = x, FW = 34, fut = big ? [] : D.future; fut.forEach(f => { x += DG; f.x0 = x; x += FW; });
+    const LX0 = x + 30, LX1 = LX0 + ls.length * UL, base = ls.length ? LX1 : x, KX = base + 62, SX = base + 138, W = SX + BW + 14, H = DLY + 10;
+    ls.forEach((m, k) => { m.lx = LX0 + k * UL; });
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.style.minWidth = Math.min(W, big ? 1000 : 1180) + "px"; svg.style.maxWidth = big ? Math.round(W * 1.08) + "px" : "";
+    svg.setAttribute("aria-label", `${criteria(V.criteria)} as one banded bar, in Day order. ${rows.length} rows above it, one per ${byMerge ? "merge" : "Day"}, mark the criteria each one gave evidence for and the ${V.events} times a criterion stopped holding. The numbered list under the graph names each one.`);
+    const defs = el("defs", {});
+    const pat = el("pattern", { id: "mrg-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+    el("rect", { width: 6, height: 6, fill: "var(--wash)" }, null, pat); el("line", { x1: 1, y1: 0, x2: 1, y2: 6, stroke: "var(--hot)", "stroke-width": 1.8 }, null, pat);
+
+    // headings
+    el("text", { x: (X0 + SPX1) / 2, y: 16, "text-anchor": "middle", class: "strong" }, big ? `${dayName(zoom)} · ${criteria(V.criteria)}` : `The spec · ${criteria(V.criteria)}`);
+    if (ls.length) { el("text", { x: (LX0 + LX1) / 2, y: 16, "text-anchor": "middle", class: "strong" }, "No criterion"); el("text", { x: (LX0 + LX1) / 2, y: 31, "text-anchor": "middle", class: "strong" }, `cites it · ${V.finds.loose.length}`); }
+    el("text", { x: SX + BW / 2, y: 16, "text-anchor": "middle", class: "strong" }, byMerge ? "Lines per merge" : "Lines per Day");
+    el("text", { x: big ? X0 - 24 : X0 - 3, y: T0 - 7, "text-anchor": big ? "middle" : "end", class: "col" }, "Replay ran");
+    el("text", { x: KX, y: 16, "text-anchor": "middle", class: "strong" }, "Stopped");
+    el("text", { x: KX, y: T0 - 7, "text-anchor": "middle", class: "col" }, "first seen here");
+    // Days plan.md lists that have no spec yet: an empty dashed column each, and an empty piece of the bar
+    fut.forEach(f => {
+      const mid = f.x0 + FW / 2, my = (T0 + y) / 2;
+      el("text", { x: mid, y: T0 - 7, "text-anchor": "middle", class: "col" }, dayName(f.day));
+      el("text", { x: mid, y: DLY, "text-anchor": "middle", class: "col" }, dayName(f.day));
+      el("rect", { x: f.x0 + .5, y: T0 + 1, width: FW - 1, height: y - T0 - 2, rx: 2, fill: "none", stroke: "var(--axis)", "stroke-width": 1, "stroke-dasharray": "3 3" });
+      el("text", { x: mid, y: my, dy: 3.5, "text-anchor": "middle", class: "col", transform: `rotate(-90 ${mid} ${my})` }, "not due · no spec yet");
+      el("rect", { x: f.x0 + .5, y: CY + .5, width: FW - 1, height: CH - 1, rx: 5, fill: "var(--card)", stroke: "var(--muted)", "stroke-width": 1.2, "stroke-dasharray": "3 3" });
+    });
+    if (!big) Object.keys(cols).forEach(d => {
+      const mid = (cols[d].x0 + cols[d].x1) / 2;
+      el("text", { x: mid, y: T0 - 7, "text-anchor": "middle", class: "col" }, dayName(+d));
+      el("text", { x: mid, y: DLY, "text-anchor": "middle", class: "col" }, dayName(+d));
+    });
+
+    // row tracks (hatched where the replay never ran), the shaded steps, labels, and the bars at the right
+    const maxL = Math.max(...rows.map(r => r.ms.reduce((s, m) => s + m.prod + m.test, 0)), 1);
+    rows.forEach((r, i) => {
+      const track = r.ran ? "var(--wash)" : "url(#mrg-hatch)";
+      const st = r.stopped;
+      if (st || !byMerge || big) el("text", { x: KX, y: r.y + RH - (byMerge && !big ? 2 : 5), "text-anchor": "middle", class: st ? "num stopn" : "num zero" }, st);
+      Object.keys(cols).forEach(d => el("rect", { x: cols[d].x0, y: r.y + 1, width: cols[d].x1 - cols[d].x0, height: RH - 2, rx: 1.5, fill: +d === r.day ? "var(--hot)" : track }));
+      if (ls.length) el("rect", { x: LX0, y: r.y + 1, width: LX1 - LX0, height: RH - 2, rx: 1.5, fill: track });
+      // a row no criterion cites: a dashed outline over its track, its label in italics; in a Day's row, how many
+      if (byMerge && r.nocite) el("rect", { class: "nocite", x: X0 - .5, y: r.y + .5, width: SPX1 - X0 + 1, height: RH - 1, rx: 2, fill: "none", stroke: "var(--ink-2)", "stroke-width": 1.1, "stroke-dasharray": "4 2" });
+      if (big) { const m = r.ms[0], t = `#${m.pr}  ${m.title}`; el("text", { x: 6, y: r.y + RH - 4.4, class: r.nocite ? "prz ncl" : "prz" }, t.length > 50 ? t.slice(0, 49) + "…" : t); }
+      else if (byMerge) {
+        if (!i || rows[i - 1].day !== r.day) el("text", { x: 6, y: r.y + 9, class: "day" }, dayName(r.day));
+        el("text", { x: X0 - 40, y: r.y + RH - 2.2, "text-anchor": "end", class: r.nocite ? "pr ncl" : "pr" }, r.label);
+      } else {
+        el("text", { x: X0 - 54, y: r.y + RH - 4.6, "text-anchor": "end", class: "day" }, r.label);
+        if (r.nocite) el("text", { x: 6, y: r.y + RH - 4.8, class: "nc" }, `${r.nocite} uncited`);
+      }
+      if (byMerge) el("circle", { cx: X0 - 24, cy: r.y + RH / 2, r: big ? 3.2 : 2.4, fill: r.ran ? "var(--ink-2)" : "var(--card)", stroke: "var(--ink-2)", "stroke-width": 1 });
+      else el("text", { x: X0 - 24, y: r.y + RH - 5, "text-anchor": "middle", class: "num" }, `${r.ran} of ${r.drawn}`);
+      const prod = r.ms.reduce((s, m) => s + m.prod, 0), test = r.ms.reduce((s, m) => s + m.test, 0);
+      if (prod + test) {
+        el("text", { x: SX - 6, y: r.y + RH - (byMerge && !big ? 2 : 5), "text-anchor": "end", class: "num" }, comma(prod + test));
+        const pw = prod / maxL * BW, tw = test / maxL * BW, bh = RH - (byMerge && !big ? 4 : 8), by = r.y + (RH - bh) / 2;
+        if (prod) el("rect", { x: SX, y: by, width: Math.max(pw, 1), height: bh, fill: "var(--ink-2)" });
+        if (test) el("rect", { x: SX + (prod ? Math.max(pw, 1) + 1 : 0), y: by, width: Math.max(tw, 1), height: bh, fill: "var(--axis)" });
+      }
+    });
+
+    // the red lines: from the merge where a criterion stopped holding to the one where it held again
+    const MW = big ? Math.min(U - 8, 20) : U - 1.6, MO = (U - MW) / 2;
+    // the suspect window: the rows after the last replay where the criterion held, above its mark
+    const inWin = (e, r) => r.ms.filter(m => m.n > e.lon && m.n < e.n);
+    evs.forEach(e => {
+      const r0 = rows[rowOf.get(e.pr)]; if (!r0 || e.lon == null) return;
+      rows.forEach(r => { if (r.i >= r0.i) return; const w = inWin(e, r); if (!w.length) return;
+        el("rect", { x: crit[e.c].x + .3, y: r.y, width: U - .6, height: RH, class: w.some(m => m.prod > 0) ? "whi" : "wlo" }); });
+    });
+    evs.forEach(e => {
+      const r0 = rows[rowOf.get(e.pr)], r1 = e.end != null ? rows[rowOf.get(e.end)] : null; if (!r0) return;
+      const y1 = r0.y + RH - 1, y2 = r1 ? r1.y + 1 : CY, cx = crit[e.c].x + U / 2;
+      if (y2 > y1) { const a = { x1: cx, y1, x2: cx, y2, stroke: "var(--c-bad)", "stroke-width": big ? 1.6 : 1.2 }; if (e.state === STALE) a["stroke-dasharray"] = "2.5 2.5"; el("line", a); }
+    });
+
+    // marks
+    rows.forEach(r => {
+      const seen = new Set();
+      r.ms.forEach(m => m.lands.forEach(i => {
+        if (!inC.has(i) || seen.has(i)) return; seen.add(i);
+        const a = { x: crit[i].x + MO, y: r.y + 1, width: MW, height: RH - 2, rx: 1, fill: crit[i].tag === "hold" ? "var(--c-guard)" : "var(--c-in)" };
+        if (crit[i].tag === "hold") { a.stroke = "var(--muted)"; a["stroke-width"] = .6; }
+        if (early(m, i)) a.opacity = .38;
+        el("rect", a);
+      }));
+      r.ms.forEach(m => { if (ls.includes(m)) el("rect", { x: m.lx + 2, y: r.y + 1, width: UL - 4, height: RH - 2, rx: 1, fill: "var(--c-unpl)" }); });
+    });
+    evs.forEach(e => {
+      const r = rows[rowOf.get(e.pr)], stale = e.state === STALE; if (!r) return;
+      el("rect", { x: crit[e.c].x + MO + (stale ? .2 : -.4), y: r.y + (stale ? 1.4 : 1), width: MW + (stale ? -.4 : .8), height: RH - (stale ? 2.8 : 2), rx: 1, fill: stale ? "var(--card)" : "var(--c-bad)", stroke: "var(--c-bad)", "stroke-width": stale ? 1.2 : 0 });
+    });
+
+    // the bar: one piece per Day, one stripe per criterion; under it the strip of each criterion's last replay state
+    const maxT = Math.max(...crit.map(c => c.nt), 1);
+    const piece = (id, x0, x1) => { const r = { x: x0, y: CY, width: x1 - x0, height: CH, rx: 5 }; el("rect", r, null, el("clipPath", { id }, null, defs)); const g = el("g", { "clip-path": `url(#${id})` }); el("rect", Object.assign({ fill: "var(--card)" }, r), null, g); return g; };
+    const gs = {}; Object.keys(cols).forEach(d => { gs[d] = piece("mrg-cp-d" + d, cols[d].x0, cols[d].x1); });
+    cs.forEach((c, k) => {
+      el("rect", { x: c.x, y: CY, width: U, height: CH, fill: c.nt ? "var(--ink)" : "var(--card)", "fill-opacity": c.nt ? .14 + .86 * Math.sqrt(c.nt / maxT) : 1, stroke: "var(--card)", "stroke-width": .6 }, null, gs[c.day]);
+      const cx = c.x + U / 2, sx = c.x + (big ? 4 : .7), sw = U - (big ? 8 : 1.4), dim = c.rep.length ? .5 : 1;
+      if (c.st === "ok") el("rect", { x: sx, y: SY, width: sw, height: SH, rx: .8, fill: "var(--c-ok)", opacity: dim });
+      else if (c.st === "un") el("rect", { x: sx + .6, y: SY + .6, width: sw - 1.2, height: SH - 1.2, rx: .8, fill: "var(--card)", stroke: "var(--c-ok)", "stroke-width": 1.2, opacity: dim });
+      else if (c.st === "bad") el("rect", { x: sx, y: SY, width: sw, height: SH, rx: .8, fill: "var(--c-bad)" });
+      else if (c.st === "stale") el("rect", { x: sx + .6, y: SY + .6, width: sw - 1.2, height: SH - 1.2, rx: .8, fill: "var(--card)", stroke: "var(--c-bad)", "stroke-width": 1.2 });
+      else if (c.st === "due") el("rect", { x: sx + .5, y: SY + .5, width: sw - 1, height: SH - 1, rx: .8, fill: "var(--card)", stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "1.8 1.4" });
+      else el("rect", { x: sx, y: SY + SH / 2 - .8, width: sw, height: 1.6, fill: "var(--muted)" });
+      if (c.rep.length) el("path", { d: `M${cx} ${TY} l-2.8 5.2 h5.6 z`, fill: "var(--ink-2)" });
+      if (big) el("text", { x: cx, y: IDY + (stag ? (k % 2) * 12 : 0), "text-anchor": "middle", class: "cid" }, c.id);
+    });
+    Object.keys(cols).forEach(d => el("rect", { x: cols[d].x0, y: CY, width: cols[d].x1 - cols[d].x0, height: CH, rx: 5, fill: "none", stroke: "var(--c-line)", "stroke-width": 1 }));
+    if (ls.length) {
+      const g = piece("mrg-cp-loose", LX0, LX1);
+      ls.forEach(m => el("rect", { x: m.lx, y: CY, width: UL, height: CH, fill: "var(--c-unpl)", stroke: "var(--card)", "stroke-width": .6 }, null, g));
+      el("rect", { x: LX0, y: CY, width: LX1 - LX0, height: CH, rx: 5, fill: "none", stroke: "var(--c-line)", "stroke-width": 1 });
+    }
+
+    // the numbers: one badge per finding, in a lane under the bar, pushed apart so none overlap
+    const lane = fs.map(f => ({ f, ax: f.c ? f.c.x + U / 2 : f.m.lx + UL / 2 })).sort((a, b) => a.ax - b.ax);
+    const bx = spread(lane.map(b => b.ax), 2 * BR + 2, BR + 2, W - BR - 2);
+    lane.forEach((b, k) => {
+      const f = b.f, col = f.kind === "loose" ? "var(--c-unpl)" : f.kind === "back" ? "var(--muted)" : "var(--c-bad)", solid = f.kind === "fix" || f.kind === "loose";
+      el("line", { x1: b.ax, y1: f.c ? TY + (f.c.rep.length ? 6.4 : -1) : CY + CH + 1, x2: bx[k], y2: BY - BR, stroke: "var(--muted)", "stroke-width": .7 });
+      el("circle", { cx: bx[k], cy: BY, r: BR, fill: solid ? col : "var(--card)", stroke: col, "stroke-width": 1.4 });
+      el("text", { x: bx[k], y: BY + 3.2, "text-anchor": "middle", class: "bn", style: `fill:${f.kind === "fix" ? "var(--card)" : f.kind === "loose" ? "var(--on-unpl)" : "var(--ink)"}` }, f.n);
+    });
+
+    // hover: a crosshair over the whole graph, so no mark has to be hit exactly
+    const rowHi = el("rect", { x: 0, width: W, height: RH, fill: "var(--ink)", "fill-opacity": .09, "pointer-events": "none", visibility: "hidden" });
+    const colHi = el("rect", { y: T0 - 2, width: U, height: SY + SH - T0 + 2, fill: "var(--ink)", "fill-opacity": .13, "pointer-events": "none", visibility: "hidden" });
+    const hit = el("rect", { class: "hit", x: 0, y: T0 - 2, width: W, height: H - T0 + 2, fill: "transparent" });
+    const line = (cls, txt) => h("div", cls, txt, tip);
+    const rel = (color, txt, hollow) => { const d = line("r", ""); const i = document.createElement("i"); if (hollow) { i.style.border = `1.6px solid ${color}`; i.style.boxSizing = "border-box"; } else i.style.background = color; d.append(i, txt); };
+    const critLines = c => {
+      line("t", `${c.id} · ${dayName(c.day)} · ${c.tag}`); if (c.txt) line("", c.txt);
+      line("s", `${c.nt ? "names " + plural(c.nt, "test") : "names no test"} · cites ${c.prs.map(p => "#" + p).join(", ")}${c.rep.length ? " · replaced by " + c.rep.join(", ") : ""}`);
+      line("s", c.lp ? `The replay last ran it at #${c.lp}, ${plural(c.nc, "time")} in all: "${c.why}".` : "The replay never ran it.");
+    };
+    const rowLines0 = r => {
+      if (r.ms.length === 1) { const m = r.ms[0]; line("m", `#${m.pr} · ${m.date}`); line("", m.title); line("s", `${comma(m.prod)} product lines, ${comma(m.test)} test lines · gives evidence to ${criteria(m.lands.length)} · ${m.rp ? "the replay ran here" : "the replay never ran here"}`); m.nocite.forEach(k => line("s", NOCITE[k])); }
+      else {
+        line("t", `${dayName(r.day)}${dayTitle[r.day] ? ": " + dayTitle[r.day] : ""}`); line("s", `${plural(r.drawn, "merge")} drawn · the replay ran at ${r.ran}`);
+        r.ms.filter(m => m.nocite.length).forEach(m => m.nocite.forEach(k => line("s", `#${m.pr}: ${NOCITE[k]}`)));
+      }
+    };
+    const rowLines = r => { rowLines0(r); const st = evs.filter(e => rowOf.get(e.pr) === r.i); if (r.stopped) rel("var(--c-bad)", `${criteria(r.stopped)} first seen not holding here: ${st.map(e => crit[e.c].id).join(", ")}.`); };
+    const move = ev => {
+      const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const r = rows.find(q => p.y >= q.y && p.y < q.y + RH);
+      const c = p.x >= X0 && p.x < SPX1 ? cs.find(q => p.x >= q.x && p.x < q.x + U) : null, ci = c ? c.i : -1;
+      const lm = ls.find(m => p.x >= m.lx && p.x < m.lx + UL);
+      const fu = fut.find(f => p.x >= f.x0 && p.x < f.x0 + FW);
+      const onBar = p.y >= CY && p.y <= BY + BR;
+      tip.replaceChildren();
+      rowHi.setAttribute("visibility", r ? "visible" : "hidden"); if (r) rowHi.setAttribute("y", r.y);
+      colHi.setAttribute("visibility", c ? "visible" : "hidden"); if (c) colHi.setAttribute("x", c.x);
+      if (c) {
+        critLines(c);
+        if (r) {
+          const on = evs.filter(e => e.c === ci && rowOf.get(e.pr) === r.i);
+          const within = evs.filter(e => e.c === ci && rowOf.get(e.pr) < r.i && (e.end == null || rowOf.get(e.end) > r.i));
+          const lands = r.ms.filter(m => m.lands.includes(ci));
+          const win = evs.filter(e => e.c === ci && e.lon != null && rowOf.get(e.pr) > r.i && inWin(e, r).length);
+          if (lands.length || on.length || within.length || win.length) line("m", byMerge ? `#${r.ms[0].pr} · ${r.ms[0].title}` : dayName(r.day));
+          lands.forEach(m => rel(c.tag === "hold" ? "var(--c-guard)" : "var(--c-in)", early(m, ci) ? `The criterion names #${m.pr}, a merge from before its Day. It may be a number in its wording, not evidence.` : `${byMerge ? "This merge" : "#" + m.pr} is evidence the criterion cites.`));
+          on.forEach(e => { rel("var(--c-bad)", `The replay first reports "${e.state}" at #${e.pr}${e.end ? ", and it holds again at #" + e.end : ", and it has not come back"}.`, e.state === STALE); if (e.detail) line("s", `${e.check ? e.check + ": " : ""}${e.detail}`); line("s", winText(e)); });
+          win.forEach(e => { const hot = inWin(e, r).filter(m => m.prod > 0); rel("var(--c-bad)", `In the suspect window: it last held at #${e.lo}, and the replay saw "${e.state}" at #${e.pr}.`, true); line("s", hot.length ? `Product code changed here in ${hash(hot.map(m => m.pr))}.` : "No merge here changed product code."); });
+          within.forEach(e => rel("var(--c-bad)", `Not holding here: "${e.state}" since #${e.pr}.`, e.state === STALE));
+          if (byMerge) r.ms[0].nocite.forEach(k => line("s", NOCITE[k]));
+        }
+      } else if (lm && (onBar || (r && r.ms.includes(lm)))) { line("m", `#${lm.pr} · ${lm.date}`); line("", lm.title); rel("var(--c-unpl)", `${plural(lm.prod, "product line")} changed, and no criterion cites this merge.`); }
+      else if (fu) { line("t", `${dayName(fu.day)}: ${fu.title}`); line("", "Not due. plan.md lists this Day and specs/ has no spec for it, so it has no criteria yet."); line("s", `${plural(fu.ho, "hand-off")} and ${plural(fu.pc, "plan commitment")} name it.`); }
+      else if (r) rowLines(r);
+      if (!tip.childNodes.length) { tip.hidden = true; return; }
+      tip.hidden = false;
+      const b = tip.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+      let tx = ev.clientX + 16, ty = ev.clientY + 16;
+      if (tx + b.width > vw - 8) tx = Math.max(8, ev.clientX - b.width - 16);
+      if (ty + b.height > vh - 8) ty = Math.max(8, ev.clientY - b.height - 16);
+      tip.style.left = tx + "px"; tip.style.top = ty + "px";
+    };
+    const leave = () => { tip.hidden = true; rowHi.setAttribute("visibility", "hidden"); colHi.setAttribute("visibility", "hidden"); };
+    hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move); hit.addEventListener("pointerleave", leave);
+
+    frame(V, fs, zoom);
+    fit();
+  }
+
+  // the text of the frame: what a screenshot has to carry without the hover
+  function frame(V, fs, zoom) {
+    $("frame-h").textContent = zoom == null ? "Merges against criteria" : `${dayName(zoom)}: ${dayTitle[zoom] || ""}`;
+    $("stamp").textContent = `the page's data at ${D.head} · after #${D.last_pr} · generated ${D.generated.replace("T", " ")} · the replay ran at ${comma(D.replayed_merges)} merges, #${D.first_replayed_pr} to #${D.newest_pr} · showing ${zoom == null ? "all Days" : dayName(zoom)}`;
+    const v = $("verdict"); v.replaceChildren();
+    const tile = (sw, num, label, sub) => { const d = h("div", "", null, v), dt = h("dt", "", null, d); if (sw) h("i", sw, null, dt); dt.append(comma(num)); const dd = h("dd", "", label, d); if (sub) h("small", "", sub, dd); };
+    V.verdict.forEach(t => tile(t.sw, t.n, t.label, t.sub));
+
+    const box = $("find"); box.replaceChildren();
+    const col = () => h("div", "", null, box);
+    const group = (parent, title, list, fill) => { h("h3", "", `${title} · ${list.length}`, parent); if (!list.length) { h("p", "none", "None.", parent); return; } const ul = h("ul", "", null, parent); list.forEach(f => { const li = h("li", "", null, ul); h("i", "bd " + (f.kind === "back" ? "" : f.kind), f.n, li); fill(h("div", "", null, li), f); }); };
+    const evText = e => `"${e.state}" first seen at #${e.pr}`;
+    const a = col();
+    group(a, "Not holding, still in force", fs.filter(f => f.kind === "fix"), (d, f) => {
+      h("b", "", f.c.id, d); d.append(` · ${f.c.tag} · ${f.ev.map(evText).join("; ")}; the replay last ran it at #${f.c.lp}. No later criterion replaces it.`);
+      const e = f.ev[f.ev.length - 1]; if (e.detail) h("small", "", `${e.check ? e.check + ": " : ""}${e.detail}`, d);
+    });
+    group(a, "Not holding when last run, since replaced", fs.filter(f => f.kind === "retired"), (d, f) => {
+      const ch = chain(f.c), end = ch[ch.length - 1];
+      h("b", "", f.c.id, d); d.append(` · ${f.c.tag} · ${f.ev.map(evText).join("; ")}; the replay stopped running it after #${f.c.lp}.`);
+      h("small", "", `Replaced by ${ch.map(c => c.id).join(" → ")}. ${end.id} ${stWord(end)}${end.lp ? " at #" + end.lp : ""}.`, d);
+    });
+    const b = col();
+    group(b, "Stopped holding and came back", fs.filter(f => f.kind === "back"), (d, f) => {
+      h("b", "", f.c.id, d); d.append(` · ${f.ev.map(e => `"${e.state}" #${e.pr} → held again #${e.end}`).join("; ")}`);
+    });
+    h("h3", "", `Stops grouped by suspect window · ${plural(V.piles.length, "group")}, first seen at ${plural(V.pile_merges, "merge")}`, b);
+    if (!V.piles.length) h("p", "none", "None.", b);
+    else { const ul = h("ul", "", null, b); V.piles.forEach(g => { const e = events[g.e], li = h("li", "", null, ul); h("i", "bd cnt", g.n, li); const d = h("div", "", null, li); h("b", "", "#" + g.pr, d); d.append(` · ${g.ids.join(", ")}`); h("small", "", winText(e), d); }); }
+    const c3 = col();
+    group(c3, "Product code no criterion cites", fs.filter(f => f.kind === "loose"), (d, f) => {
+      h("b", "", "#" + f.m.pr, d); d.append(` · ${plural(f.m.prod, "product line")} · ${f.m.title}`);
+    });
+    h("h3", "", `Doubtful citations · ${V.doubt.length}`, c3);
+    if (V.doubt.length) { h("p", "", "A criterion names a merge from before its own Day. Often it is a number in the criterion's wording, read as a pull request.", c3); h("p", "mmono", V.doubt.join("  "), c3); }
+    else h("p", "none", "None.", c3);
+
+    const notes = $("notes"); notes.replaceChildren();
+    const flat = !D.flap.crit_twice && !D.flap.twice;
+    [[V.drawn, ` merges drawn; the replay never ran at ${comma(V.dead)} of them (it starts at #${D.first_replayed_pr})`],
+     [D.cells, ` replay runs of a criterion at a merge in all: the replay samples, it does not run every criterion at every merge`],
+     [D.tests_cited, " tests named by criteria, of " + comma(D.inventory.driver || 0) + " driver tests"],
+     [D.flap.crit_twice, ` criteria stopped holding twice: of ${comma(D.flap.series)} single checks the replay followed, ${D.flap.stopped} stopped and ${D.flap.twice} stopped again${flat ? ", so no flapping sign is drawn" : ""}`]]
+      .forEach(([k, t]) => { const s = h("span", "", null, notes); h("b", "", comma(k), s); s.append(t); });
+  }
+  const fit = () => { const sc = $("scroll"); $("narrow").hidden = sc.scrollWidth <= sc.clientWidth + 1; };
+  const win = typeof window !== "undefined" && typeof window.addEventListener === "function" ? window : null;
+  if (win) win.addEventListener("resize", fit);
+
+  // the table of the same red marks
+  const tb = $("ev");
+  tb.replaceChildren();
+  const td = (tr, cls, txt) => h("td", cls, txt, tr);
+  events.slice().sort((a, b) => a.pr - b.pr || a.c - b.c).forEach(e => {
+    const tr = document.createElement("tr"), c = crit[e.c], stale = e.state === STALE;
+    td(tr, "pr", e.find); td(tr, "id", c.id); td(tr, "", c.txt); td(tr, "pr", e.lo == null ? "never" : "#" + e.lo); td(tr, "pr", "#" + e.pr);
+    td(tr, "", e.lo == null ? "not holding at its first replay" : `${plural(e.wn, "merge")}; ${e.sus.length ? "product code changed in " + hash(e.sus) : "none changed product code"}`);
+    const s = td(tr, ""), p = h("span", "pill " + (stale ? "stale" : "bad"), null, s); p.append(document.createElement("i"), e.state);
+    if (e.detail) h("div", "", e.detail, s);
+    td(tr, e.end ? "pr" : "pr open", e.end ? "#" + e.end : "not yet");
+    tb.appendChild(tr);
+  });
+  $("ev-h").textContent = `Where a criterion stopped holding · ${events.length} times, ${D.open_events} still open (the table)`;
+
+  const futureDays = D.future.map(f => dayName(f.day)).join(" and ");
+  const cannot = $("cannot"); cannot.replaceChildren();
+  [`A red mark means a check the criterion names stopped passing, or its break on purpose stopped applying. Code that leaves the spec where no test looks is not drawn.`,
+   `A blue mark links a whole pull request to a criterion, as the criterion's Evidence cites it. Nothing says which of its lines serve the criterion.`,
+   `The replay starts at #${D.first_replayed_pr} and runs every criterion at only ${D.all_at.length} merges (${hash(D.all_at)}); at the others it runs the Day's own. So a red mark, and the Stopped count, sit where the replay next looked: ${D.at_all} of the ${events.length} stops were first seen at one of those merges. The count says when a stop was noticed, not which merge caused it.`,
+   `The red band is the window the cause lies in. It is as wide as the gap between two looks, ${D.win.min} to ${D.win.max} merges, and the darker rows only say that product code changed there, not that it broke the criterion. Merges are taken in merge order, which is not always number order.`,
+   D.flap.crit_twice || D.flap.twice ? `${criteria(D.flap.crit_twice)} stopped holding twice, and ${plural(D.flap.twice, "single check")} stopped again after holding. No flapping sign is drawn yet; one would go beside the criterion's number.`
+     : `No criterion, and no single check, stopped holding twice, so there is no flapping sign to draw yet. One would go beside the criterion's number.`,
+   D.future.length ? `${futureDays} ${D.future.length === 1 ? "is an empty dashed column: plan.md lists it" : "are empty dashed columns: plan.md lists them"} and no spec exists, so they have no criteria. ${comma(D.nyf)} replay runs reported "not yet in force", a criterion run at a merge from before its own Day had closed; they are not drawn.`
+     : `${comma(D.nyf)} replay runs reported "not yet in force", a criterion run at a merge from before its own Day had closed; they are not drawn.`,
+   `Once a later criterion replaces one, the replay stops running the old one. Its cell in the strip, and a red line that reaches the bar, show the last state seen, not today's.`,
+   `${comma(D.early_n)} faint marks sit above the steps: a later criterion names a merge from before its own Day. Some are real, a hold citing the merge that built what it guards. Some are a number in the criterion's own wording ("wait: #12") that the dashboard reads as a pull request. The real graph would have to tell them apart.`,
+   `${comma(D.skipped_total)} merges are not drawn: no criterion cites them and they changed no product code (specs, closes, tooling, the dashboard, docs).`]
+    .forEach(t => h("li", "", t, cannot));
+
+  const bm = $("v-merge"), bd = $("v-day"), zs = $("zoom");
+  zs.replaceChildren();
+  h("option", "", "All Days", zs).value = "";
+  D.days.forEach(d => { const t = `${dayName(d.day)}: ${d.title}`; h("option", "", t.length > 58 ? t.slice(0, 57) + "…" : t, zs).value = d.day; });
+  const sync = () => { const z = state.day != null; bm.disabled = bd.disabled = z; bm.setAttribute("aria-pressed", z || state.view === "merge"); bd.setAttribute("aria-pressed", !z && state.view === "day"); tip.hidden = true; draw(); };
+  // a view can be linked (#mrg-day-10, #mrg-merges); the page's address is only read, never written, so the dashboard's own anchors and scroll stay as they are
+  const readHash = () => { const where = typeof location !== "undefined" ? location.hash : ""; const m = /^#mrg-day-(\d+)$/.exec(where), mg = where === "#mrg-merges"; if (!m && !mg) return false; const d = m && +m[1] in dayTitle ? +m[1] : null; state.day = d; state.view = mg ? "merge" : state.view; zs.value = d == null ? "" : d; sync(); return true; };
+  bm.addEventListener("click", () => { state.view = "merge"; sync(); });
+  bd.addEventListener("click", () => { state.view = "day"; sync(); });
+  zs.addEventListener("change", () => { state.day = zs.value === "" ? null : +zs.value; sync(); });
+  // the page's Day buttons zoom the graph to that Day, and "All Days" back out
+  onDay.push(day => { state.day = day != null && day in dayTitle ? day : null; zs.value = state.day == null ? "" : state.day; sync(); });
+  if (win) win.addEventListener("hashchange", readHash);
+  if (!readHash()) sync();
+}
+
 function draw(M, DATA) {
   const $ = id => document.getElementById(id);
   const put = (id, ...kids) => { const box = $(id); box.replaceChildren(...kids.flat(Infinity).filter(c => c != null && c !== false)); return box; };
@@ -2149,6 +2509,14 @@ function draw(M, DATA) {
     const plain = list => list.map(([b, text]) => h("li", null, h("b", null, rich(b)), rich(text)));
     put("gene-expected", plain(m.expected)); put("gene-bends", plain(m.bends));
   });
+
+  /* The merge graph, in graph 6's place: the merges against the criteria they give evidence to */
+  {
+    const m = M.mrg, failed = e => { put("mrg-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`mrg: ${e}`); };
+    if (m.error) failed(m.error);
+    else if (m.empty) put("mrg-scroll", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty)));
+    else try { mergeDraw(m, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
+  }
 
   graph("g12", m => {
     if (m.empty) { put("g12-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }

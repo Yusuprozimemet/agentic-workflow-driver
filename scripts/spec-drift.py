@@ -75,7 +75,7 @@ from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
-from spec_drift_views import criterion_states, gene
+from spec_drift_views import criterion_states, gene, merge_graph
 from spec_drift_score import quality_score
 
 
@@ -258,6 +258,7 @@ def main():
                     meta=dict(caveats=CAVEATS + [note] * bool(note), provenance=provenance(),
                               break_line_from_pr=BREAK_LINE_FROM_PR, project=project_name(), repo_url=repo_url(),
                               phases=phases(plan), stops=stops(plan), where=where_rows(plan, spec_days)))
+        real["merge_graph"] = merge_graph(real)
         real["score"] = quality_score(real)
         if args.build:
             # The re-check rows are on the data branch, every other file the panel quotes on main.
