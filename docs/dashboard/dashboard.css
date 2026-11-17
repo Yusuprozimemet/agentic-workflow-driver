@@ -1649,3 +1649,217 @@ footer { font-size: 12.5px; color: var(--muted); }
 /* the exact numbers: one line per cell, and the table scrolls sideways in its own box on a phone */
 #act .exact .scroll-x{max-width:100%;overflow-x:auto}
 #act .exact th,#act .exact td{white-space:nowrap}
+
+/* Graph 11 as reflex arcs. Every rule is under #rfx; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
+#rfx{--shadow:rgba(14,17,22,.16);gap:10px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #rfx{--shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #rfx{--shadow:rgba(0,0,0,.5)}
+
+#rfx .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:12px 0 0}
+#rfx h3{font:600 15px/1.25 var(--display);margin:0 0 8px;text-wrap:balance}
+
+/* the line of figures: the number, and beside it what it counts */
+#rfx .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px 22px;border-block:1px solid var(--line);padding:9px 0}
+#rfx .figs>div{min-width:0;display:flex;align-items:flex-start;gap:10px}
+#rfx .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:2px}
+#rfx .figs .num small{font:500 12px/1 var(--sans);color:var(--muted);margin-left:4px}
+#rfx .figs .txt{min-width:0}
+#rfx .figs .what{display:block;font-weight:600;color:var(--ink);line-height:1.3}
+#rfx .figs .sub{display:block;font:400 12px/1.35 var(--sans);color:var(--muted)}
+
+/* the short key over the figure */
+#rfx .keys{display:flex;flex-wrap:wrap;align-items:center;gap:3px 16px;margin:0;font-size:12px;color:var(--ink-2)}
+#rfx .keys span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+#rfx .keys svg,#rfx .lg svg{flex:none;overflow:visible}
+@media (max-width:640px){#rfx .keys span{white-space:normal}}
+
+/* the long key, folded */
+#rfx .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:12px 0 0;font-size:12.5px;color:var(--ink-2)}
+#rfx .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#rfx .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#rfx .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#rfx .lg dd span{display:inline-flex;align-items:center;gap:7px}
+@media (max-width:640px){#rfx .lg{grid-template-columns:1fr;gap:2px 0}#rfx .lg dd{margin-bottom:10px}}
+#rfx .read{margin:10px 0 0;max-width:860px;font-size:13.5px;color:var(--ink-2)}
+
+/* the figure */
+#rfx .scroll{overflow-x:auto;min-width:0}
+#rfx .fig{display:block;width:100%;min-width:1198px;height:auto}
+#rfx .fig text{font-family:var(--sans)}
+#rfx .t-hd{font:600 10px var(--sans);fill:var(--ink-2)}
+#rfx .t-bio{font:500 9px var(--mono);letter-spacing:.07em;fill:var(--muted)}
+#rfx .t-who{font:600 12px var(--sans);fill:var(--ink)}
+#rfx .t-lab{font:600 12px var(--sans);fill:var(--ink)}
+#rfx .t-sub{font:400 9.5px var(--sans);fill:var(--muted)}
+#rfx .t-go{font:500 9.5px var(--sans);fill:var(--ink-2);text-anchor:end;paint-order:stroke;stroke:var(--wash);stroke-width:4px;stroke-linejoin:round}
+#rfx .t-end{font:600 11px var(--sans);fill:var(--ink)}
+#rfx .t-l2{font:500 9.5px var(--sans);fill:var(--ink-2)}
+#rfx .t-none{font:400 9.5px var(--sans);fill:var(--muted);text-anchor:middle}
+#rfx .x-band{fill:var(--wash);stroke:var(--axis);stroke-width:1}
+#rfx .x-track{fill:none;stroke:var(--line);stroke-width:1}
+#rfx .x-nerve{fill:none;stroke:var(--s3);stroke-width:1.6;stroke-linecap:round}
+#rfx .x-nerve.skip{stroke:var(--s2);stroke-width:1.2;stroke-dasharray:1.5 4}
+#rfx .x-nerve.await{stroke:var(--pending);stroke-dasharray:4 3}
+#rfx .x-guide{fill:none;stroke:var(--s2);stroke-width:1;stroke-dasharray:.1 4;stroke-linecap:round}
+#rfx .x-stim{fill:var(--s3)}
+#rfx .x-ses{fill:var(--s3)}
+#rfx .x-fix{fill:var(--repair)}
+#rfx .x-fixn{font:600 9px var(--mono);fill:#0b0b0b;text-anchor:middle}
+#rfx .x-crash{fill:var(--card);stroke:var(--broken);stroke-width:1.6}
+#rfx .x-crashx{fill:none;stroke:var(--broken);stroke-width:1.6;stroke-linecap:round}
+#rfx .x-halo{fill:none;stroke:var(--card);stroke-width:5}
+#rfx .x-br{fill:none;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+#rfx .x-br.maint{stroke:var(--bar)}
+#rfx .x-br.fault{stroke:var(--broken);stroke-dasharray:5 3}
+#rfx .x-term.maint,#rfx .x-fin.maint{fill:var(--bar)}
+#rfx .x-term.fault,#rfx .x-fin.fault{fill:var(--broken)}
+#rfx .x-fin.merged{fill:var(--proven)}
+#rfx .x-fin.fixed{fill:var(--repair)}
+#rfx .x-fin.still{fill:var(--card);stroke:var(--pending);stroke-width:1.6}
+#rfx .x-pill{fill:var(--unproven);stroke:var(--proven);stroke-width:1.2}
+#rfx .x-pill.await{fill:var(--card);stroke:var(--pending);stroke-dasharray:3 2}
+#rfx .x-pilln{font:500 9.5px var(--mono);fill:var(--ink);text-anchor:middle}
+#rfx .x-go{fill:var(--bar);stroke:var(--bar);stroke-width:1.2;stroke-linejoin:round}
+#rfx .x-go.await{fill:var(--card)}
+#rfx .x-l2{fill:none;stroke:var(--s2);stroke-width:1}
+#rfx .x-l2.run{fill:var(--proven);stroke:var(--proven)}
+#rfx .hit{fill:var(--ink);fill-opacity:0}
+#rfx .hitl{fill:none;stroke:var(--ink);stroke-opacity:0;stroke-width:9;pointer-events:stroke}
+#rfx .fig .b{cursor:default}
+#rfx .fig .b:focus{outline:none}
+#rfx .fig .b:hover .hit{fill-opacity:.07}
+#rfx .fig .b:hover .hitl{stroke-opacity:.08}
+#rfx .fig .b:focus-visible .hit{fill-opacity:.07;stroke:var(--link);stroke-width:1.6}
+#rfx .fig .b:focus-visible .hitl{stroke:var(--link);stroke-opacity:.3;stroke-width:7}
+#rfx .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* the folded lists */
+#rfx .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px 32px;margin-top:12px}
+#rfx .cols>div{min-width:0}
+#rfx .finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+#rfx .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#rfx .finds li.good{border-left-color:var(--proven)}
+#rfx .finds li.fault{border-left-color:var(--broken)}
+#rfx .finds li.maint{border-left-color:var(--bar)}
+#rfx .finds b,#rfx .plain b{color:var(--ink);font-weight:600}
+#rfx .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#rfx #rfx-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#rfx #rfx-tip[hidden]{display:none}
+#rfx #rfx-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#rfx #rfx-tip .l{margin-top:4px}
+#rfx #rfx-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2);overflow-wrap:anywhere}
+
+/* "How this works" as one protein followed through a cell. Every rule is under #cel; the colours are the dashboard's tokens, and only the one it lacks is defined here. */
+#cel{--cel-shadow:rgba(14,17,22,.16)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #cel{--cel-shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #cel{--cel-shadow:rgba(0,0,0,.5)}
+
+#cel .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:10px 0 0}
+#cel h3{font:600 16px/1.25 var(--display);margin:0;text-wrap:balance}
+#cel .k-doc{--c:var(--spec)}#cel .k-try{--c:var(--code)}#cel .k-after{--c:var(--ink)}
+
+/* the line of figures */
+#cel .figs{display:grid;grid-template-columns:minmax(0,2.3fr) repeat(3,minmax(0,1fr));gap:12px 26px;border-block:1px solid var(--line);padding:12px 0}
+#cel .figs>div{min-width:0}
+#cel .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#cel .figs .what{font-weight:600;margin-top:6px;color:var(--ink);overflow-wrap:anywhere}
+#cel .figs .wide .what{font-size:13px;line-height:1.4}
+#cel .figs .sub{display:block;font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:2px 0 0}
+#cel .figs .wide .sub{font:400 11.5px/1.5 var(--mono)}
+@media (max-width:900px){#cel .figs{grid-template-columns:repeat(3,minmax(0,1fr))}#cel .figs .wide{grid-column:1/-1}}
+@media (max-width:520px){#cel .figs{grid-template-columns:1fr}}
+
+/* the key, and the longer legend in the fold */
+#cel .key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 18px;font-size:12.5px;color:var(--ink-2)}
+#cel .key span{display:inline-flex;align-items:center;gap:7px}
+#cel .key svg,#cel .lg svg{flex:none;overflow:visible}
+#cel .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#cel .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#cel .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#cel .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#cel .lg dd span{display:inline-flex;align-items:center;gap:7px}
+#cel .lg dd span.tx{display:inline}
+@media (max-width:640px){#cel .lg{grid-template-columns:1fr;gap:2px 0}#cel .lg dd{margin-bottom:10px}}
+
+/* the figure */
+#cel .scroll{overflow-x:auto;min-width:0}
+#cel .fig{display:block;width:100%;min-width:1120px;height:auto}
+#cel .fig text{font-family:var(--sans)}
+#cel .cellb{fill:none;stroke:var(--s3);stroke-width:1.4}
+#cel .mem-c{fill:none;stroke:var(--s3);stroke-width:1.2;stroke-dasharray:1 3.4;stroke-linecap:round}
+#cel .nuc{fill:var(--wash);stroke:var(--s3);stroke-width:1.2;stroke-dasharray:7 4}
+#cel .wipe{fill:var(--card)}
+#cel .pore{fill:var(--card);stroke:var(--s3);stroke-width:1.2}
+#cel .way{stroke:var(--s3);stroke-width:2.2;fill:none}
+#cel .head{fill:var(--s3)}
+#cel .back{fill:none;stroke:var(--s3);stroke-width:1.4;stroke-dasharray:4 3}
+#cel .who{fill:var(--s3)}
+#cel .sw{fill:var(--card);stroke:var(--c);stroke-width:2.2}
+#cel .chk{fill:var(--s4)}
+#cel .ribo{fill:var(--s1);stroke:var(--s3);stroke-width:1.2}
+#cel .pill{fill:var(--card);stroke:var(--c);stroke-width:2.2}
+#cel .no{fill:var(--card);stroke:var(--c);stroke-width:1.8}
+#cel .fr{fill:none;stroke:none}
+#cel .here{stroke:none;stroke-width:3.4;stroke-linecap:round}
+#cel .hit{fill:#000;fill-opacity:0;stroke:none}
+#cel path.hit{fill:none;stroke:#000;stroke-opacity:0;stroke-width:14}
+#cel .t-nm{font:600 10.5px var(--sans);fill:var(--ink)}
+#cel .t-no{font:600 10px var(--mono);fill:var(--ink)}
+#cel .t-bio{font:400 9.5px var(--mono);letter-spacing:.02em;fill:var(--muted);text-transform:none}
+#cel .t-g{font:600 10.5px var(--sans);fill:var(--ink-2)}
+#cel .t-lp{font:500 10.5px var(--sans);fill:var(--ink-2)}
+#cel .t-reg{font:600 10px var(--mono);letter-spacing:.07em;fill:var(--ink-2)}
+#cel .t-reg .t-bio{font-weight:400;letter-spacing:.02em}
+#cel .fig .b{cursor:default}
+#cel .fig .st{cursor:pointer}
+#cel .fig .b:focus{outline:none}
+#cel .fig .st:hover .pill{fill:var(--wash)}
+#cel .fig .st[aria-pressed="true"] .pill{fill:var(--wash);stroke-width:3.4}
+#cel .fig .st[aria-pressed="true"] .no{fill:var(--ink);stroke:var(--ink)}
+#cel .fig .st[aria-pressed="true"] .t-no{fill:var(--card)}
+#cel .fig .st[aria-pressed="true"] .here{stroke:var(--c)}
+#cel .fig .st:focus-visible .fr{stroke:var(--link);stroke-width:2}
+#cel .fig .gt:focus-visible>.hit{stroke:var(--link);stroke-width:2}
+#cel .fig .gt:hover>.hit{fill-opacity:.05}
+#cel .fig .lp:hover .back,#cel .fig .lp:focus-visible .back{stroke:var(--ink);stroke-width:2}
+#cel .fig .lp:hover .t-lp,#cel .fig .lp:focus-visible .t-lp{fill:var(--ink)}
+#cel .fig .lp:focus-visible .t-lp{text-decoration:underline}
+#cel .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* the chosen station's text */
+#cel .panes{background:var(--wash);border-radius:10px;padding:14px 18px;min-width:0;min-height:292px}
+#cel .pane{display:grid;grid-template-columns:minmax(0,490px) minmax(0,1fr);gap:10px 28px;align-items:start}
+#cel .pane[hidden]{display:none}
+#cel .say,#cel .real{display:grid;gap:9px;align-content:start;min-width:0}
+#cel .say{font-size:13.5px;color:var(--ink-2)}
+#cel .say strong,#cel .say em{color:var(--ink)}
+#cel .say ul{margin:0;padding-left:18px;display:grid;gap:5px}
+#cel .kicker{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);font-weight:600;border-left:4px solid var(--c);padding-left:8px}
+#cel .pane h3{font-size:19px;margin-top:-4px}
+#cel .line{color:var(--ink);font-weight:500;margin-top:-6px}
+#cel .foot{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 28px;border-top:1px solid var(--axis);padding-top:8px}
+#cel .next{font-size:12.5px;color:var(--ink-2);flex:1 1 420px;min-width:0}
+#cel .next>span{font:500 10.5px/1.6 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:8px}
+#cel .next b{color:var(--ink);font-weight:600}
+#cel .links{display:flex;flex-wrap:wrap;gap:4px 18px}
+#cel .real:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+#cel .real>p{font-size:13.5px;color:var(--ink-2)}
+#cel .gap{display:block;padding:8px 10px;border:2px dashed var(--repair);border-radius:6px;font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+@media (max-width:760px){#cel .pane{grid-template-columns:minmax(0,1fr)}}
+
+/* the two folded parts */
+#cel .more{display:grid;gap:14px;padding-top:10px;max-width:980px}
+#cel .more>p{font-size:13.5px;color:var(--ink-2)}
+#cel .more h3{font-size:15px}
+#cel .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px 32px;padding-top:10px}
+#cel .cols>div{min-width:0;display:grid;gap:10px;align-content:start}
+#cel .finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#cel .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2);overflow-wrap:anywhere}
+#cel .finds b,#cel .plain b{color:var(--ink);font-weight:600}
+#cel .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#cel #cel-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--cel-shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#cel #cel-tip[hidden]{display:none}
+#cel #cel-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#cel #cel-tip .l{margin-top:4px}

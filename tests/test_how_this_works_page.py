@@ -10,6 +10,13 @@ from pathlib import Path
 PAGE = Path(__file__).resolve().parent.parent / "docs" / "dashboard"
 
 
+# The walk-through builds nodes, not HTML: a document whose nodes print as tags around their escaped text.
+DOCUMENT = """
+const document = { createElement: tag => ({ tag, kids: [], style: {}, setAttribute() {}, append(...c) { this.kids.push(...c); }, set className(v) {} }) };
+const html = n => typeof n === "string" ? n.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : `<${n.tag}>${n.kids.map(html).join("")}</${n.tag}>`;
+"""
+
+
 class PageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -36,18 +43,20 @@ class PageTest(unittest.TestCase):
         code = "\n".join(
             [
                 part(r"^const esc = .*?$"),
+                DOCUMENT,
+                part(r"^function h\(.*?^}$"),
                 part(r"^const howHas = .*?$"),
-                part(r"^function howMissing\(.*?^}$"),
-                part(r"^function howExcerpt\(.*?^}$"),
+                part(r"^const howMissing = .*?$"),
+                part(r"^const howExcerpt = .*?$"),
                 part(r"^function howRecheck\(.*?^}$"),
             ]
         )
         code += """
-console.log(howRecheck({source: "r", text: {pr: null, checks: []}}, "C1.1"));
+console.log(html(howRecheck({source: "r", text: {pr: null, checks: []}}, "C1.1")));
 console.log("---");
-console.log(howRecheck({source: "r", text: {pr: 7, checks: [{check: "T.a", state: "pass"}]}}, "C1.1"));
+console.log(html(howRecheck({source: "r", text: {pr: 7, checks: [{check: "T.a", state: "pass"}]}}, "C1.1")));
 console.log("---");
-console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "C1.1"));
+console.log(html(howRecheck({source: "r", missing: "the file is missing or empty"}, "C1.1")));
 """
         out = subprocess.run(
             ["node", "-e", code], capture_output=True, text=True, encoding="utf-8", check=True
@@ -89,17 +98,19 @@ console.log(howRecheck({source: "r", missing: "the file is missing or empty"}, "
         code = "\n".join(
             [
                 part(r"^const esc = .*?$"),
+                DOCUMENT,
+                part(r"^function h\(.*?^}$"),
                 part(r"^const howHas = .*?$"),
-                part(r"^function howMissing\(.*?^}$"),
-                part(r"^function howExcerpt\(.*?^}$"),
+                part(r"^const howMissing = .*?$"),
+                part(r"^const howExcerpt = .*?$"),
             ]
         )
         code += """
-console.log(howExcerpt({source: "plan.md", missing: "the file is missing or empty"}, "A caption"));
+console.log(html(howExcerpt({source: "plan.md", missing: "the file is missing or empty"}, "A caption")));
 console.log("---");
-console.log(howExcerpt(undefined, "Another caption"));
+console.log(html(howExcerpt(undefined, "Another caption")));
 console.log("---");
-console.log(howExcerpt({source: "plan.md", text: "<kept>"}, "Found"));
+console.log(html(howExcerpt({source: "plan.md", text: "<kept>"}, "Found")));
 """
         out = subprocess.run(
             ["node", "-e", code], capture_output=True, text=True, check=True
