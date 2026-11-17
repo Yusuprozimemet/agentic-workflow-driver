@@ -35,7 +35,7 @@
     <p class="now" id="now">Loading the latest data…</p>
     <section class="graph" id="whr" aria-labelledby="whr-h" hidden>
       <div class="graph-head">
-        <p class="graph-n">Where we are · the old tiles are folded below</p>
+        <p class="graph-n">Where we are · the plan as a ring</p>
         <h2 id="whr-h">Where we are</h2>
         <p class="graph-say">Read the ring clockwise from the top: one segment for each Day, a gate at each stop, a marker where the work is. Click a Day to light it in every graph.</p>
       </div>
@@ -61,33 +61,13 @@
       </div>
       <div id="whr-tip" hidden></div>
     </section>
-    <details class="exact mock-top" id="where-fold" hidden>
-      <summary>Where we are as it was, folded: a tile per Day; its tiles still light every graph</summary>
-    <section class="where" id="where" aria-labelledby="where-h" hidden>
-      <h2 id="where-h">Where we are</h2>
-      <p class="graph-say">Rebuilt after every merge from the repository itself: the Day in progress, the next step, and the Days <code>plan.md</code> names ahead. Click a Day to see what it is and to highlight it in every graph.</p>
-      <div class="where-cols">
-        <div class="where-left">
-          <p class="where-kick" id="where-kick"></p>
-          <p class="where-count" id="where-count"></p>
-          <div class="where-next"><p class="where-kick">Next step</p><p class="where-step" id="where-next"></p></div>
-          <p class="where-stop" id="where-stop"></p>
-        </div>
-        <div class="where-right">
-          <div id="where-rows"></div>
-          <p class="where-read" id="where-read" aria-live="polite"></p>
-          <div class="legend where-key" id="where-key"></div>
-        </div>
-      </div>
-    </section>
-    </details>
     <section class="quality" id="quality" aria-label="Quality of the work" hidden>
       <div class="q-top">
         <div class="q-num"><b id="q-n"></b><small id="q-of"></small></div>
         <div class="q-rows" id="q-rows"></div>
       </div>
       <details class="exact"><summary>Exact numbers</summary>
-        <p class="limit">Five parts, each the plain average of the shares counted under it, combined by their geometric mean with no weights, so one weak part pulls the score down more than an average would. Only finished Days count. A part opens the graph that explains it; each Day's score is on its button, each ability's on graph 5. The recipe is <code>scripts/spec_drift_score.py</code>.</p>
+        <p class="limit">Five parts, each the plain average of the shares counted under it, combined by their geometric mean with no weights, so one weak part pulls the score down more than an average would. Only finished Days count. A part opens the graph that explains it; each Day's score is on its button, each ability's on its protein. The recipe is <code>scripts/spec_drift_score.py</code>.</p>
         <div class="scroll-x"><table id="q-table"></table></div>
       </details>
     </section>
@@ -220,7 +200,7 @@
     </svg>open and numbered <span id="rdg-k-num"></span></span>
     </dd>
     </dl>
-    <p class="hint">Point at a cell for its merge and the promises it built; the hand-offs it opened or closed light up, the closed ones drawn only then. Point at a thin stretch for the merges squeezed into it, and at an arc for the hand-off. The graph ends at the next stop: what comes after is not specified, so it gives no percentage of the whole plan.</p>
+    <p class="hint">Point at a cell for its merge and the promises it built; the hand-offs it opened or closed light up and the others fade. Point at a thin stretch for the merges squeezed into it, and at an arc for the hand-off. The graph ends at the next stop: what comes after is not specified, so it gives no percentage of the whole plan.</p>
     <p class="stamp" id="rdg-stamp"></p>
     </div>
     </details>
@@ -303,9 +283,9 @@
   <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, and the promises behind them</small></h2>
 
   <section class="graph" id="prt">
-    <span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
+    <span class="anchor" id="g3"></span><span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
     <div class="graph-head">
-      <p class="graph-n">Graphs 3–5 · drawn as proteins; the old graphs are folded below</p>
+      <p class="graph-n">Graphs 3–5 · drawn as proteins</p>
       <h2>What can the driver do, and can I rely on it?</h2>
       <p class="graph-say">One chain per ability, one cell per promise in the order built, marked by what its test and the replay say.</p>
     </div>
@@ -315,9 +295,9 @@
 <div><p class="graph-say">Each box is one ability, drawn as a protein: a chain with one cell for every promise the specs made for it. Read a chain from the dot, row by row, in the order the promises were built. A filled green cell is a promise that holds and whose test was seen to fail when the code was broken on purpose. The more of a chain is filled, the more you can rely on that ability.</p>
 <dl class="lg">
     <dt>An ability <small>a protein</small></dt>
-    <dd><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>one chain per ability, read from the dot; the same cell size in every box, so a longer chain is a larger protein</span><span><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="40.06 53.41" transform="rotate(-90 11 11)"/></svg>proven, of the promises the last re-check counted: graph 3's ring</span></dd>
+    <dd><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>one chain per ability, read from the dot; the same cell size in every box, so a longer chain is a larger protein</span><span><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="40.06 53.41" transform="rotate(-90 11 11)"/></svg>proven, of the promises the last re-check counted</span></dd>
     <dt>A promise <small>a residue</small></dt>
-    <dd><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg><span><b id="prt-k-proven"></b> holds, and a break on purpose proved its test <em>graph 3 says “Proven”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unproved" x="0.8" y="0.8" width="11.4" height="11.4" rx="3.2"/></svg><span><b id="prt-k-unproven"></b> holds, never seen to fail <em>graph 3 says “Passes, not yet proven”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m norun" x="0.5" y="0.5" width="12" height="12" rx="3.2"/></svg><span><b id="prt-k-skipped"></b> the replay cannot run its check <em>graph 3 says “Not checked here”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unbuilt" x="0.6" y="0.6" width="11.9" height="11.9" rx="3.2"/></svg><span><b id="prt-k-open"></b> written, not built <em>graph 3 says “Left unticked”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m stale" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M6.5 2.9v4.2 M6.5 9.9v.1"/></svg><span><b id="prt-k-repair"></b> its recorded break no longer applies <em>graph 3 says “Needs repair”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m broken" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M3.9 3.9l5.2 5.2 M9.1 3.9l-5.2 5.2"/></svg><span><b id="prt-k-broken"></b> does not hold <em>graph 3 says “Broken”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m replaced" x="0.5" y="0.5" width="12.1" height="12.1" rx="3.2"/></svg><span><b id="prt-k-replaced"></b> replaced by a later promise <em>graph 3 says “Replaced”</em></span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved scar" x="0.7" y="0.7" width="11.7" height="11.7" rx="3.2"/></svg><span><b id="prt-k-back"></b> of the proven are edged: the replay once saw it stop, and it came back <em>graph 3 has no mark for this</em></span></span></dd>
+    <dd><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg><span><b id="prt-k-proven"></b> holds, and a break on purpose proved its test</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unproved" x="0.8" y="0.8" width="11.4" height="11.4" rx="3.2"/></svg><span><b id="prt-k-unproven"></b> holds, never seen to fail</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m norun" x="0.5" y="0.5" width="12" height="12" rx="3.2"/></svg><span><b id="prt-k-skipped"></b> the replay cannot run its check</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unbuilt" x="0.6" y="0.6" width="11.9" height="11.9" rx="3.2"/></svg><span><b id="prt-k-open"></b> written, not built</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m stale" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M6.5 2.9v4.2 M6.5 9.9v.1"/></svg><span><b id="prt-k-repair"></b> its recorded break no longer applies</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m broken" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M3.9 3.9l5.2 5.2 M9.1 3.9l-5.2 5.2"/></svg><span><b id="prt-k-broken"></b> does not hold</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m replaced" x="0.5" y="0.5" width="12.1" height="12.1" rx="3.2"/></svg><span><b id="prt-k-replaced"></b> replaced by a later promise</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved scar" x="0.7" y="0.7" width="11.7" height="11.7" rx="3.2"/></svg><span><b id="prt-k-back"></b> of the proven are edged: the replay once saw it stop, and it came back</span></span></dd>
     <dt>A Day <small>where in the chain</small></dt>
     <dd><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>a wider gap and a small number where the chain passes into a new Day</span><span id="prt-k-all"></span></dd>
     <dt>In real runs <small>the protein at work</small></dt>
@@ -336,36 +316,6 @@
       </div></div>
     </details>
     <div id="prt-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g3-fold">
-    <details class="exact"><summary>Graphs 3 to 5 as they were, folded: one line per ability</summary>
-    <div id="g3">
-    <div class="graph-head">
-      <p class="graph-n">Graphs 3–5</p>
-      <h2>What can the driver do, and can I rely on it?</h2>
-      <p class="graph-say">One line per ability. A line starts on the Day the ability was first built. Each station is that Day's merged pull requests for it, larger for more of them; the dots under a station are the promises they made, coloured by the state the last re-check found them in. A promise belongs to the ability its pull request grew. "Between Days" holds pull requests tagged with an ability outside any Day's spec: tooling and dashboard work, which grew it and made no promise. The ring at the end of a line is how many of its re-checked promises are proven. Lines are coloured only to tell them apart; state is only ever on the dots.</p>
-    </div>
-    <div class="legend" id="g3-key"></div>
-    <div class="scroll-x" id="g3-plot"></div>
-    <div class="trust" id="g3-trust">
-      <div>
-        <p class="graph-say small" id="g3-hist-say"></p>
-        <div class="strip" id="g3-hist"></div>
-      </div>
-      <p class="trust-n" id="g3-hist-n"></p>
-    </div>
-    <div class="readout" id="g3-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary>
-      <p class="graph-say small">Pull requests, by ability and Day</p>
-      <div class="scroll-x"><table id="g3-table"></table></div>
-      <p class="graph-say small">Promises, by Day and state</p>
-      <div class="scroll-x"><table id="g4-table"></table></div>
-      <p class="graph-say small">Promises, by ability and state</p>
-      <div class="scroll-x"><table id="g5-table"></table></div>
-    </details>
-  </div>
-    </details>
   </section>
 
   <h2 class="chapter">Is the way of working sound?<small>plan against spec, spec against code, and what the checks catch</small></h2>
@@ -604,8 +554,9 @@
   <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
 
   <section class="graph" id="atp" data-by="kind" data-grp="date">
+    <span class="anchor" id="g8"></span>
     <div class="graph-head">
-      <p class="graph-n">Graph 8 · drawn as an energy budget; the old graph 8 is folded below</p>
+      <p class="graph-n">Graph 8 · drawn as an energy budget</p>
       <h2>What did it cost?</h2>
       <p class="graph-say">One bead is $2 of tokens at list prices, stacked by date: round beads kept the conversation in mind, square ones made something new.</p>
     </div>
@@ -646,26 +597,10 @@
     <div id="atp-tip" hidden></div>
   </section>
 
-  <section class="graph mock-fold" id="g8-fold">
-    <details class="exact"><summary>Graph 8 as it was, folded: dollars by date</summary>
-    <div id="g8">
-      <div class="graph-head">
-        <p class="graph-n">Graph 8</p>
-        <h2>What did it cost?</h2>
-        <p class="graph-say" id="g8-say">Dollars of tokens on each date with a session.</p>
-      </div>
-      <div class="legend" id="g8-key"></div>
-      <div class="bar-plot" id="g8-plot"></div>
-      <p id="g8-byday"></p>
-      <div class="readout tall" id="g8-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g8-table"></table></div></details>
-    </div>
-    </details>
-  </section>
-
   <section class="graph" id="rng">
+    <span class="anchor" id="g9"></span>
     <div class="graph-head">
-      <p class="graph-n">Graph 9 · drawn as growth rings; the old graph 9 is folded below</p>
+      <p class="graph-n">Graph 9 · drawn as growth rings</p>
       <h2>Where did the work go?</h2>
       <p class="graph-say">Each ring is a Day, as wide as the lines its pull requests changed, and its bands show what kind of file they were in.</p>
     </div>
@@ -686,16 +621,16 @@
     <div class="rng-scroll" id="rng-scroll"><svg class="rng-fig" id="rng-fig" viewBox="0 0 1198 379" role="group"></svg></div>
     <p class="rng-hint">Point at a ring, or reach it with the Tab key, for the Day, its pull requests and its lines by kind. Both strips share one scale: a ring 1 px wide is about <span id="rng-scale"></span> lines. A Day's button above dims every ring not of that Day.</p>
     <details class="exact"><summary>How to read it</summary>
-      <p class="rng-read">Read each strip from the left, the first Day, to the right, today. A wide ring is a heavy Day: its width is the lines added plus the lines deleted in the Day's own merged pull requests. Inside a ring the bands are stacked in one fixed order, and a band's height is that kind's share of the ring, so a band's area is its lines. The lower strip is the work that belongs to no Day, mostly the dashboard and the tooling. It is placed as graph 9 places it, at the Day that was open, or had last closed, when it merged, and it counts in no Day's size. The two columns at the top right add each strip up. Why rings: a ring records how much a tree grew in one season and cannot be changed afterwards, as a merged Day cannot.</p>
+      <p class="rng-read">Read each strip from the left, the first Day, to the right, today. A wide ring is a heavy Day: its width is the lines added plus the lines deleted in the Day's own merged pull requests. Inside a ring the bands are stacked in one fixed order, and a band's height is that kind's share of the ring, so a band's area is its lines. The lower strip is the work that belongs to no Day, mostly the dashboard and the tooling. It is placed at the Day that was open, or had last closed, when it merged, and it counts in no Day's size. The two columns at the top right add each strip up. Why rings: a ring records how much a tree grew in one season and cannot be changed afterwards, as a merged Day cannot.</p>
       <dl class="rng-lg">
         <dt>A ring <small>a growth ring: one season's wood</small></dt>
         <dd><span><svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true"><rect class="k-prod" width="24" height="5"/><rect class="k-test" y="5" width="24" height="8"/><rect class="k-spec" y="13" width="24" height="5"/><path class="late" d="M24.6 0V18"/></svg>the merged pull requests of one Day, by the Day their branch names. The dark line at its right edge is where the Day ends</span></dd>
         <dt>Its width <small>ring width: how much the tree grew</small></dt>
         <dd><span>lines added plus lines deleted, printed above the ring. Files a tool writes (the dashboard's count files, lock files, screenshots) and binary files are left out</span></dd>
         <dt>Its bands <small>tissue: what the season's growth was made of</small></dt>
-        <dd><span><i class="rng-sw k-prod"></i>production code: the driver itself, and any file no other kind names</span><span><i class="rng-sw k-test"></i>tests</span><span><i class="rng-sw k-spec"></i>specs: the plan and the Days' specs</span><span><i class="rng-sw k-context"></i>agent context: other Markdown, the agents' briefs and settings, the docs</span><span><i class="rng-sw k-tooling"></i>tooling: scripts, workflows, the dashboard</span><span>Always in this order, top to bottom. Graph 9 counts specs and agent context as one kind; here they are two bands of one hue. A band tall enough carries its share.</span></dd>
+        <dd><span><i class="rng-sw k-prod"></i>production code: the driver itself, and any file no other kind names</span><span><i class="rng-sw k-test"></i>tests</span><span><i class="rng-sw k-spec"></i>specs: the plan and the Days' specs</span><span><i class="rng-sw k-context"></i>agent context: other Markdown, the agents' briefs and settings, the docs</span><span><i class="rng-sw k-tooling"></i>tooling: scripts, workflows, the dashboard</span><span>Always in this order, top to bottom. Specs and agent context are two bands of one hue. A band tall enough carries its share.</span></dd>
         <dt>Hatched rings <small>no counterpart: a tree grows nothing between its rings</small></dt>
-        <dd><span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect class="k-tooling" width="18" height="14" rx="1"/><rect class="over" width="18" height="14" rx="1" fill="url(#rng-hatch)"/></svg>pull requests on no Day's branch. Graph 9 draws them as a paler bar beside the Day. A ring too thin for a label is named under the strip</span></dd>
+        <dd><span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect class="k-tooling" width="18" height="14" rx="1"/><rect class="over" width="18" height="14" rx="1" fill="url(#rng-hatch)"/></svg>pull requests on no Day's branch. A ring too thin for a label is named under the strip</span></dd>
         <dt>The two ends <small>pith and bark</small></dt>
         <dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><circle class="pith" cx="3" cy="7" r="2.6"/><path class="bark" d="M22 2V12"/></svg>the dot is the pith, the first Day. The thick line is the bark, the last merge counted</span></dd>
       </dl>
@@ -709,22 +644,6 @@
     </details>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="rng-table"></table></div></details>
     <div id="rng-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g9-fold">
-    <details class="exact"><summary>Graph 9 as it was, folded: lines by Day</summary>
-    <div id="g9">
-      <div class="graph-head">
-        <p class="graph-n">Graph 9</p>
-        <h2>Where did the work go?</h2>
-        <p class="graph-say">Lines changed in the merged pull requests of each Day, sorted by what the file is. Files a tool writes (the dashboard's count files, lock files, screenshots) and binary files are left out, so the totals run a little under GitHub's additions plus deletions for the same pull requests.</p>
-      </div>
-      <div class="legend" id="g9-key"></div>
-      <div class="bar-plot" id="g9-plot"></div>
-      <div class="readout tall" id="g9-read" aria-live="polite"></div>
-      <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g9-table"></table></div></details>
-    </div>
-    </details>
   </section>
 
   <section class="graph" id="act">

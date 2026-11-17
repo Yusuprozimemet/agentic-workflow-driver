@@ -133,6 +133,12 @@ def build_rows():
     for i, p in enumerate(merged, 1):
         closed += p["kind"] == "close"
         rows.append(dict(row(i, p), evidence=evidence_at(closed, p)))
+    # the tooling pull request beside Day 6, #119 (verification has it too): it touched a little product code and no
+    # criterion cites it, so the merge graph and the gene each show one merge no criterion cites
+    p = dict(number=max(r["pr"] for r in rows if r["pr"]) + 2, kind="other", title="Tooling: the page build reads the cache once",
+             branch="tooling/page-build-cache", day=6)
+    tool = row(len(rows), p)
+    rows.append(dict(tool, date=rows[-1]["date"], work=dict(tool["work"], prod=6), evidence=rows[-1]["evidence"]))
     return rows
 
 
@@ -210,7 +216,7 @@ ABILITIES = (
 )
 
 
-# What each finished day's promises grew, the first being where graph 5 draws them.
+# What each finished day's promises grew, the first being the chain the proteins draw them in.
 DAY_ABILITIES = {1: ("rehearse",), 2: ("rehearse", "stop"), 3: ("stop",), 4: ("loop",), 5: ("park", "loop")}
 # One made-up defect at each gate: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
 DEFECTS = (
@@ -395,8 +401,9 @@ def demo():
                          breaks="none" if r["kind"] == "spec" else "recorded",
                          pushes=2 if r["kind"] == "code" else 1, failed=1 if r["kind"] == "code" else 0,
                          failed_in=["unit"] if r["kind"] == "code" else [])
-                    for r in merged]
-    verification.append(dict(number=max(r["pr"] for r in merged) + 1, day=None, kind="other", step="tooling",
+                    for r in merged if r["kind"] != "other"]
+    # the tooling pull request, the last merged (Day 6's close, #118, is still open)
+    verification.append(dict(number=next(r["pr"] for r in merged if r["kind"] == "other"), day=None, kind="other", step="tooling",
                              hours=0.75, breaks="recorded", pushes=1, failed=0, failed_in=[]))
 
     def hooks(n):

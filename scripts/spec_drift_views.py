@@ -13,7 +13,7 @@ import datetime
 import math
 import re
 
-# Each replay state, as the group a reader sees it in: dashboard.js's REPLAY_LOOK keeps the same groups, and
+# Each replay state, as the group a reader sees it in: dashboard-reconcile.py's recount keeps the same groups, and
 # tests/test_dashboard_views.py holds the two to each other.
 REPLAY_GROUP = {
     "code broken": "broken",
@@ -57,7 +57,7 @@ def _stops(seen, pr_of):
 
 
 def criterion_states(index, days, replay):
-    """Give each criterion of `index` its `state`, as the page's promise tiles read it; `back`: the replay saw
+    """Give each criterion of `index` its `state`, as the page reads it; `back`: the replay saw
     it stop holding (broken, or needing repair) at an earlier merge, and it holds now; and `seen`: how many merges
     the replay ran it at, the last one's pull request, and each stop (`_stops`)."""
     by_day = {d.get("day"): d for d in days}
@@ -287,6 +287,17 @@ def _merge_crit(c, seen, pr_of):
                 lp=pr_of.get(seen[-1].get("n")) if seen else None, nc=len(seen))
 
 
+def uncited_merges(d):
+    """The merges no criterion cites that changed product code, in merge order: a code or other merge (not a Day's
+    spec or close) with product lines, not a short spec's (a `change/` branch). #235's rule, and the one list the merge
+    graph's "No criterion cites it" rows (`loose`) and the gene's beads are both drawn from: [{pr, title, date, prod}]."""
+    cited = {p for c in d.get("criteria_index") or [] if isinstance(c, dict) for p in c.get("prs") or []}
+    rows = sorted((r for r in d.get("rows") or [] if r.get("pr")), key=lambda r: r.get("i", 0))
+    return [dict(pr=r["pr"], title=r.get("title", ""), date=r.get("date", ""), prod=(r.get("work") or {}).get("prod", 0))
+            for r in rows if r["pr"] not in cited and (r.get("work") or {}).get("prod", 0) > 0
+            and r.get("kind") in ("code", "other") and not (r.get("branch") or "").startswith("change/")]
+
+
 def merge_graph(d):
     """The merge graph: every merge a criterion cites, or that changed product code and none cites, as rows over the
     spec's criteria, one stripe each; the stops the replay saw, each with its suspect window; and everything the page
@@ -312,11 +323,11 @@ def merge_graph(d):
     # the stop would have no row to sit in
     stop_at, held_at = {e["pr"] for e in events}, {e["end"] for e in events}
     seen = (stop_at | held_at) - {None}
-    merges, skipped = [], {}
+    merges, skipped, uncited = [], {}, uncited_merges(d)
+    loose_prs = {u["pr"] for u in uncited}
     for r in rows:
         w = r.get("work") or {}
-        loose = (r["pr"] not in cited and w.get("prod", 0) > 0 and r.get("kind") in ("code", "other")
-                 and not (r.get("branch") or "").startswith("change/"))
+        loose = r["pr"] in loose_prs
         if r["pr"] not in cited and r["pr"] not in seen and not loose:
             skipped[r.get("kind")] = skipped.get(r.get("kind"), 0) + 1
             continue
@@ -377,7 +388,7 @@ def merge_graph(d):
                win=dict(min=min(wins), max=max(wins)) if wins else dict(min=0, max=0),
                flap=dict(_flap(followed), crit_twice=sum(1 for k in per.values() if k > 1)),
                early_n=sum(len(m["early"]) for m in merges), open_events=sum(1 for e in events if not e["end"]),
-               nocite=[m["pr"] for m in merges if m["nocite"]])
+               nocite=[m["pr"] for m in merges if m["nocite"]], uncited=uncited)
     out["all"] = _merge_view(crit, merges, events, finds, list(range(len(crit))), [m["pr"] for m in merges], loose,
                              future)
     out["by_day"] = {}
@@ -443,8 +454,7 @@ def _stamp(d):
 
 def where_ring(d):
     """"Where we are" as a ring: one segment per Day plan.md numbers, in its order and its phases, a gate at each stop
-    and the place the work stands, with everything the ring and its lists print. A Day's state is the tiles' (the
-    page's whereNow): closed, closed with a promise not ticked, in progress, spec written, next, or provisional; a
+    and the place the work stands, with everything the ring and its lists print. A Day's state is one of: closed, closed with a promise not ticked, in progress, spec written, next, or provisional; a
     phase with no Day numbered yet is one segment, a stub."""
     meta, now = d.get("meta") or {}, d.get("now") or {}
     where = meta.get("where") or {}
@@ -737,7 +747,7 @@ def gel(d):
     )
 
 
-# The replay's states that count as re-checked: graph 3's ring and its trust strip count the same five.
+# The replay's states that count as re-checked: the proteins' proven of re-checked counts these five.
 RECHECKED = ("proven", "unproven", "repair", "broken", "skipped")
 
 # What the driver's run log shows of each ability in use. This is the maintainer's mapping, as the mockup at #228
@@ -791,11 +801,16 @@ def _tally(cells):
     return out
 
 
+def _per_day(cells):
+    """[[day, criteria]] for each Day that wrote one of `cells`, in Day order: what the page says of a chosen Day."""
+    days = sorted({x["day"] for x in cells if x.get("day") is not None})
+    return [[day, sum(1 for x in cells if x.get("day") == day)] for day in days]
+
+
 def protein(d):
     """Graphs 3 to 5 as proteins: one chain per ability, one cell per criterion in the order built (its Day, then its
     number), each in the state criterion_states gave it; the criteria that name no ability make a chain of their own.
-    A criterion is drawn once, under the first ability it names (the folded graph 5's rule, so the two count the
-    same cells per ability); naming none, it sits in the chain of its own. `proven` of `rechecked` counts only the states the replay re-checks; a criterion in
+    A criterion is drawn once, under the first ability it names; naming none, it sits in the chain of its own. `proven` of `rechecked` counts only the states the replay re-checks; a criterion in
     force outside them (written and not built, or not re-checked yet) is in `outside`."""
     index = [c for c in d.get("criteria_index") or [] if isinstance(c, dict)]
     us = d.get("user_stories") or {}
@@ -861,6 +876,7 @@ def protein(d):
                 prs=[[day, sorted(by_day[day])] for day in sorted(by_day)],
                 between=sorted(s.get("number") for s in own if s.get("day") is None),
                 run=run(a) if k is not None else None,
+                per_day=_per_day(mine),
             )
         )
     every = [x for list_ in cells.values() for x in list_]
@@ -877,6 +893,7 @@ def protein(d):
         chains=chains,
         counts=n,
         written=len(every),
+        per_day=_per_day(every),
         replaced=n.get("replaced", 0),
         in_force=sum(v for s, v in n.items() if s != "replaced"),
         proven=n.get("proven", 0),
@@ -1218,7 +1235,7 @@ def _budget_missing(d):
 
 def _budget_col(rows, split, beads):
     """One column's figures: its dollars by kind and by who, the beads of each, and its rail (the dollars past 150k;
-    None when no row has the figure, as graph 8 reads a row without it: not known)."""
+    None when no row has the figure: a row without it is not known)."""
     k, w = [0.0] * 4, [0.0] * 5
     for t in rows:
         parts = split[id(t)]
@@ -1266,7 +1283,7 @@ def budget(d):
     total = cost(tokens)
     beads = _round(total / BUDGET_UNIT)
     days = sorted(d.get("days") or [], key=lambda x: x.get("day"))
-    # a column for each date, and the Days worked on it (graph 8's rule: the date is within a Day's `worked`)
+    # a column for each date, and the Days worked on it (a Day is worked on a date within its `worked`)
     dates = sorted({t.get("date") for t in tokens})
     by_date = [[t for t in tokens if t.get("date") == x] for x in dates]
     refused = {}
@@ -1354,8 +1371,8 @@ def budget(d):
     return out
 
 
-# Graph 9 as growth rings (the mockup at #228's rng): the kinds of file, in the bands' order, top to bottom. Graph 9
-# counts specs and agent context as one kind; here they are two bands.
+# Graph 9 as growth rings (the mockup at #228's rng): the kinds of file, in the bands' order, top to bottom. Specs
+# and agent context are two bands.
 RING_KINDS = ("prod", "test", "spec", "context", "tooling")
 
 
@@ -1391,8 +1408,8 @@ def _ring(rows, key, **extra):
 
 def rings(d):
     """Graph 9's lines as growth rings: one ring for each Day, its own pull requests (the Day its branch names), and
-    below, one hatched ring for the work no Day owns, at the Day graph 9 places it beside (`_placed`'s `at`: the
-    furthest Day begun when it merged). Rows before Day 1 began are graph 9's "before Day 1": counted, in no ring.
+    below, one hatched ring for the work no Day owns, at the Day it is placed beside (`_placed`'s `at`: the
+    furthest Day begun when it merged). Rows before Day 1 began are "before Day 1": counted, in no ring.
     Rows in neither (a Day not in the data, or no pull request after Day 1 began) are `unplaced`, counted apart, so
     none vanishes. Every width in lines and every share is counted here; dashboard.js turns lines into px."""
     rows, placed = d.get("rows") or [], _placed(d)

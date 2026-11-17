@@ -1,11 +1,14 @@
 """Hold each new section of the dashboard to the graph it is drawn beside: one line per section, the new total against
-the original's, both read from the page's own model of the data.
+the original's, both read from the page's own model of the data; where the original has left the page, against the
+same figure counted here from the data.
 
     python scripts/dashboard-reconcile.py [spec-drift.json]     # the data spec-drift.py --out wrote
     python scripts/dashboard-reconcile.py --demo                # scripts/demo-data.py's made-up data
 
-The old graphs stay on the page, folded under the new ones, so the two can be reconciled on every build. Prints one
-line per section and exits 1 when any disagrees. Needs node, as the page's model runs in it.
+Graphs 1, 2, 6, 7, 10 and 11 and the how-this-works panel stay on the page, folded under their new drawings, so the two
+can be reconciled on every build. The ring, the proteins, the energy budget and the growth rings have no original on
+the page: each is checked against a recount of the data (days_finished, last_recheck, dollars, lines_placed). Prints
+one line per section and exits 1 when any disagrees. Needs node, as the page's model runs in it.
 """
 import argparse
 import importlib.util
@@ -33,8 +36,77 @@ def model(data):
     return json.loads(out.stdout)
 
 
+# The recounts: four figures counted here from the data as spec-drift.py wrote it, by none of the view functions in
+# spec_drift_views.py, so a section drawn from those is held to something that is not itself.
+FINISHED = ("done", "closed", "cut")
+# The count a replay state goes in; None is counted nowhere. tests/test_dashboard_gap.py holds these keys to the states
+# scripts/replay-history.py writes, and tests/test_dashboard_views.py the groups to spec_drift_views.REPLAY_GROUP.
+REPLAY_GROUP = {"code broken": "broken", "test weakened": "repair", "break no longer applies": "repair",
+                "not runnable": "skipped", "not applicable on this platform": "skipped", "live only": "skipped",
+                "holds, never broken": "unproven", "holds": "proven", "not yet in force": None}
+WORK = ("spec", "context", "prod", "test", "tooling")
+
+
+def days_finished(data):
+    """(finished, numbered): the Days plan.md numbers in a phase that is not cut, and those of them the data has as
+    done, closed or cut. None when the plan lists no phase."""
+    rows = ((data.get("meta") or {}).get("where") or {}).get("rows") or []
+    if not rows:
+        return None
+    by = {d["day"]: d for d in sorted(data.get("days") or [], key=lambda d: d["day"])}
+    numbered = [n for r in rows if not r.get("cut") for n in r.get("days") or []]
+    return sum(1 for n in numbered if n in by and by[n].get("status") in FINISHED), len(numbered)
+
+
+def last_recheck(data):
+    """The newest merge the replay ran on, as {"pr", "proven", "total"}: each criterion not replaced counts in the group
+    of its newest re-check at or before that merge, and one whose state has no group is not counted. None with no merge."""
+    replay = data.get("replay") or {}
+    merges = sorted(replay.get("merges") or [], key=lambda m: m["n"])
+    if not merges:
+        return None
+    replaced = {c["id"] for c in data.get("criteria_index") or [] if c.get("replaced_by")}
+    group = {}
+    for cell in sorted(replay.get("cells") or [], key=lambda c: c["n"]):
+        if cell["n"] <= merges[-1]["n"] and cell["criterion"] not in replaced:
+            group[cell["criterion"]] = REPLAY_GROUP.get(cell["state"])
+    counted = [g for g in group.values() if g]
+    return {"pr": merges[-1]["pr"], "proven": counted.count("proven"), "total": len(counted)}
+
+
+def dollars(data):
+    """Every row of the token counts, summed and rounded to the cent."""
+    return round(sum(t.get("cost") or 0 for t in data.get("tokens") or []), 2)
+
+
+def lines_placed(data):
+    """The lines each merge changed, placed by one rule: a pull request whose branch names a Day is that Day's; any
+    other pull request is outside any Day, beside the furthest Day begun when it merged; a row with no pull request, or
+    merged before any Day began, comes before Day 1. Returns {"days": {day: (lines, spec and agent context)},
+    "beside": {day: lines}, "before": lines}, the Days being the data's own."""
+    order, top = data.get("order") or [], 0
+    rank = lambda d: order.index(d) if d in order else d  # noqa: E731
+    days = {d["day"]: [0, 0] for d in sorted(data.get("days") or [], key=lambda d: d["day"])}
+    beside, before = {}, 0
+    for r in data.get("rows") or []:
+        work = r.get("work") or {}
+        lines = sum(work.get(k) or 0 for k in WORK)
+        own = r.get("own_day") if r.get("pr") and r.get("own_day") is not None else None
+        if own is not None and (not top or rank(own) > rank(top)):
+            top = own
+        if own is not None and own in days:
+            days[own][0] += lines
+            days[own][1] += (work.get("spec") or 0) + (work.get("context") or 0)
+        if own is None and r.get("pr") and top in days:
+            beside[top] = beside.get(top, 0) + lines
+        if own is None and top == 0:
+            before += lines
+    return {"days": {d: tuple(v) for d, v in days.items()}, "beside": beside, "before": before}
+
+
 def gene_line(m):
-    """The gene against graph 12: the same commitments, and the same ones due and named by no criterion in force."""
+    """The gene against graph 12: the same commitments, and the same ones due and named by no criterion in force; and
+    its beads of merges no criterion cites against the merge graph's rows of them."""
     gene, plan = m.get("gene") or {}, m.get("g12") or {}
     if gene.get("error") or plan.get("error"):
         return False, f"gene: not drawn ({gene.get('error') or plan.get('error')})"
@@ -43,10 +115,14 @@ def gene_line(m):
     cols = [c for c in plan["all"] if c["arm"] in ("p", "n")]
     due = sorted(c["key"] for c in cols if c["is"]["due"])
     uncovered, figs = sorted(gene["uncovered"]), sum(f["n"] for f in gene["figs"])
-    agree = gene["total"] == len(cols) == figs and uncovered == due
+    # the beads under its ring against the merge graph's "No criterion cites it" rows
+    beads, rows = len(gene.get("uncited") or []), len(((m.get("mrg") or {}).get("all") or {}).get("loose") or [])
+    agree = gene["total"] == len(cols) == figs and uncovered == due and beads == rows
     return agree, (f"gene: {gene['total']} commitments ({figs} in its classes), {len(uncovered)} uncovered | "
-                   f"graph 12: {len(cols)} commitments, {len(due)} should be covered by now: "
-                   + ("agree" if agree else f"DISAGREE (gene {', '.join(uncovered) or 'none'}; graph 12 {', '.join(due) or 'none'})"))
+                   f"graph 12: {len(cols)} commitments, {len(due)} should be covered by now; "
+                   f"{beads} uncited merges | merge graph: {rows}: "
+                   + ("agree" if agree else "DISAGREE" if beads != rows
+                      else f"DISAGREE (gene {', '.join(uncovered) or 'none'}; graph 12 {', '.join(due) or 'none'})"))
 
 
 # The merge graph's verdict tiles and the promise tiles' states they count: the same criteria in each.
@@ -56,8 +132,8 @@ MERGE_TILES = (("st ok", "hold proved", ("proven",)), ("st un", "hold unproved",
 
 
 def merge_line(m):
-    """The merge graph against the promise tiles (graphs 3 to 5): each verdict tile counts the criteria in the tile
-    states it stands for, and all of them every criterion."""
+    """The merge graph against the page's promise counts (the model's promises key, each criterion in its state): each
+    verdict tile counts the criteria in the states it stands for, and all of them every criterion."""
     g, p = m.get("mrg") or {}, m.get("promises") or {}
     if g.get("error") or p.get("error"):
         return False, f"merge graph: not drawn ({g.get('error') or p.get('error')})"
@@ -74,19 +150,21 @@ def merge_line(m):
                    f"promise tiles: {sum(states.values())} ({say(theirs)}): " + ("agree" if agree else "DISAGREE"))
 
 
-def ring_line(m):
-    """The ring against the old tiles ("Where we are", folded under it): the same Days closed of the same Days
-    numbered; and its promises built against graph 1's (the look-ahead's last column)."""
-    w, tiles, g1 = m.get("whr") or {}, m.get("where") or {}, m.get("g1") or {}
+def ring_line(m, data):
+    """The ring against the Days counted from the data (days_finished): the same Days closed of the same Days numbered;
+    and its promises built against graph 1's (the look-ahead's last column)."""
+    w, g1, days = m.get("whr") or {}, m.get("g1") or {}, days_finished(data)
     if w.get("error") or w.get("empty"):
-        agree = not tiles or bool(tiles.get("error"))
-        return agree, f"where we are: no ring ({w.get('error') or w.get('empty')}) | tiles: " + ("none either: agree" if agree else "DISAGREE")
-    a, b = (re.match(r"(\d+) of (\d+) numbered Days finished", tiles.get("count") or "") or re.match("()()", "")).groups()
+        agree = days is None
+        return agree, (f"where we are: no ring ({w.get('error') or w.get('empty')}) | counted from the data: "
+                       + ("no numbered Day either: agree" if agree else "DISAGREE"))
+    a, b = days or ("", "")
     c, e = (re.match(r"(\d+) of (\d+) promises built", (g1.get("read") or {}).get("t") or "") or re.match("()()", "")).groups()
     ours, theirs = [w["closed"], w["numbered"], w["built"], w["written"]], [a, b, c, e]
-    agree = [str(n) for n in ours] == theirs
+    agree = [str(n) for n in ours] == [str(n) for n in theirs]
     return agree, (f"where we are: ring {w['closed']} of {w['numbered']} Days closed, {w['built']} of {w['written']} promises built | "
-                   f"tiles {a or '?'} of {b or '?'}, look-ahead {c or '?'} of {e or '?'}: " + ("agree" if agree else "DISAGREE"))
+                   f"counted from the data: {'?' if a == '' else a} of {'?' if b == '' else b} Days, look-ahead {c or '?'} of {e or '?'}: "
+                   + ("agree" if agree else "DISAGREE"))
 
 
 def reading_line(m):
@@ -123,28 +201,27 @@ def gel_line(m):
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
-def prt_line(m):
-    """The proteins' headline (proven, of the criteria re-checked) against the trust strip's last column (graph 3's,
-    folded) and the merge graph's verdict tiles. The strip counts at a merge the replay ran on: an older one than the
-    last merge is said, and never agrees."""
-    p, b, g = m.get("prt") or {}, m.get("g4") or {}, m.get("mrg") or {}
-    for x, name in ((p, "proteins"), (b, "trust strip"), (g, "merge graph")):
+def prt_line(m, data):
+    """The proteins' headline (proven, of the criteria re-checked) against the same count made from the data at the
+    newest merge the replay ran on (last_recheck), and against the merge graph's verdict tiles. A re-check older than
+    the last merge is said, and never agrees."""
+    p, g, last = m.get("prt") or {}, m.get("mrg") or {}, last_recheck(data)
+    for x, name in ((p, "proteins"), (g, "merge graph")):
         if x.get("error"):
             return False, f"proteins: not drawn ({name}: {x['error']})"
     if p.get("empty"):
-        agree = not (b.get("hist") or [])
-        return agree, "proteins: no criteria | trust strip: " + ("none either: agree" if agree else "DISAGREE")
-    last = (b.get("hist") or [None])[-1]
+        agree = last is None
+        return agree, "proteins: no criteria | counted from the data: " + ("no re-check either: agree" if agree else "DISAGREE")
     tiles = {t["sw"]: t["n"] for t in (g.get("all") or {}).get("verdict") or []}
     seen = sum(tiles.get(k, 0) for k in ("st ok", "st un", "st bad", "st none"))
     ours = [p["proven"], p["rechecked"], p["rechecked"] + p["counts"].get("unchecked", 0)]
-    strip = [last["counts"]["proven"], last["total"]] if last else [None, None]
-    agree = ours[:2] == strip and [ours[0], ours[2]] == [tiles.get("st ok"), seen]
+    theirs = [last["proven"], last["total"]] if last else [None, None]
+    agree = ours[:2] == theirs and [ours[0], ours[2]] == [tiles.get("st ok"), seen]
     why = ""
     if last and not agree and p.get("last_pr") is not None and last["pr"] < p["last_pr"]:
-        why = f"; the strip's last column is #{last['pr']}, older than the last merge #{p['last_pr']}, and the replay has not run since"
-    return agree, (f"proteins: {ours[0]} of {ours[1]} proven | trust strip at #{last['pr'] if last else '?'}: "
-                   f"{strip[0]} of {strip[1]}, merge graph {tiles.get('st ok', 0)} proven of {seen} in force and built: "
+        why = f"; the last re-check is at #{last['pr']}, older than the last merge #{p['last_pr']}, and the replay has not run since"
+    return agree, (f"proteins: {ours[0]} of {ours[1]} proven | counted from the data at the re-check of #{last['pr'] if last else '?'}: "
+                   f"{theirs[0]} of {theirs[1]}, merge graph {tiles.get('st ok', 0)} proven of {seen} in force and built: "
                    + ("agree" if agree else f"DISAGREE{why}"))
 
 
@@ -168,51 +245,50 @@ def prf_line(m):
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
-def atp_line(m):
-    """The energy budget against graph 8 (folded under it): what it split by kind plus what it could not split is graph
-    8's dollars, to the cent; and the whole beads are the dollars over the unit, rounded, in both views."""
-    a, g8 = m.get("atp") or {}, m.get("g8") or {}
-    if a.get("error") or g8.get("error"):
-        return False, f"budget: not drawn ({a.get('error') or g8.get('error')})"
-    theirs = round(sum(b.get("total") or 0 for b in g8.get("bars") or []), 2)
+def atp_line(m, data):
+    """The energy budget against the dollars counted from the data (dollars): what it split by kind plus what it could
+    not split is every row of the token counts, to the cent; and the whole beads are the dollars over the unit,
+    rounded, in both views."""
+    a, theirs = m.get("atp") or {}, dollars(data)
+    if a.get("error"):
+        return False, f"budget: not drawn ({a['error']})"
     if a.get("empty"):
-        return theirs == 0, f"budget: not drawn | graph 8: ${theirs:.2f}: " + ("agree" if theirs == 0 else "DISAGREE")
+        return theirs == 0, f"budget: not drawn | counted from the data: ${theirs:.2f}: " + ("agree" if theirs == 0 else "DISAGREE")
     split, rest = round(sum(a["kinds"][:3]), 2), round(a["kinds"][3], 2)
     ours, unit, beads = round(sum(a["kinds"]), 2), a["unit"], a["beads"]
     views = [sum(c["b"] for c in a["cols"][v]) for v in ("date", "day")]
     agree = ours == theirs == round(a["total"], 2) and views == [beads, beads] and beads == int(a["total"] / unit + 0.5)
-    return agree, (f"budget: split ${split:.2f} + not split ${rest:.2f} = ${ours:.2f} | graph 8: ${theirs:.2f}: "
+    return agree, (f"budget: split ${split:.2f} + not split ${rest:.2f} = ${ours:.2f} | counted from the data: ${theirs:.2f}: "
                    + ("agree" if agree else f"DISAGREE (beads by date {views[0]}, by Day {views[1]})")
                    + f"; {beads} beads x ${unit} = ${beads * unit:.2f} against ${a['total']:.2f} exact")
 
 
-def rng_line(m):
-    """The rings against graph 9 (folded under them): the Days' lines, the lines outside any Day and the lines before
-    Day 1 are graph 9's bars, its paler bars beside them and its "before Day 1"; specs plus agent context are graph 9's
-    spec, Day by Day. Rows in neither (a Day not in the data, no pull request after Day 1 began) are in no ring and no
-    bar of graph 9; they are printed, and the rings' total with them must be every row's lines, so none vanishes."""
-    r, g9 = m.get("rng") or {}, m.get("g9") or {}
-    if r.get("error") or g9.get("error"):
-        return False, f"rings: not drawn ({r.get('error') or g9.get('error')})"
-    bars = g9.get("bars") or []
-    days_9, out_9 = sum(b["total"] for b in bars), sum((b.get("aside") or {}).get("total", 0) for b in bars)
-    before_9 = g9.get("before") or 0
+def rng_line(m, data):
+    """The rings against the lines counted from the data (lines_placed): the Days' lines, the lines outside any Day and
+    the lines before Day 1, Day by Day; and specs plus agent context, Day by Day. Rows in neither (a Day not in the
+    data, no pull request after Day 1 began) are in no ring and in no count here; they are printed, and the rings' total
+    with them must be every row's lines, so none vanishes."""
+    r, placed = m.get("rng") or {}, lines_placed(data)
+    if r.get("error"):
+        return False, f"rings: not drawn ({r['error']})"
+    days_c, out_c = sum(v[0] for v in placed["days"].values()), sum(placed["beside"].values())
+    before_c = placed["before"]
     if r.get("empty"):
-        agree = days_9 + out_9 + before_9 == 0
-        return agree, "rings: no ring | graph 9: " + ("no line either: agree" if agree else "DISAGREE")
+        agree = days_c + out_c + before_c == 0
+        return agree, "rings: no ring | counted from the data: " + ("no line either: agree" if agree else "DISAGREE")
     days, out, before = r["inside"]["lines"], r["out"]["lines"], r["before"]["lines"]
     per_day = {x["day"]: (x["lines"], x["w"]["spec"] + x["w"]["context"]) for x in r["days"]}
-    per_day_9 = {b["day"]: (b["total"], b["w"]["spec"]) for b in bars if b["total"]}
+    per_day_c = {d: v for d, v in placed["days"].items() if v[0]}
     per_at = {x["at"]: x["lines"] for x in r["outside"]}
-    per_at_9 = {b["day"]: b["aside"]["total"] for b in bars if b.get("aside") and b["aside"]["total"]}
-    spec, ctx, spec_9 = r["inside"]["w"]["spec"], r["inside"]["w"]["context"], sum(b["w"]["spec"] for b in bars)
+    per_at_c = {d: n for d, n in placed["beside"].items() if n}
+    spec, ctx, spec_c = r["inside"]["w"]["spec"], r["inside"]["w"]["context"], sum(v[1] for v in placed["days"].values())
     loose = r["unplaced"]["lines"]
-    differ = [w for w, a, b in (("Days", (days, per_day), (days_9, per_day_9)), ("outside", (out, per_at), (out_9, per_at_9)),
-                                ("before Day 1", before, before_9), ("spec", spec + ctx, spec_9),
+    differ = [w for w, a, b in (("Days", (days, per_day), (days_c, per_day_c)), ("outside", (out, per_at), (out_c, per_at_c)),
+                                ("before Day 1", before, before_c), ("spec", spec + ctx, spec_c),
                                 ("every row", r["total"] + loose, r["all_lines"])) if a != b]
-    return not differ, (f"rings: Days {days:,} + outside {out:,} + before Day 1 {before:,} = {r['total']:,} | graph 9: "
-                        f"Days {days_9:,} + beside {out_9:,} + before Day 1 {before_9:,} = {days_9 + out_9 + before_9:,}; "
-                        f"specs {spec:,} + context {ctx:,} = graph 9's spec {spec_9:,}; {loose:,} lines in neither: "
+    return not differ, (f"rings: Days {days:,} + outside {out:,} + before Day 1 {before:,} = {r['total']:,} | counted from the data: "
+                        f"Days {days_c:,} + outside {out_c:,} + before Day 1 {before_c:,} = {days_c + out_c + before_c:,}; "
+                        f"specs {spec:,} + context {ctx:,} = {spec_c:,} counted; {loose:,} lines in neither: "
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
@@ -279,6 +355,8 @@ def cel_line(m):
 
 
 SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line, cel_line]
+# The sections whose original has left the page: each takes the data too, and recounts its figure from it.
+RECOUNTED = (ring_line, prt_line, atp_line, rng_line)
 
 
 def main(argv=None):
@@ -297,7 +375,7 @@ def main(argv=None):
     m = model(data)
     ok = True
     for section in SECTIONS:
-        agree, line = section(m)
+        agree, line = section(m, data) if section in RECOUNTED else section(m)
         ok = ok and agree
         print(line)
     return 0 if ok else 1
