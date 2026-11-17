@@ -2055,8 +2055,8 @@ class ActogramTest(unittest.TestCase):
         # 23:30 to 01:30 stays on the evening's row, past midnight (minute 1140)
         self.assertIn([1110, 1230, "main"], evening["segs"])
         # a wait from 04:50 to 05:20 is split at 05:00
-        self.assertEqual(evening["wait_segs"][-1], [1430, 1440, "tests"])
-        self.assertEqual(next_day["wait_segs"], [[0, 20, "tests"]])
+        self.assertEqual(evening["wait_segs"][-1], [1430, 1440, "tests", 0])
+        self.assertEqual(next_day["wait_segs"], [[0, 20, "tests", 0]])
         self.assertEqual(
             (evening["label"], evening["days"], evening["up_to"]), ("2 Mar", [1, 2], 1440)
         )
@@ -2133,6 +2133,224 @@ class ActogramTest(unittest.TestCase):
             agree, line = reconcile.act_line(reconcile.model(data))
             self.assertTrue(agree, line)
             self.assertRegex(line, r"^actogram: \d+ dates, busy [\d.]+ h .*: agree$")
+
+    def test_a_date_has_its_weekday(self):
+        evening, next_day = self.act(clock_data())["dates"]
+        self.assertEqual((evening["weekday"], evening["label"]), ("Mon", "2 Mar"))
+        self.assertEqual((next_day["weekday"], next_day["label"]), ("Tue", "3 Mar"))
+
+    def test_the_sub_agents_are_one_lane_two_of_them_at_once_counted_once(self):
+        evening, next_day = self.act(clock_data())["dates"]
+        # the auditor is busy from 09:30 to 09:50 while the main session is too, and stays in the lane;
+        # the two implementers are both busy from 10:30 to 11:00, counted once
+        self.assertEqual((evening["subs"], evening["sub"]), ([[270, 290], [300, 390]], 110))
+        self.assertEqual((next_day["subs"], next_day["sub"]), ([[330, 405]], 75))
+        # the figures graph 10 reads are as they were
+        self.assertEqual(fig_of(evening), OLD_CLOCK_FIXTURE["2026-03-02"])
+
+    def test_two_main_sessions_busy_at_once(self):
+        # two implementers at once are not two main sessions
+        evening, next_day = self.act(clock_data())["dates"]
+        self.assertEqual((evening["two"], evening["two_min"]), ([], 0))
+        self.assertEqual((next_day["two"], next_day["two_min"]), ([], 0))
+        # two more main sessions inside the one busy from 09:00 to 12:00: 10:00 to 10:30 and 10:15 to 10:45
+        d = clock_data()
+        d["clock"]["sessions"] += [
+            main_session("2026-03-02T10:00:00+01:00", "2026-03-02T10:30:00+01:00"),
+            main_session("2026-03-02T10:15:00+01:00", "2026-03-02T10:45:00+01:00"),
+        ]
+        evening, next_day = self.act(d)["dates"]
+        self.assertEqual((evening["two"], evening["two_min"]), ([[300, 345]], 45))
+        self.assertEqual((evening["busy"], evening["main"]), (330, 330))
+        self.assertEqual(next_day["two"], [])
+
+    def test_a_wait_names_the_lane_it_is_drawn_in(self):
+        d = clock_data()
+        # the implementer busy from 10:00 to 11:00 waits on tests from 10:10 to 10:20
+        d["clock"]["sessions"][2]["runs"] = [
+            ["2026-03-02T09:10:00Z", "2026-03-02T09:20:00Z", "tests"]
+        ]
+        evening, next_day = self.act(d)["dates"]
+        self.assertEqual([s[3] for s in evening["wait_segs"]], [0, 1, 0])
+        self.assertEqual(
+            evening["wait_segs"],
+            [[270, 285, "checks", 0], [310, 320, "tests", 1], [1430, 1440, "tests", 0]],
+        )
+        self.assertEqual(next_day["wait_segs"], [[0, 20, "tests", 0]])
+
+    def test_the_pull_requests_open_on_a_date(self):
+        d = clock_data()
+        d["clock"]["prs"] += [
+            open_pr(20, "code", "2026-03-02T05:00:00Z", merged="2026-03-02T06:00:00Z"),
+            # opened while #20 is open: half height
+            open_pr(21, "spec", "2026-03-02T05:30:00Z", merged="2026-03-02T05:45:00Z"),
+            # opened after both closed: full height; its kind is none the page draws
+            open_pr(22, "dashboard", "2026-03-02T06:30:00Z", merged="2026-03-02T06:40:00Z"),
+            open_pr(23, "code", "2026-03-02T07:00:00Z", closed="2026-03-02T07:20:00Z"),
+        ]
+        evening, next_day = self.act(d)["dates"]
+        keys = ("pr", "from", "to", "kind", "half", "state", "wait", "cut", "day")
+        bars = lambda x: [tuple(p[k] for k in keys) for p in x["prs"]]
+        self.assertEqual([p["pr"] for p in evening["prs"] if p["half"]], [21, 14])
+        self.assertEqual(
+            bars(evening),
+            [
+                (20, 60, 120, "code", False, "merged", 60, False, 1),
+                (21, 90, 105, "spec", True, "merged", 15, False, 1),
+                (22, 150, 160, "other", False, "merged", 10, False, 1),
+                (23, 180, 200, "code", False, "closed", 20, False, 1),
+                (10, 300, 340, "code", False, "merged", 40, False, 1),
+                # merged on the next date: open to this date's end
+                (11, 960, 1440, "close", False, "merged", 840, False, 1),
+                (14, 1020, 1150, "other", True, "merged", 130, False, None),
+            ],
+        )
+        self.assertEqual(
+            bars(next_day),
+            [
+                # opened before the row's 05:00: cut at its start, its whole wait kept
+                (11, 0, 360, "close", False, "merged", 840, True, 1),
+                (12, 240, 245, "spec", True, "merged", 5, False, 2),
+                # still open: to the date's end, with no wait
+                (13, 300, 1440, "code", True, "open", None, False, 2),
+            ],
+        )
+        self.assertEqual((evening["open"], next_day["open"]), (7, 3))
+        self.assertEqual(sorted(evening["prs"][0]), sorted(keys))
+        # the closed one is no merge
+        self.assertNotIn(23, [m["pr"] for m in evening["merges"]])
+
+    def test_the_checks_running_on_a_date(self):
+        d = clock_data()
+        z = lambda t, date="02": f"2026-03-{date}T{t}:00Z"
+        d["clock"]["prs"] += [
+            # two stretches, a run failed in the first
+            open_pr(
+                30,
+                "code",
+                z("06:00"),
+                merged=z("06:50"),
+                checks=the_checks(
+                    z("06:01"),
+                    z("06:40"),
+                    failed=1,
+                    spans=[[z("06:01"), z("06:05"), 1], [z("06:30"), z("06:40"), 0]],
+                ),
+            ),
+            # written before the stretches were kept: the first start to the last end, two runs failed
+            open_pr(
+                31,
+                "code",
+                z("07:00"),
+                merged=z("07:30"),
+                checks=the_checks(z("07:02"), z("07:12"), failed=2),
+            ),
+            # running across the row's 05:00, which is 04:00 UTC: clipped to each date
+            open_pr(
+                32,
+                "code",
+                z("03:50", "03"),
+                merged=z("04:30", "03"),
+                checks=the_checks(
+                    z("03:55", "03"),
+                    z("04:10", "03"),
+                    spans=[[z("03:55", "03"), z("04:10", "03"), 0]],
+                ),
+            ),
+            # running while #30's first stretch is: the minutes they share count once
+            open_pr(
+                33,
+                "spec",
+                z("06:00"),
+                merged=z("06:20"),
+                checks=the_checks(z("06:03"), z("06:08"), spans=[[z("06:03"), z("06:08"), 0]]),
+            ),
+        ]
+        evening, next_day = self.act(d)["dates"]
+        self.assertEqual([c[3] for c in evening["checks"] if c[2]], [30, 31])
+        self.assertEqual(
+            evening["checks"],
+            [
+                [121, 125, 1, 30],
+                [123, 128, 0, 33],
+                [150, 160, 0, 30],
+                [182, 192, 1, 31],
+                [300, 300, 0, 10],
+                [960, 960, 0, 11],
+                [1020, 1020, 0, 14],
+                [1435, 1440, 0, 32],
+            ],
+        )
+        self.assertEqual(next_day["checks"], [[0, 10, 0, 32], [240, 240, 0, 12], [300, 300, 0, 13]])
+        self.assertEqual((evening["checks_min"], next_day["checks_min"]), (32, 10))
+        # a pull request with no check recorded has no stretch
+        d["clock"]["prs"].append(open_pr(34, "code", z("08:00"), merged=z("08:10")))
+        d["clock"]["prs"].append(
+            {**open_pr(35, "code", z("08:00"), merged=z("08:10")), "checks": None}
+        )
+        self.assertEqual(self.act(d)["dates"][0]["checks"], evening["checks"])
+
+    def test_the_totals_of_two_main_sessions_at_once_and_of_the_sub_agents(self):
+        t = self.act(clock_data())["totals"]
+        self.assertEqual((t["two"], t["sub"]), (0, 185))
+        d = clock_data()
+        d["clock"]["sessions"] += [
+            main_session("2026-03-02T10:00:00+01:00", "2026-03-02T10:30:00+01:00"),
+            main_session("2026-03-03T09:30:00+01:00", "2026-03-03T09:45:00+01:00"),
+        ]
+        t = self.act(d)["totals"]
+        self.assertEqual((t["two"], t["sub"]), (45, 185))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_actograms_pull_requests_and_checks_are_graph_10s_on_each_date(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        for data in (clock_data(), demo_data.demo()):
+            data = {**data, "actogram": self.act(data)}
+            agree, line = reconcile.act_line(reconcile.model(data))
+            self.assertTrue(agree, line)
+            self.assertRegex(
+                line,
+                r", (\d+) pull requests open, (\d+) checks \| graph 10: .*"
+                r", \1 pull request bars, \2 check bars: agree$",
+            )
+            # one pull request bar, then one check, taken out of the actogram on one date
+            for key, word in (("prs", "pull requests"), ("checks", "checks")):
+                less = json.loads(json.dumps(data))
+                date = next(x for x in less["actogram"]["dates"] if x[key])
+                date[key].pop()
+                agree, line = reconcile.act_line(reconcile.model(less))
+                self.assertFalse(agree, line)
+                self.assertRegex(line, rf": DISAGREE \(.*{word} differ on {date['date']}\b")
+
+
+def main_session(a, b):
+    """A main session of clock_data()'s Day 1, busy from `a` to `b`."""
+    return {"date": a[:10], "day": 1, "agent": "main", "replies": 3, "from": a, "to": b}
+
+
+def the_checks(start, end, failed=0, spans=None):
+    """A pull request's checks as GitHub's times give them; `spans` only when the stretches were kept."""
+    checks = {"start": start, "end": end, "runs": 4, "failed": failed, "pushes": 1}
+    if spans:
+        checks["spans"] = spans
+    return checks
+
+
+def open_pr(number, kind, opened, merged=None, closed=None, checks=None):
+    """A pull request of clock_data()'s Day 1: merged, closed without a merge, or still open."""
+    p = {
+        "number": number,
+        "day": 1,
+        "kind": kind,
+        "branch": f"b{number}",
+        "opened": opened,
+        "checks": checks or {"start": None, "end": None, "runs": 0, "failed": 0},
+    }
+    if merged:
+        p["merged"] = merged
+    if closed:
+        p["closed"] = closed
+    return p
 
 
 def runs_data(absent=(), commit="abc"):

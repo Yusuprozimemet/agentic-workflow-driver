@@ -292,13 +292,22 @@ def rng_line(m, data):
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
+# Graph 10's bars by class: a pull request open, by its kind, and a stretch of its checks, passed or with a failed run.
+ACT_PR_BARS = ("spec", "code", "close", "other")
+ACT_CHECK_BARS = ("ok", "failed")
+
+
 def act_line(m):
     """The actogram against graph 10 (folded under it): each date's busy time, two sessions at once counted once, is at
     least its busiest lane's and at most its lanes' sum; its merge ticks are graph 10's merge marks, and its wait marks
-    are graph 10's marks of a session waiting on a command, summed over the dates."""
+    are graph 10's marks of a session waiting on a command, summed over the dates. On each of the actogram's dates,
+    its pull requests open are as many as graph 10's pull request bars on that date (spec, code, close or other), and
+    its checks as many as graph 10's check bars (ok or failed); the line gives both totals over the actogram's dates
+    and, when they differ, the dates."""
     a, g10 = m.get("act") or {}, m.get("g10") or {}
     if a.get("error") or g10.get("error"):
         return False, f"actogram: not drawn ({a.get('error') or g10.get('error')})"
+    by_date = {x["date"]: [b["cls"] for lane in x["lanes"] for b in lane["bars"]] for x in g10.get("dates") or []}
     bars = [b for x in g10.get("dates") or [] for lane in x["lanes"] for b in lane["bars"]]
     merges_10 = sum(1 for b in bars if b["cls"] == "merge")
     waits_10 = sum(1 for b in bars if b["cls"].startswith("run "))
@@ -307,19 +316,30 @@ def act_line(m):
         return agree, (f"actogram: not drawn ({a['empty']}) | graph 10: {merges_10} merge marks, {waits_10} wait marks: "
                        + ("agree" if agree else "DISAGREE"))
     figs = {x["date"]: x.get("fig") or {} for x in g10.get("dates") or []}
-    low = high = busy = 0
-    bad = []
+    low = high = busy = prs = prs_10 = checks = checks_10 = 0
+    bad, bad_prs, bad_checks = [], [], []
     for x in a["dates"]:
         lanes = list((figs.get(x["date"]) or {}).get("lanes", {}).values())
         lo, hi = max(lanes, default=0), sum(lanes)
         low, high, busy = low + lo, high + hi, busy + x["busy"]
         if not lo - 0.05 <= x["busy"] <= hi + 0.05 * len(lanes):
             bad.append(x["date"])
+        drawn = by_date.get(x["date"]) or []
+        p, p10 = len(x.get("prs") or []), sum(1 for cls in drawn if cls in ACT_PR_BARS)
+        c, c10 = len(x.get("checks") or []), sum(1 for cls in drawn if cls in ACT_CHECK_BARS)
+        prs, prs_10, checks, checks_10 = prs + p, prs_10 + p10, checks + c, checks_10 + c10
+        if p != p10:
+            bad_prs.append(x["date"])
+        if c != c10:
+            bad_checks.append(x["date"])
     merges, waits = sum(len(x["merges"]) for x in a["dates"]), sum(len(x["wait_segs"]) for x in a["dates"])
-    agree = not bad and merges == merges_10 and waits == waits_10
+    agree = not bad and not bad_prs and not bad_checks and merges == merges_10 and waits == waits_10
+    differ = "; ".join(f"{what} on {', '.join(dates)}" for what, dates in (
+        ("busy outside its lanes", bad), ("pull requests differ", bad_prs), ("checks differ", bad_checks)) if dates)
     return agree, (f"actogram: {len(a['dates'])} dates, busy {busy / 60:.1f} h (lanes {low / 60:.1f} to {high / 60:.1f} h), "
-                   f"{merges} merges, {waits} waits | graph 10: {merges_10} merge marks, {waits_10} wait marks: "
-                   + ("agree" if agree else f"DISAGREE{' (busy outside its lanes on ' + ', '.join(bad) + ')' if bad else ''}"))
+                   f"{merges} merges, {waits} waits, {prs} pull requests open, {checks} checks | graph 10: {merges_10} merge marks, "
+                   f"{waits_10} wait marks, {prs_10} pull request bars, {checks_10} check bars: "
+                   + ("agree" if agree else f"DISAGREE{' (' + differ + ')' if differ else ''}"))
 
 
 def rfx_line(m):
