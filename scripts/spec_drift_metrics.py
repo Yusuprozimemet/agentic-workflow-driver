@@ -2,6 +2,8 @@
 
 import builtins
 import collections
+import concurrent.futures
+import os
 import posixpath
 import re
 import subprocess
@@ -324,6 +326,53 @@ def code_flags(sha, flags):
     return set(cached["found"])
 
 
+def names_in_code(sha, patterns, index):
+    """The vocabulary names git grep finds in the code at sha, as name -> path -> count. patterns is
+    the vocabulary, one name a line. kit/ is the starter cleanup's tooling and the source project's
+    data, which a copy deletes: not this project's code. specs/ is the spec side, every file in it:
+    its break manifests copy the spec's names, and counted as code they narrowed the gap at #25
+    with no code changed."""
+    out = subprocess.run(["git", "grep", "-z", "-I", "-w", "-F", "-f", "-", sha, "--", ".",
+                          ":(exclude)*.md", ":(exclude)**/package-lock.json",
+                          *(f":(exclude){d}" for d in NOT_CODE_DIRS)], input=patterns,
+                         capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+    counted = {}
+    for match in out.split("\n"):
+        where, _, text = match.partition("\0")  # -z: "<sha>:<path>\0<line>"
+        path = where.split(":", 1)[-1]
+        for line in text.splitlines():  # as the lines were read before the path was kept
+            for tok in code_names(line, index):
+                counted.setdefault(tok, {}).setdefault(path, 0)
+                counted[tok][path] += 1
+    return counted
+
+
+# A merge not counted yet is one git grep over its whole tree, and a first run has one for every
+# merge: they run side by side, this many at a time.
+GREP_WORKERS = max(2, os.cpu_count() or 0)
+
+
+def count_code(shas, patterns, index):
+    """Fill the cache's counts for the commits it lacks, the greps side by side. A SHA fixes its
+    history, so counts cached under it stay right."""
+    cache = CACHE.setdefault("code", {})
+    todo = [sha for sha in dict.fromkeys(shas) if sha not in cache]
+    if not todo:
+        return
+    with concurrent.futures.ThreadPoolExecutor(GREP_WORKERS) as pool:
+        for sha, counted in zip(todo, pool.map(lambda sha: names_in_code(sha, patterns, index), todo)):
+            # A spec cites a file by its path (`tests/test_config.py`): the file is the thing, though
+            # no line holds its name. Each file or folder named so counts once, at its path.
+            for path in at_commits("ls-tree", "-r", "--name-only", sha).splitlines():
+                if not is_code_path(path):
+                    continue
+                for tok in path_names(path):
+                    if tok in index:
+                        counted.setdefault(tok, {}).setdefault(path, 0)
+                        counted[tok][path] += 1
+            cache[sha] = counted
+
+
 def ranker(order):
     """A day's place in the run order: 0 (and plan.md) first, a day the order does not list after it by number."""
     pos = {d: i for i, d in enumerate(d for d in order if d not in PLACEHOLDERS)}
@@ -364,43 +413,18 @@ def trajectory(snaps, blobs, order=()):
 
     def code_counts(sha):
         """A merge's counts need only the names the specs had used by then (later ones are masked
-        by born), and a SHA fixes its history, so counts cached under it stay right. kit/ is the
-        starter cleanup's tooling and the source project's data, which a copy deletes: not this project's code.
-        specs/ is the spec side, every file in it: its break manifests copy the spec's names, and
-        counted as code they narrowed the gap at #25 with no code changed.
+        by born); count_code has put them in the cache (names_in_code says what is counted).
         One count vector per place, by the file's work_kind: prod, test, tooling, and other for
         any box else; summed, they are the all-code counts. The cache keeps each name's count per
         path, so a merge's lists can say where a name is; the second return is name -> paths."""
-        cached = CACHE.setdefault("code", {}).get(sha)
-        if cached is None:
-            out = subprocess.run(["git", "grep", "-z", "-I", "-w", "-F", "-f", "-", sha, "--", ".",
-                                  ":(exclude)*.md", ":(exclude)**/package-lock.json",
-                                  *(f":(exclude){d}" for d in NOT_CODE_DIRS)], input=patterns,
-                                 capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
-            cached = {}
-            for match in out.split("\n"):
-                where, _, text = match.partition("\0")  # -z: "<sha>:<path>\0<line>"
-                path = where.split(":", 1)[-1]
-                for line in text.splitlines():  # as the lines were read before the path was kept
-                    for tok in code_names(line, index):
-                        cached.setdefault(tok, {}).setdefault(path, 0)
-                        cached[tok][path] += 1
-            # A spec cites a file by its path (`tests/test_config.py`): the file is the thing, though
-            # no line holds its name. Each file or folder named so counts once, at its path.
-            for path in at_commits("ls-tree", "-r", "--name-only", sha).splitlines():
-                if not is_code_path(path):
-                    continue
-                for tok in path_names(path):
-                    if tok in index:
-                        cached.setdefault(tok, {}).setdefault(path, 0)
-                        cached[tok][path] += 1
-            CACHE["code"][sha] = cached
+        cached = CACHE["code"][sha]
         counts = {p: np.zeros(len(vocab)) for p in PLACES}
         for tok, paths in cached.items():
             for path, n in paths.items() if tok in index else ():
                 counts[place_of(path)][index[tok]] += n
         return counts, cached
 
+    count_code((s["sha"] for s in snaps), patterns, index)
     day, rows, ever, before = 0, [], np.zeros(len(vocab), dtype=bool), None
     for i, s in enumerate(snaps):
         touched = at_commits("diff", "--name-only", snaps[i - 1]["sha"], s["sha"], "--", "plan.md", "specs").split() if i else []

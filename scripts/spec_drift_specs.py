@@ -2,6 +2,7 @@
 
 import collections
 import fnmatch
+import functools
 import os
 import posixpath
 import re
@@ -407,6 +408,33 @@ def moves(snaps):
     return out + [(pr_at[n], old, new) for n, (old, new) in RENAMED.items() if n in pr_at]
 
 
+# A file's text by its blob id, for this run only: the bytes are the same at every commit that holds
+# that id, and evidence_history asks test_state at every merge. What test_state reads from a text
+# is kept beside it (the four functions below), so a file unchanged over 200 merges is read once.
+BLOB_TEXTS = {}
+
+
+@functools.lru_cache(maxsize=None)
+def classes_in(text):
+    return frozenset(PY_CLASS.findall(text))
+
+
+@functools.lru_cache(maxsize=None)
+def ci_properties(text):
+    return frozenset(CI_PROPERTY.findall(text))
+
+
+@functools.lru_cache(maxsize=None)
+def names_member(text, member):
+    return bool(re.search(rf"\b{member}\b", text))
+
+
+@functools.lru_cache(maxsize=None)
+def can_skip(text, ci):
+    """Whether CI can skip a test file: ci is the properties its workflows set, as a frozenset."""
+    return bool(SKIPPABLE.search(ON_PROPERTY.sub(lambda m: "" if m.group(1) in ci else m.group(0), text)))
+
+
 def test_state(tests, sha, blobs, moved=None):
     """Where each named test stands at a commit: present, skippable (a class or file CI can skip,
     unless CI meets its condition), or missing. CI runs every test that is present, so a hold
@@ -414,16 +442,23 @@ def test_state(tests, sha, blobs, moved=None):
     the tree is looked for under the name it moved to by then (moved: old to new). A Java or Kotlin
     class is its file's name; a Python test file holds its classes under other names (CliTest in
     tests/test_cli.py), so they are read from it."""
-    files, ci = collections.defaultdict(list), set()
-    for path in (line.split("\t", 1)[1] for line in at_commits("ls-tree", "-r", sha).splitlines()):
+    files, ci, blob = collections.defaultdict(list), set(), {}
+
+    def text(path):
+        if blob[path] not in BLOB_TEXTS:
+            BLOB_TEXTS[blob[path]] = blobs.read(sha, path)
+        return BLOB_TEXTS[blob[path]]
+
+    for entry, path in (line.split("\t", 1) for line in at_commits("ls-tree", "-r", sha).splitlines()):
+        blob[path] = entry.split()[-1]  # "<mode> <type> <id>"
         if path.endswith((".java", ".kt")):
             files[os.path.splitext(os.path.basename(path))[0]].append(path)
         elif path.endswith(".py") and TEST_PATH.search(path):
-            for cls in set(PY_CLASS.findall(blobs.read(sha, path))):
+            for cls in classes_in(text(path)):
                 files[cls].append(path)
         elif path.startswith(".github/workflows/"):
-            ci.update(CI_PROPERTY.findall(blobs.read(sha, path)))
-    met = lambda m: "" if m.group(1) in ci else m.group(0)
+            ci.update(ci_properties(text(path)))
+    ci = frozenset(ci)
     out = {}
     for t in tests:
         cls, _, member = t.partition(".")
@@ -431,11 +466,11 @@ def test_state(tests, sha, blobs, moved=None):
         while cls not in files and (moved or {}).get(cls) not in seen | {None}:
             cls = moved[cls]
             seen.add(cls)
-        texts = [blobs.read(sha, p) for p in files.get(cls, [])]
-        if not any(not member or re.search(rf"\b{member}\b", x) for x in texts):
+        texts = [text(p) for p in files.get(cls, [])]
+        if not any(not member or names_member(x, member) for x in texts):
             out[t] = "missing"
         else:
-            out[t] = "skippable" if any(SKIPPABLE.search(ON_PROPERTY.sub(met, x)) for x in texts) else "present"
+            out[t] = "skippable" if any(can_skip(x, ci) for x in texts) else "present"
     return out
 
 

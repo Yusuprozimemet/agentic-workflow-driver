@@ -138,8 +138,7 @@ def spec_texts(sha, blobs):
 def day_comments(sha):
     """(path, line) for each line outside Markdown that names a day at a commit. git grep exits 1
     when it finds none, which an early commit does."""
-    key = "\0".join(("day-comments", sha))
-    cached = CACHE.setdefault("git", {})
+    key, cached = sha, CACHE.setdefault("comments", {})
     if key not in cached:
         got = subprocess.run(["git", "grep", "-n", "-I", "-E", r"\bDays? [0-9]+\b", sha, "--", ".",
                               ":(exclude)*.md", ":(exclude)docs/dashboard", ":(exclude)data"],
