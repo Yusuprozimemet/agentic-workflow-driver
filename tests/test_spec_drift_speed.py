@@ -26,8 +26,12 @@ def load(name, path):
 specs = load("spec_drift_specs", os.path.join(SCRIPTS, "spec_drift_specs.py"))
 metrics = load("spec_drift_metrics", os.path.join(SCRIPTS, "spec_drift_metrics.py"))
 
-PARTS = {"git": {"ls-tree\0abc": "plan.md\n"}, "code": {"abc": {"load_cache": {"scripts/spec-drift.py": 2}}},
-         "flags": {"abc": {"asked": ["--out"], "found": ["--out"]}}, "comments": {"abc": "abc:run-steps.py:7:# Day 3\n"}}
+PARTS = {
+    "git": {"ls-tree\0abc": "plan.md\n"},
+    "code": {"abc": {"load_cache": {"scripts/spec-drift.py": 2}}},
+    "flags": {"abc": {"asked": ["--out"], "found": ["--out"]}},
+    "comments": {"abc": "abc:run-steps.py:7:# Day 3\n"},
+}
 
 
 class CacheKeptTest(unittest.TestCase):
@@ -58,10 +62,14 @@ class CacheKeptTest(unittest.TestCase):
         self.assertEqual({part: self.drift.CACHE.get(part) for part in PARTS}, PARTS)
 
     def test_an_edit_to_a_view_keeps_every_part(self):
-        self.assertEqual(self.kept_after_editing("spec_drift_views.py"), ["code", "comments", "flags", "git"])
+        self.assertEqual(
+            self.kept_after_editing("spec_drift_views.py"), ["code", "comments", "flags", "git"]
+        )
 
     def test_an_edit_to_the_script_itself_keeps_every_part(self):
-        self.assertEqual(self.kept_after_editing("spec-drift.py"), ["code", "comments", "flags", "git"])
+        self.assertEqual(
+            self.kept_after_editing("spec-drift.py"), ["code", "comments", "flags", "git"]
+        )
 
     def test_an_edit_to_the_counting_starts_the_counts_over(self):
         self.assertEqual(self.kept_after_editing("spec_drift_metrics.py"), ["comments", "git"])
@@ -70,7 +78,9 @@ class CacheKeptTest(unittest.TestCase):
         self.assertEqual(self.kept_after_editing("spec_drift_common.py"), ["comments", "git"])
 
     def test_an_edit_to_the_hand_offs_starts_their_grep_over(self):
-        self.assertEqual(self.kept_after_editing("spec_drift_handoffs.py"), ["code", "flags", "git"])
+        self.assertEqual(
+            self.kept_after_editing("spec_drift_handoffs.py"), ["code", "flags", "git"]
+        )
 
     def test_an_edit_to_the_git_reader_starts_every_part_over(self):
         self.assertEqual(self.kept_after_editing("spec_drift_git.py"), [])
@@ -118,7 +128,9 @@ class ReadOnceTest(unittest.TestCase):
     """test_state at two commits: what the second one reads again."""
 
     def setUp(self):
-        getattr(specs, "BLOB_TEXTS", {}).clear()  # absent before the change, which read every file each time
+        getattr(
+            specs, "BLOB_TEXTS", {}
+        ).clear()  # absent before the change, which read every file each time
 
     def states(self, trees, texts):
         blobs = Blobs(texts)
@@ -127,18 +139,33 @@ class ReadOnceTest(unittest.TestCase):
 
     def test_files_unchanged_at_the_next_commit_are_not_read_again(self):
         at = dict(zip(PATHS, (CLI, SLOW, "run: mvn -Dslow=true verify\n")))
-        (first, second), reads = self.states({"one": tree("a1", "b1", "c1"), "two": tree("a1", "b1", "c1")},
-                                             {"one": at, "two": at})
-        self.assertEqual(first, {"CliTest.test_help": "present", "CliTest.test_gone": "missing",
-                                 "SlowIT": "present", "Absent": "missing"})
+        (first, second), reads = self.states(
+            {"one": tree("a1", "b1", "c1"), "two": tree("a1", "b1", "c1")}, {"one": at, "two": at}
+        )
+        self.assertEqual(
+            first,
+            {
+                "CliTest.test_help": "present",
+                "CliTest.test_gone": "missing",
+                "SlowIT": "present",
+                "Absent": "missing",
+            },
+        )
         self.assertEqual(second, first)
         self.assertEqual(reads, 3)
 
     def test_a_changed_file_is_read_again_and_judged_as_it_is_now(self):
         at = dict(zip(PATHS, (CLI, SLOW, "run: mvn -Dslow=true verify\n")))
-        now = dict(at, **{PATHS[0]: "class CliTest(unittest.TestCase):\n    pass\n", PATHS[2]: "run: mvn verify\n"})
-        (first, second), reads = self.states({"one": tree("a1", "b1", "c1"), "two": tree("a2", "b1", "c2")},
-                                             {"one": at, "two": now})
+        now = dict(
+            at,
+            **{
+                PATHS[0]: "class CliTest(unittest.TestCase):\n    pass\n",
+                PATHS[2]: "run: mvn verify\n",
+            },
+        )
+        (first, second), reads = self.states(
+            {"one": tree("a1", "b1", "c1"), "two": tree("a2", "b1", "c2")}, {"one": at, "two": now}
+        )
         self.assertEqual((first["CliTest.test_help"], first["SlowIT"]), ("present", "present"))
         self.assertEqual((second["CliTest.test_help"], second["SlowIT"]), ("missing", "skippable"))
         self.assertEqual(reads, 5)
@@ -153,18 +180,26 @@ class GrepsOverlapTest(unittest.TestCase):
         metrics.CACHE["code"] = {"old": {"kept": {"a.py": 1}}}
 
     def count(self, grep):
-        with mock.patch.object(metrics, "names_in_code", side_effect=grep), \
-                mock.patch.object(metrics, "at_commits", return_value="scripts/load_cache.py\nspecs/load_cache.py\n"):
+        with (
+            mock.patch.object(metrics, "names_in_code", side_effect=grep),
+            mock.patch.object(
+                metrics, "at_commits", return_value="scripts/load_cache.py\nspecs/load_cache.py\n"
+            ),
+        ):
             metrics.count_code(["old", "new1", "new2", "new1"], "load_cache\n", {"load_cache": 0})
 
     def test_only_the_commits_the_cache_lacks_are_grepped_and_each_once(self):
         asked = []
         self.count(lambda sha, patterns, index: asked.append(sha) or {"load_cache": {"run.py": 2}})
         self.assertEqual(sorted(asked), ["new1", "new2"])
-        self.assertEqual(metrics.CACHE["code"], {
-            "old": {"kept": {"a.py": 1}},
-            "new1": {"load_cache": {"run.py": 2, "scripts/load_cache.py": 1}},
-            "new2": {"load_cache": {"run.py": 2, "scripts/load_cache.py": 1}}})
+        self.assertEqual(
+            metrics.CACHE["code"],
+            {
+                "old": {"kept": {"a.py": 1}},
+                "new1": {"load_cache": {"run.py": 2, "scripts/load_cache.py": 1}},
+                "new2": {"load_cache": {"run.py": 2, "scripts/load_cache.py": 1}},
+            },
+        )
 
     def test_two_greps_run_at_the_same_time(self):
         both = threading.Barrier(2, timeout=5)
