@@ -26,8 +26,8 @@ def load(name, path):
 specs = load("spec_drift_specs", os.path.join(SCRIPTS, "spec_drift_specs.py"))
 metrics = load("spec_drift_metrics", os.path.join(SCRIPTS, "spec_drift_metrics.py"))
 
-PARTS = dict(git={"ls-tree\0abc": "plan.md\n"}, code={"abc": {"load_cache": {"scripts/spec-drift.py": 2}}},
-             flags={"abc": {"asked": ["--out"], "found": ["--out"]}}, comments={"abc": "abc:run-steps.py:7:# Day 3\n"})
+PARTS = {"git": {"ls-tree\0abc": "plan.md\n"}, "code": {"abc": {"load_cache": {"scripts/spec-drift.py": 2}}},
+         "flags": {"abc": {"asked": ["--out"], "found": ["--out"]}}, "comments": {"abc": "abc:run-steps.py:7:# Day 3\n"}}
 
 
 class CacheKeptTest(unittest.TestCase):
