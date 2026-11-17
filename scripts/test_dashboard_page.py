@@ -473,11 +473,13 @@ class ModelTest(unittest.TestCase):
 
     def test_graph_2_draws_each_yardstick_as_a_bullet_on_its_own_scale_over_the_columns_days(self):
         value = lambda day, v: dict(day=day, value=v, text="")
-        g = model(data(yardsticks=dict(days=[1, 2], problems=[], rows=[
+        yard = dict(days=[1, 2], problems=[], rows=[
             dict(key="cost", name="Cost", unit="$", decimals=2, baseline=1.5, average=[2.0, 1.5, None],
                  values=[value(1, 2.0), value(2, 1.0), value(14, 9.0)]),
             dict(key="refusals", name="Refused", unit="", decimals=0, baseline=None, average=[4.0, 5.0],
-                 values=[value(1, 4), value(2, 6)])])))["g2"]
+                 values=[value(1, 4), value(2, 6)])])
+        # Which way is better is read from the gel's panels (spec_drift_views.LOWER_BETTER), as spec-drift.py writes them.
+        g = model(data(yardsticks=yard, gel=views.gel(dict(yardsticks=yard))))["g2"]
         cost, ref = (r["bullet"] for r in g["rows"])
         # Scale: the largest of the Days, the kit and the average, and a little more; Day 14 has no column, so it is left out.
         top = 2.0 * 1.08
@@ -1230,9 +1232,64 @@ class ThemeTest(unittest.TestCase):
 
 
 # The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id. Graph 6 is folded, for good,
-# under the merge graph that took its place, and graph 1 under its reading as a gene (as the mockup at #228 has them).
+# under the merge graph that took its place, graph 1 under its reading as a gene, graph 2 under its gel and graphs 3 to 5
+# under their proteins (as the mockup at #228 has them).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
-FOLDED = (6, 1)
+FOLDED = (6, 1, 2, 3)
+
+# gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
+# many marks of each kind they drew, and the words of the proteins' figures.
+GEL_PRT = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
+  classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle() {} },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { this.kids = c; }, addEventListener() {} };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c))).length;
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const M = model(DATA), days = [];
+  gelDraw(M.gel, $, days); protDraw(M.prt, $, days);
+  const g = $("gel-fig"), p = $("prt-fig");
+  ({ gel: { pans: is(g, ["pan"]), lanes: is(g, ["b", "ln"]), ladder: is(g, ["b", "rb"]), figs: $("gel-figs").kids.length },
+     prt: { prot: is(p, ["prot"]), cells: all(p).filter(e => e.attrs && e.attrs.tabindex != null && is(e, ["rs"])).length, rings: is(p, ["b", "arc"]),
+            runs: is(p, ["b", "run"]), figs: words($("prt-figs")).replace(/\\s+/g, " "), all: $("prt-k-all").textContent }, onDay: days.length })`, ctx)));
+"""
+
+
+class GelAndProteinPageTest(unittest.TestCase):
+    """The gel and the proteins, drawn by the page on the example data."""
+
+    def test_the_gel_and_the_proteins_draw_a_mark_for_every_panel_lane_chain_and_cell(self):
+        spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
+        demo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(demo)
+        data = demo.demo()
+        G, P, out = data["gel"], data["protein"], node(GEL_PRT, data)
+        ladder = sum((p["average"] is not None) + (p["kit"] is not None) for p in G["panels"])
+        self.assertEqual(out["gel"], dict(pans=len(G["panels"]), lanes=len(G["panels"]) * len(G["days"]), ladder=ladder, figs=2 + len(G["kit"])))
+        self.assertEqual(out["prt"]["prot"], len(P["chains"]))
+        self.assertEqual(out["prt"]["cells"], P["written"])
+        self.assertEqual(out["prt"]["rings"], len(P["chains"]))
+        self.assertEqual(out["prt"]["runs"], sum(1 for c in P["chains"] if c["run"]))
+        self.assertIn(f"{P['proven']} of {P['rechecked']} promises proven, of those re-checked", out["prt"]["figs"])
+        outside = [x["id"] for c in P["chains"] for x in c["cells"] if x["state"] == "open"]
+        self.assertTrue(outside)
+        self.assertIn(f"{len(outside)} was written and not built ({', '.join(outside)})", out["prt"]["all"])
+        self.assertEqual(out["onDay"], 2)  # each hooks into the page's Day buttons
+
+    def test_the_gel_and_the_proteins_build_no_html_from_text(self):
+        script = read("dashboard.js")
+        for name in ("function pointerBox", "function gelDraw", "function protDraw"):
+            body = script[script.index(name):]
+            body = body[:body.index("\n}\n") if "\n}\n" in body else body.index("\r\n}\r\n")]
+            self.assertNotIn("innerHTML", body, name)
 
 
 class PageFilesTest(unittest.TestCase):
@@ -1250,18 +1307,20 @@ class PageFilesTest(unittest.TestCase):
         self.assertNotIn("<details open", html)
 
     def test_graphs_3_to_5_are_one_card_that_keeps_their_anchors_and_their_exact_numbers(self):
-        section = re.search(r'<section class="graph" id="g3">.*?</section>', read("index.html"), re.S).group(0)
+        section = re.search(r'<section class="graph mock-fold" id="g3-fold">.*?</section>', read("index.html"), re.S).group(0)
         self.assertIn('<p class="graph-n">Graphs 3–5</p>', section)
-        # The quality panel links to #g4 and #g5 (spec_drift_score.PARTS): both land on the card.
+        # The quality panel links to #g4 and #g5 (spec_drift_score.PARTS): both land on the proteins drawn in their place,
+        # not on the fold.
+        proteins = re.search(r'<section class="graph" id="prt">.*?</section>', read("index.html"), re.S).group(0)
         for n in (4, 5):
-            self.assertIn(f'<span class="anchor" id="g{n}"></span>', section)
+            self.assertIn(f'<span class="anchor" id="g{n}"></span>', proteins)
         exact = re.search(r'<details class="exact">.*?</details>', section, re.S).group(0)
         self.assertEqual(re.findall(r'<table id="(g\d)-table">', exact), ["g3", "g4", "g5"])
         self.assertNotIn("levels", section)  # one ladder only, graph 1's
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll"]:
+        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1277,7 +1336,7 @@ class PageFilesTest(unittest.TestCase):
         for n in FOLDED:
             g = model(data)[f"g{n}"]
             self.assertNotIn("error", g)
-            self.assertGreater(len(g["merges"]), 0)
+            self.assertGreater(len(g.get("merges") or g.get("rows") or []), 0, f"graph {n}")
         out = boot(data)
         self.assertEqual((out["error"], out["logged"]), (None, []))
 
@@ -1302,20 +1361,22 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg)">', html),
-                         ["rdg"] + [f"g{n}" for n in (2, 3, 12)] + ["mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt)">', html),
+                         ["rdg", "gel", "prt", "g12", "mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "g2": 0, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
+        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
         for n, g in group.items():
             at = html.index(f'id="{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
         self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
         self.assertLess(html.index('id="g6-fold">'), html.index('id="g7">'))
         self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
-        self.assertLess(html.index('id="g1-fold">'), html.index('id="g2">'))
+        self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
+        self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))
+        self.assertLess(html.index('id="prt">'), html.index('id="g3-fold">'))
         for part in ("say", "ladder", "key", "plot", "read", "table"):
             self.assertIn(f'id="g1-{part}"', html)
 

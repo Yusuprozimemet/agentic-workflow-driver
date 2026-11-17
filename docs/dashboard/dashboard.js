@@ -140,7 +140,6 @@ const REASONS = { replay_failed: "Replay failed", replay_error: "Replay error", 
   evidence_missing: "Evidence missing", not_seen_red: "Not seen red", test_not_found: "Test not found", handoff_unclaimed: "Hand-off unclaimed",
   not_breakable: "No break possible from the repository", test_skippable: "Can be skipped in CI (expected)",
   handoff_next: "Hand-off for the next Day", handoff_unpicked: "Hand-off no later Day picks up" };
-const LOWER_BETTER = ["cost", "replies", "escapes", "parks", "gates", "reread"];
 const YARD_HINT = { escapes: "fewer is better", refusals: "many of one kind mean a rule is in the way", reread: "re-reading is most of the cost",
   gates: "a gate run in the main session is also inside the pull requests' cost above" };
 
@@ -597,6 +596,9 @@ function model(DATA) {
     });
     return { ...r, values };
   };
+  // Which yardsticks are better lower: the maintainer's judgement, kept in scripts/spec_drift_views.py (LOWER_BETTER) and
+  // read from the gel's panels, so graph 2 and the gel judge alike.
+  const lowerBetter = new Set(((DATA.gel || {}).panels || []).filter(p => p.lower_better).map(p => p.key));
   function yardGraph() {
     const Y = DATA.yardsticks || {}, all = (Y.rows || []).map(parksFromRuns), cols = [...new Set([...days.map(d => d.day), ...(Y.days || [])])].sort((a, b) => a - b);
     const show = (r, v) => r.unit === "$" ? `$${v.toFixed(r.decimals)}` : `${v.toFixed(r.decimals)}${r.unit || ""}`;
@@ -609,7 +611,7 @@ function model(DATA) {
       const inCols = every.filter(v => cols.includes(v.day)), vals = inCols.length ? inCols : every;
       const last = vals[vals.length - 1], lo = Math.min(...vals.map(v => v.value)), hi = Math.max(...vals.map(v => v.value));
       const top = Math.max(hi, r.baseline || 0, lastAvg ? lastAvg.value : 0) * 1.08 || 1, at = v => v / top;
-      const cmp = !lastAvg || !LOWER_BETTER.includes(r.key) ? "" : last.value < lastAvg.value ? "better" : last.value > lastAvg.value ? "worse" : "";
+      const cmp = !lastAvg || !lowerBetter.has(r.key) ? "" : last.value < lastAvg.value ? "better" : last.value > lastAvg.value ? "worse" : "";
       return { lo: at(lo), hi: at(hi), last: at(last.value), avg: lastAvg ? at(lastAvg.value) : null, base: r.baseline != null ? at(r.baseline) : null, cmp,
         spark: cols.map((day, i) => { const v = r.values.find(x => x.day === day); return v && v.value != null ? { day, x: cols.length > 1 ? i / (cols.length - 1) : 0.5, y: at(v.value) } : null; }).filter(Boolean),
         now: show(r, last.value), day: last.day, avgText: lastAvg ? show(fine, lastAvg.value) : "–",
@@ -1021,6 +1023,16 @@ function model(DATA) {
     if (!R || !(R.m || []).length) return { empty: (R && R.empty) || "nothing is merged yet, so there is no strand to read." };
     return Object.assign({}, R, { ledger: { n: (L.hand_offs || []).length, open: last.open || 0, numbered: last.open_numbered || 0 } });
   }
+  /* Graph 2 as a gel, and graphs 3 to 5 as proteins: counted in scripts/spec_drift_views.py (gel, protein). */
+  function gelGraph() {
+    const G = DATA.gel;
+    return G && (G.panels || []).length ? G : { empty: (G && G.empty) || "no yardstick is counted yet, so there is no gel to run." };
+  }
+  function prtGraph() {
+    const P = DATA.protein, Q = (safe(quality) || {}).abilities || {};
+    if (!P || !(P.chains || []).length) return { empty: (P && P.empty) || "no criterion is on record yet, so there is no chain to fold." };
+    return Object.assign({}, P, { chains: P.chains.map(c => Object.assign({}, c, { parts: c.key in Q ? Q[c.key].parts : null })) });
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -1154,7 +1166,7 @@ function model(DATA) {
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -2583,6 +2595,341 @@ function mergeDraw(D, get, onDay) {
   if (!readHash()) sync();
 }
 
+/* The pointer box of a mockup section: `D` maps a mark's data-k (or what `key(el)` reads) to a title, an optional
+   quote and lines, each built as text. Shared by the gel and the proteins. */
+function pointerBox(fig, tip, show, key) {
+  const place = (x, y) => { const w = tip.offsetWidth, ht = tip.offsetHeight; let t = y + 18; if (t + ht > innerHeight - 8) t = Math.max(8, y - ht - 12);
+    tip.style.left = Math.max(8, Math.min(x + 14, innerWidth - w - 8)) + "px"; tip.style.top = t + "px"; };
+  const mark = e => e.target && e.target.closest ? e.target.closest(".b") : null;
+  fig.addEventListener("pointerover", e => { const b = mark(e); if (b && show(key(b), b)) place(e.clientX, e.clientY); else { tip.hidden = true; show(null); } });
+  fig.addEventListener("pointermove", e => { if (!tip.hidden) place(e.clientX, e.clientY); });
+  fig.addEventListener("pointerleave", () => { tip.hidden = true; show(null); });
+  fig.addEventListener("focusin", e => { const b = mark(e); if (b && show(key(b), b)) { const r = b.getBoundingClientRect(); place(r.left, r.bottom - 10); } });
+  fig.addEventListener("focusout", () => { tip.hidden = true; show(null); });
+  if (typeof addEventListener === "function") addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+}
+const tipFill = (tip, d) => { tip.replaceChildren(); const div = (c, t) => { const e = document.createElement("div"); e.className = c; e.textContent = t; tip.appendChild(e); };
+  div("t", d.t); (d.l || []).filter(Boolean).forEach(l => Array.isArray(l) ? div(l[0], l[1]) : div("l", l)); if (d.q) div("q", d.q); tip.hidden = false; return true; };
+
+/* Graph 2 as a gel, as the mockup at #228 draws it: counted in scripts/spec_drift_views.py (gel); this lays it out and
+   words it. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #gel. */
+// What one of a yardstick's figures is a figure of, as the pointer box says it.
+const GEL_NOUN = { cost: ["for each merged pull request"], replies: ["reply for each merged pull request", "replies for each merged pull request"],
+  escapes: ["escaped defect", "escaped defects"], parks: ["stop for a person", "stops for a person"], refusals: ["refused call", "refused calls"],
+  gates: ["for the gates"], reread: ["token read again for each token written", "tokens read again for each token written"] };
+const GEL_SHORT = { cost: "cost", replies: "replies", escapes: "escaped defects", parks: "stops for a person", refusals: "refused calls", gates: "the gates' cost", reread: "re-reading" };
+function gelDraw(G, get, onDay) {
+  const $ = id => get("gel-" + id), fig = $("fig"), tip = $("tip");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => (+v).toFixed(1).replace(/\.0$/, "");
+  const fmt = (p, v, dec) => p.unit === "$" ? `$${(+v).toFixed(dec == null ? p.decimals : dec)}` : `${(+v).toFixed(dec == null ? p.decimals : dec)}${p.unit || ""}`;
+  const avgOf = p => fmt(p, p.average, Math.max(1, p.decimals));
+  const noun = (p, v) => { const w = GEL_NOUN[p.key]; return w ? (w.length > 1 && v !== 1 ? w[1] : w[0]) : ""; };
+  const said = (p, v, dec) => `${fmt(p, v, dec)}${noun(p, v) ? " " + noun(p, v) : ""}`;
+  const nice = v => { const e = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1e-9)))); return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map(k => k * e).find(k => k >= v - 1e-9); };
+  const wrap = (s, w) => String(s).split(" ").reduce((ls, word) => { const l = ls[ls.length - 1]; if (l && (l + " " + word).length <= w) ls[ls.length - 1] = l + " " + word; else ls.push(word); return ls; }, []);
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const P = G.panels, days = G.days, N = days.length, PW = 171.1, D = {}, lastDay = days[days.length - 1];
+  const over = p => p.average_over === "days" ? "every Day" : p.average_over === "tokens written" ? "all the tokens written" : p.average_over ? `every ${p.average_over.replace(/s$/, "")}` : "every Day";
+  // the line of figures
+  const fig3 = (num, small, what, sub) => { const d = h("div", null, h("div", { class: "num" }, String(num), small && h("small", null, small)), h("div", { class: "what" }, what), h("div", { class: "sub" }, sub)); return d; };
+  const below = G.below.map(k => GEL_SHORT[k] || k), unjudged = P.filter(p => !p.lower_better).map(p => GEL_SHORT[p.key] || p.key);
+  $("figs").replaceChildren(fig3(G.named, null, "yardsticks the plan names", `one panel each, counted at each Day's close, ${N === 1 ? `Day ${days[0]}` : `Days ${days[0]} to ${lastDay}`}`),
+    fig3(G.below.length, ` of ${G.judged} judged`, "below their average on the last Day counted",
+      (below.length ? `${andList(below).replace(/^./, c => c.toUpperCase())}.` : "None.") + (unjudged.length ? ` Not judged: ${andList(unjudged)}, where no direction is better` : "")),
+    ...G.kit.map(k => { const p = P.find(x => x.key === k.key); return fig3(k.above, ` of ${n(k.of, "Day", "Days")}`, `above the kit's figure for ${k.key}`,
+      `the kit, with a person driving every step: ${fmt(p, k.kit)}${k.last ? `; the last Day: ${fmt(p, k.last.value)}` : ""}`); }));
+  $("k-kit").textContent = G.kit.length ? `${G.kit.length} of the ${G.named} have one: ${andList(G.kit.map(k => k.key))}` : "none of the yardsticks has one";
+  $("stamp").textContent = `Drawn from the page's data at ${G.head || "?"}${G.last_pr ? ` (#${G.last_pr})` : ""}, generated ${G.generated} · ${n(G.named, "yardstick", "yardsticks")} · Days ${days[0]} to ${lastDay}`;
+  // the figure
+  fig.replaceChildren();
+  fig.setAttribute("viewBox", `0 0 ${f(P.length * PW)} 307`);
+  fig.setAttribute("aria-label", `${P.length} gels side by side, one for each yardstick. In each, a ladder lane with the kit's figure and the average so far, then one lane for each Day from ${days[0]} to ${lastDay} with one band at the height of that Day's figure`);
+  const lanes = [];
+  P.forEach((p, i) => {
+    const X = i * PW, g = el("g", { class: "pan", "data-y": p.key }), top = nice(Math.max(...p.lanes.map(x => x.value || 0), p.kit || 0, p.average || 0, 1e-9));
+    const Y = v => 271 - v / top * 172, LX = X + 43, LW = (X + 160.1 - LX) / N;
+    wrap(p.name, 28).slice(0, 2).forEach((line, j) => el("text", { class: "t-name", x: f(X), y: 11 + 14 * j }, line, g));
+    const v = p.verdict === "better" || p.verdict === "worse" ? p.verdict : "flat";
+    if (p.last) {
+      el("path", { class: `tri ${v}`, d: v === "better" ? `M${f(X)} 43.5 h9 l-4.5 7z` : `M${f(X)} 50.5 h9 l-4.5 -7z` }, null, g);
+      el("text", { class: `t-val ${v === "flat" ? "" : v}`, x: f(X + 14), y: 55 }, fmt(p, p.last.value), g);
+      el("text", { class: "t-sub", x: f(X), y: 71 }, `Day ${p.last.day}${p.average != null ? ` · avg ${avgOf(p)}` : ""}`, g);
+    }
+    el("rect", { class: "box", x: f(X + 23), y: 82, width: 140.1, height: 198, rx: 7 }, null, g);
+    el("rect", { class: "track ref", x: f(X + 26), y: 87, width: 15, height: 188, rx: 1.5 }, null, g);
+    p.lanes.forEach((x, j) => { el("rect", { class: "track", x: f(LX + j * LW + 0.7), y: 87, width: f(LW - 1.4), height: 188, rx: 1.5 }, null, g);
+      el("rect", { class: "well", x: f(LX + j * LW + 1.7), y: 87, width: f(LW - 3.4), height: 3, rx: 1 }, null, g); });
+    el("text", { class: "t-ax", x: f(X + 19), y: 102.2, "text-anchor": "end" }, fmt(p, top, 0), g);
+    el("text", { class: "t-ax", x: f(X + 19), y: 274.2, "text-anchor": "end" }, fmt(p, 0, 0), g);
+    el("path", { class: "tick", d: `M${f(X + 21)} 99 h3 M${f(X + 21)} 271 h3` }, null, g);
+    // the ladder: the average so far, and the kit's figure where it has one; labels kept apart when the two are close
+    const refs = [["avg", p.average], ["kit", p.kit]].filter(r => r[1] != null).map(([k, val]) => ({ k, val, y: Y(val), ly: Y(val) + 3.2, lo: Y(val) - 6, hi: Y(val) + 6 }));
+    if (refs.length === 2 && Math.abs(refs[0].ly - refs[1].ly) < 10) { const [a, b] = refs[0].y <= refs[1].y ? refs : [refs[1], refs[0]], mid = (a.ly + b.ly) / 2, cut = (a.y + b.y) / 2;
+      a.ly = mid - 5; b.ly = mid + 5; a.hi = cut; b.lo = cut; }
+    refs.forEach(r => { el("path", { class: `across ${r.k}`, d: `M${f(X + 42)} ${f(r.y)} H${f(X + 160.1)}` }, null, g);
+      el("text", { class: "t-ref", x: f(X + 19), y: f(r.ly), "text-anchor": "end" }, r.k, g); });
+    refs.forEach(r => { const b = el("g", { class: "b rb", tabindex: 0, "data-k": `${p.key}-${r.k}`, "aria-label": r.k === "avg" ? `The average so far for ${p.name}: ${avgOf(p)}` : `The kit's figure for ${p.name}: ${fmt(p, p.kit)}` }, null, g);
+      el("rect", { class: "hit", x: f(X + 26), y: f(r.lo), width: 15, height: f(r.hi - r.lo) }, null, b);
+      el("rect", { class: `band ${r.k}`, x: f(X + 27.6), y: f(r.y - 2.3), width: 11.8, height: 4.6, rx: 2.3 }, null, b); });
+    D[`${p.key}-avg`] = { t: `Average so far · ${said(p, p.average, Math.max(1, p.decimals))}`, l: [p.name, `Taken over ${over(p)}, up to Day ${lastDay}.`] };
+    if (p.kit != null) D[`${p.key}-kit`] = { t: `The kit's figure · ${said(p, p.kit)}`, l: [p.name, `What the kit reached with a person driving every step. ${p.above_kit} of the ${p.counted} Days counted are above it.`, p.source ? `Recorded in ${p.source}.` : null] };
+    // a lane per Day
+    p.lanes.forEach((x, j) => {
+      const at = LX + j * LW, last = p.last && p.last.day === x.day, has = x.value != null;
+      const b = el("g", { class: "b ln", tabindex: 0, "data-k": `${p.key}-${x.day}`, "aria-label": `Day ${x.day}: ${has ? fmt(p, x.value) : "no figure"}` }, null, g);
+      el("rect", { class: "hit", x: f(at), y: 84, width: f(LW), height: 194 }, null, b);
+      if (has) el("rect", { class: `band ${last ? "last" : "earlier"}`, x: f(at + 1.2), y: f(Y(x.value) - 2.3), width: f(LW - 2.4), height: 4.6, rx: 2.3 }, null, b);
+      el("text", { class: `t-day ${last ? "last" : has ? "" : "none"}`, x: f(at + LW / 2), y: j % 2 ? 302 : 292, "text-anchor": "middle" }, String(x.day), g);
+      lanes.push([b, x.day]);
+      const cmp = p.average == null ? null : x.value < p.average ? "below" : x.value > p.average ? "above" : "level with";
+      D[`${p.key}-${x.day}`] = has ? { t: `Day ${x.day} · ${said(p, x.value)}`, q: x.text, l: [p.name,
+        p.kit != null ? `${x.value > p.kit ? "Above" : "Within"} the kit's figure of ${fmt(p, p.kit)}.` : null,
+        last && cmp ? `The last Day counted: ${cmp} its average so far, ${avgOf(p)}.` : null] }
+        : { t: `Day ${x.day} · no figure`, q: x.text, l: [p.name, "An empty lane: nothing was counted for this Day."] };
+    });
+    el("text", { class: "t-day ref", x: f(X + 32.5), y: 302, "text-anchor": "middle" }, "ref", g);
+  });
+  // what the picture shows, and where the model bends
+  const li = (list, cls, b, t) => { const e = h("li", { class: cls || null }, h("b", null, b), t); list.appendChild(e); };
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  P.filter(p => p.last).forEach(p => {
+    const rel = p.average == null ? "" : p.last.value < p.average ? "Below" : p.last.value > p.average ? "Above" : "Level with";
+    li(finds, p.lower_better ? p.verdict : "", `${p.name}: ${fmt(p, p.last.value)} on Day ${p.last.day}.`,
+      ` ${rel ? `${rel} its average so far (${avgOf(p)})` : "No average yet"}${p.kit != null ? ` and ${p.last.value > p.kit ? "above" : "within"} the kit's figure (${fmt(p, p.kit)})` : ""}.`
+      + (p.lower_better ? "" : " No direction is better here, so it is not judged.")
+      + (p.drift ? ` Its ${p.counted} bands drift ${p.drift}${p.counted === 2 ? ", and two bands are a thin line to read" : ""}.` : "")
+      + (p.empty ? ` ${p.empty} of its ${N} lanes are empty.` : ""));
+  });
+  const up = P.filter(p => p.drift === "up").length, down = P.filter(p => p.drift === "down").length;
+  $("drift").textContent = `The drift is the sign of a straight line fitted to every band of a panel: up for ${n(up, "yardstick", "yardsticks")}, down for ${down}. It is only a slope. It says nothing of why, and one Day can turn it.`;
+  const emptiest = P.reduce((a, p) => !a || p.empty > a.empty ? p : a, null), kits = P.filter(p => p.kit != null);
+  [["A real gel has one scale.", ` There every lane shares it, and distance means size. Here each of the ${P.length} panels has its own scale and its own unit: compare bands inside a panel, never across panels.`],
+    ["A band is one number, not a quantity of material.", " Its thickness and its darkness measure nothing. The darkest band only marks the last Day counted."],
+    ["An empty lane is not a zero.", ` A band on the floor of the gel is a figure of zero. An empty lane is a Day with no figure${emptiest && emptiest.empty ? `: ${emptiest.empty} of the ${N} lanes for ${GEL_SHORT[emptiest.key] || emptiest.key}` : ""}.`],
+    ["The ladder is short, and half of it moves.", ` It has at most two bands, because the kit recorded only ${n(kits.length, "figure", "figures")}${kits.length ? `: ${andList(kits.map(p => `${fmt(p, p.kit)} for ${p.key}`))}` : ""}. The other band, the average so far, shifts with every Day. A real ladder is a fixed standard.`],
+    ["Dollars are API list prices, not a bill.", " As in graph 8, they say what the tokens would cost at list price, not what was paid."]].forEach(([b, t]) => li(bends, "", b, t));
+  pointerBox(fig, tip, k => k != null && D[k] ? tipFill(tip, D[k]) : false, b => b.getAttribute("data-k"));
+  // the page's Day buttons dim every other Day's lane
+  onDay.push(day => lanes.forEach(([b, d]) => b.classList.toggle("mk-dim", day != null && d !== day)));
+  return fig;
+}
+
+/* Graphs 3 to 5 as proteins, as the mockup at #228 draws them: counted in scripts/spec_drift_views.py (protein); this
+   folds each chain and words it. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in
+   dashboard.css, under #prt. */
+const PRT_MARK = { proven: ["proved", 13], unproven: ["unproved", 11.4], skipped: ["norun", 12], repair: ["stale", 13], broken: ["broken", 13],
+  replaced: ["replaced", 12.1], open: ["unbuilt", 11.9], building: ["unbuilt", 11.9], unchecked: ["unbuilt", 11.9] };
+const PRT_SAYS = { proven: "holds, and a break on purpose proved its test", unproven: "holds, never seen to fail", skipped: "the replay cannot run its check",
+  repair: "its recorded break no longer applies", broken: "does not hold", replaced: "replaced by a later promise", open: "written, not built",
+  building: "not yet in force: its Day is still being built", unchecked: "in force, not re-checked yet" };
+// a chain folded into rows `span` wide: each cell's row and its place along the row; a new Day leaves a wider gap
+function prtFold(cells, span) {
+  const out = []; let row = 0, u = 0;
+  cells.forEach((c, i) => { if (i) { const step = c.day !== cells[i - 1].day ? 20 : 16; if (u + step > span - 15) { row++; u = 0; } else u += step; } out.push({ row, u }); });
+  return out;
+}
+function protDraw(P, get, onDay) {
+  const $ = id => get("prt-" + id), fig = $("fig"), tip = $("tip"), say = $("say");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => (+v).toFixed(1).replace(/\.0$/, "");
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const nums = (a, max) => a.slice(0, max).map(x => "#" + x).join(", ") + (a.length > max ? ` and ${a.length - max} more` : "");
+  const span = ds => ds.length === 1 ? `on Day ${ds[0]}` : `over Days ${ds[0]} to ${ds[ds.length - 1]}`;
+  const wrap = (s, w) => String(s).split(" ").reduce((ls, word) => { const l = ls[ls.length - 1]; if (l && (l + " " + word).length <= w) ls[ls.length - 1] = l + " " + word; else ls.push(word); return ls; }, []);
+  const C = P.chains, D = {}, cellOf = {}, byId = {}, SLOT = 241.6, MAXSPAN = 185, RING = 2 * Math.PI * 8.5;
+  const group = c => c.role === "rung" ? 0 : c.role === "rail" ? 1 : c.key == null ? 2 : 0, TITLE = ["NEEDED TO CLIMB THE LEVELS", "RAILS: NEEDED AT EVERY LEVEL", "NO ABILITY NAMED"];
+  const rungs = C.filter(c => c.role === "rung"), rails = C.filter(c => c.role === "rail"), none = C.find(c => c.key == null);
+  // where each chain folds: the fewest rows MAXSPAN allows, then the narrowest span that keeps them
+  const shape = c => { const rows = k => k.length ? k[k.length - 1].row + 1 : 0, at = rows(prtFold(c.cells, MAXSPAN)); let s = MAXSPAN;
+    if (at > 1) while (s > 60 && rows(prtFold(c.cells, s - 0.5)) === at) s -= 0.5; return { span: s, rows: Math.max(1, at) }; };
+  // the line of figures
+  const cnt = s => P.counts[s] || 0, notYet = P.in_force - P.proven, pct = P.rechecked ? Math.round(100 * P.proven / P.rechecked) : 0;
+  const fig5 = (num, small, what, sub) => h("div", null, h("div", { class: "num" }, String(num), small && h("small", null, small)), h("div", { class: "what" }, what), h("div", { class: "sub" }, sub));
+  const parts = [[cnt("unproven"), "holds but was never seen to fail", "hold but were never seen to fail"], [cnt("skipped"), "the replay cannot run", "the replay cannot run"],
+    [cnt("repair"), "has a recorded break that no longer applies", "have a recorded break that no longer applies"], [cnt("broken"), "does not hold", "do not hold"],
+    [cnt("open"), "was written and not built", "were written and not built"], [cnt("building"), "is not in force yet", "are not in force yet"], [cnt("unchecked"), "is not re-checked yet", "are not re-checked yet"]]
+    .filter(x => x[0]).map(([k, one, many]) => `${k} ${k === 1 ? one : many}`);
+  const W = P.weakest, S = P.strongest, U = P.used;
+  const never = [rungs.some(c => c.run && c.run.how === "stop" && !c.run.n) && "a stop has never been seen", rungs.some(c => c.run && c.run.how === "uncounted") && "a rehearsal is not counted"].filter(Boolean);
+  $("figs").replaceChildren(...[fig5(rungs.length + rails.length, null, "abilities, one protein each", `${rungs.length} needed to climb the levels and ${n(rails.length, "rail", "rails")}.`
+      + (none ? ` ${none.cells.length === 1 ? "1 promise names no ability, and sits alone" : `${none.cells.length} promises name no ability, and sit in a chain of their own`}.` : "")),
+    fig5(P.proven, `of ${P.rechecked}`, "promises proven, of those re-checked", `${pct}%. Of the ${P.written} promises written, ${P.replaced} were replaced and ${P.outside.length} ${P.outside.length === 1 ? "is" : "are"} in force but outside the re-check${P.outside.length ? ` (${P.outside.join(", ")})` : ""}: none of these is re-checked`),
+    fig5(notYet, null, "promises in force, not proven yet", parts.length ? andList(parts) : "none"),
+    W ? fig5(`${Math.round(100 * W.proven / W.rechecked)}%`, null, `the weakest: ${W.name}`, `${W.proven} of its ${W.rechecked} re-checked promises are proven. The strongest is ${S.name}, ${S.proven} of ${S.rechecked}`) : null,
+    fig5(U.n, `of ${U.of}`, "abilities used in a real run", `Of the ${U.of} needed to climb the levels, counted from the ${n(U.steps, "step", "steps")} the driver started on another project.`
+      + (never.length ? ` ${andList(never).replace(/^./, c => c.toUpperCase())}.` : ""))].filter(Boolean));
+  // the key's counts, and the one criterion outside the re-check
+  [["proven", "proven"], ["unproven", "unproven"], ["skipped", "skipped"], ["open", "open"], ["repair", "repair"], ["broken", "broken"], ["replaced", "replaced"]].forEach(([k, s]) => { const e = $(`k-${k}`); if (e) e.textContent = String(cnt(s)); });
+  $("k-back").textContent = String(P.back);
+  $("k-all").textContent = `All ${P.written} promises are drawn; ${P.rechecked} of them are what the last re-check counted.` + (cnt("open") ? ` ${cnt("open")} ${cnt("open") === 1 ? "was" : "were"} written and not built (${C.flatMap(c => c.cells).filter(x => x.state === "open").map(x => x.id).join(", ")}): in force, and outside the re-check.` : "");
+  $("stamp").textContent = `Drawn from the page's data at ${P.head || "?"}${P.last_pr ? ` (#${P.last_pr})` : ""}, generated ${P.generated} · ${n(P.written, "promise", "promises")} in ${n(C.length, "chain", "chains")}`;
+  // the figure: one box per chain, five to a row, a row for the rungs and one for the rest
+  fig.replaceChildren();
+  const defs = el("defs", {}), pat = el("pattern", { id: "prt-pat-norun", width: 3, height: 3, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+  el("rect", { class: "pn-bg", width: 3, height: 3 }, null, pat); el("rect", { class: "pn-l", width: 1.4, height: 3 }, null, pat);
+  const rows = [[], []]; C.forEach(c => rows[group(c) === 0 ? 0 : 1].push(c));
+  const lines = []; rows.filter(r => r.length).forEach(r => { for (let i = 0; i < r.length; i += 5) lines.push(r.slice(i, i + 5)); });
+  const chainAt = (c, x0, y0, sh, tab) => {
+    // one chain: the dot, the bone through every cell row by row, a Day's number over its first cell
+    const xL = x0 + 20, xR = xL + sh.span, places = prtFold(c.cells, sh.span), Y = r => y0 + 30 * r;
+    const cx = p => p.row % 2 ? xR - 7.5 - p.u : xL + 7.5 + p.u, last = places[places.length - 1];
+    let d = `M${f(x0 + 15)} ${f(y0)}`;
+    for (let r = 0; r <= last.row; r++) { d += ` H${f(r === last.row ? cx(last) : r % 2 ? xL : xR)}`; if (r < last.row) d += ` a7.5 15 0 0 ${r % 2 ? 0 : 1} 0 30`; }
+    el("path", { class: "bone", d }); el("circle", { class: "nterm", cx: f(x0 + 15), cy: f(y0), r: 2.6 });
+    const gs = [];
+    c.cells.forEach((x, i) => {
+      const p = places[i], X = cx(p), Yc = Y(p.row);
+      if (!i || x.day !== c.cells[i - 1].day) el("text", { class: "t-day", "data-d": x.day, x: f(X), y: f(Yc - 9.5), "text-anchor": "middle" }, String(x.day));
+      const g = el("g", { class: "b rs", "data-c": x.id, "data-d": x.day, tabindex: tab ? (i ? -1 : 0) : null });
+      if (tab) el("rect", { class: "hit", x: f(X - 8), y: f(Yc - 8.5), width: 16, height: 17 }, null, g);
+      const [cls, s] = PRT_MARK[x.state] || PRT_MARK.unchecked, scar = x.state === "proven" && x.back;
+      const sz = scar ? 11.7 : s;
+      el("rect", { class: `m ${cls}${scar ? " scar" : ""}`, x: f(X - sz / 2), y: f(Yc - sz / 2), width: f(sz), height: f(sz), rx: 3.2 }, null, g);
+      if (cls === "stale") el("path", { class: "sign", d: `M${f(X)} ${f(Yc - 3.6)}v4.2 M${f(X)} ${f(Yc + 3.4)}v.1` }, null, g);
+      if (cls === "broken") el("path", { class: "sign", d: `M${f(X - 2.6)} ${f(Yc - 2.6)}l5.2 5.2 M${f(X + 2.6)} ${f(Yc - 2.6)}l-5.2 5.2` }, null, g);
+      if (tab) { cellOf[x.id] = g; byId[x.id] = x; gs.push(g); }
+      x.at = { X, Y: Yc };
+    });
+    return { gs, places, xL, xR, cx, Y };
+  };
+  let top = 20.5, lastTop = top;
+  const walk = [];
+  lines.forEach(line => {
+    const extra = Math.max(...line.map(c => wrap(c.name, 30).length)) > 1 ? 15 : 0, shapes = line.map(shape);
+    const more = 30 * Math.max(0, Math.max(...shapes.map(s => s.rows)) - 4), H = 285 + extra + more, rule = top + 168.5 + extra + more;
+    let seen = null;
+    lastTop = top;
+    line.forEach((c, i) => {
+      const x0 = 0.5 + i * SLOT, xt = x0 + 11.5, g = group(c);
+      if (g !== seen) { el("text", { class: "t-grp", x: f(i ? x0 - 0.5 : 0), y: f(top - 8.5) }, TITLE[g]); seen = g; }
+      const box = el("g", { class: "prot", "data-a": c.key == null ? "none" : c.key, role: "group", "aria-label": `${c.name}: ${n(c.cells.length, "promise", "promises")}, ${c.proven} of ${c.rechecked} proven` });
+      el("rect", { class: "tl", x: f(x0), y: f(top), width: 228.6, height: H, rx: 8 }, null, box);
+      const name = el("text", { class: "t-name", x: f(xt), y: f(top + 22.5) }, null, box);
+      wrap(c.name, 30).forEach((l, j) => el("tspan", { x: f(xt), dy: j ? 15 : 0 }, l, name));
+      const sub = el("text", { class: "t-sub", x: f(xt), y: f(top + 36.5 + extra) }, null, box);
+      if (c.score != null) el("tspan", { class: "b sc", "data-k": "sc", "data-v": c.key, tabindex: 0 }, `score ${c.score}`, sub);
+      el("tspan", {}, `${c.score == null ? "no score" : ""} · ${n(c.cells.length, "promise", "promises")}`, sub);
+      walk.push(c.cells.length ? chainAt(c, x0, top + 66 + extra, shapes[i], true).gs : []);
+      el("path", { class: "rule", d: `M${f(xt)} ${f(rule)}H${f(x0 + 217.1)}` });
+      const ring = el("g", { class: "b arc", "data-k": "ring", "data-v": c.key == null ? "none" : c.key, tabindex: 0 });
+      el("rect", { class: "hit", x: f(xt), y: f(rule + 6), width: 205.6, height: 24 }, null, ring);
+      el("circle", { class: "ring-bg", cx: f(x0 + 22.5), cy: f(rule + 18), r: 8.5 }, null, ring);
+      if (c.proven) el("circle", { class: "ring-fg", cx: f(x0 + 22.5), cy: f(rule + 18), r: 8.5, "stroke-dasharray": `${(RING * c.proven / c.rechecked).toFixed(2)} ${RING.toFixed(2)}`, transform: `rotate(-90 ${f(x0 + 22.5)} ${f(rule + 18)})` }, null, ring);
+      el("text", { class: "t-ring", x: f(x0 + 39.5), y: f(rule + 22) }, c.rechecked ? `${c.proven} of ${c.rechecked} proven` : "none re-checked", ring);
+      const prs = c.key == null ? Object.entries(c.cells.reduce((a, x) => { (a[x.day] = a[x.day] || []).push(...x.prs); return a; }, {})).map(([d, l]) => [+d, [...new Set(l)]]) : c.prs;
+      const k = prs.reduce((s, x) => s + x[1].length, 0);
+      const pt = el("text", { class: "b t-pr", "data-k": "pr", "data-v": c.key == null ? "none" : c.key, tabindex: 0, x: f(xt), y: f(rule + 44) });
+      [`${n(k, "pull request", "pull requests")}${prs.length ? " " + span(prs.map(x => x[0])) : ""}`, ...(c.between.length ? [`${c.between.length} more between Days,`, "which made no promise"] : [])]
+        .forEach((l, j) => el("tspan", { x: f(xt), dy: j ? 12 : 0 }, l, pt));
+      const key = c.key == null ? "none" : c.key;
+      D[`pr:${key}`] = { t: `${c.name} · ${n(k + c.between.length, "pull request", "pull requests")}`, l: [...prs.map(x => `Day ${x[0]}: ${nums(x[1], 12)}`),
+        c.between.length ? ["q", `Between Days: ${nums(c.between, 8)}. They grew the ability and built no promise drawn here.`] : null] };
+      D[`ring:${key}`] = { t: `${c.name} · ${c.proven} of ${c.rechecked} proven`, l: [`${n(c.cells.length, "promise", "promises")} in the chain: ${Object.entries(c.counts).map(([s, v]) => `${v} ${lower(STATES[s] ? STATES[s].word : s)}`).join(", ")}.`,
+        ["q", "The count is graph 3's: only the promises the last re-check counted. A replaced promise, and one written and not built, stay in the chain and out of the count."]] };
+      if (c.score != null) D[`sc:${key}`] = { t: `${c.name} · score ${c.score}`, l: [`The dashboard's score for the ability, out of 100${c.parts ? `: ${c.parts}` : ""}.`] };
+      const R = c.run;
+      if (R) {
+        const by = R.parks.reduce((a, p) => { const w = p.by === "fault" ? "on a fault" : /every day is done/i.test(p.line) ? "with every day done" : `by the ${p.by}`; a[w] = (a[w] || 0) + 1; return a; }, {});
+        const crash = R.crashes[0], faultAt = crash && R.parks.some(p => p.pr === crash.pr && p.by === "fault");
+        const word = R.how === "rail" ? ["does not apply", "a rail, not a step of a run", "na"] : R.how === "uncounted" ? ["not counted", "the run log keeps no rehearsal", "na"]
+          : R.how === "loop" ? [`${R.n} of ${n(R.of, "step", "steps")}`, "reached their merge with no park", R.n ? "seen" : "never"]
+          : R.how === "park" ? [n(R.n, "park", "parks"), Object.entries(by).map(([w, v]) => `${v} ${w}`).join(", ") || "none in the run log", R.n ? "seen" : "never"]
+          : R.how === "recover" ? [n(R.n, "crash", "crashes"), R.n === 1 ? `it ended ${crash.ended === "parked" ? `in a park${faultAt ? " on a fault" : ""}` : crash.ended}` : R.n ? `${R.n} steps with a crash` : `no crash recorded in ${R.of} steps`, R.n ? "seen" : "never"]
+          : R.n ? [n(R.n, "stop", "stops"), `in ${n(R.of, "step", "steps")}`, "seen"] : ["never yet", `no stop recorded in ${n(R.of, "step", "steps")}`, "never"];
+        const rg = el("g", { class: "b run", "data-k": "run", "data-v": key, tabindex: 0, role: "img", "aria-label": `In real runs: ${word[0]}. ${word[1]}` });
+        const yb = top + H - 33;
+        el("rect", { class: "rhit", x: f(xt), y: f(yb), width: 205.6, height: 31 }, null, rg);
+        el("path", { class: "rdiv", d: `M${f(xt)} ${f(yb - 1)}H${f(x0 + 217.1)}` }, null, rg);
+        el("rect", { class: `rm ${word[2]}`, x: f(xt), y: f(yb + 6.5), width: 9, height: 9, rx: 2 }, null, rg);
+        const tr = el("text", { class: "t-run", x: f(xt + 14), y: f(yb + 14.5) }, "In real runs", rg);
+        el("tspan", { class: "rv", dx: 6 }, word[0], tr);
+        el("text", { class: "t-sub", x: f(xt), y: f(yb + 27) }, word[1], rg);
+        const from = P.source ? ["q", `Counted from the driver's run log (${P.source}${P.counted ? `, counted ${String(P.counted).slice(0, 16).replace("T", " ")}` : ""}). Which step counts for which ability is the maintainer's reading, not the data's.`] : null;
+        const others = R.of - (R.merged || []).length;
+        D[`run:${key}`] = { t: `${c.name} · in real runs: ${word[0]}`, l: R.how === "rail" ? ["Does not apply. A rail is needed at every level and is not used by one step of a run, so the driver's count has no figure for it.", from]
+          : R.how === "uncounted" ? ["Not counted. The run log records the steps the driver started, and a rehearsal starts none, so the count cannot show this ability in use.", from]
+          : R.how === "loop" ? [`${R.n} of the ${n(R.of, "step", "steps")} the driver started reached their merge with no park${R.prs.length ? `: ${nums(R.prs.filter(x => x != null), 8)}` : ""}.`,
+            ["q", `The other ${others}: ${andList([R.crashes.length && `${n(R.crashes.length, "crashed", "crashed")} (${nums(R.crashes.map(x => x.pr).filter(x => x != null), 4)})`, R.parks.filter(p => p.pr == null).length && `${R.parks.filter(p => p.pr == null).length} ${R.parks.filter(p => p.pr == null).length === 1 ? "was a park" : "were parks"} with no step of its own`, R.open.length && `${R.open.length} ${R.open.length === 1 ? "is" : "are"} still open (${nums(R.open, 4)})`].filter(Boolean))}. A step still open is counted in no ability yet.`], from]
+          : R.how === "park" ? [`${n(R.n, "park", "parks")} in the ${n(R.of, "step", "steps")} the driver started.`, ...R.parks.map(p => ["q", `${p.pr != null ? `#${p.pr}` : "With no step of its own"}: ${p.line || p.by}.`]),
+            R.crashes.length ? ["q", "A step that crashed and then parked is counted here and under the crash too: it is one step, not two."] : null, from]
+          : R.how === "recover" ? [`${n(R.n, "crash", "crashes")} in ${n(R.of, "step", "steps")}${R.prs.length ? `, on ${nums(R.prs.filter(x => x != null), 4)}` : ""}.`,
+            ...R.crashes.map(x => ["q", `#${x.pr}: the step ended ${x.ended}, over ${n(x.sessions, "session", "sessions")}. The count does not say who started the next. Its park is counted under "${(C.find(a => a.run && a.run.how === "park") || {}).name || "park"}" as well: the same step.`]), from]
+          : [R.n ? `${n(R.n, "stop", "stops")} in ${n(R.of, "step", "steps")}.` : `Never yet. In the ${n(R.of, "step", "steps")} the driver started on another project, the count records no stop.`,
+            ["q", `The chain above is ${c.proven} of ${c.rechecked} proven: by tests, not by a stop in a real run.`], from] };
+      }
+    });
+    top += H + 23;
+  });
+  // how to read one: the shortest rung chain of six or more, folded narrower, with four numbered marks
+  const free = 5 - lines[lines.length - 1].length, ex = rungs.filter(c => c.cells.length >= 6).sort((a, b) => a.cells.length - b.cells.length)[0];
+  let VH = top - 23 + 36;
+  if (ex && free >= 2) {
+    const x0 = 0.5 + (5 - free) * SLOT + 15, kp = el("g", { class: "keyp", "aria-label": "How to read a protein" });
+    el("text", { class: "t-name", x: f(x0), y: f(lastTop + 22.5) }, "How to read one", kp);
+    const t = el("text", { class: "t-sub", x: f(x0), y: f(lastTop + 37.5) }, null, kp);
+    [`“${ex.name}” again,`, "folded narrower. The order along", "the chain is the same."].forEach((l, j) => el("tspan", { x: f(x0), dy: j ? 13 : 0 }, l, t));
+    const copy = { cells: ex.cells.map(x => Object.assign({}, x)) };
+    const m = chainAt(copy, x0 + 18.5, lastTop + 120, { span: 95, rows: 0 }, false);
+    const first = copy.cells[0], lastC = copy.cells[copy.cells.length - 1], kn = (k, x, y) => { el("circle", { class: "kn", cx: f(x), cy: f(y), r: 7 }); el("text", { class: "t-kn", x: f(x), y: f(y + 3.3), "text-anchor": "middle" }, String(k)); };
+    kn(1, x0 + 18.5, lastTop + 120); kn(2, first.at.X, first.at.Y - 25.5);
+    if (m.places[m.places.length - 1].row > 0) kn(3, m.xR + 17.5, lastTop + 135);
+    kn(4, lastC.at.X - 18.5, lastC.at.Y);
+    const notes = [`Start at the dot. The first cell is the first promise built: ${first.id}, on Day ${first.day}.`, "A small number is a Day. The cell under it is that Day's first promise in this chain.",
+      "At the end of a row the chain turns back. The turn says nothing.", `The last cell is the newest promise: ${lastC.id}, on Day ${lastC.day}.`, "The same cell size everywhere: a longer chain is a larger protein."];
+    let y = lastTop + 27.5;
+    notes.forEach((s, j) => { if (j < 4) kn(j + 1, x0 + 206, y - 3.5); const tx = el("text", { class: "t-key", x: f(x0 + 220), y: f(y) }, null, kp);
+      const ls = wrap(s, 40); ls.forEach((l, i) => el("tspan", { x: f(x0 + 220), dy: i ? 13.5 : 0 }, l, tx)); y += 13.5 * ls.length + 7; });
+  }
+  fig.setAttribute("viewBox", `0 0 1196 ${f(VH)}`);
+  // what the picture shows, and where the model bends
+  const li = (list, b, t, ids) => { const e = h("li", ids && ids.length ? { "data-t": ids.join(" "), tabindex: 0 } : null, h("b", null, b), t); list.appendChild(e); return e; };
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  const real = C.filter(c => c.key != null && c.cells.length), big = [...real].sort((a, b) => b.cells.length - a.cells.length), most = big.filter(c => c.cells.length === big[0].cells.length);
+  if (big.length) li(finds, `The largest ${most.length > 1 ? "proteins are" : "protein is"} ${andList(most.map(c => `“${c.name}”`))}, ${big[0].cells.length} residues${most.length > 1 ? " each" : ""}.`,
+    ` The smallest is “${big[big.length - 1].name}”, ${big[big.length - 1].cells.length}. Size is how many promises the specs made for an ability, not how well it works.`);
+  const full = real.filter(c => c.rechecked && c.proven === c.rechecked);
+  full.forEach(c => li(finds, `“${c.name}” has every re-checked residue proven: ${c.proven} of ${c.rechecked}.`,
+    ` Its chain still holds ${c.cells.length - c.rechecked} more that the count leaves out${c.cells.length > c.rechecked ? ` (${c.cells.filter(x => !COUNTED.includes(x.state)).map(x => x.id).join(", ")})` : ""}.`));
+  C.forEach(c => { const not = c.cells.filter(x => x.state !== "proven" && x.state !== "replaced"); if (!not.length) return;
+    const by = s => not.filter(x => x.state === s).map(x => x.id);
+    li(finds, `“${c.name}” holds ${n(not.length, "residue", "residues")} not proven.`, " " + Object.keys(PRT_SAYS).filter(s => by(s).length).map(s => `${PRT_SAYS[s]}: ${by(s).join(", ")}`).join("; ").replace(/^./, x => x.toUpperCase()) + ".", not.map(x => x.id)); });
+  const perDay = {}; C.forEach(c => c.cells.forEach(x => { (perDay[x.day] = perDay[x.day] || []).push(x.id); }));
+  const dayMost = Object.keys(perDay).sort((a, b) => perDay[b].length - perDay[a].length)[0];
+  if (dayMost) li(finds, `Day ${dayMost} added the most residues: ${perDay[dayMost].length}.`, "", perDay[dayMost]);
+  const back = C.flatMap(c => c.cells).filter(x => x.state === "proven" && x.back).map(x => x.id);
+  if (back.length) li(finds, `${n(back.length, "residue is", "residues are")} proven now and edged.`, ` The replay once saw each stop holding, and it came back: ${back.join(", ")}.`, back);
+  const between = C.reduce((s, c) => s + c.between.length, 0), shared = C.flatMap(c => c.cells).filter(x => x.also.length).length;
+  [["The fold's shape means nothing.", " Only the order along the chain does. A chain turns where its tile runs out of room, and two cells that touch across a row have nothing to do with each other."],
+    ["A real protein folds one way, and works or does not.", " These work residue by residue: a chain with one hollow cell still has every other promise proven."],
+    ["Time is only the Day numbers.", " A chain says the order promises were built in, not how long it took. The Day axis is in the folded graph below."],
+    ["Pull requests between Days grew an ability and added no residue.", ` ${n(between, "pull request is", "pull requests are")} counted under a chain and drawn nowhere in it.`],
+    ["A residue sits in one protein only.", ` ${n(shared, "promise touches", "promises touch")} more than one ability. Each is drawn once, under the first of its abilities in the dashboard's order. The pointer says which others it grew.`],
+    ["A replaced residue stays in the chain.", ` In a cell it would be cut out. Here the ${cnt("replaced")} hollow cells keep their place, so a chain's length is every promise ever made for the ability.`]].forEach(([b, t]) => li(bends, b, t));
+  // the pointer box, the kin of a replaced promise lit with it, the arrow keys along a chain
+  const kin = id => { const x = byId[id]; if (!x) return []; const ids = [...x.replaced_by]; Object.values(byId).forEach(y => { if (y.replaced_by.includes(id)) ids.push(y.id); }); return ids.length ? [id, ...ids] : []; };
+  const light = ids => { fig.classList.remove("foc"); Object.values(cellOf).forEach(g => g.classList.remove("lit")); const on = ids.filter(id => cellOf[id]); on.forEach(id => cellOf[id].classList.add("lit")); if (on.length) fig.classList.add("foc"); };
+  const cellTip = x => ({ t: `${x.id} · Day ${x.day} · ${x.tag === "hold" ? "safety check" : "new work"}`, l: [x.text,
+    ["st", `${PRT_SAYS[x.state].replace(/^./, c => c.toUpperCase())}${x.state === "proven" && x.back ? "; the replay once saw it stop, and it came back" : ""}${x.state === "replaced" ? `: ${x.replaced_by.join(", ")}` : ""}${x.last && COUNTED.includes(x.state) ? ` (last re-checked at #${x.last})` : ""}. Graph 3 calls it “${(STATES[x.state] || STATES.unchecked).word}”.`],
+    ["q", x.prs.length ? `Cites ${n(x.prs.length, "pull request", "pull requests")}: ${nums(x.prs, 10)}.` : "Cites no pull request."],
+    ...x.stops.filter(s => x.state !== "replaced" || s.held).map(s => ["q", `At #${s.pr} the replay first reported “${s.state}”${s.held ? `, and it held again by #${s.held}.` : ", and it has not been seen holding since."}`]),
+    x.also.length ? ["q", `Drawn here, and it also grows: ${x.also.map(a => (C.find(c => c.key === a) || {}).name || a).join(", ")}.`] : null] });
+  pointerBox(fig, tip, (k, b) => { if (k == null) { light([]); return false; } const x = byId[k]; if (x) { light(kin(k)); return tipFill(tip, cellTip(x)); } light([]); return D[k] ? tipFill(tip, D[k]) : false; },
+    b => b.getAttribute("data-c") || `${b.getAttribute("data-k")}:${b.getAttribute("data-v")}`);
+  fig.addEventListener("keydown", e => { const b = e.target && e.target.closest ? e.target.closest(".rs") : null; if (!b) return;
+    const list = walk.find(l => l.includes(b)), i = list ? list.indexOf(b) : -1, step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (i < 0 || !step || !list[i + step]) return; e.preventDefault(); b.setAttribute("tabindex", "-1"); list[i + step].setAttribute("tabindex", "0"); list[i + step].focus(); });
+  finds.addEventListener("pointerover", e => { const l = e.target && e.target.closest ? e.target.closest("li[data-t]") : null; light(l ? l.getAttribute("data-t").split(" ") : []); });
+  finds.addEventListener("pointerleave", () => light([]));
+  // the page's Day buttons light one Day's promises
+  const days = fig.querySelectorAll ? () => [...fig.querySelectorAll(".t-day")] : () => [];
+  onDay.push(day => { Object.values(cellOf).forEach(g => g.classList.toggle("off", day != null && +g.getAttribute("data-d") !== day));
+    days().forEach(t => t.classList.toggle("off", day != null && +t.getAttribute("data-d") !== day));
+    const k = day == null ? 0 : Object.values(byId).filter(x => x.day === day).length, in_ = day == null ? 0 : C.filter(c => c.cells.some(x => x.day === day)).length;
+    say.textContent = day == null ? "" : k ? `Day ${day}: ${n(k, "promise", "promises")}, in ${n(in_, "chain", "chains")}.` : `Day ${day} made no promise.`; });
+  return fig;
+}
+
 function draw(M, DATA) {
   const $ = id => document.getElementById(id);
   const put = (id, ...kids) => { const box = $(id); box.replaceChildren(...kids.flat(Infinity).filter(c => c != null && c !== false)); return box; };
@@ -2716,6 +3063,14 @@ function draw(M, DATA) {
     else if (r.empty) put("rdg-scroll", h("p", { class: "load-error" }, "Not measured yet: ", rich(r.empty)));
     else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
+
+  /* Graph 2 as a gel, and graphs 3 to 5 as proteins, in their places; the graphs themselves are folded under them */
+  [["gel", gelDraw], ["prt", protDraw]].forEach(([k, fn]) => {
+    const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
+    if (g.error) failed(g.error);
+    else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
+    else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
+  });
 
   /* Graph 1 */
   graph("g1", (m, mark) => {
