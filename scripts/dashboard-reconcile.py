@@ -11,6 +11,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -73,7 +74,35 @@ def merge_line(m):
                    f"promise tiles: {sum(states.values())} ({say(theirs)}): " + ("agree" if agree else "DISAGREE"))
 
 
-SECTIONS = [gene_line, merge_line]
+def ring_line(m):
+    """The ring against the old tiles ("Where we are", folded under it): the same Days closed of the same Days
+    numbered; and its promises built against graph 1's (the look-ahead's last column)."""
+    w, tiles, g1 = m.get("whr") or {}, m.get("where") or {}, m.get("g1") or {}
+    if w.get("error") or w.get("empty"):
+        agree = not tiles or bool(tiles.get("error"))
+        return agree, f"where we are: no ring ({w.get('error') or w.get('empty')}) | tiles: " + ("none either: agree" if agree else "DISAGREE")
+    a, b = (re.match(r"(\d+) of (\d+) numbered Days finished", tiles.get("count") or "") or re.match("()()", "")).groups()
+    c, e = (re.match(r"(\d+) of (\d+) promises built", (g1.get("read") or {}).get("t") or "") or re.match("()()", "")).groups()
+    ours, theirs = [w["closed"], w["numbered"], w["built"], w["written"]], [a, b, c, e]
+    agree = [str(n) for n in ours] == theirs
+    return agree, (f"where we are: ring {w['closed']} of {w['numbered']} Days closed, {w['built']} of {w['written']} promises built | "
+                   f"tiles {a or '?'} of {b or '?'}, look-ahead {c or '?'} of {e or '?'}: " + ("agree" if agree else "DISAGREE"))
+
+
+def reading_line(m):
+    """Graph 1's reading against the look-ahead it is read from: an arc for every hand-off of its ledger, and as many
+    open, and open with a number, as its last column counts."""
+    r = m.get("rdg") or {}
+    if r.get("error") or r.get("empty"):
+        return False, f"reading: not drawn ({r.get('error') or r.get('empty')})"
+    led = r["ledger"]
+    ours, theirs = [len(r["h"]), r["open"], r["numbered"]], [led["n"], led["open"], led["numbered"]]
+    agree = ours == theirs
+    return agree, (f"reading: {ours[0]} arcs, {ours[1]} open, {ours[2]} numbered | "
+                   f"look-ahead {theirs[0]} hand-offs, {theirs[1]} open, {theirs[2]} numbered: " + ("agree" if agree else "DISAGREE"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line]
 
 
 def main(argv=None):

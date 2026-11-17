@@ -1010,6 +1010,17 @@ function model(DATA) {
   }
 
   /* The merge graph: counted in scripts/spec_drift_views.py (merge_graph), drawn by mergeDraw as it stands. */
+  /* "Where we are" as a ring, and graph 1 read as a gene: counted in scripts/spec_drift_views.py (where_ring, reading);
+     the reading carries what dashboard-reconcile.py holds it to, the look-ahead's own ledger and last column. */
+  function whrGraph() {
+    const W = DATA.where_ring;
+    return W && (W.slots || []).length ? W : { empty: (W && W.empty) || "plan.md lists no phase with its Days, so there is no plan to draw as a ring." };
+  }
+  function rdgGraph() {
+    const R = DATA.reading, L = DATA.look_ahead || {}, C = L.columns || [], last = C[C.length - 1] || {};
+    if (!R || !(R.m || []).length) return { empty: (R && R.empty) || "nothing is merged yet, so there is no strand to read." };
+    return Object.assign({}, R, { ledger: { n: (L.hand_offs || []).length, open: last.open || 0, numbered: last.open_numbered || 0 } });
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -1143,7 +1154,7 @@ function model(DATA) {
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -1725,6 +1736,500 @@ function geneDraw(m, box, tip, forDays) {
   return { light: ids => light(ids.map(id => `[data-p="${id}"]`).join(","), "foc"), clear };
 }
 
+/* "Where we are" as one turn of a cell's cycle, in the old panel's place: a segment per Day plan.md numbers, read
+   clockwise from the top, each phase's arc outside its Days, a gate at each stop and a hand where the work stands.
+   Layout only, as the mockup at #228 drew it: every count it prints is in DATA.where_ring, counted by
+   scripts/spec_drift_views.py (where_ring). `get` finds an element by its id; `onDay` is the page's Day buttons and
+   `press(day)` presses one. Colours are in dashboard.css, under #whr. */
+const RING_WORD = { done: "done", open: "closed, boxes open", active: "in progress", ready: "spec written", next: "next, no spec yet",
+  planned: "provisional: plan.md names it, no spec yet", cut: "cut" };
+function ringDraw(W, get, onDay, press) {
+  const NS = "http://www.w3.org/2000/svg", $ = id => get("whr-" + id), fig = $("fig"), tip = $("tip");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const span = ds => !ds.length ? "" : ds.length === 1 ? `Day ${ds[0]}` : `Days ${ds[0]} to ${ds[ds.length - 1]}`;
+  const runs = ds => { const out = []; ds.forEach(d => { const r = out[out.length - 1]; if (r && d === r[1] + 1) r[1] = d; else out.push([d, d]); });
+    return andList(out.map(([a, b]) => a === b ? String(a) : `${a} to ${b}`)); };
+  const wrap = (s, w) => String(s).split(" ").reduce((ls, word) => { const l = ls[ls.length - 1]; if (l && (l + " " + word).length <= w) ls[ls.length - 1] = l + " " + word; else ls.push(word); return ls; }, []);
+  const CX = 280, CY = 168, RO = 138, RI = 100, RP = 146, RL = 119, PAD = 3.6, GAP = 1.2, TRIM = 1.6, VW = 572, VH = 326;
+  const S = W.slots, N = Math.max(1, S.length), PITCH = (360 - 2 * PAD + GAP) / N, f = v => v.toFixed(1);
+  const pt = (a, r) => [CX + r * Math.sin(a * Math.PI / 180), CY - r * Math.cos(a * Math.PI / 180)];
+  const P = (a, r) => pt(a, r).map(f).join(" ");
+  const arc = (a0, a1, r) => `M${P(a0, r)} A${r.toFixed(1)} ${r.toFixed(1)} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${P(a1, r)}`;
+  const band = (a0, a1) => `${arc(a0, a1, RO)} L${P(a1, RI)} A${RI.toFixed(1)} ${RI.toFixed(1)} 0 ${a1 - a0 > 180 ? 1 : 0} 0 ${P(a0, RI)} Z`;
+  const start = i => PAD + PITCH * i, end = i => start(i) + PITCH - GAP, mid = i => start(i) + (PITCH - GAP) / 2;
+  const phaseOf = p => W.phases.find(x => x.phase === p) || { name: "", days: [] };
+  const phaseName = p => p == null ? "Before the plan's list" : `${p}. ${phaseOf(p).name}`;
+  const closed = s => s.state === "done" || s.state === "open";
+  const D = {};
+
+  // the words each mark says when pointed at: the pointer box and the mark's label alike
+  W.phases.forEach(p => {
+    D[p.k] = { t: `Phase ${phaseName(p.phase)}`, l: [p.days.length ? `${span(p.days)}: ${p.closed} of ${p.total} closed`
+      : `No Day of it is numbered yet: the plan says only that it starts at Day ${p.from_day}.`,
+    p.stop != null ? `The plan stops for the maintainer after Day ${p.stop}: ${p.lifted ? "passed, lifted by a course correction" : "ahead"}.`
+      : p.days.length ? "No stop after it: the next phase follows without waiting." : null] };
+  });
+  S.forEach(s => {
+    if (s.state === "stub") { D[s.k] = { t: `From Day ${s.from_day} · not numbered yet`, l: [`Phase ${phaseName(s.phase)}`,
+      `The plan names this phase and says it starts at Day ${s.from_day}. It numbers none of its Days yet, so the ring cannot say how long it is.`] }; return; }
+    const spec = s.total || s.prs.n;
+    D[s.k] = { t: `Day ${s.day} · ${RING_WORD[s.state]}`, q: s.title || s.name, l: [`Phase ${phaseName(s.phase)}`,
+      ...(spec ? [`${n(s.total, "promise", "promises")}, ${s.ticked} ticked`, `${n(s.prs.n, "pull request", "pull requests")}: ${s.prs.code} code, ${s.prs.spec} spec, ${s.prs.close} close`,
+        s.state === "active" && s.tracks ? `${s.merged} of ${s.tracks} tracks merged` : null,
+        s.score != null ? `Score ${s.score} of 100; its lowest part: ${s.low}` : null] : ["No spec yet: no promises, no pull requests, no score"]),
+      s.end ? "Ends a phase" : null,
+      s.stop ? `A stop follows it: ${s.stop === "passed" ? "passed, lifted by a course correction" : "the work halts here until the maintainer lifts it"}` : null] };
+  });
+  const toGo = g => S.slice(0, g.slot + 1).filter(s => s.day != null && !closed(s) && s.state !== "cut").map(s => s.day);
+  W.gates.forEach(g => {
+    D[g.k] = { t: `Stop after Day ${g.day} · ${g.passed ? "passed" : "ahead"}`, l: ["The plan stops here for the maintainer. No phase starts after it until the maintainer says go on.",
+      g.passed ? "The maintainer said go on: the stop was lifted by a course correction." : `${n(toGo(g).length, "Day", "Days")} to go before it: ${span(toGo(g))}.`] };
+  });
+  const [was, next] = W.now.between || [null, null], last = W.last;
+  const nowWhere = W.now.day != null ? `The work stands in Day ${W.now.day}, in progress.` : was == null ? `The work stands before Day ${next}.`
+    : next == null ? `The work stands after Day ${was}, the last Day the plan numbers.` : `The work stands between Day ${was} and Day ${next}.`;
+  const openSay = W.open_prs.length ? `${n(W.open_prs.length, "pull request is", "pull requests are")} open.` : "No pull request is open.";
+  D.now = { t: `Now · ${W.now.day != null ? `Day ${W.now.day} in progress` : "between Days"}`, l: [nowWhere, `Next step: ${W.next_step}`,
+    last ? `Last merge: #${last.pr}${last.sha ? ` at ${last.sha}` : ""}. ${openSay}` : openSay] };
+  const said = k => [D[k].t, D[k].q, ...D[k].l].filter(Boolean).join(". ");
+
+  // the figure
+  fig.replaceChildren();
+  const where = W.now.day != null ? `Day ${W.now.day} is in progress` : `between ${was == null ? "the start" : `Day ${was}`} and ${next == null ? "the end" : `Day ${next}`}`;
+  fig.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+  fig.setAttribute("aria-label", `The plan as a ring read clockwise from the top: ${n(W.numbered, "Day", "Days")} in ${n(W.phases.length, "phase", "phases")}, ${W.closed} closed. Now: ${where}. Next step: ${W.next_step}`);
+  el("path", { class: "start", d: `M${CX - 4}.0 ${CY - 125}.0 l0 12 l8 -6 z` });
+  el("text", { class: "t-sub", x: CX, y: 13, "text-anchor": "middle" }, "start");
+  const groups = [], labels = [];
+  const group = (k, extra) => { const g = el("g", Object.assign({ class: "b", tabindex: 0, role: "img", "aria-label": said(k), "data-k": k }, extra || {})); groups.push(g); return g; };
+  // the phases: an arc outside their Days, and their name beside it
+  W.phases.forEach(p => {
+    const at = S.map((s, i) => s.phase === p.phase ? i : -1).filter(i => i >= 0);
+    if (!at.length) return;
+    const a0 = start(at[0]) + 0.8, a1 = end(at[at.length - 1]) - 0.8, d = arc(a0, a1, RP), m = (a0 + a1) / 2, g = group(p.k);
+    el("path", { class: `parc${p.days.length ? "" : " later"}`, d }, null, g);
+    el("path", { d, fill: "none", stroke: "transparent", "stroke-width": 14 }, null, g);
+    const sub = p.days.length ? span(p.days) : `from Day ${p.from_day}`;
+    if (m < 50 || m > 310) labels.push({ top: true, x: m < 180 ? CX + 34 : CX - 34, anchor: m < 180 ? "start" : "end", name: phaseName(p.phase), sub });
+    else { const right = m < 180, x = right ? CX + RP + 4.7 : CX - RP - 15.9, lines = wrap(phaseName(p.phase), Math.floor((right ? VW - x - 4 : x - 4) / 6.2));
+      labels.push({ x, anchor: right ? "start" : "end", lines: [...lines, sub], y: CY - 170 * Math.cos(m * Math.PI / 180) - 7 * lines.length }); }
+  });
+  // the Days: one segment each, its number, and its score under it
+  S.forEach((s, i) => {
+    const first = !i || S[i - 1].phase !== s.phase, lastOf = i === S.length - 1 || S[i + 1].phase !== s.phase;
+    const a0 = start(i) + (first ? TRIM : 0), a1 = end(i) - (lastOf ? TRIM : 0), g = group(s.k);
+    el("path", { class: `seg s-${s.state}`, d: band(a0, a1) }, null, g);
+    if (s.state === "active" && s.tracks) el("path", { class: "prog", d: arc(a0, a0 + (a1 - a0) * Math.max(0.04, s.merged / s.tracks), RO - 3) }, null, g);
+    const [x, y] = pt(mid(i), RL), ny = y + 4.5 - (s.score != null ? 5 : 0);
+    el("text", { class: `t-n${s.state === "planned" || s.state === "stub" ? " quiet" : ""}${s.state === "cut" ? " struck" : ""}`, x: f(x), y: f(ny) },
+      s.day != null ? String(s.day) : `${s.from_day}+`, g);
+    if (s.score != null) el("text", { class: "t-sc", x: f(x), y: f(ny + 12) }, String(s.score), g);
+    if (s.state === "open") el("rect", { class: "box", x: f(x + 8.5), y: f(ny - 12.5), width: 7, height: 7, rx: 1 }, null, g);
+    if (s.day != null) {
+      g.addEventListener("click", () => press(s.day));
+      g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); press(s.day); } });
+    }
+  });
+  // the stops: a gate across the ring after their Day, open once the maintainer lifted it
+  const gateAt = slot => start(slot + 1) - GAP / 2;
+  W.gates.forEach(gt => {
+    const a = gateAt(gt.slot), g = group(gt.k, { transform: `rotate(${a.toFixed(2)} ${CX} ${CY})` });
+    el("rect", { class: "hit", x: f(CX - 8), y: "12.0", width: 16, height: "68.0", rx: 4 }, null, g);
+    if (gt.passed) { el("rect", { class: "gate passed", x: f(CX - 3), y: "15.0", width: 6, height: 13, rx: 3 }, null, g); el("rect", { class: "gate passed", x: f(CX - 3), y: "70.0", width: 6, height: 11, rx: 3 }, null, g); }
+    else el("rect", { class: "gate ahead", x: f(CX - 3), y: "15.0", width: 6, height: "62.0", rx: 3 }, null, g);
+    const [px, py] = pt(a, 155), left = a > 180, below = py > CY, x = left ? px - 58 : px + 58, y = below ? py - 22 : py + 19;
+    labels.push({ x, anchor: left ? "end" : "start", gate: true, lines: [gt.passed ? `stop after Day ${gt.day}, passed:` : `stop after Day ${gt.day}:`,
+      gt.passed ? "the maintainer said go on" : "the maintainer says go on"], y, lead: [left ? 4 : -4, below ? 10 : -4, px, py] });
+  });
+  // where the work stands: in the middle of the Day in progress, or before the first Day not finished
+  const na = W.now.day != null ? mid(W.now.slot) : gateAt(W.now.slot), ng = group("now", { transform: `rotate(${na.toFixed(2)} ${CX} ${CY})` });
+  el("rect", { class: "hit", x: CX - 9, y: "2.0", width: 18, height: "72.0", rx: 4 }, null, ng);
+  el("path", { class: "hand", d: `M${CX} 17.0 V70.0` }, null, ng);
+  el("path", { class: "pin", d: `M${CX - 6.5} 5.0 h13 l-6.5 11 z` }, null, ng);
+  { const [px, py] = pt(na, 172), left = na > 180;
+    labels.push({ x: left ? px - 9 : px + 9, anchor: left ? "end" : "start", now: true, lines: ["now", W.now.day != null ? `in Day ${W.now.day}` : "between Days"], y: py }); }
+  // the labels at the sides, pushed down until none overlaps another on its side
+  const side = labels.filter(l => !l.top).sort((a, b) => a.y - b.y);
+  side.forEach((l, i) => side.slice(0, i).forEach(o => {
+    if (o.anchor === l.anchor && Math.abs(o.x - l.x) < 120 && l.y < o.y + 14 * o.lines.length + 4) l.y = o.y + 14 * o.lines.length + 4; }));
+  labels.forEach(l => {
+    if (l.top) { const t = el("text", { class: "t-ph", x: l.x, y: 13, "text-anchor": l.anchor }, l.name); el("tspan", { class: "t-sub" }, ` · ${l.sub}`, t); return; }
+    l.y = Math.max(13, Math.min(VH - 14 * l.lines.length, l.y));
+    const wide = Math.max(...l.lines.map(s => s.length)) * 6.3;  // kept inside the picture, as the mockup keeps them
+    l.x = l.anchor === "start" ? Math.min(l.x, VW - wide - 2) : Math.max(l.x, wide + 2);
+    l.lines.forEach((line, j) => el("text", { class: j === l.lines.length - 1 ? "t-sub" : l.now ? "t-now" : l.gate ? "t-gate" : "t-ph", x: f(l.x), y: f(l.y + 14 * j), "text-anchor": l.anchor }, line));
+    if (l.lead) el("path", { class: "lead", d: `M${f(l.x + l.lead[0])} ${f(l.y + l.lead[1])} L${f(l.lead[2])} ${f(l.lead[3])}` });
+  });
+  // the middle: the next step in the page's own words, and how far the next stop is
+  const steps = wrap(W.next_step, 23), shown = steps.slice(0, 4);
+  if (steps.length > 4) shown[3] = shown[3].replace(/.?$/, "…");
+  let y = 109 + 8 * (3 - shown.length);
+  el("text", { class: "t-kick", x: CX, y: f(y) }, W.now.day != null ? "IN PROGRESS" : "NEXT STEP");
+  shown.forEach((s, j) => el("text", { class: "t-step", x: CX, y: f(y + 19 + 16 * j) }, s));
+  y += 19 + 16 * (shown.length - 1) + 14;
+  el("path", { class: "rule", d: `M${CX - 52} ${f(y)} H${CX + 52}` });
+  const big = W.stop != null ? [n(W.left.length, "Day", "Days"), "left to the next stop,", `after Day ${W.stop}`] : [`${W.closed} of ${W.numbered}`, "Days closed", ""];
+  el("text", { class: "t-big", x: CX, y: f(y + 32) }, big[0]);
+  el("text", { class: "t-mid", x: CX, y: f(y + 49) }, big[1]);
+  if (big[2]) el("text", { class: "t-mid", x: CX, y: f(y + 63) }, big[2]);
+
+  // the figures beside it, and the next step among them
+  const fig3 = (num, of, what, sub) => { const d = h("div"); const v = h("div", "num", String(num), d); if (of != null) h("small", "", ` of ${of}`, v); h("div", "what", what, d); h("span", "sub", sub, d); return d; };
+  const nx = h("div", "next"); h("p", "kick", `Next step · ${W.now.day != null ? `Day ${W.now.day} in progress` : "between Days"}`, nx); h("p", "step", W.next_step, nx);
+  $("figs").replaceChildren(fig3(W.closed, W.numbered, "Days closed", "of the Days the plan numbers"),
+    W.stop != null ? fig3(W.left.length, null, `${W.left.length === 1 ? "Day" : "Days"} left to the next stop`, `the plan stops after Day ${W.stop}`)
+      : fig3(W.left.length, null, `${W.left.length === 1 ? "Day" : "Days"} not finished`, "the plan names no stop ahead"),
+    fig3(W.built, W.written, "promises built", "of the promises written so far"), nx);
+  $("key-sc").textContent = W.score != null ? String(W.score) : "";
+  const facts = $("facts"), fact = (dt, wide) => { const d = h("div", wide ? "wide" : ""); h("dt", "", dt, d); facts.appendChild(d); return h("dd", "", null, d); };
+  facts.replaceChildren();
+  if (last) { const dd = fact("Last merge"), b = h("b", "", null, dd);
+    if (W.repo_url) { const a = h("a", "", `#${last.pr}`, b); a.setAttribute("href", `${W.repo_url}/pull/${last.pr}`); } else b.textContent = `#${last.pr}`;
+    if (last.sha) { dd.append(" at "); h("code", "", last.sha, dd); }
+    dd.append(`, ${last.date || ""}`); h("br", "", null, dd); dd.append(last.title); }
+  { const dd = fact("Open pull requests"); if (!W.open_prs.length) h("b", "", "None", dd); else W.open_prs.forEach((p, i) => { if (i) h("br", "", null, dd); h("b", "", `#${p.pr}`, dd); dd.append(` ${p.title}`); }); }
+  if (W.score != null) { const dd = fact("Score so far"); h("b", "", String(W.score), dd); dd.append(" of 100, the finished Days together"); }
+  if (W.stop != null) { const dd = fact("Stop ahead", true); h("b", "", `Day ${W.stop}`, dd);
+    dd.append(`${W.stop_name ? `, ${W.stop_name}` : ""}, ${W.left.length ? `${n(W.left.length, "Day", "Days")} to go` : "reached"}. The work halts there until the maintainer lifts it.`); }
+
+  // the key, the lists and the stamp under the picture
+  const sw = (cls, parent, extra) => { const s = el("svg", { width: 20, height: 14, viewBox: "0 0 20 14", "aria-hidden": "true" }, null, parent); el("rect", { class: `seg s-${cls}`, x: 1, y: 1, width: 18, height: 12, rx: 2.5 }, null, s);
+    if (extra) el("rect", { class: "box", x: 7.5, y: 4.5, width: 5, height: 5, rx: 1, style: "stroke-width:1.2" }, null, s); return s; };
+  const lg = $("lg"); lg.replaceChildren();
+  const term = (dt, small) => { const t = h("dt", "", dt, lg); h("small", "", small, t); return h("dd", "", null, lg); };
+  const item = (dd, mk, text) => { const s = h("span", "", null, dd); mk(s); s.append(text); };
+  const inState = st => S.filter(s => s.state === st && s.day != null).map(s => s.day);
+  const dayList = ds => ds.length === 1 ? `Day ${ds[0]}` : `Days ${runs(ds)}`;
+  const STATES = [["done", "closed, every promise ticked"], ["open", "closed, a box open: closed with a promise not ticked"], ["active", "in progress"], ["ready", "spec written, not closed"],
+    ["next", "next, and no spec yet"], ["planned", "no spec yet: plan.md names it, nothing more"], ["cut", "cut"]];
+  let dd = term("A Day", "a stretch of the cycle");
+  STATES.filter(([st]) => inState(st).length).forEach(([st, w]) => item(dd, s => sw(st, s, st === "open"), `${w} (${dayList(inState(st))})`));
+  h("span", "", "The big number is the Day. The small number under it is the Day's score out of 100, the one the page's Day buttons show; a Day not finished has none.", dd);
+  const absent = STATES.filter(([st]) => !inState(st).length).map(([, w]) => w.split(":")[0].replace(/, and no spec yet$/, ""));
+  if (absent.length) h("span", "", `Not drawn today, since no Day is in that state: ${absent.join(", ")}.`, dd);
+  dd = term("A phase", "a stretch of the plan");
+  item(dd, s => { const v = el("svg", { width: 22, height: 8, viewBox: "0 0 22 8", "aria-hidden": "true" }, null, s); el("path", { class: "parc", d: "M2 6Q11 0 20 6", style: "stroke-width:3" }, null, v); },
+    "the arc outside its Days, with its number and name as plan.md gives them");
+  const stubs = S.filter(s => s.state === "stub");
+  if (stubs.length) item(dd, s => sw("stub", s), `a phase whose Days are not numbered yet: one dashed segment, marked with the Day it starts from (${stubs.map(s => s.from_day + "+").join(", ")})`);
+  if (W.gates.length) {
+    dd = term("A stop", "a checkpoint");
+    const gs = p => W.gates.filter(g => g.passed === p).map(g => `after Day ${g.day}`).join(", ");
+    const gate = (s, p) => { const v = el("svg", { width: 8, height: 18, viewBox: "0 0 8 18", "aria-hidden": "true" }, null, s);
+      if (p) { el("rect", { class: "gate passed", x: 1.5, y: 1, width: 5, height: 6, rx: 2.5 }, null, v); el("rect", { class: "gate passed", x: 1.5, y: 11, width: 5, height: 6, rx: 2.5 }, null, v); }
+      else el("rect", { class: "gate ahead", x: 1.5, y: 1, width: 5, height: 16, rx: 2.5 }, null, v); };
+    if (gs(true)) item(dd, s => gate(s, true), `stop, passed: the maintainer said go on, and the gate stands open (${gs(true)})`);
+    if (gs(false)) item(dd, s => gate(s, false), `stop ahead: a bar across the ring, shut until the maintainer says go on (${gs(false)})`);
+  }
+  dd = term("Now", "where the cell is in its cycle");
+  item(dd, s => { const v = el("svg", { width: 12, height: 18, viewBox: "0 0 12 18", "aria-hidden": "true" }, null, s); el("path", { class: "pin", d: "M1 1h10l-5 8z" }, null, v); el("path", { class: "hand", d: "M6 9V17" }, null, v); },
+    `the line where the work stands: in the middle of a Day in progress, or before the first Day not finished (today: ${where})`);
+  $("stamp").textContent = `Drawn from the page's data at ${W.head}${W.last_pr ? ` (#${W.last_pr})` : ""}, generated ${W.generated}`;
+
+  const li = (ul, cls, b, text) => { const l = h("li", cls, null, ul); h("b", "", b, l); l.append(text); };
+  const finds = $("finds"); finds.replaceChildren();
+  const whole = W.phases.filter(p => p.total && p.closed === p.total), part = W.phases.filter(p => p.total && p.closed && p.closed < p.total);
+  li(finds, "good", `${W.closed} of the ${W.numbered} Days the plan numbers are closed.`,
+    (whole.length ? ` Phases closed whole: ${andList(whole.map(p => `${p.phase} (${span(p.days)})`))}.` : "") + part.map(p => ` Phase ${p.phase} has ${p.closed} of its ${p.total} closed.`).join(""));
+  W.boxes.forEach(b => li(finds, "fix", `Day ${b.day} is closed with ${n(b.total - b.ticked, "box", "boxes")} open.`,
+    ` ${b.ticked} of its ${b.total} promises are ticked; ${b.ids.length === 1 ? `the one not ticked is ${b.ids[0]}` : `not ticked: ${b.ids.join(", ")}`}.${W.built < W.written ? ` It is why the page counts ${W.built} promises built of ${W.written} written.` : ""}`));
+  li(finds, "", W.now.day != null ? `Day ${W.now.day} is in progress.` : "No Day is in progress.",
+    ` ${nowWhere} Next step: ${W.next_step}.${last ? ` The last merge is #${last.pr}${last.sha ? ` at ${last.sha}` : ""}, and ${W.open_prs.length ? n(W.open_prs.length, "pull request is", "pull requests are") + " open" : "no pull request is open"}.` : ""}`);
+  if (W.stop != null) { const unspec = W.left.filter(d => { const s = S.find(x => x.day === d); return s && (s.state === "next" || s.state === "planned"); });
+    li(finds, "", `${n(W.left.length, "Day", "Days")} to the next stop, after Day ${W.stop}.`,
+      unspec.length ? ` ${dayList(unspec)} ${unspec.length === 1 ? "has" : "have"} no spec yet: ${unspec.length === 1 ? "it is" : "they are"} named only by plan.md.` : ""); }
+  W.gates.filter(g => g.passed).forEach(g => { const after = W.phases.find(p => p.days.includes(g.day + 1) || p.from_day === g.day + 1);
+    li(finds, "", `The stop after Day ${g.day} was passed.`, ` The plan stopped there for the maintainer, and a course correction lifted it.${after ? ` Phase ${after.phase} started after it.` : ""}`); });
+  stubs.forEach(s => li(finds, "", `Phase ${s.phase} has no numbered Day.`, ` The plan says it starts at Day ${s.from_day} and names none of its Days, so the ring shows it as one dashed segment of unknown length.`));
+  if (W.lo && W.hi) li(finds, "", `The closed Days score from ${W.lo.n} to ${W.hi.n} out of 100.`, ` The lowest is Day ${W.lo.day}, the highest Day ${W.hi.day}${W.score != null ? `; the finished Days together score ${W.score}` : ""}.`);
+  const sized = S.filter(s => s.total), small = sized.reduce((a, s) => !a || s.total < a.total ? s : a, null), large = sized.reduce((a, s) => !a || s.total > a.total ? s : a, null);
+  const lifted = W.gates.filter(g => g.passed).map(g => `the stop after Day ${g.day}`);
+  const bends = $("bends"); bends.replaceChildren();
+  [["A cell's cycle repeats; this plan runs once.", " After division a cell is back at the start. The ring is one turn only: it ends at the top and does not begin again, which is why it is left open there."],
+    ["Nobody chooses a cell's phases.", ` The plan's phases and its stops were written by the maintainer in plan.md, and can be rewritten${lifted.length ? `: ${andList(lifted)} was lifted by a course correction` : ""}.`],
+    ["A checkpoint tests the cell; a stop waits for a person.", " A cell passes when its own checks find nothing wrong. Here the checks run on every pull request, and the stop is a separate thing: the maintainer's decision to go on."],
+    ["Every segment has the same width.", ` A Day is a step of the plan, not a length of time or an amount of work${small && large && small !== large ? `: Day ${small.day} has ${small.total} promises and Day ${large.day} has ${large.total}, and they are drawn alike` : ""}.`],
+    ["Closed is not the same as proven.", " A filled segment says the Day is closed. How well its promises hold is the score, and the graphs below."],
+    ...(stubs.length ? [["The last phase is drawn as one segment.", " That is a placeholder, not a count: the plan does not yet say how many Days it holds."]] : [])]
+    .forEach(([b, t]) => li(bends, "", b, t));
+
+  // the pointer box: what a mark is, built as text
+  const show = k => { const d = D[k]; if (!d) return false; tip.replaceChildren(); h("div", "t", d.t, tip); if (d.q) h("div", "q", d.q, tip); d.l.filter(Boolean).forEach(l => h("div", "l", l, tip)); tip.hidden = false; return true; };
+  const place = (x, y) => { const w = tip.offsetWidth, ht = tip.offsetHeight; let t = y + 18; if (t + ht > innerHeight - 8) t = Math.max(8, y - ht - 12);
+    tip.style.left = Math.max(8, Math.min(x + 14, innerWidth - w - 8)) + "px"; tip.style.top = t + "px"; };
+  const mark = e => e.target && e.target.closest ? e.target.closest(".b") : null;
+  fig.addEventListener("pointerover", e => { const b = mark(e); if (b && show(b.getAttribute("data-k"))) place(e.clientX, e.clientY); else tip.hidden = true; });
+  fig.addEventListener("pointermove", e => { if (!tip.hidden) place(e.clientX, e.clientY); });
+  fig.addEventListener("pointerleave", () => { tip.hidden = true; });
+  fig.addEventListener("focusin", e => { const b = mark(e); if (b && show(b.getAttribute("data-k"))) { const r = b.getBoundingClientRect(); place(r.left + r.width / 2, r.bottom - 10); } });
+  fig.addEventListener("focusout", () => { tip.hidden = true; });
+  if (typeof addEventListener === "function") addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+  // the page's Day buttons light a Day on the ring, and its phase
+  onDay.push(day => groups.forEach(g => { const k = g.getAttribute("data-k"), m = /^d(\d+)$/.exec(k), p = /^p(\d+)$/.exec(k);
+    g.classList.toggle("mk-dim", day != null && (m ? +m[1] !== day : p ? !(phaseOf(+p[1]).days || []).includes(day) : false)); }));
+  // at phone width the ring scrolls sideways in its card: open it centred on the ring, not on its left labels
+  const sc = $("scroll"); if (sc.scrollWidth > sc.clientWidth) sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
+  return fig;
+}
+
+/* What graph 1's reading says of one mark, as the pointer box shows it: a title, the words it quotes, and its lines.
+   `k` and `v` are the mark's data-k and data-v. */
+const RDG_HOW = { picked: "Picked up", lapsed: "Lapsed", withdrawn: "Withdrawn" };
+function rdgTip(R, k, v) {
+  const m = R.m, pr = i => m[i] && m[i].pr ? "#" + m[i].pr : "the first commit", n = (x, one, many) => `${x} ${x === 1 ? one : many}`;
+  const whose = i => (m[i] || {}).w || "";
+  if (k === "m") {
+    const x = m[+v]; let o = 0, c = 0; R.h.forEach(h => { if (h.o === +v) o++; if (h.c === +v) c++; });
+    return { t: `${x.pr ? "Pull request #" + x.pr : "The first commit"} · ${KINDS[x.k] || x.k} · ${x.w}`,
+      l: [x.t, x.g.length ? `Built ${x.g.map(g => g[0]).join(", ")}.` : "Built no promise.", o || c ? `Opened ${n(o, "hand-off", "hand-offs")}, closed ${c}.` : ""] };
+  }
+  if (k === "iv") {
+    const ix = R.strand.filter(s => s.iv)[+v].iv, built = sum(ix, i => m[i].g.length), first = whose(ix[0]);
+    const lines = ix.slice(0, 8).map(i => `${m[i].pr ? "#" + m[i].pr : "start"} ${m[i].t}`);
+    if (ix.length > 8) lines.push(`and ${ix.length - 8} more`);
+    return { t: `Between Days · ${n(ix.length, "merge", "merges")} · ${ix.length > 1 ? `${pr(ix[0])} to ${pr(ix[ix.length - 1])}` : pr(ix[0])}`,
+      l: [`${first.charAt(0).toUpperCase()}${first.slice(1)}. They built ${built || "no"} promise${built === 1 ? "" : "s"}.`, ...lines] };
+  }
+  if (k === "h") {
+    const h = R.h[+v];
+    return { t: `${h.id || "Unnumbered hand-off"} · ${h.s}`, q: h.x, l: [`Opened at ${pr(h.o)} (${whose(h.o)}).`,
+      h.c == null ? `Still open${h.w ? `; it waits for Day ${h.w}` : ""}.` : `${RDG_HOW[h.how] || "Closed"} at ${pr(h.c)} (${whose(h.c)}).`] };
+  }
+  if (k === "ph") {
+    const p = R.phases[+v], ds = p.days;
+    return { t: `Phase ${p.phase} · ${p.name}`, l: [ds.length ? `${ds.length === 1 ? `Day ${ds[0]}` : `Days ${ds[0]} to ${ds[ds.length - 1]}`}.` : `From Day ${p.from_day}; none of its Days is numbered yet.`,
+      p.stop == null ? "No stop of its own." : p.lifted ? `Its stop, after Day ${p.stop}, was lifted.` : `Its stop, after Day ${p.stop}, is the next one: the maintainer decides there.`] };
+  }
+  if (k === "gap") { const g = R.gap.find(x => x.id === v); return { t: `${v} · written on Day ${g.d}, never built`, q: g.x, l: ["Its Day closed without it, and nothing ahead builds it."] }; }
+  if (k === "ahead") {
+    const a = R.ahead.find(x => x.day === +v), named = a.w.filter(x => x !== "unnumbered");
+    return { t: `Day ${v} · no spec yet`, l: [a.n ? `The plan calls it: ${a.n}.` : "", "Its size cannot be drawn until its spec is written.",
+      a.w.length ? `${n(a.w.length, "open hand-off waits", "open hand-offs wait")} for it; numbered: ${named.join(", ") || "none"}.` : ""] };
+  }
+  return null;
+}
+
+/* Graph 1 read as a gene, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
+   merges between Days as thin stretches, the promises built under each merge, today as the polymerase, the Days with
+   no spec ahead and the stop, and the hand-offs as arcs. Layout only, as the mockup at #228 drew it: every count it
+   prints is in DATA.reading, counted by scripts/spec_drift_views.py (reading). A closed hand-off's arc shows only
+   while its merge or a Day of it is pointed at or chosen; an open one is always drawn. `get` finds an element by its
+   id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #rdg. */
+function readingDraw(R, get, onDay) {
+  const NS = "http://www.w3.org/2000/svg", $ = id => get("rdg-" + id), fig = $("fig"), tip = $("tip");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`, f = v => +v.toFixed(1);
+  const m = R.m, items = R.strand, ivs = items.filter(x => x.iv), nA = R.ahead.length, stop = R.stop;
+  const later = R.phases.find(p => p.later), cellsN = items.length - ivs.length;
+  // the right of the strand: today, the Days ahead, the stop and a phase not numbered yet, as the mockup spaces them
+  const VW = 1240, X0 = 120, right = 7 + 13 + (nA ? 52 * nA - 6 + 12 : 0) + (stop ? 12 : 0) + (later ? 56 : 0) + 6;
+  const PC = Math.min(24, (VW - right - X0 - 6 * ivs.length - 0.5 * R.between) / Math.max(1, cellsN)), CW = Math.max(1.2, PC - 0.96);
+  const L = [], X = [], CX = {};
+  let c = X0 + 0.5;
+  items.forEach((x, j) => {
+    if (x.iv) { const w = 6 + 0.5 * x.iv.length, x0 = c - 0.5; L.push({ j, iv: x.iv, x: x0, w }); x.iv.forEach((i, k) => { X[i] = x0 + w * (k + 0.5) / x.iv.length; }); c += w; }
+    else { L.push({ j, m: x.m, x: c, w: CW }); CX[x.m] = c; X[x.m] = c + CW / 2; c += PC; }
+  });
+  const SE = c - 0.5, T = SE + 7, TX = T + 13, AE = TX + 52 * nA - 6, termX = nA ? AE + 12 : TX, LX = stop ? termX + 12 : termX;
+  const cellEnd = i => CX[i] + CW;
+  fig.replaceChildren();
+
+  // the open hand-offs' rows: to the Day they wait for, nearest origin innermost
+  const rank = d => { const i = R.ahead.findIndex(a => a.day === d); return i < 0 ? 1e6 + (d || 0) : i; };
+  const opens = R.h.map((x, j) => ({ x, j })).filter(o => o.x.c == null).sort((a, b) => rank(a.x.w) - rank(b.x.w) || b.x.o - a.x.o || a.j - b.j);
+  const Y0 = 268, rows = opens.map((o, k) => Y0 + 4.6 * k), lastY = rows.length ? rows[rows.length - 1] : 220;
+  const VH = f(Math.max(lastY + 26.4, 240));
+  fig.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
+  const defs = el("defs", {}), pat = el("pattern", { id: "rdg-hatch", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+  el("rect", { class: "hb", width: 5, height: 5 }, null, pat); el("rect", { class: "hl", width: 1.6, height: 5 }, null, pat);
+
+  // the rows' names on the left
+  const how = R.how || {}, closedN = (how.picked || 0) + (how.lapsed || 0) + (how.withdrawn || 0);
+  [["t-row", 43, "The plan's phases"], ["t-row", 78, "Merges, in order"], ["t-bio", 90, "THE GENE, AS READ"], ["t-sec", 101, `${R.merges}, ${R.between} between Days`],
+    ["t-row", 125, "Promises built"], ["t-bio", 137, "THE TRANSCRIPT"], ["t-sec", 148, `${R.built} of ${R.written} written`],
+    ["t-row", 180, "Hand-offs, closed"], ["t-sec", 192, `${closedN}: ${how.picked || 0} picked up,`], ["t-sec", 203, `${how.lapsed || 0} lapsed, ${how.withdrawn || 0} withdrawn`]]
+    .forEach(([cls, y, t]) => el("text", { class: cls, x: 0, y }, t));
+  if (opens.length) { const y = (rows[0] + lastY) / 2 - 16;
+    [["t-row", 0, "Hand-offs, open"], ["t-sec", 12, `${R.open}, of them`], ["t-sec", 23, `${R.numbered} numbered`]].forEach(([cls, dy, t]) => el("text", { class: cls, x: 0, y: f(y + dy) }, t)); }
+
+  // the phases over the strand
+  const aheadDays = new Set(R.ahead.map(a => a.day)), marks = [];
+  R.phases.forEach((p, v) => {
+    if (p.later) return;
+    const mine = R.days.filter(d => p.days.includes(d.day)), at = mine.flatMap(d => [d.main, ...d.strays]).flat();
+    const hasAhead = p.days.some(d => aheadDays.has(d));
+    if (!at.length && !hasAhead) return;
+    const x0 = at.length ? Math.min(...at.map(i => CX[i])) - 0.5 : TX - 0.5, x1 = hasAhead ? (stop ? termX : AE) : Math.max(...at.map(cellEnd)) + 0.5;
+    const g = el("g", { class: "b ph", tabindex: 0, "data-k": "ph", "data-v": v });
+    el("rect", { class: "phase", x: f(x0), y: 32, width: f(x1 - x0), height: 15, rx: 3 }, null, g);
+    const full = `Phase ${p.phase} · ${p.name}`;
+    el("text", { class: "t-ph", x: f(x0 + 6), y: 43 }, full.length * 5.4 < x1 - x0 - 12 ? full : `Phase ${p.phase}`, g);
+  });
+  // a bracket over each Day's main span, its number and its promises; a small number over a fragment away from it
+  R.days.forEach(d => {
+    const x0 = CX[d.main[0]], x1 = cellEnd(d.main[1]), mid = (x0 + x1) / 2;
+    el("path", { class: "brk", d: `M${f(x0)} 69 V66 H${f(x1)} V69` });
+    el("text", { class: "t-dayn", x: f(mid), y: 62, "text-anchor": "middle" }, x1 - x0 >= 30 ? `Day ${d.day}` : String(d.day));
+    if (d.total) el("text", { class: `t-bw${d.ticked < d.total ? " short" : ""}`, x: f(mid), y: 153, "text-anchor": "middle" }, `${d.ticked}/${d.total}`);
+    d.strays.forEach(([a, b]) => { el("path", { class: "brk", d: `M${f(CX[a])} 69 V66 H${f(cellEnd(b))} V69` });
+      el("text", { class: "t-stray", x: f((CX[a] + cellEnd(b)) / 2), y: 62, "text-anchor": "middle" }, String(d.day)); });
+  });
+  // the strand: a cell per merge of a Day, a thin stretch for the merges between Days
+  el("path", { class: "strand", d: `M${X0} 90 H${f(SE)}` });
+  const cells = {}, stretches = [];
+  L.forEach(x => {
+    if (x.iv) {
+      const r = el("rect", { class: "b iv", tabindex: 0, "data-k": "iv", "data-v": stretches.length, x: f(x.x), y: 74, width: f(x.w), height: 32 });
+      stretches.push(r); marks.push(r);
+      x.iv.forEach(i => { if (m[i].k === "spec") el("rect", { class: "pc", x: f(X[i] - 1), y: 85.5, width: 2, height: 9 }); });
+    } else {
+      cells[x.m] = el("rect", { class: `b cell k-${m[x.m].k}`, tabindex: 0, "data-k": "m", "data-v": x.m, x: f(x.x), y: 82, width: f(x.w), height: 16, rx: 1 });
+      marks.push(cells[x.m]);
+    }
+  });
+  // under each merge, the promises it built
+  const qs = [];
+  m.forEach((x, i) => x.g.forEach(([id, tag, day], k) => {
+    const w = i in CX ? CW - 0.6 : 4, x0 = i in CX ? CX[i] + 0.3 : X[i] - 2;
+    const q = el("rect", { class: `q q-${tag === "hold" ? "hold" : "new"}`, "data-q": id, x: f(x0), y: f(103 + 4.4 * k), width: f(w), height: 3, rx: 1.2 }); q.dataset.day = String(day); qs.push(q);
+  }));
+  R.gap.forEach(g => el("rect", { class: "b q gap", tabindex: 0, "data-k": "gap", "data-v": g.id, x: f(X[g.at] - 3.55), y: f(104 + 4.4 * m[g.at].g.length), width: 7.1, height: 3.4, rx: 1.2 }));
+  // the stops: one the maintainer lifted, after its Day; the next, after the Days ahead
+  R.lifted.forEach(s => { const x = cellEnd(s.at);
+    el("path", { class: "lead", d: `M${f(x + 1.5)} 26 V73` });
+    el("rect", { class: "term lifted", x: f(x), y: 74, width: 3, height: 32, rx: 1.5 });
+    el("text", { class: "t-top", x: f(x + 1.5), y: 22, "text-anchor": "middle" }, `stop after Day ${s.day}: lifted`); });
+  if (stop) {
+    el("path", { class: "lead", d: `M${f(termX + 3)} 14 V32` });
+    el("rect", { class: "term shut", x: f(termX), y: 73, width: 6, height: 34, rx: 2 });
+    el("path", { class: "termcap", d: `M${f(termX - 6)} 73 h18` });
+    el("text", { class: "t-top strong", x: VW - 2, y: 10, "text-anchor": "end" }, `the next stop, after Day ${stop.day}: the maintainer decides`);
+  }
+  L.forEach(x => { if (x.iv && x.iv.length >= 4) el("text", { class: "t-iv", x: f(x.x + x.w / 2), y: 84, "text-anchor": "middle" }, String(x.iv.length)); });
+  // today, and the Days the plan lists with no spec yet
+  const lastPr = [...m].reverse().find(x => x.pr);
+  el("path", { class: "lead today", d: `M${f(T)} 26 V78` });
+  el("ellipse", { class: "pol", cx: f(T), cy: 90, rx: 7, ry: 11.5 });
+  el("text", { class: "t-top strong", x: f(T + 6), y: 22, "text-anchor": "end" }, `today${lastPr ? ` · after #${lastPr.pr}` : ""}`);
+  if (nA || stop) el("path", { class: "strand todo", d: `M${f(T + 7)} 90 H${f(stop ? termX : AE)}` });
+  const boxX = {};
+  R.ahead.forEach((a, k) => { const x = TX + 52 * k; boxX[a.day] = x + 23;
+    const g = el("g", { class: "b", tabindex: 0, "data-k": "ahead", "data-v": a.day });
+    el("rect", { class: "todo-day", x: f(x), y: 80, width: 46, height: 20, rx: 2 }, null, g);
+    el("text", { class: "t-todo", x: f(x + 23), y: 93.5, "text-anchor": "middle" }, `Day ${a.day}`, g); });
+  if (nA) { el("path", { class: "brk", d: `M${f(TX + 0.5)} 69 V66 H${f(AE - 0.5)} V69` });
+    el("text", { class: "t-dayn muted", x: f((TX + AE) / 2), y: 62, "text-anchor": "middle" }, "no spec yet"); }
+  if (later) {
+    el("rect", { class: "phase later", x: f(LX), y: 32, width: 56, height: 15, rx: 3 });
+    el("text", { class: "t-ph later", x: f(LX + 6), y: 43 }, `Phase ${later.phase}`);
+    el("path", { class: "strand later", d: `M${f(LX)} 90 H${f(LX + 56)}` });
+    el("text", { class: "t-sec", x: f(LX + 28), y: 112, "text-anchor": "middle" }, `from Day ${later.from_day},`);
+    el("text", { class: "t-sec", x: f(LX + 28), y: 123, "text-anchor": "middle" }, "not specified");
+  }
+  // the hand-offs: a closed one as an arc under the strand, from where it was opened to where it was closed
+  const arcs = [], pairs = {};
+  R.h.forEach((x, j) => {
+    if (x.c == null) return;
+    const key = `${x.o} ${x.c}`, k = pairs[key] = (pairs[key] || 0) + 1, a = X[x.o], b = X[x.c];
+    const depth = Math.min(184, 14 + 0.4 * Math.abs(b - a) + 4.4 * (k - 1)), d = `M${f(a)} 164 Q${f((a + b) / 2)} ${f(164 + depth)} ${f(b)} 164`;
+    const g = el("g", { class: `b ho ${x.how || "picked"}`, tabindex: 0, "data-k": "h", "data-v": j, "data-o": x.o, "data-c": x.c });
+    el("path", { class: "v", d }, null, g); el("path", { class: "hitp", d }, null, g); arcs[j] = g;
+  });
+  // an open one runs down and along to the Day it waits for, the ones from one merge side by side
+  const from = {}, seen = {};
+  opens.forEach(o => { from[o.x.o] = (from[o.x.o] || 0) + 1; });
+  const waits = {};
+  opens.forEach((o, k) => {
+    const x = o.x, y = rows[k], i = seen[x.o] = (seen[x.o] == null ? 0 : seen[x.o] + 1), sx = X[x.o] - 1.7 * (from[x.o] - 1) / 2 + 1.7 * i;
+    const tx = x.w in boxX ? boxX[x.w] : stop ? termX + 3 : T, d = `M${f(sx)} 164 V${f(y - 5)} Q${f(sx)} ${f(y)} ${f(sx + 5)} ${f(y)} H${f(tx - 2.6)}`;
+    const g = el("g", { class: `b ho open${x.id ? " num" : ""}`, tabindex: 0, "data-k": "h", "data-v": o.j, "data-o": x.o });
+    el("path", { class: "v", d }, null, g); el("circle", { class: "oend", cx: f(tx), cy: f(y), r: 2.2 }, null, g); el("path", { class: "hitp", d }, null, g);
+    arcs[o.j] = g; if (x.w in boxX) (waits[x.w] = waits[x.w] || []).push(y);
+  });
+  Object.keys(waits).forEach(day => { const ys = waits[day];
+    el("path", { class: "guide", d: `M${f(boxX[day])} 101 V${f(ys[0] - 3)}` });
+    el("text", { class: "t-n", x: f(boxX[day]), y: f(lastY + 16), "text-anchor": "middle" }, `${ys.length} wait`); });
+  fig.setAttribute("aria-label", `Every merge in order, drawn as a gene being read: Days as blocks, the work between Days as thin lines, the promises built under them, today's place, the Days ahead and the stop, and the hand-offs as arcs`);
+
+  // the figures over it, and the key's counts
+  const fig4 = (num, of, what, sub) => { const d = h("div"); const v = h("div", "num", String(num), d); if (of != null) h("small", "", ` ${of}`, v); h("div", "what", what, d); h("div", "sub", sub, d); return d; };
+  const bk = R.between_kinds || {}, unbuilt = R.written - R.built;
+  const neither = nA === 1 ? "it has no spec yet" : nA === 2 ? "neither has a spec yet" : "none has a spec yet";
+  $("figs").replaceChildren(
+    fig4(R.built, `of ${R.written}`, "promises built", unbuilt > 0 ? `${n(unbuilt, "promise", "promises")} written and never built` : "every promise written is built"),
+    fig4(nA, null, stop ? `${nA === 1 ? "Day" : "Days"} left to the stop` : `${nA === 1 ? "Day" : "Days"} the plan lists with no spec`, stop ? `${nA ? neither + "; " : ""}the stop is after Day ${stop.day}` : "the plan names no stop ahead"),
+    fig4(R.numbered, `of ${R.open} open`, "numbered hand-offs open", "the rest are notes and test comments that name a Day ahead"),
+    fig4(R.between, `of ${R.merges}`, "merges between Days", `${n(R.stretches, "run", "runs")}; ${bk.other || 0} other, ${bk.spec || 0} spec or plan${bk.origin ? ", and the first commit" : ""}`));
+  const K = R.kinds || {}, say = (id, t) => { $(id).textContent = t; };
+  say("k-between", `(${R.between} in ${n(R.stretches, "stretch", "stretches")})`);
+  say("k-pc", `(${bk.spec || 0})`);
+  say("k-kinds", `Counted as graph 1 counts them: spec ${K.spec || 0}, code ${K.code || 0}, a Day's close ${K.close || 0}, other ${K.other || 0}${K.origin ? ", and the first commit" : ""}`);
+  const d0 = R.days[0]; say("k-bw", d0 ? `${d0.ticked}/${d0.total} under a Day: built of written` : "built of written, under a Day");
+  say("k-picked", `(${how.picked || 0})`); say("k-lapsed", `(${how.lapsed || 0})`); say("k-withdrawn", `(${how.withdrawn || 0})`);
+  say("k-open", `(${R.open - R.numbered})`); say("k-num", `(${R.numbered})`);
+  say("stamp", `Drawn from the page's data at ${R.head}${R.last_pr ? ` (#${R.last_pr})` : ""}, generated ${R.generated} · ${n(R.merges, "merge", "merges")} · the level cards above are graph 1's own`);
+
+  // the lists under it
+  const li = (ul, b, text) => { const l = h("li", "", null, ul); h("b", "", b, l); l.append(text); return l; };
+  const dayList = ds => andList(ds.map(d => `Day ${d}`));
+  const finds = $("finds"); finds.replaceChildren();
+  const context = s => `${s.w.replace(/^outside any Day, merged /, "")}${s.next != null ? `, before Day ${s.next}'s ${s.first ? "first" : "next"} merge` : ", up to today"}`;
+  li(finds, `${R.between} of the ${R.merges} merges were between Days.`, R.longest.length ? ` The longest ${R.longest.length === 1 ? "stretch" : "stretches"}: ${R.longest.map(s =>
+    `${n(s.n, "merge", "merges")}, ${s.n > 1 ? `${s.a ? "#" + s.a : "the first commit"} to #${s.b}` : s.a ? "#" + s.a : "the first commit"} (${context(s)})`).join("; ")}.` : "");
+  if (R.cut.length) li(finds, "A Day's work rarely ran in one piece.", ` ${R.cut.map(([d, k]) => `Day ${d} was cut into ${k} fragments`).join(", ")}.${R.unbroken.length ? ` Only ${dayList(R.unbroken)} ran unbroken.` : ""}`);
+  if (R.gap.length) li(finds, `${n(R.gap.length, "promise was", "promises were")} written and never built:`,
+    ` ${R.gap.map(g => `${g.id}, the hollow dash under Day ${g.d}`).join("; ")}. Nothing ahead builds ${R.gap.length === 1 ? "it" : "them"}.`);
+  if (nA) li(finds, `${n(nA, "Day is", "Days are")} left to the ${stop ? "stop" : "end of the plan's list"}, and ${nA === 1 ? "it has no spec" : nA === 2 ? "neither has a spec" : "none has a spec"}.`,
+    ` ${R.ahead.map(a => `Day ${a.day}${a.n ? ` is ${a.n}` : ""}, and ${n(a.w.length, "open hand-off waits", "open hand-offs wait")} for it`).join("; ")}. Their size cannot be drawn until their specs are written.`);
+  R.lifted.forEach(s => li(finds, `The stop after Day ${s.day} was lifted.`, ` ${n(s.between, "merge", "merges")} went by between it and the next Day's first merge.`));
+  const opened = $("opens"); opened.replaceChildren();
+  R.opens.forEach(o => { const short = o.x.length > 150 ? o.x.slice(0, 150).replace(/\s+\S*$/, "") + "…" : o.x;
+    const l = li(opened, o.id, `${o.to != null ? `, for Day ${o.to}` : ""}, opened at ${o.pr ? "#" + o.pr : "the first commit"}: ${short}`); l.setAttribute("tabindex", "0"); l.dataset.h = String(o.h);
+    ["pointerover", "focusin"].forEach(ev => l.addEventListener(ev, () => lightH(o.h))); ["pointerleave", "focusout"].forEach(ev => l.addEventListener(ev, clear)); });
+  if (!R.opens.length) h("li", "", "None.", opened);
+  const bends = $("bends"); bends.replaceChildren();
+  const cutAll = R.days.filter(d => d.frags > 1).length, whole = R.unbroken;
+  [["An intron is cut out; this work is not.", " In a cell an intron is removed from the transcript. The merges between Days are tooling, the dashboard and plan changes: they build no promise, and the Days run on them."],
+    ["A gene's exons do not interleave.", ` Here ${R.strayed.length ? `${dayList(R.strayed)} ${R.strayed.length === 1 ? "has a fragment" : "have fragments"} away from ${R.strayed.length === 1 ? "its span" : "their spans"}, and ` : ""}${cutAll ? (whole.length ? `every Day but ${andList(whole.map(String))} was cut by merges between Days` : "every Day was cut by merges between Days") : "no Day was cut"}. The picture keeps the true order; the bracket is the Day's main span.`],
+    ...(nA ? [["The Days ahead have no width.", ` ${dayList(R.ahead.map(a => a.day))} ${nA === 1 ? "has" : "have"} no spec, so nothing says how many merges or promises they hold. Their boxes are one size and mean nothing by it.`]] : []),
+    ["Between Days is squeezed.", ` A cell of a Day is ${PC.toFixed(1)} px wide; a stretch between Days is 6 px and half a pixel for each merge, so its length understates it. The number over it is the count.`],
+    ["No dates.", " The strand is in merge order. A long stretch may be one afternoon; graph 10 has the clock."]].forEach(([b, t]) => li(bends, b, t));
+
+  // the pointer box, and what it lights: a hand-off's two merges, or a merge's hand-offs
+  const show = (k, v) => { const d = rdgTip(R, k, v); if (!d) return false; tip.replaceChildren(); h("div", "t", d.t, tip); if (d.q) h("div", "q", d.q, tip);
+    d.l.filter(Boolean).forEach(l => h("div", "l", l, tip)); tip.hidden = false; return true; };
+  const place = (x, y) => { const w = tip.offsetWidth, ht = tip.offsetHeight; let t = y + 18; if (t + ht > innerHeight - 8) t = Math.max(8, y - ht - 12);
+    tip.style.left = Math.max(8, Math.min(x + 14, innerWidth - w - 8)) + "px"; tip.style.top = t + "px"; };
+  const lit = [];
+  function clear() { fig.classList.remove("foc"); lit.splice(0).forEach(e => e.classList.remove("lit")); }
+  const light = e => { if (e) { e.classList.add("lit"); lit.push(e); } };
+  function lightH(j) { clear(); const x = R.h[+j]; if (!x || !arcs[+j]) return; light(arcs[+j]); [x.o, x.c].forEach(i => light(cells[i])); fig.classList.add("foc"); }
+  const focusOn = b => { const k = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+    if (k === "h") return lightH(v);
+    clear();
+    if (k === "m") { const mine = R.h.map((x, j) => x.o === +v || x.c === +v ? arcs[j] : null).filter(Boolean); if (!mine.length) return; mine.forEach(light); light(b); fig.classList.add("foc"); } };
+  const mark = e => e.target && e.target.closest ? e.target.closest(".b") : null;
+  fig.addEventListener("pointerover", e => { const b = mark(e); if (b && show(b.getAttribute("data-k"), b.getAttribute("data-v"))) { place(e.clientX, e.clientY); focusOn(b); } else { tip.hidden = true; clear(); } });
+  fig.addEventListener("pointermove", e => { if (!tip.hidden) place(e.clientX, e.clientY); });
+  fig.addEventListener("pointerleave", () => { tip.hidden = true; clear(); });
+  fig.addEventListener("focusin", e => { const b = mark(e); if (b && show(b.getAttribute("data-k"), b.getAttribute("data-v"))) { const r = b.getBoundingClientRect(); place(r.left, r.bottom); focusOn(b); } });
+  fig.addEventListener("focusout", () => { tip.hidden = true; clear(); });
+  if (typeof addEventListener === "function") addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+  // a Day chosen on the page's buttons: its merges, its promises and its hand-offs stay lit, the closed ones drawn
+  const own = (i, day) => i != null && m[i] && m[i].own === day;
+  onDay.push(day => {
+    Object.keys(cells).forEach(i => cells[i].classList.toggle("mk-dim", day != null && !own(+i, day)));
+    stretches.forEach(r => r.classList.toggle("mk-dim", day != null));
+    qs.forEach(q => q.classList.toggle("mk-dim", day != null && q.dataset.day !== String(day)));
+    R.h.forEach((x, j) => { if (!arcs[j]) return; const on = day != null && (own(x.o, day) || own(x.c, day));
+      arcs[j].classList.toggle("day", on); arcs[j].classList.toggle("mk-dim", day != null && !on); });
+  });
+  return fig;
+}
+
 /* The merge graph, drawn, in graph 6's place: the spec as one long bar, one stripe per criterion, and above it a row
    per Day (or per merge) marking the criteria each merge gave evidence for and the times the replay saw one stop
    holding. Layout only, as the mockup at #228 drew it: every count it prints is in DATA.merge_graph, counted by
@@ -2164,6 +2669,7 @@ function draw(M, DATA) {
   /* Where we are: a tile lights its Day as its chip does; a Day with no spec only says what it is */
   const W = M.where && !M.where.error ? M.where : null;
   $("where").hidden = !W;
+  $("where-fold").hidden = !W;
   $("now").hidden = !!W;
   if (W) {
     const READ = "Click a Day to see what it is, and to highlight it in every graph.";
@@ -2192,6 +2698,23 @@ function draw(M, DATA) {
       h("span", null, h("i", { class: "wt key planned" }, h("i", { class: "wt-end" })), "Ends a phase"),
       h("span", null, h("i", { class: "wt key planned stop" }), "A stop")]);
     onDay.push(day => tiles.forEach(x => x.b.setAttribute("aria-pressed", x.t.day === day ? "true" : "false")));
+  }
+
+  /* Where we are, as a ring, in the old panel's place: a Day on it presses its button, a second press lets it go */
+  {
+    const w = M.whr, failed = e => { put("whr-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`whr: ${e}`); };
+    const press = day => { const i = M.days.findIndex(d => d.day === day); chips[i >= 0 && lit !== day ? i + 1 : 0].click(); };
+    $("whr").hidden = !!w.empty;
+    if (w.error) failed(w.error);
+    else if (!w.empty) try { ringDraw(w, $, onDay, press); } catch (e) { failed(String((e && e.message) || e)); }
+  }
+
+  /* Graph 1 read as a gene, in graph 1's place; graph 1 is folded under it, its level cards drawn in it */
+  {
+    const r = M.rdg, failed = e => { put("rdg-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`rdg: ${e}`); };
+    if (r.error) failed(r.error);
+    else if (r.empty) put("rdg-scroll", h("p", { class: "load-error" }, "Not measured yet: ", rich(r.empty)));
+    else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
 
   /* Graph 1 */

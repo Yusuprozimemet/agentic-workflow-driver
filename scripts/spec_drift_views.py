@@ -386,3 +386,239 @@ def merge_graph(d):
                                               [i for i, c in enumerate(crit) if c["day"] == day], ms,
                                               [m["pr"] for m in merges if m["loose"] and m["day"] == day])
     return out
+
+
+def _finished(day):
+    return bool(day) and day.get("status") in FINISHED
+
+
+def _round(x):
+    """As the page's Math.round: a half goes up."""
+    return None if x is None else int(x + 0.5)
+
+
+def _plain(s):
+    return str(s or "").replace("`", "")
+
+
+def _placed(d):
+    """The Day each merge belongs to, as the page places it (dashboard.js, PLACED): the Day its branch names; for a
+    merge no Day owns, the furthest Day begun when it merged, and whether that Day was open or closed by then. A code
+    merge or a close no Day owns is counted as other work."""
+    order = d.get("order") or []
+    rank = lambda day: order.index(day) if day in order else day  # noqa: E731
+    top, shut, out = None, set(), []
+    for r in d.get("rows") or []:
+        own = r.get("own_day") if r.get("pr") and r.get("own_day") is not None else None
+        if own is not None and (top is None or rank(own) > rank(top)):
+            top = own
+        kind = r.get("kind") if r.get("kind") in ("origin", "spec", "code", "close", "other") else "other"
+        if r.get("pr") and own is None and kind in ("code", "close"):
+            kind = "other"
+        if not r.get("pr"):
+            whose = "before Day 1"
+        elif own is not None:
+            whose = f"Day {own}"
+        elif top is None:
+            whose = "outside any Day, merged before Day 1 began"
+        else:
+            whose = f"outside any Day, merged {f'after Day {top} closed' if top in shut else f'while Day {top} was open'}"
+        if own is not None and r.get("kind") == "close":
+            shut.add(own)
+        out.append(dict(own=own, kind=kind, whose=whose))
+    return out
+
+
+def _stamp(d):
+    now = d.get("now") or {}
+    return dict(head=(now.get("head") or "")[:7], last_pr=now.get("last_pr"), generated=now.get("generated") or "")
+
+
+def where_ring(d):
+    """"Where we are" as a ring: one segment per Day plan.md numbers, in its order and its phases, a gate at each stop
+    and the place the work stands, with everything the ring and its lists print. A Day's state is the tiles' (the
+    page's whereNow): closed, closed with a promise not ticked, in progress, spec written, next, or provisional; a
+    phase with no Day numbered yet is one segment, a stub."""
+    meta, now = d.get("meta") or {}, d.get("now") or {}
+    where = meta.get("where") or {}
+    rows = where.get("rows") or []
+    if not rows:
+        return dict(empty="plan.md lists no phase with its Days, so there is no plan to draw as a ring.")
+    names, phase_names = where.get("names") or {}, meta.get("phases") or []
+    by = {x["day"]: x for x in d.get("days") or []}
+    order = [n for n in d.get("order") or [] if isinstance(n, int)]
+    current, stop = now.get("current_day"), now.get("stop_after")
+    next_day = next((n for n in order if not _finished(by.get(n))), None)
+    scores = (d.get("score") or {}).get("days") or {}
+    index = d.get("criteria_index") or []
+    look = d.get("look_ahead") or {}
+    slots, phases, gates = [], [], []
+    for r in rows:
+        p, ds, cut = r.get("phase"), r.get("days") or [], bool(r.get("cut"))
+        name = phase_names[p] if p is not None and p < len(phase_names) else f"Phase {p}" if p is not None else ""
+        phases.append(dict(k=f"p{p}", phase=p, name=name, days=ds, total=len(ds), cut=cut,
+                           closed=sum(1 for n in ds if _finished(by.get(n))), stop=r.get("stop"),
+                           lifted=bool(r.get("lifted")), from_day=r.get("from_day")))
+        for i, n in enumerate(ds):
+            x = by.get(n) or {}
+            crit, sc = x.get("criteria") or {}, scores.get(str(n)) or {}
+            if cut or x.get("status") == "cut":
+                state = "cut"
+            elif _finished(x):
+                state = "done" if x.get("status") == "done" else "open"
+            else:
+                state = "active" if x and n == current else "ready" if x else "next" if n == next_day else "planned"
+            low = next((q.get("name") for q in sc.get("parts") or [] if q.get("key") == sc.get("low")), None)
+            kinds = [q.get("kind") for q in x.get("prs") or []]
+            slots.append(dict(
+                k=f"d{n}", day=n, phase=p, state=state, title=_plain(x.get("title")), name=_plain(names.get(str(n))),
+                ticked=crit.get("ticked", 0), total=crit.get("total", 0),
+                prs=dict(n=len(kinds), code=kinds.count("code"), spec=kinds.count("spec"), close=kinds.count("close")),
+                score=_round(sc.get("score")), low=low.lower() if low else None,
+                end=not cut and i == len(ds) - 1 and p is not None,
+                stop=None if n != r.get("stop") else "passed" if r.get("lifted") else "ahead",
+                tracks=len(x.get("tracks") or []), merged=len(x.get("tracks_merged") or [])))
+        if not ds and r.get("from_day") is not None:
+            slots.append(dict(k=f"stub{p}", day=None, phase=p, state="stub", from_day=r["from_day"]))
+        if r.get("stop") is not None:
+            at = next((i for i, s in enumerate(slots) if s["day"] == r["stop"]), len(slots) - 1)
+            gates.append(dict(k=f"s{r['stop']}", day=r["stop"], passed=bool(r.get("lifted")), slot=at))
+    days = [s for s in slots if s["day"] is not None]
+    counted = [s["day"] for s in days if s["state"] != "cut"]
+    if current is not None and any(s["day"] == current for s in days):
+        place = dict(between=None, day=current, slot=next(i for i, s in enumerate(slots) if s["day"] == current))
+    else:
+        at = next((i for i, s in enumerate(slots) if s["day"] is not None and not _finished(by.get(s["day"]))), None)
+        before = [i for i, s in enumerate(slots[:at] if at is not None else slots) if s["day"] is not None]
+        place = dict(between=[slots[before[-1]]["day"] if before else None, slots[at]["day"] if at is not None else None],
+                     day=None, slot=before[-1] if before else -1)
+    ahead = counted[:counted.index(stop) + 1] if stop in counted else counted
+    scored = [s for s in days if s["score"] is not None]
+    last = next((r for r in reversed(d.get("rows") or []) if r.get("pr")), None)
+    unticked = {}
+    for c in index:
+        if c.get("ticked") is False and not c.get("replaced_by"):
+            unticked.setdefault(c.get("day"), []).append(c["id"])
+    out = dict(
+        _stamp(d), slots=slots, phases=phases, gates=gates, now=place, next_step=_plain(now.get("next_step")),
+        last=last and dict(pr=last.get("pr"), sha=(last.get("sha") or "")[:7] or None, date=last.get("date"),
+                           title=last.get("title") or ""),
+        open_prs=[dict(pr=p.get("number"), title=p.get("title") or "") for p in now.get("open_prs") or []],
+        closed=sum(1 for n in counted if _finished(by.get(n))), numbered=len(counted),
+        left=[n for n in ahead if not _finished(by.get(n))], stop=stop,
+        stop_name=_plain((by.get(stop) or {}).get("title") or names.get(str(stop))) if stop is not None else None,
+        built=look.get("built", 0), written=look.get("written", 0),
+        boxes=[dict(day=s["day"], ticked=s["ticked"], total=s["total"], ids=unticked.get(s["day"], []))
+               for s in days if s["state"] == "open"],
+        score=_round(((d.get("score") or {}).get("all") or {}).get("score")),
+        lo=scored and dict(day=min(scored, key=lambda s: s["score"])["day"], n=min(s["score"] for s in scored)),
+        hi=scored and dict(day=max(scored, key=lambda s: s["score"])["day"], n=max(s["score"] for s in scored)),
+        repo_url=meta.get("repo_url"))
+    out["lo"], out["hi"] = out["lo"] or None, out["hi"] or None
+    return out
+
+
+def reading(d):
+    """Graph 1 read as a gene: every merge in order on one strand, a Day's merges as a block (its main span, and any
+    fragment away from it), the merges no Day owns as stretches between the blocks, the promises each merge built
+    under it, the hand-offs as arcs from the merge that opened them to the one that closed them (or on to the Day ahead
+    they wait for), and the Days plan.md lists with no spec yet, up to the stop."""
+    rows = d.get("rows") or []
+    if not rows:
+        return dict(empty="nothing is merged yet, so there is no strand to read.")
+    look, now, meta = d.get("look_ahead") or {}, d.get("now") or {}, d.get("meta") or {}
+    cols, ledger = look.get("columns") or [], look.get("hand_offs") or []
+    by = {x["day"]: x for x in d.get("days") or []}
+    order = [n for n in d.get("order") or [] if isinstance(n, int)]
+    rank = lambda day: order.index(day) if day in order else len(order) + (day or 0)  # noqa: E731
+    names = (meta.get("where") or {}).get("names") or {}
+    index = d.get("criteria_index") or []
+    tag = {c["id"]: [c.get("tag") or "new", c.get("day")] for c in index}
+    placed = _placed(d)
+    m = [dict(pr=r.get("pr"), t=r.get("title") or "", k=p["kind"], own=p["own"], w=p["whose"],
+              g=[[g, *tag.get(g, ["new", None])] for g in (cols[i] if i < len(cols) else {}).get("got") or []])
+         for i, (r, p) in enumerate(zip(rows, placed))]
+    strand = []
+    for i, x in enumerate(m):
+        if x["own"] is not None:
+            strand.append(dict(m=i))
+        elif strand and "iv" in strand[-1]:
+            strand[-1]["iv"].append(i)
+        else:
+            strand.append(dict(iv=[i]))
+    ivs = [x["iv"] for x in strand if "iv" in x]
+    cells = [x["m"] for x in strand if "m" in x]
+    days = []
+    for day in sorted({m[i]["own"] for i in cells}, key=rank):
+        groups, frags, prev = [], 0, None
+        for i in cells:
+            if m[i]["own"] == day:
+                if prev is None or m[prev]["own"] != day:
+                    groups.append([])
+                groups[-1].append(i)
+            prev = i
+        run = False
+        for x in strand:
+            mine = "m" in x and m[x["m"]]["own"] == day
+            frags += mine and not run
+            run = mine
+        main = max(groups, key=len)
+        crit = (by.get(day) or {}).get("criteria") or {}
+        days.append(dict(day=day, main=[main[0], main[-1]], strays=[[g[0], g[-1]] for g in groups if g is not main],
+                         frags=frags, ticked=crit.get("ticked", 0), total=crit.get("total", 0)))
+    last_of = {x["day"]: max(i for i in cells if m[i]["own"] == x["day"]) for x in days}
+    finished = lambda n: _finished(by.get(n))  # noqa: E731
+    h = []
+    for x in ledger:
+        to = [t for t in x.get("to") or [] if isinstance(t, int)]
+        waits = None
+        if x.get("closed") is None and to:
+            waits = next((t for t in sorted(to, key=rank) if not finished(t)), max(to, key=rank))
+        h.append(dict(id=x.get("id"), s=x.get("source") or "", x=x.get("text") or "", o=x.get("opened"),
+                      c=x.get("closed"), how=x.get("how"), w=waits))
+    stop = now.get("stop_after")
+    ahead = [dict(day=n, n=_plain(names.get(str(n))), w=[x["id"] or "unnumbered" for x in h
+                                                        if x["c"] is None and x["w"] == n])
+             for n in order if n not in by and (stop is None or rank(n) <= rank(stop))]
+    gap = [dict(id=c["id"], d=c.get("day"), at=last_of[c.get("day")],
+                x=(lambda t: t if len(t) <= 200 else t[:199].rstrip() + "…")(" ".join(_plain(c.get("claim")).split())))
+           for c in index if c.get("ticked") is False and not c.get("replaced_by") and finished(c.get("day"))
+           and c.get("day") in last_of]
+    lifted = []
+    for r in (meta.get("where") or {}).get("rows") or []:
+        if r.get("stop") is not None and r.get("lifted") and r["stop"] in last_of:
+            at = last_of[r["stop"]]
+            nxt = next((i for i in cells if i > at and m[i]["own"] != r["stop"]), len(m))
+            lifted.append(dict(day=r["stop"], at=at, between=nxt - at - 1))
+    stretch = []
+    for j, x in enumerate(strand):
+        if "iv" in x:
+            after = strand[j + 1]["m"] if j + 1 < len(strand) and "m" in strand[j + 1] else None
+            nd = m[after]["own"] if after is not None else None
+            stretch.append(dict(n=len(x["iv"]), a=m[x["iv"][0]]["pr"], b=m[x["iv"][-1]]["pr"], w=m[x["iv"][0]]["w"],
+                                next=nd, first=after is not None and min(i for i in cells if m[i]["own"] == nd) == after))
+    kinds, between = {}, {}
+    for i, x in enumerate(m):
+        kinds[x["k"]] = kinds.get(x["k"], 0) + 1
+    for i in (i for iv in ivs for i in iv):
+        between[m[i]["k"]] = between.get(m[i]["k"], 0) + 1
+    how = {}
+    for x in h:
+        k = x["how"] if x["c"] is not None else "open"
+        how[k] = how.get(k, 0) + 1
+    phases = [dict(phase=r.get("phase"), name=(meta.get("phases") or [])[r["phase"]]
+                   if r.get("phase") is not None and r["phase"] < len(meta.get("phases") or []) else "",
+                   days=r.get("days") or [], stop=r.get("stop"), lifted=bool(r.get("lifted")),
+                   from_day=r.get("from_day"), later=not r.get("days"))
+              for r in (meta.get("where") or {}).get("rows") or [] if not r.get("cut")]
+    return dict(
+        _stamp(d), m=m, strand=strand, days=days, h=h, ahead=ahead, gap=gap, lifted=lifted, phases=phases,
+        stop=None if stop is None else dict(day=stop, name=_plain(names.get(str(stop)) or (by.get(stop) or {}).get("title"))),
+        built=look.get("built", 0), written=look.get("written", 0), merges=len(m), stretches=len(ivs),
+        between=sum(len(iv) for iv in ivs), between_kinds=between, kinds=kinds, how=how,
+        open=sum(1 for x in h if x["c"] is None), numbered=sum(1 for x in h if x["c"] is None and x["id"]),
+        opens=[dict(h=j, id=x["id"], to=x["w"], pr=m[x["o"]]["pr"] if x["o"] is not None else None, x=x["x"])
+               for j, x in enumerate(h) if x["c"] is None and x["id"]],
+        longest=sorted(stretch, key=lambda s: -s["n"])[:3],
+        cut=sorted(([x["day"], x["frags"]] for x in days if x["frags"] > 1), key=lambda x: -x[1])[:3],
+        unbroken=[x["day"] for x in days if x["frags"] == 1], strayed=[x["day"] for x in days if x["strays"]])

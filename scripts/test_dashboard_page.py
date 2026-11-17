@@ -1230,9 +1230,9 @@ class ThemeTest(unittest.TestCase):
 
 
 # The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id. Graph 6 is folded, for good,
-# under the merge graph that took its place (as the mockup at #228 has it).
+# under the merge graph that took its place, and graph 1 under its reading as a gene (as the mockup at #228 has them).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
-FOLDED = (6,)
+FOLDED = (6, 1)
 
 
 class PageFilesTest(unittest.TestCase):
@@ -1261,7 +1261,7 @@ class PageFilesTest(unittest.TestCase):
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll"]:
+        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1274,9 +1274,10 @@ class PageFilesTest(unittest.TestCase):
         demo = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(demo)
         data = demo.demo()
-        g6 = model(data)["g6"]
-        self.assertNotIn("error", g6)
-        self.assertGreater(len(g6["merges"]), 0)
+        for n in FOLDED:
+            g = model(data)[f"g{n}"]
+            self.assertNotIn("error", g)
+            self.assertGreater(len(g["merges"]), 0)
         out = boot(data)
         self.assertEqual((out["error"], out["logged"]), (None, []))
 
@@ -1301,18 +1302,20 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg)">', html),
-                         [f"g{n}" for n in (1, 2, 3, 12)] + ["mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg)">', html),
+                         ["rdg"] + [f"g{n}" for n in (2, 3, 12)] + ["mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"g1": 0, "g2": 0, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
+        group = {"rdg": 0, "g1": 0, "g2": 0, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
         for n, g in group.items():
             at = html.index(f'id="{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
         self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
         self.assertLess(html.index('id="g6-fold">'), html.index('id="g7">'))
+        self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
+        self.assertLess(html.index('id="g1-fold">'), html.index('id="g2">'))
         for part in ("say", "ladder", "key", "plot", "read", "table"):
             self.assertIn(f'id="g1-{part}"', html)
 
