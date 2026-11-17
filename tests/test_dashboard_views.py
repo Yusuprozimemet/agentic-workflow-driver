@@ -66,6 +66,37 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
 """
 
 
+# mergeDraw() from dashboard.js on the data from stdin, on the same kind of document, in each of its views: the
+# criteria's stripes, the red marks of the stops, the uncited merges' marks and the numbered badges it drew.
+MRG = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => ({ tag, attrs: {}, kids: [], style: {}, dataset: {}, classList: { add() {}, remove() {} }, hidden: false,
+  setAttribute(k, v) { this.attrs[k] = String(v); }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { this.kids = c; }, addEventListener() {} });
+const document = { createElementNS(ns, tag) { return node(tag); }, createElement: node, addEventListener() {} };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, els });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...n.kids.filter(k => typeof k === "object").flatMap(all)];
+  const count = () => {
+    const made = all($("mrg-g")), clip = p => made.filter(e => e.tag === "g" && (e.attrs["clip-path"] || "").startsWith("url(#" + p));
+    return { stripes: clip("mrg-cp-d").reduce((s, g) => s + g.kids.length, 0) - clip("mrg-cp-d").length,
+      loose: clip("mrg-cp-loose").reduce((s, g) => s + g.kids.length - 1, 0),
+      stops: made.filter(e => e.tag === "rect" && e.attrs.stroke === "var(--c-bad)" && e.attrs.rx === "1").length,
+      badges: made.filter(e => e.tag === "circle" && e.attrs.r !== "2.4" && e.attrs.r !== "3.2").length,
+      tiles: $("mrg-verdict").kids.length, events: $("mrg-ev").kids.length,
+      nocite: made.filter(e => (e.attrs.class || "").split(" ").includes("nocite")).length,
+      nc: made.filter(e => e.attrs.class === "nc").map(e => e.textContent) };
+  };
+  const days = [];
+  mergeDraw(model(DATA).mrg, $, days);
+  const out = { all: count() };
+  days.forEach(f => f(DATA.merge_graph.days[0].day));
+  out.day = count();
+  out`, ctx)));
+"""
+
+
 def page_replay_look():
     """REPLAY_LOOK as dashboard.js declares it, as JSON."""
     with open(os.path.join(ROOT, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
@@ -268,6 +299,237 @@ class GeneTest(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+def merge_row(i, pr, kind, prod=0, branch="", day=1):
+    return {
+        "i": i,
+        "pr": pr,
+        "kind": kind,
+        "branch": branch,
+        "day": day,
+        "title": f"PR {pr}",
+        "date": "2026-11-01",
+        "work": {"spec": 0, "context": 0, "prod": prod, "test": 1, "tooling": 0},
+    }
+
+
+def merge_crit(cid, day, prs, replaced_by=(), ticked=True):
+    return {
+        "id": cid,
+        "day": day,
+        "tag": "new",
+        "prs": list(prs),
+        "tests": ["T.test_a"],
+        "replaced_by": list(replaced_by),
+        "claim": cid,
+        "ticked": ticked,
+    }
+
+
+def merge_cell(cid, n, state, checks=None):
+    return {
+        "criterion": cid,
+        "day": "01",
+        "n": n,
+        "state": state,
+        "checks": checks or [{"check": "tests", "state": state, "platform": "linux"}],
+    }
+
+
+class MergeGraphTest(unittest.TestCase):
+    """merge_graph(): the merges against the criteria they give evidence to, as the merge graph draws them."""
+
+    def views(self):
+        return load("spec_drift_views", "spec_drift_views.py")
+
+    def test_a_merge_no_criterion_cites_is_loose_only_when_it_is_code_or_other_and_changed_product_code(
+        self,
+    ):
+        rows = [
+            dict(merge_row(0, None, "origin"), day=0),
+            merge_row(
+                1, 1, "spec", prod=2, branch="day-02/spec-preflight"
+            ),  # a root config file counted as prod
+            merge_row(2, 2, "close", prod=5, branch="day-01/close-the-day"),
+            merge_row(
+                3, 3, "code", prod=10, branch="change/switch-log"
+            ),  # a short spec's criteria cite it
+            merge_row(4, 4, "code", prod=20, branch="day-01/track-a"),  # cited
+            merge_row(5, 5, "code", prod=7, branch="tooling/x"),
+            merge_row(6, 6, "other", prod=3, branch="dashboard/y"),
+            merge_row(7, 7, "other", prod=0, branch="docs/z"),
+        ]
+        d = {
+            "rows": rows,
+            "criteria_index": [merge_crit("C1.1", 1, [4])],
+            "days": [{"day": 1, "title": "One", "status": "done"}],
+            "replay": {},
+            "order": [1],
+            "now": {},
+        }
+        self.views().criterion_states(d["criteria_index"], d["days"], d["replay"])
+        g = self.views().merge_graph(d)
+        self.assertEqual([m["pr"] for m in g["merges"] if m["loose"]], [5, 6])
+        self.assertEqual([m["pr"] for m in g["merges"]], [4, 5, 6])
+        self.assertEqual(g["skipped"], {"spec": 1, "close": 1, "code": 1, "other": 1})
+        self.assertEqual(g["skipped_total"], 4)
+        self.assertEqual(
+            [(f["n"], f["kind"], f.get("pr")) for f in g["finds"]],
+            [(1, "loose", 5), (2, "loose", 6)],
+        )
+
+    def fixture(self):
+        # Row i and the replay's n differ on purpose: a cell's n is the replay's, an event's n is the row's.
+        rows = [
+            merge_row(i, 10 + i, "code", prod=p, branch=f"day-01/track-{i}")
+            for i, p in ((1, 5), (2, 4), (3, 0), (4, 0), (5, 0), (6, 0))
+        ]
+        index = [merge_crit("C1.1", 1, [11]), merge_crit("C1.2", 1, [12])]
+        replay = {
+            "merges": [
+                {"n": 100 + i, "pr": 10 + i, "sample": "all" if i in (1, 4) else "day"}
+                for i in range(1, 7)
+            ],
+            "cells": [
+                merge_cell("C1.1", 101, "holds"),
+                merge_cell(
+                    "C1.1",
+                    104,
+                    "code broken",
+                    [
+                        {"check": "a", "state": "holds", "platform": "linux"},
+                        {
+                            "check": "b",
+                            "state": "code broken",
+                            "detail": "FAILED",
+                            "platform": "linux",
+                        },
+                    ],
+                ),
+                merge_cell("C1.1", 105, "not runnable"),
+                merge_cell("C1.1", 106, "holds"),
+                merge_cell("C1.2", 102, "break no longer applies"),
+            ],
+        }
+        d = {
+            "rows": rows,
+            "criteria_index": index,
+            "days": [{"day": 1, "title": "One", "status": "done"}],
+            "replay": replay,
+            "order": [1],
+            "now": {"head": "abc1234", "last_pr": 16, "generated": "2026-11-01T10:00+00:00"},
+        }
+        self.views().criterion_states(index, d["days"], replay)
+        return self.views().merge_graph(d)
+
+    def test_a_merge_drawn_only_for_a_stop_is_marked_apart_from_the_cited_and_the_loose(self):
+        g = self.fixture()
+        # #14: the replay first saw C1.1 stop there; #16: it saw it hold again there; neither is cited nor loose
+        self.assertEqual(
+            [(m["pr"], m["nocite"]) for m in g["merges"]],
+            [(11, []), (12, []), (14, ["stop"]), (16, ["held"])],
+        )
+        self.assertEqual((g["nocite"], g["all"]["nocite"]), ([14, 16], [14, 16]))
+        self.assertEqual(g["by_day"]["1"]["nocite"], [14, 16])
+        self.assertEqual([r["nocite"] for r in g["all"]["rows"]], [2])
+
+    def test_a_stop_keeps_its_suspect_window_its_check_and_where_it_held_again(self):
+        g = self.fixture()
+        # #14 and #16 are cited by none and changed no product code: drawn because a stop starts and ends there
+        self.assertEqual(
+            [(m["pr"], m["loose"]) for m in g["merges"]],
+            [(11, False), (12, False), (14, False), (16, False)],
+        )
+        keep = ("c", "pr", "n", "state", "check", "detail", "end", "lon", "lo", "wn", "sus")
+        self.assertEqual(
+            [{k: e[k] for k in keep} for e in g["events"]],
+            [
+                {
+                    "c": 0,
+                    "pr": 14,
+                    "n": 4,
+                    "state": "code broken",
+                    "check": "b",
+                    "detail": "FAILED",
+                    "end": 16,
+                    "lon": 1,
+                    "lo": 11,
+                    "wn": 3,
+                    "sus": [12],
+                },
+                {
+                    "c": 1,
+                    "pr": 12,
+                    "n": 2,
+                    "state": "break no longer applies",
+                    "check": "tests",
+                    "detail": None,
+                    "end": None,
+                    "lon": None,
+                    "lo": None,
+                    "wn": 0,
+                    "sus": [],
+                },
+            ],
+        )
+        self.assertEqual(
+            [(c["id"], c["st"], c["why"], c["lp"], c["nc"]) for c in g["crit"]],
+            [("C1.1", "ok", "holds", 16, 4), ("C1.2", "stale", "break no longer applies", 12, 1)],
+        )
+        self.assertEqual(
+            [(f["n"], f["kind"], f.get("c")) for f in g["finds"]], [(1, "back", 0), (2, "fix", 1)]
+        )
+        self.assertEqual((g["all_at"], g["at_all"], g["win"]), ([11, 14], 1, {"min": 3, "max": 3}))
+        self.assertEqual(g["flap"], {"series": 4, "stopped": 2, "twice": 0, "crit_twice": 0})
+
+    def test_the_days_plan_md_lists_with_no_spec_are_future_with_their_hand_offs_and_commitments(
+        self,
+    ):
+        d = {
+            "rows": [],
+            "criteria_index": [],
+            "days": [{"day": 1, "title": "One", "status": "done"}, {"day": 2, "title": "Two"}],
+            "replay": {},
+            "order": [1, 2, 3, 4],
+            "now": {},
+            "meta": {"where": {"names": {"3": "the third", "4": "the fourth"}}},
+            "hand_offs": [{"to": 3}, {"to": 3}, {"to": 4}, {"to": 2}],
+            "plan": {
+                "commitments": [
+                    {"owner_day": 4},
+                    {"owner_day": 3},
+                    {"owner_day": 4},
+                    {"owner_day": None},
+                ]
+            },
+        }
+        g = self.views().merge_graph(d)
+        self.assertEqual(
+            g["future"],
+            [
+                {"day": 3, "title": "the third", "ho": 2, "pc": 1},
+                {"day": 4, "title": "the fourth", "ho": 1, "pc": 2},
+            ],
+        )
+
+    def test_the_verdict_counts_what_the_promise_tiles_count_on_demo_data(self):
+        data = demo_data.demo()
+        g = data["merge_graph"]
+        states = [c["state"] for c in data["criteria_index"]]
+        n = lambda *s: sum(1 for x in states if x in s)
+        self.assertEqual(
+            [t["n"] for t in g["all"]["verdict"]],
+            [
+                n("proven"),
+                n("unproven"),
+                n("broken", "repair"),
+                n("skipped", "unchecked"),
+                n("open", "building"),
+                n("replaced"),
+            ],
+        )
+        self.assertEqual(sum(t["n"] for t in g["all"]["verdict"]), len(states))
+
+
 class PageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -333,6 +595,72 @@ class PageTest(unittest.TestCase):
             ],
         )
         self.assertEqual((drawn["dated"], drawn["names"], drawn["box"]), (16 + 15 + 4 + 4, 7, 4))
+
+    def test_the_merge_graph_draws_a_mark_for_every_criterion_stop_loose_merge_and_finding_on_demo_data(
+        self,
+    ):
+        data = demo_data.demo()
+        out = subprocess.run(
+            ["node", "-e", MRG, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        g, drawn = data["merge_graph"], json.loads(out.stdout)
+        loose = [m for m in g["merges"] if m["loose"]]
+        self.assertGreater(len(g["events"]), 0, "the demo data has a stop to draw")
+        self.assertEqual(
+            drawn["all"],
+            {
+                "stripes": len(g["crit"]),
+                "stops": len(g["events"]),
+                "loose": len(loose),
+                "badges": len(g["finds"]),
+                "tiles": 6,
+                "events": len(g["events"]),
+                "nocite": 0,
+                "nc": [f"{r['nocite']} uncited" for r in g["all"]["rows"] if r["nocite"]],
+            },
+        )
+        day = g["days"][0]["day"]
+        v = g["by_day"][str(day)]
+        self.assertEqual(
+            drawn["day"],
+            {
+                "stripes": sum(1 for c in g["crit"] if c["day"] == day),
+                "stops": v["events"],
+                "loose": len(v["loose"]),
+                "badges": sum(len(x) for x in v["finds"].values()),
+                "tiles": 6,
+                "events": len(g["events"]),
+                "nocite": len(v["nocite"]),
+                "nc": [],
+            },
+        )
+
+    def test_the_merge_graph_marks_every_row_no_criterion_cites_as_the_data_counts_them(self):
+        g = MergeGraphTest().fixture()
+        out = subprocess.run(
+            ["node", "-e", MRG, reconcile.SCRIPT],
+            input=json.dumps({"merge_graph": g}),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        drawn = json.loads(out.stdout)
+        # one Day row, its count beside "ran of drawn"; zoomed to the Day, one dashed row per merge
+        self.assertEqual(drawn["all"]["nc"], [f"{len(g['all']['nocite'])} uncited"])
+        self.assertEqual(drawn["day"]["nocite"], len(g["by_day"]["1"]["nocite"]))
+
+    def test_the_merge_graphs_verdict_reconciles_with_the_promise_tiles_on_demo_data(self):
+        agree, line = reconcile.merge_line(reconcile.model(demo_data.demo()))
+        self.assertTrue(agree, line)
+        self.assertRegex(
+            line, r"^merge graph: \d+ criteria \(.*\) \| promise tiles: \d+ \(.*\): agree$"
+        )
 
     def test_graph_12_counts_only_criteria_in_force(self):
         m = reconcile.model(demo_data.demo())

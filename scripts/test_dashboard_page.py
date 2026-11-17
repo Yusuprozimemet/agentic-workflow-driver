@@ -1229,8 +1229,10 @@ class ThemeTest(unittest.TestCase):
         self.assertEqual(start.strip().splitlines()[0], "themeToggle();")
 
 
-# The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id.
+# The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id. Graph 6 is folded, for good,
+# under the merge graph that took its place (as the mockup at #228 has it).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
+FOLDED = (6,)
 
 
 class PageFilesTest(unittest.TestCase):
@@ -1239,7 +1241,7 @@ class PageFilesTest(unittest.TestCase):
     def test_every_graph_has_its_plot_its_readout_and_its_exact_numbers_folded_under_it(self):
         html = read("index.html")
         for n in CARDS:
-            section = re.search(rf'<section class="graph" id="g{n}">.*?</section>', html, re.S)
+            section = re.search(rf'<(?:section class="graph"|div) id="g{n}">.*?</section>', html, re.S)
             self.assertIsNotNone(section, f"graph {n}")
             order = [section.group(0).index(f'id="g{n}-{part}"') for part in ("plot", "read", "table")]
             self.assertEqual(order, sorted(order), f"graph {n}")
@@ -1259,13 +1261,28 @@ class PageFilesTest(unittest.TestCase):
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for n in CARDS:
-            self.assertIn(f'id="g{n}-plot"', html, f"graph {n}")
-            before = html[:html.index(f'id="g{n}-plot"')]
-            self.assertEqual(before.count("<details"), before.count("</details>"), f"graph {n}")
+        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll"]:
+            self.assertIn(f'id="{plot}"', html, plot)
+            before = html[:html.index(f'id="{plot}"')]
+            self.assertEqual(before.count("<details"), before.count("</details>"), plot)
+        for n in FOLDED:
+            fold = re.search(rf'<section class="graph mock-fold" id="g{n}-fold">\s*<details class="exact">.*?</section>', html, re.S)
+            for part in ("plot", "read", "table"):
+                self.assertIn(f'id="g{n}-{part}"', fold.group(0), f"graph {n}'s {part} is in its fold")
+        # and drawn there, on the example data, as before it was folded
+        spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
+        demo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(demo)
+        data = demo.demo()
+        g6 = model(data)["g6"]
+        self.assertNotIn("error", g6)
+        self.assertGreater(len(g6["merges"]), 0)
+        out = boot(data)
+        self.assertEqual((out["error"], out["logged"]), (None, []))
 
     def test_what_graph_6_would_mislead_without_stays_visible_beside_it(self):
-        section = re.search(r'<section class="graph" id="g6">.*?</section>', read("index.html"), re.S).group(0)
+        # folded under the merge graph: what shows when its fold is opened
+        section = re.search(r'<div id="g6">.*?\n  </div>', read("index.html"), re.S).group(0)
         visible = re.sub(r"<details.*?</details>", "", section, flags=re.S)
         self.assertIn("The angle matches names, not meaning", visible)
         self.assertIn('href="#cannot-see"', visible)
@@ -1284,15 +1301,18 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+)">', html), [f"g{n}" for n in (1, 2, 3, 12, 6, 7, 8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg)">', html),
+                         [f"g{n}" for n in (1, 2, 3, 12)] + ["mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {1: 0, 2: 0, 3: 1, 12: 2, 6: 2, 7: 2, 8: 3, 9: 3, 10: 3, 11: 4}
+        group = {"g1": 0, "g2": 0, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
         for n, g in group.items():
-            at = html.index(f'<section class="graph" id="g{n}">')
-            self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, f"graph {n}")
+            at = html.index(f'id="{n}">')
+            self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
+        self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
+        self.assertLess(html.index('id="g6-fold">'), html.index('id="g7">'))
         for part in ("say", "ladder", "key", "plot", "read", "table"):
             self.assertIn(f'id="g1-{part}"', html)
 

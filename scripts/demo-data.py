@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import criterion_states, gene  # noqa: E402
+from spec_drift_views import criterion_states, gene, merge_graph  # noqa: E402
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -496,6 +496,7 @@ def demo():
     out["defect_counts"] = defect_counts(out["days"])
     criterion_states(out["criteria_index"], out["days"], out["replay"])
     out["gene"] = gene(out["plan"], out["criteria_index"], out["days"])
+    out["merge_graph"] = merge_graph(out)
     out["score"] = quality_score(out)
     return out
 

@@ -233,7 +233,64 @@
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g12-table"></table></div></details>
   </section>
 
-  <section class="graph" id="g6">
+  <section class="graph" id="mrg">
+    <div class="graph-head">
+      <p class="graph-n">Graph 6 · the merges against the spec; the old graph 6 is folded below</p>
+      <h2>Does the code still pass the spec?</h2>
+      <p class="graph-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
+    </div>
+    <div class="bar-top">
+      <h3 class="frame-h" id="mrg-frame-h">Merges against criteria</h3>
+      <div class="ctl">
+        <label for="mrg-zoom">Show</label>
+        <select id="mrg-zoom"></select>
+        <div class="mseg" role="group" aria-label="Rows">
+          <button type="button" id="mrg-v-day" aria-pressed="true">One row per Day</button>
+          <button type="button" id="mrg-v-merge" aria-pressed="false">One row per merge</button>
+        </div>
+      </div>
+    </div>
+    <p class="stamp" id="mrg-stamp"></p>
+    <dl class="verdict" id="mrg-verdict"></dl>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Uncited row</span></p>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+  <div><p class="graph-say">The long bar is the spec, one stripe per criterion. Each row above it is a Day's merges. A mark says what a merge did to the criterion straight below it: gave it its evidence, or stopped it holding. Everything a reader needs is printed inside the card, so a screenshot of it can be read without the hover.</p>
+  <dl class="mlegend">
+        <dt>The long bar</dt>
+        <dd><span><i class="msw grad"></i>one stripe per criterion: the darker, the more tests it names</span><span><i class="msw empty"></i>names no test</span></dd>
+        <dt>Marks in a row</dt>
+        <dd><span><i class="msw new"></i>the merge is evidence a new criterion cites</span><span><i class="msw hold"></i>evidence a hold criterion cites</span><span><i class="msw bad"></i>the replay first reports "code broken" or "test weakened" here</span><span><i class="msw stale"></i>first reports "break no longer applies" here</span><span><i class="msw loose"></i>changed product code, and no criterion cites it</span></dd>
+        <dt>Red line</dt>
+        <dd><span><i class="ln"></i>broken from the mark until the line ends</span><span><i class="ln mdash"></i>the break no longer applies until the line ends</span><span>a line that reaches the bar has not come back</span></dd>
+        <dt>Red band</dt>
+        <dd><span><i class="msw win"></i>the suspect window: every row after the last replay where the criterion held, up to the mark</span><span><i class="msw win hot"></i>darker where a merge in the window changed product code</span><span>the cause is somewhere in the band</span></dd>
+        <dt>Numbers</dt>
+        <dd><span><i class="bd fix">n</i>not holding, still in force</span><span><i class="bd retired">n</i>not holding when last run, since replaced</span><span><i class="bd">n</i>stopped holding and came back</span><span><i class="bd loose">n</i>a merge no criterion cites</span><span><i class="tri"></i>a later criterion replaced this one</span></dd>
+        <dt>Rows</dt>
+        <dd><span><i class="msw own"></i>a Day's own merges over its own criteria</span><span><i class="msw dead"></i>the replay never ran at this merge, so no red can show here</span><span><i class="msw new" style="opacity:.38"></i>faint: a later criterion names an earlier merge</span><span><i class="msw prod"></i>product lines</span><span><i class="msw test"></i>test lines</span><span><b class="stopk">3</b>Stopped: criteria the replay first saw not holding in this row</span><span><i class="msw due"></i>not due: plan.md lists the Day, no spec yet</span><span><i class="msw nocite"></i>dashed, in italics, or "2 uncited" beside a Day: no criterion cites the merge; it is drawn because the replay first noticed a stop, or saw one hold again, there, at a sampled merge</span></dd>
+      </dl>
+  <p class="vcap">These counts are each criterion's state the last time the replay ran it. The strip under the long bar draws the same state, one cell per criterion.</p></div>
+  </details>
+
+    <div class="scroll" id="mrg-scroll"><svg class="g" id="mrg-g" role="img"></svg></div>
+    <p class="narrow" id="mrg-narrow" hidden>The graph is wider than this window, so a screenshot will cut it off. Widen the window or zoom the browser out until this note goes away.</p>
+    <div class="find" id="mrg-find"></div>
+    <div class="notes" id="mrg-notes"></div>
+    <details class="exact"><summary id="mrg-ev-h">Where a criterion stopped holding</summary>
+      <div class="tablewrap"><table>
+        <thead><tr><th>No.</th><th>Criterion</th><th>What it promises</th><th>Last held at</th><th>First seen at</th><th>In the window between</th><th>The replay reported</th><th>Held again at</th></tr></thead>
+        <tbody id="mrg-ev"></tbody>
+      </table></div>
+    </details>
+    <details class="exact"><summary>What this graph cannot show</summary>
+      <ul class="cannot" id="mrg-cannot"></ul>
+    </details>
+    <div id="mrg-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g6-fold">
+    <details class="exact"><summary>Graph 6 as it was, folded: the angle between the specs' names and the code</summary>
+    <div id="g6">
     <div class="graph-head">
       <p class="graph-n">Graph 6</p>
       <h2>Do the spec and the code still agree?</h2>
@@ -244,6 +301,8 @@
     <p class="limit">The angle matches names, not meaning: a spec can name a thing the code has and still describe it wrongly. <a href="#cannot-see">What these figures cannot see</a> lists the rest.</p>
     <div class="readout" id="g6-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g6-table"></table></div></details>
+  </div>
+    </details>
   </section>
 
   <section class="graph" id="g7">
