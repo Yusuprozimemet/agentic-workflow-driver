@@ -1254,5 +1254,275 @@ class ProteinTest(unittest.TestCase):
         self.assertIn("empty", self.prt(data))
 
 
+def prf_data(absent=(), commit="abc"):
+    """Two closed Days of defects at most of the gates: two Days' auditors (one Notes line in the older form), a track
+    and the session in the work, a later Day's review, the evidence replay; Day 2 had a pull request merge after the
+    count, so its catches are left out of the cost per catch (graph 7's rule). D2.1 and D2.4 came back; D2.1 escaped."""
+
+    def defect(i, found, cause, made, same=None):
+        return {
+            "id": i,
+            "found": found,
+            "cause": cause,
+            "made": made,
+            "same_as": same,
+            "problem": None,
+        }
+
+    def gate(name, found, runs, cost):
+        return {"gate": name, "found": found, "runs": runs, "cost": cost}
+
+    def pr(n, day, merged):
+        return {"number": n, "day": day, "opened": f"{merged[:10]}T08:00:00Z", "merged": merged}
+
+    return {
+        "days": [
+            {
+                "day": 1,
+                "status": "done",
+                "defects": [
+                    defect("D1.1", "auditor", "spec", "Day 01"),
+                    defect("D1.2", "The auditor (plan-auditor)", "process", "Day 01"),
+                    defect("D1.3", "Track A", "implementation", "Day 01"),
+                    defect("D1.4", "self", "spec", "none"),
+                ],
+            },
+            {
+                "day": 2,
+                "status": "done",
+                "relabel": {"stage": [3, 4], "cause": [4, 4], "made": [2, 4]},
+                "defects": [
+                    defect("D2.1", "auditor", "spec", "Day 01", "D1.1"),
+                    defect("D2.2", "seen red", "implementation", "Day 02"),
+                    defect("D2.3", "Day 1 review", "process", None),
+                    defect("D2.4", "evidence replay", "environment", "Day 02", "D1.3"),
+                ],
+            },
+            {"day": 3, "status": "active", "defects": []},
+        ],
+        "gate_report": {
+            "gates": [
+                gate("auditors", "auditor", 4, 3.0),
+                gate("seen red", "seen red", 2, 1.0),
+                gate("break on purpose", "break on purpose", 0, 0.0),
+                gate("evidence replay", "evidence replay", 1, 0.5),
+                gate("hooks", None, 3, 0.3),
+            ]
+        },
+        "counted": {"at": "2026-01-02T12:00:00+00:00"},
+        "clock": {
+            "sessions": [],
+            "prs": [pr(1, 1, "2026-01-01T10:00:00Z"), pr(2, 2, "2026-01-03T10:00:00Z")],
+        },
+        "rows": [{"pr": None}, {"pr": 1, "day": 1}, {"pr": 2, "day": 2}],
+        "refusals": [
+            {"date": "2026-01-01", "guard": "read-guard", "refused": 3},
+            {"date": "2026-01-01", "guard": "step-guard", "refused": 1},
+            {"date": "2026-01-02", "guard": "read-guard", "refused": 2},
+        ],
+        "verification": [
+            {"number": 1, "failed_in": ["PR checks", "Tests"]},
+            {"number": 2, "failed_in": ["PR checks", "PR checks"]},
+            {"number": 3, "failed_in": []},
+        ],
+        "defect_recurrence": {
+            "recurrences": [{"id": "D2.1", "same_as": "D1.1"}, {"id": "D2.4", "same_as": "D1.3"}]
+        },
+        "data": {"branch": "dashboard-data", "commit": commit, "at": None, "absent": list(absent)},
+        "now": {"head": "abcdef1234", "last_pr": 2, "generated": "2026-01-04T09:00+00:00"},
+    }
+
+
+# model() and prfDraw() from dashboard.js on the data from stdin, on a document that keeps what is made: graph 7's
+# counts as its model has them, the marks prfDraw drew by class, its words, and the banner.
+PRF = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, dataset: {}, hidden: false, textContent: "",
+  classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle() {}, contains() { return false; } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { this.kids = c; }, addEventListener() {}, querySelectorAll() { return []; } };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS(ns, tag) { return node(tag); }, createElement: node, addEventListener() {} };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c))).length;
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const M = model(DATA), days = [], g7 = M.g7;
+  const drew = typeof prfDraw === "function" && M.prf && !M.prf.error ? (prfDraw(M.prf, $, days), true) : false;
+  const f = $("prf-fig");
+  ({ g7: { subs: g7.gates.map(x => x.sub), gates: g7.gates.map(x => [x.key, x.n, x.per == null ? null : x.per]),
+           phases: g7.pipe.phases.map(p => p.n),
+           caught: g7.pipe.stages.flatMap(s => s.gates.filter(x => x.caught).map(x => x.caught)) },
+     prf: { drew, dots: is(f, ["b", "d"]), grps: is(f, ["b", "grp"]), lays: is(f, ["b", "lay"]), hooks: is(f, ["b", "hk"]),
+            marks: is(f, ["b", "mk"]), drops: is(f, ["t-drop"]),
+            words: [f, $("prf-figs"), $("prf-finds"), $("prf-bends"), $("prf-ci"), $("prf-key")].map(words).join(" ").replace(/\\s+/g, " ") },
+     missing: M.head.missing, onDay: days.length })`, ctx)));
+"""
+
+
+def prf_node(data):
+    reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+    out = subprocess.run(
+        ["node", "-e", PRF, reconcile.SCRIPT],
+        input=json.dumps(data),
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if out.returncode:
+        raise AssertionError(out.stderr[:800])
+    return json.loads(out.stdout)
+
+
+def with_prf(data):
+    data = dict(data)
+    data["proofreading"] = load("spec_drift_views", "spec_drift_views.py").proofreading(data)
+    return data
+
+
+# What graph 7's own rules gave in dashboard.js up to #237 (GATES, gateOf, PHASES and the cost per catch over the Days
+# in the count), run in node on each data set before they moved to spec_drift_views.proofreading: the gates in GATES'
+# order, the four phases, and the cost per catch of the gates that had one.
+GATE_KEYS = [
+    "auditor",
+    "spec-change PR",
+    "seen red",
+    "break on purpose",
+    "review",
+    "work",
+    "close",
+    "rehearsal",
+    "evidence replay",
+    "dashboard",
+    "Day review",
+]
+OLD_DEMO = {
+    "caught": [1] * 11,
+    "layers": [2, 4, 2, 3],
+    "per": {
+        "auditor": "$2.40",
+        "seen red": "$3.60",
+        "break on purpose": "$5.60",
+        "evidence replay": "$2.00",
+    },
+}
+OLD_FIXTURE = {
+    "caught": [3, 0, 1, 0, 0, 2, 0, 0, 1, 0, 1],
+    "layers": [3, 3, 0, 2],
+    "per": {"auditor": "$1.50"},
+}
+
+
+class ProofreadingTest(unittest.TestCase):
+    """proofreading(): every defect in one stream through four layers of checking, counted by graph 7's rules."""
+
+    def prf(self, data):
+        return load("spec_drift_views", "spec_drift_views.py").proofreading(data)
+
+    def counts(self, p):
+        caught = [g["caught"] for g in p["gates"]]
+        per = {g["key"]: f"${g['per']:.2f}" for g in p["gates"] if g["per"] is not None}
+        return {"caught": caught, "layers": [x["caught"] for x in p["layers"]], "per": per}
+
+    def test_the_counts_are_graph_7s_on_the_demo_data_and_on_a_day_merged_after_the_count(self):
+        p = self.prf(demo_data.demo())
+        self.assertEqual([g["key"] for g in p["gates"]], GATE_KEYS)
+        f = self.prf(prf_data())
+        # field by field, gate by gate: a short report break.py can record (unittest shortens long dicts)
+        for got, old in ((self.counts(p), OLD_DEMO), (self.counts(f), OLD_FIXTURE)):
+            self.assertEqual(got["caught"], old["caught"])
+            self.assertEqual(got["layers"], old["layers"])
+            for k in sorted(set(got["per"]) | set(old["per"])):
+                self.assertEqual(got["per"].get(k), old["per"].get(k), f"cost per catch at {k}")
+        self.assertEqual(f["late"], [2])
+        self.assertEqual((f["total"], [x["reached"] for x in f["layers"]]), (8, [8, 5, 2, 2]))
+
+    def test_the_gate_a_found_value_names_is_graph_7s_rule(self):
+        gate_of = load("spec_drift_views", "spec_drift_views.py").gate_of
+        cases = {
+            "day 3 review": "Day review",
+            "Day 12 review": "Day review",
+            "the auditor (plan)": "auditor",
+            "The spec-change PR": "spec-change PR",
+            "Track B": "work",
+            "self": "work",
+            "work": "work",
+            "a reviewer nobody named": "work",
+            None: "work",
+        }
+        for k, want in cases.items():
+            self.assertEqual(gate_of(k), want, f"found: {k}")
+
+    def test_came_back_and_after_the_merge_are_two_sets_and_what_they_share_is_counted(self):
+        m = self.prf(prf_data())["marks"]
+        self.assertEqual((m["back"]["n"], m["after_merge"], m["shared"]), (2, 2, 1))
+        self.assertEqual((m["escaped"]["n"], m["both"]), (1, 1))
+        self.assertEqual(m["back"]["layers"], [1, 0, 0, 1])
+
+    def test_with_the_data_branch_or_its_gates_json_missing_there_is_no_stream(self):
+        for data in (prf_data(commit=None), prf_data(absent=["gates.json"])):
+            p = self.prf(data)
+            self.assertTrue("empty" in p, "the stream would be drawn")
+            self.assertEqual([g["cost"] for g in p["gates"]], [None] * 11)
+            self.assertIsNone(p["hooks"])
+        self.assertNotIn("empty", self.prf(prf_data(absent=["sessions.json"])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_graph_7_reads_the_same_counts_as_the_stream(self):
+        for data, old in ((demo_data.demo(), OLD_DEMO), (with_prf(prf_data()), OLD_FIXTURE)):
+            got = prf_node(data)["g7"]
+            self.assertEqual([int(s.split(" ")[0]) for s in got["subs"]], old["caught"])
+            self.assertEqual(got["phases"], old["layers"])
+            per = [re.search(r"about (\$[\d.]+) a catch", c) for c in got["caught"]]
+            self.assertEqual(sorted(x.group(1) for x in per if x), sorted(old["per"].values()))
+            p = data["proofreading"]
+            self.assertEqual(got["gates"], [[g["key"], g["caught"], g["per"]] for g in p["gates"]])
+        with open(os.path.join(ROOT, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
+            script = f.read()
+        self.assertEqual(re.findall(r"^const (GATES|gateOf|PHASES)\b", script, re.MULTILINE), [])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_stream_draws_a_dot_per_defect_a_group_per_gate_and_a_row_per_guard(self):
+        data = demo_data.demo()
+        out, p = prf_node(data), data["proofreading"]
+        guards = {r["guard"] for r in data["refusals"] if r["refused"]}
+        want = {"dots": p["total"], "grps": 11, "lays": 4, "hooks": len(guards), "marks": 2}
+        self.assertEqual({k: out["prf"][k] for k in want}, want)
+        self.assertEqual(p["total"], 11)
+        self.assertEqual(out["onDay"], 1)  # it hooks into the page's Day buttons
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_stream_labels_came_back_and_after_the_merge_apart_and_says_what_they_share(self):
+        words = prf_node(with_prf(prf_data()))["prf"]["words"]
+        self.assertIn("2 came back.", words)
+        self.assertIn("They are not the 2 caught after the merge: the two sets share 1.", words)
+        self.assertIn("Days merged by the count", words)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_without_the_data_branch_the_stream_draws_nothing_and_the_banner_says_so(self):
+        for data in (prf_data(commit=None), prf_data(absent=["gates.json"])):
+            out = prf_node(with_prf(data))
+            self.assertEqual(
+                (out["prf"]["dots"], out["prf"]["grps"], out["prf"]["drops"]), (0, 0, 0)
+            )
+            self.assertIn("The proofreading stream is not drawn.", out["missing"])
+            # graph 7 still puts each defect at its gate, with no gate's cost
+            self.assertEqual(out["g7"]["phases"], OLD_FIXTURE["layers"])
+            self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 11)
+            self.assertFalse(any("run" in s for s in out["g7"]["subs"]), out["g7"]["subs"])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_stream_reconciles_with_graph_7_on_demo_data(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        agree, line = reconcile.prf_line(reconcile.model(demo_data.demo()))
+        self.assertTrue(agree, line)
+        self.assertRegex(
+            line, r"^proofreading: 11 defects, layers 2/4/2/3, .* \| graph 7: .*: agree$"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

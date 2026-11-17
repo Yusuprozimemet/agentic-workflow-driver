@@ -634,7 +634,7 @@ CAUSES = ("spec", "implementation", "process", "environment")
 
 def found_tag(value):
     """A Defect line's found: or cause: value as relabel.py reads it: older Notes qualify the value,
-    "auditor (spec-auditor)". The page's graph 7 reads it the same way (tagOf, dashboard.js)."""
+    "auditor (spec-auditor)". Graph 7 reads it the same way (spec_drift_views._tag)."""
     return re.sub(r" \(.*\)$", "", re.sub(r"^the ", "", (value or "").strip().lower()))
 
 

@@ -53,13 +53,6 @@ const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(c => flipTheme(c[0], c[1]))", ctx)));
 """
 
-# tagOf() on each value of the list from stdin.
-TAGS = r"""
-const fs = require("fs"), vm = require("vm");
-const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
-console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(tagOf)", ctx)));
-"""
-
 # howBlob() on the data from stdin: where the page's "Read ..." links point.
 HOW_BLOB = r"""
 const fs = require("fs"), vm = require("vm");
@@ -94,6 +87,9 @@ def model(data):
     """What the page would draw and say for this data, each criterion given its state as spec-drift.py gives it."""
     if isinstance(data.get("criteria_index"), list):
         views.criterion_states(data["criteria_index"], data.get("days") or [], data.get("replay"))
+    # Graph 7's gates, phases and cost per catch, as spec-drift.py writes them (spec_drift_views.proofreading).
+    if isinstance(data.get("days"), list) and "proofreading" not in data:
+        data = dict(data, proofreading=views.proofreading(data))
     return node(MODEL, data)
 
 
@@ -844,7 +840,8 @@ class ModelTest(unittest.TestCase):
 
     def test_graph_7_reads_a_found_value_as_the_gate_report_does_and_shares_a_gates_dollars_over_the_days_counted(self):
         values = ["The auditor (spec-auditor)", " Seen red ", "break on purpose (D03.2)", "the close", "Track A", "Spec", None, ""]
-        self.assertEqual(node(TAGS, values), [sd.found_tag(v) for v in values])
+        # Graph 7's reading of a found: value moved from the page (tagOf) to spec_drift_views.proofreading.
+        self.assertEqual([views._tag(v) for v in values], [sd.found_tag(v) for v in values])
         # Day 2 had a pull request merge after the count, so the auditors' dollar is not shared with its catch.
         defect = lambda i, found, cause, made: dict(id=i, found=found, cause=cause, made=made, same_as=None, problem=None)
         pr = lambda n, day, merged: dict(number=n, day=day, kind="code", branch=f"day-0{day}/track-a", opened="2026-01-01T09:00:00Z", merged=merged, checks=None)
@@ -1195,7 +1192,7 @@ class BootTest(unittest.TestCase):
         self.assertFalse(gone["missing"]["hidden"])
         self.assertEqual(gone["missing"]["text"], "The dashboard-data branch is missing, so this page leaves out the dollars, the hooks' refusals, the gates' "
                          "runs and cost, the sessions' times, when the sessions were last counted, the driver's steps and the "
-                         "re-checks of finished promises.")
+                         "re-checks of finished promises. The proofreading stream is not drawn.")
         one = boot(data(data=source("abc", ["replay-history.json"])))
         self.assertEqual(one["missing"]["text"], "The dashboard-data branch has no replay-history.json, so this page leaves out "
                          "the re-checks of finished promises.")
@@ -1233,9 +1230,9 @@ class ThemeTest(unittest.TestCase):
 
 # The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id. Graph 6 is folded, for good,
 # under the merge graph that took its place, graph 1 under its reading as a gene, graph 2 under its gel and graphs 3 to 5
-# under their proteins (as the mockup at #228 has them).
+# under their proteins, graph 7 under its proofreading stream (as the mockup at #228 has them).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
-FOLDED = (6, 1, 2, 3)
+FOLDED = (6, 1, 2, 3, 7)
 
 # gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
 # many marks of each kind they drew, and the words of the proteins' figures.
@@ -1286,7 +1283,7 @@ class GelAndProteinPageTest(unittest.TestCase):
 
     def test_the_gel_and_the_proteins_build_no_html_from_text(self):
         script = read("dashboard.js")
-        for name in ("function pointerBox", "function gelDraw", "function protDraw"):
+        for name in ("function pointerBox", "function gelDraw", "function protDraw", "function prfDraw"):
             body = script[script.index(name):]
             body = body[:body.index("\n}\n") if "\n}\n" in body else body.index("\r\n}\r\n")]
             self.assertNotIn("innerHTML", body, name)
@@ -1320,7 +1317,8 @@ class PageFilesTest(unittest.TestCase):
 
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
-        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll"]:
+        for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll",
+                                                                             "prf-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1361,18 +1359,19 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt)">', html),
-                         ["rdg", "gel", "prt", "g12", "mrg"] + [f"g{n}" for n in (7, 8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf)">', html),
+                         ["rdg", "gel", "prt", "g12", "mrg", "prf"] + [f"g{n}" for n in (8, 9, 10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
+        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
         for n, g in group.items():
             at = html.index(f'id="{n}">')
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
         self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
-        self.assertLess(html.index('id="g6-fold">'), html.index('id="g7">'))
+        self.assertLess(html.index('id="g6-fold">'), html.index('id="prf">'))
+        self.assertLess(html.index('id="prf">'), html.index('id="g7-fold">'))
         self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
         self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
         self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))

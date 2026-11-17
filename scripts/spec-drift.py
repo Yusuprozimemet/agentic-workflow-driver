@@ -75,7 +75,7 @@ from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
-from spec_drift_views import criterion_states, gel, gene, merge_graph, protein, reading, where_ring
+from spec_drift_views import criterion_states, gel, gene, merge_graph, proofreading, protein, reading, where_ring
 from spec_drift_score import quality_score
 
 
@@ -261,7 +261,7 @@ def main():
         real["merge_graph"] = merge_graph(real)
         real["score"] = quality_score(real)
         real["where_ring"], real["reading"] = where_ring(real), reading(real)
-        real["gel"], real["protein"] = gel(real), protein(real)
+        real["gel"], real["protein"], real["proofreading"] = gel(real), protein(real), proofreading(real)
         if args.build:
             # The re-check rows are on the data branch, every other file the panel quotes on main.
             how_read = lambda path: (data_text("replay-history.json") or "") if path == HOW_REPLAY else blobs.read(head, path)  # noqa: E731
