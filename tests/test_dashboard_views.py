@@ -1723,5 +1723,242 @@ class RingsTest(unittest.TestCase):
             self.assertRegex(line, r"^rings: Days [\d,]+ \+ outside [\d,]+ .*: agree")
 
 
+def clock_data(absent=(), commit="abc"):
+    """Graph 10's times: a session past midnight, a wait across 05:00, two implementer sessions at once, the main
+    session and an auditor at once, pull requests merged on two dates, one opened on the date before."""
+
+    def s(agent, day, a, b, replies=5, **kw):
+        return {
+            "date": a[:10],
+            "day": day,
+            "agent": agent,
+            "replies": replies,
+            **kw,
+            "from": a,
+            "to": b,
+        }
+
+    def pr(number, day, kind, opened, merged=None):
+        p = {
+            "number": number,
+            "day": day,
+            "kind": kind,
+            "branch": f"b{number}",
+            "opened": opened,
+            "checks": {"start": opened, "end": opened, "runs": 1, "failed": 0},
+        }
+        if merged:
+            p["merged"] = merged
+        return p
+
+    return {
+        "clock": {
+            "sessions": [
+                s(
+                    "main",
+                    1,
+                    "2026-03-02T09:00:00+01:00",
+                    "2026-03-02T12:00:00+01:00",
+                    30,
+                    ran={"tests": 120, "checks": 900, "other": 30},
+                    runs=[["2026-03-02T08:30:00Z", "2026-03-02T08:45:00Z", "checks"]],
+                ),
+                s("spec-auditor", 1, "2026-03-02T09:30:00+01:00", "2026-03-02T09:50:00+01:00", 4),
+                s("implementer", 1, "2026-03-02T10:00:00+01:00", "2026-03-02T11:00:00+01:00"),
+                s(
+                    "implementer",
+                    1,
+                    "2026-03-02T10:30:00+01:00",
+                    "2026-03-02T11:30:00+01:00",
+                    ran={"tests": 600},
+                ),
+                s(
+                    "main",
+                    1,
+                    "2026-03-02T23:30:00+01:00",
+                    "2026-03-03T01:30:00+01:00",
+                    12,
+                    ran={"other": 1200},
+                ),
+                s(
+                    "main",
+                    2,
+                    "2026-03-03T04:30:00+01:00",
+                    "2026-03-03T05:40:00+01:00",
+                    8,
+                    ran={"tests": 2400, "other": 300},
+                    runs=[["2026-03-03T03:50:00Z", "2026-03-03T04:20:00Z", "tests"]],
+                ),
+                s("main", 2, "2026-03-03T09:00:00+01:00", "2026-03-03T11:00:00+01:00", 20),
+                s(
+                    "general-purpose",
+                    2,
+                    "2026-03-03T10:30:00+01:00",
+                    "2026-03-03T11:45:00+01:00",
+                    3,
+                ),
+            ],
+            "prs": [
+                pr(10, 1, "code", "2026-03-02T09:00:00Z", "2026-03-02T09:40:00Z"),
+                pr(11, 1, "close", "2026-03-02T20:00:00Z", "2026-03-03T10:00:00Z"),
+                pr(12, 2, "spec", "2026-03-03T08:00:00Z", "2026-03-03T08:05:00Z"),
+                pr(13, 2, "code", "2026-03-03T09:00:00Z"),
+                pr(14, None, "other", "2026-03-02T21:00:00Z", "2026-03-02T23:10:00Z"),
+            ],
+        },
+        "counted": {"at": "2026-03-03T18:00:00+01:00"},
+        "data": {"branch": "dashboard-data", "commit": commit, "absent": list(absent)},
+        "days": [
+            {"day": 1, "status": "done", "title": "One"},
+            {"day": 2, "status": "active", "title": "Two"},
+        ],
+        "now": {"head": "abcdef1234", "last_pr": 14, "generated": "2026-03-03T19:00+00:00"},
+    }
+
+
+# What graph 10 counted itself in dashboard.js up to #239 (clockGraph's lanes, waits, `ran`, merges and lower median),
+# run in node on each data set before the counting moved to spec_drift_views.actogram: per date, the lanes' busy
+# minutes, their waits on commands, the waits on tests, GitHub's checks and other commands, the pull requests merged
+# and their median wait, in minutes rounded to 0.1.
+# fmt: off
+OLD_CLOCK_DEMO = {
+    "2026-10-01": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-02": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    "2026-10-03": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
+    "2026-10-04": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-05": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    "2026-10-06": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
+    "2026-10-07": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-08": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    "2026-10-09": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
+    "2026-10-10": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-11": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    "2026-10-12": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
+    "2026-10-13": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-14": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    "2026-10-15": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
+    "2026-10-16": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
+    "2026-10-17": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+}
+OLD_CLOCK_FIXTURE = {
+    "2026-03-02": [{"main": 330, "implementer": 90, "auditors": 20}, {"main": 53.9, "implementer": 10, "auditors": 0}, [26.3, 15, 22.6], 2, 40],
+    "2026-03-03": [{"main": 160, "other": 75}, {"main": 28.6, "other": 0}, [25.7, 0, 2.9], 2, 5],
+}
+# fmt: on
+
+
+def fig_of(x):
+    """A date's figures in OLD_CLOCK_*'s form, from actogram()'s date or graph 10's `fig`."""
+    return [x["lanes"], x["waits"], x["ran"], x["merged"], x["median"]]
+
+
+ACT = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const g = model(DATA).g10; g.error ? g : g.dates.map(x => [x.date, x.fig])`, ctx)));
+"""
+
+
+class ActogramTest(unittest.TestCase):
+    """actogram(): every date on one clock, 05:00 to 05:00, counted by graph 10's rules."""
+
+    def act(self, data):
+        return load("spec_drift_views", "spec_drift_views.py").actogram(data)
+
+    def test_the_figures_per_date_are_graph_10s(self):
+        for data, old in ((demo_data.demo(), OLD_CLOCK_DEMO), (clock_data(), OLD_CLOCK_FIXTURE)):
+            a = self.act(data)
+            self.assertEqual([x["date"] for x in a["dates"]], sorted(old))
+            for x in a["dates"]:
+                self.assertEqual(fig_of(x), old[x["date"]], x["date"])
+
+    def test_a_date_runs_from_05_00_to_05_00_on_the_sessions_clock(self):
+        a = self.act(clock_data())
+        self.assertEqual(a["zone"], "UTC+01:00")
+        evening, next_day = a["dates"]
+        # 23:30 to 01:30 stays on the evening's row, past midnight (minute 1140)
+        self.assertIn([1110, 1230, "main"], evening["segs"])
+        # a wait from 04:50 to 05:20 is split at 05:00
+        self.assertEqual(evening["wait_segs"][-1], [1430, 1440, "tests"])
+        self.assertEqual(next_day["wait_segs"], [[0, 20, "tests"]])
+        self.assertEqual(
+            (evening["label"], evening["days"], evening["up_to"]), ("2 Mar", [1, 2], 1440)
+        )
+        self.assertEqual(next_day["up_to"], 780)
+        # a pull request merged at 02:00 is the evening's merge, not the next date's
+        d = clock_data()
+        d["clock"]["prs"].append(
+            {
+                "number": 15,
+                "day": 1,
+                "kind": "code",
+                "branch": "b15",
+                "opened": "2026-03-02T23:00:00+01:00",
+                "merged": "2026-03-03T02:00:00+01:00",
+                "checks": {"start": None, "end": None, "runs": 0, "failed": 0},
+            }
+        )
+        evening, next_day = self.act(d)["dates"]
+        self.assertEqual(
+            [(m["pr"], m["from"], m["at"]) for m in evening["merges"] if m["pr"] == 15],
+            [(15, 1080, 1260)],
+        )
+        self.assertNotIn(15, [m["pr"] for m in next_day["merges"]])
+
+    def test_two_sessions_busy_at_once_count_once(self):
+        evening, next_day = self.act(clock_data())["dates"]
+        self.assertEqual((evening["busy"], evening["main"]), (330, 330))
+        self.assertEqual((next_day["busy"], next_day["main"]), (205, 160))
+        self.assertEqual(next_day["segs"], [[0, 40, "main"], [240, 360, "main"], [360, 405, "sub"]])
+
+    def test_a_merge_opened_before_the_rows_05_00_is_cut_and_keeps_its_wait(self):
+        evening, next_day = self.act(clock_data())["dates"]
+        marks = lambda d: [(m["pr"], m["at"], m["from"], m["wait"], m["cut"]) for m in d["merges"]]
+        self.assertEqual(marks(evening), [(10, 340, 300, 40, False), (14, 1150, 1020, 130, False)])
+        self.assertEqual(marks(next_day), [(11, 360, 0, 840, True), (12, 245, 240, 5, False)])
+
+    def test_the_totals(self):
+        t = self.act(clock_data())["totals"]
+        self.assertEqual((t["dates"], t["first"], t["last"]), (2, "2026-03-02", "2026-03-03"))
+        self.assertEqual((t["busy"], t["main"], t["merged"], t["median"]), (535, 490, 4, 40))
+        self.assertEqual((t["over_hour"], t["longest"]), (2, {"pr": 11, "wait": 840}))
+        self.assertEqual((t["after_midnight"], t["whole"]), (1, 1))
+
+    def test_the_banner_when_the_sessions_are_not_on_the_data_branch(self):
+        self.assertIsNone(self.act(clock_data())["missing"])
+        absent = self.act(clock_data(absent=["sessions.json"]))["missing"]
+        self.assertRegex(
+            absent, r"^the dashboard-data branch has no sessions.json, so no session is drawn"
+        )
+        gone = self.act(clock_data(commit=None))["missing"]
+        self.assertRegex(gone, r"^the dashboard-data branch is missing, so no session is drawn")
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_graph_10_reads_its_figures_from_the_actogram(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        for data, old in ((demo_data.demo(), OLD_CLOCK_DEMO), (clock_data(), OLD_CLOCK_FIXTURE)):
+            data = {**data, "actogram": self.act(data)}
+            out = subprocess.run(
+                ["node", "-e", ACT, reconcile.SCRIPT],
+                input=json.dumps(data),
+                capture_output=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(out.returncode, 0, out.stderr[:800])
+            for date, fig in json.loads(out.stdout):
+                self.assertEqual(fig_of(fig), old[date], date)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_actogram_reconciles_with_graph_10(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        for data in (clock_data(), demo_data.demo()):
+            data = {**data, "actogram": self.act(data)}
+            agree, line = reconcile.act_line(reconcile.model(data))
+            self.assertTrue(agree, line)
+            self.assertRegex(line, r"^actogram: \d+ dates, busy [\d.]+ h .*: agree$")
+
+
 if __name__ == "__main__":
     unittest.main()

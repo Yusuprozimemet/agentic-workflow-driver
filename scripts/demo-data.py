@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import (budget, criterion_states, gel, gene, merge_graph, proofreading, protein,  # noqa: E402
+from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, proofreading, protein,  # noqa: E402
                               reading, rings, where_ring)
 
 PROJECT = "sample-shop"
@@ -508,7 +508,7 @@ def demo():
     out["score"] = quality_score(out)
     out["where_ring"], out["reading"] = where_ring(out), reading(out)
     out["gel"], out["protein"], out["proofreading"] = gel(out), protein(out), proofreading(out)
-    out["budget"], out["rings"] = budget(out), rings(out)
+    out["budget"], out["rings"], out["actogram"] = budget(out), rings(out), actogram(out)
     return out
 
 

@@ -1574,3 +1574,78 @@ footer { font-size: 12.5px; color: var(--muted); }
 #rng .rng-fig .b{transition:opacity .15s}
 #rng .rng-fig .b.mk-dim{opacity:.25}
 @media (prefers-reduced-motion:reduce){#atp .fig .col,#rng .rng-fig .b{transition:none}}
+
+/* Graph 10 as an actogram: every date on one clock, a row per date. Every rule is under #act; the colours are the
+   dashboard's tokens, and only the shadow it lacks is defined here. */
+#act{--act-shadow:rgba(14,17,22,.16)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #act{--act-shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #act{--act-shadow:rgba(0,0,0,.5)}
+#act h3{font:600 15px/1.25 var(--display);margin:0 0 8px;text-wrap:balance}
+
+/* the line of figures */
+#act .act-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 26px;border-block:1px solid var(--line);padding:12px 0}
+#act .act-figs>div{min-width:0}
+#act .act-figs .act-num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#act .act-figs .act-num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:5px}
+#act .act-figs .act-what{font-weight:600;margin-top:5px;color:var(--ink)}
+#act .act-figs .act-sub{font:400 12.5px/1.4 var(--sans);color:var(--muted)}
+
+/* the short key */
+#act .act-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 16px;font-size:12.5px;color:var(--ink-2)}
+#act .act-key>span{display:inline-flex;align-items:center;gap:6px}
+#act .act-key svg{flex:none;overflow:visible}
+
+/* the marks, in the figure and in the key */
+#act .act-s{fill:var(--bar)}
+#act .act-mini{fill:var(--bar);fill-opacity:.45}
+#act .act-w{fill:var(--bar-2);pointer-events:none}
+#act .act-m{fill:var(--ink)}
+#act .act-ml{fill:none;stroke:var(--ink);stroke-opacity:.18;stroke-width:1.2}
+#act .act-unc{fill:url(#act-hatch);pointer-events:none}
+#act .act-hatch{fill:var(--line)}
+
+/* the figure */
+#act .act-scroll{overflow-x:auto;min-width:0}
+#act .act-fig{display:block;width:100%;min-width:1180px;height:auto}
+#act .act-fig text{font-family:var(--sans);pointer-events:none}
+#act .act-t-col{font:500 10.5px var(--sans);fill:var(--muted)}
+#act .act-t-hr{font:400 10.5px var(--mono);fill:var(--muted)}
+#act .act-t-date{font:600 12.5px var(--sans);fill:var(--ink)}
+#act .act-t-day{font:400 11px var(--sans);fill:var(--muted)}
+#act .act-t-num{font:600 12.5px var(--sans);fill:var(--ink);font-variant-numeric:tabular-nums}
+#act .act-t-num .act-pct{font-weight:400;font-size:10.5px;fill:var(--muted)}
+#act .act-bg{fill:var(--card)}
+#act .act-trk{fill:var(--wash)}
+#act .act-grid{fill:none;stroke:var(--axis);stroke-width:1;opacity:.6;pointer-events:none}
+#act .act-mid{fill:none;stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:3 3;pointer-events:none}
+#act .act-row{cursor:pointer;transition:opacity .15s}
+#act .act-row:focus{outline:none}
+#act .act-row:focus-visible>.act-bg{stroke:var(--link);stroke-width:2}
+#act .act-row:hover>.act-bg{fill:var(--well)}
+#act .act-row:hover .act-t-date{text-decoration:underline}
+#act .act-row.mk-dim{opacity:.25}
+@media (prefers-reduced-motion:reduce){#act .act-row{transition:none}}
+#act .act-hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* the folded text */
+#act .act-read{font-size:13.5px;color:var(--ink-2);max-width:900px;margin:10px 0 12px}
+#act .act-lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#act .act-lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#act .act-lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#act .act-lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+@media (max-width:640px){#act .act-lg{grid-template-columns:1fr;gap:2px 0}#act .act-lg dd{margin-bottom:10px}}
+#act .act-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px 32px;margin-top:12px}
+#act .act-cols>div{min-width:0}
+#act .act-finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#act .act-finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#act .act-finds b,#act .act-plain b{color:var(--ink);font-weight:600}
+#act .act-plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#act #act-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(380px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--act-shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none;overflow-wrap:anywhere}
+#act #act-tip[hidden]{display:none}
+#act #act-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#act #act-tip .l{margin-top:5px;overflow-wrap:anywhere}
+#act { scroll-margin-top: 12px; }
+/* the exact numbers: one line per cell, and the table scrolls sideways in its own box on a phone */
+#act .exact .scroll-x{max-width:100%;overflow-x:auto}
+#act .exact th,#act .exact td{white-space:nowrap}

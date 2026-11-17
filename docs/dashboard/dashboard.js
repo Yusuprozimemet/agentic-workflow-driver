@@ -786,13 +786,15 @@ function model(DATA) {
       const passed = Math.max(0, ch.runs - (ch.failed || 0) - (ch.cancelled || 0) - (ch.unfinished || 0));
       return `${runs}: ${andList([passed ? `${passed} passed` : "", ch.failed ? `${ch.failed} failed` : "", ch.cancelled ? `${ch.cancelled} cancelled` : "",
         ch.unfinished ? `${ch.unfinished} never finished` : ""].filter(Boolean))}.`; };
+    const ACT_BY = new Map(((DATA.actogram || {}).dates || []).map(x => [x.date, x]));
     const out = dates.map(date => {
       const days = new Set(), lanes = [], busy = [], rows = [];
       // The minute of this date the sessions are counted up to: all of it, none of it, or part of it.
       const upTo = countedMs == null ? 1440 : Math.max(0, Math.min(1440, (countedMs - dayStart(date)) / 60000));
       const unseen = upTo <= 0 ? "not counted yet" : upTo < 1440 ? `nothing recorded up to ${wall(upTo)}` : "nothing recorded";
       const add = (name, bars, sub, busyFor) => { lanes.push({ name, sub, bars, busyFor }); bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([name, b.what || b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }); return bars; };
-      const ran = RUNS.map(() => 0), who = s => s.agent === "main" ? "Main session" : s.agent;
+      // The date's figures, counted in Python (scripts/spec_drift_views.py, actogram); without them the sentences that need them are left out.
+      const F = ACT_BY.get(date) || null, ran = F ? F.ran : null, who = s => s.agent === "main" ? "Main session" : s.agent;
       let counted = false;  // a stretch written before the waits were counted has no `ran`: the date then says nothing about them
       laneKeys.forEach(([k, name]) => {
         const mine = S.filter(s => laneOf(s.agent) === k).map(s => ({ s, c: clip(date, s.from, s.to) })).filter(x => x.c);
@@ -806,11 +808,11 @@ function model(DATA) {
         const waits = mine.flatMap(({ s }) => (s.runs || []).map(([a, b, kind]) => { const c = clip(date, a, b), run = RUNS.find(r => r[0] === kind) || RUNS[2];
           return c && { ...bar(`run ${run[0]}`, c, `${who(s)} · ${run[1]} ${wall(c[0])} to ${wall(c[1])}`, [`${span(c[1] - c[0])} inside a busy stretch: the session had run a command and was waiting for it to finish.`], s.day), what: `${who(s)}, ${run[1]}`, src: s }; }).filter(Boolean));
         busy.push(...bars);
-        RUNS.forEach((_, i) => { ran[i] += sum(bars, b => b.ran[i]); });
         counted = counted || bars.some(b => b.counted);
-        // Two sessions of a lane busy at once are one stretch of the clock, not two.
-        const mins = covered(mine.map(x => x.c)), wait = Math.min(mins, sum(bars, b => sum(b.ran)));
-        add(name, stackLane(bars, waits), bars.length ?`busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}` : unseen, bars.length ? span(mins) : "");
+        // A lane's busy minutes (two of its sessions at once counted once) and its waits are counted in Python (actogram).
+        const mins = F && bars.length ? F.lanes[k] : null, wait = F && bars.length ? F.waits[k] : null;
+        add(name, stackLane(bars, waits), !bars.length ? unseen : mins == null ? "busy"
+          : `busy ${span(mins)}${wait >= 1 ? `, ${span(wait)} of it waiting on commands` : ""}`, mins != null ? span(mins) : "");
       });
       // A pull request is drawn from its opening to its merge, to its close without a merge, or to the date's end while it is still open.
       const open = PRS.map(p => { const c = clip(date, p.opened, p.merged || p.closed || OPEN_TO); if (!c) return null; const ch = p.checks, at = wall(c[0]), to = wall(c[1]),
@@ -847,18 +849,19 @@ function model(DATA) {
       lanes.unshift(...drv);
       const driverSay = quiet ? "The driver started no step and nothing was parked on this date." : DSTEPS && (sessionsOn.length || parks.length) ? `The driver started ${plural(sessionsOn.length, "session", "sessions")} and waited ${parks.length ? `${span(sum(parks, b => b.mins))} on ${plural(parks.length, "park", "parks")}` : "on no park"}.` : "";
       // What the date says as a whole: the merges and the typical wait, who was busy how long, the longest stretch with nothing running, the longest waits.
-      const waits = merged.map(m => m.wait).sort((a, b) => a - b), median = waits.length ? waits[Math.floor((waits.length - 1) / 2)] : null;
+      const median = F ? F.median : null, sessionBars = busy.some(b => b.cls === "busy");
       const was = lanes.filter(l => l.busyFor).map((l, i) => `${i ? "the " : "The "}${lower(l.name)} ${i ? "" : "was busy "}for ${l.busyFor}`);
-      const waited = !counted ? "" : sum(ran) < 1 ? "None of that was a wait on a command of a minute or more."
+      const waited = !counted || !ran ? "" : sum(ran) < 1 ? "None of that was a wait on a command of a minute or more."
         : `Of that, the sessions waited ${span(sum(ran))} on commands they had run: ${andList(RUNS.map(([, , word], i) => ran[i] >= 1 ? `${span(ran[i])} on ${word}` : "").filter(Boolean))}.${ran[1] >= 1 ? " The wait on GitHub's checks is drawn again under Checks running." : ""}`;
       const idle = busy.map(b => [b.x * 14.4, b.x * 14.4 + b.mins]).sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => { if (acc.end != null && a - acc.end > acc.gap && a <= upTo) { acc.gap = a - acc.end; acc.from = acc.end; acc.to = a; } acc.end = acc.end == null ? b : Math.max(acc.end, b); return acc; }, { end: null, gap: 0 });
       const longest = merged.sort((a, b) => b.wait - a.wait).slice(0, 3);
-      const read = { t: `${shortDate(date)}: ${plural(merged.length, "pull request", "pull requests")} merged${median != null ? `, half of them open for ${span(median)} or less` : ""}`,
-        b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : upTo <= 0 ? `The sessions of this date are not counted yet: the count ends at ${countedSay}.` : "No session was recorded on this date.", was.length ? waited : "", driverSay,
+      const read = { t: F ? `${shortDate(date)}: ${plural(F.merged, "pull request", "pull requests")} merged${median != null ? `, half of them open for ${span(median)} or less` : ""}` : shortDate(date),
+        b: [days.size ? `Work of ${daySpan([...days].sort((a, b) => a - b))}.` : "", was.length ? `${andList(was)}.` : sessionBars ? "" : upTo <= 0 ? `The sessions of this date are not counted yet: the count ends at ${countedSay}.` : "No session was recorded on this date.", was.length ? waited : "", driverSay,
           upTo > 0 && upTo < 1440 ? `The sessions are counted up to ${wall(upTo)}: after that, only GitHub's pull requests and checks are in.` : "",
           idle.gap >= 60 ? `Nothing ran from ${wall(idle.from)} to ${wall(idle.to)}.` : "", longest.length ? `The longest ${longest.length === 1 ? "wait" : "waits"} for a merge: ${andList(longest.map(m => `#${m.p.number} (${span(m.wait)})`))}.` : "",
           `Times are on the clock of the machine that recorded the sessions (${zoneText}).`].filter(Boolean) };
-      return { date, label: shortDate(date), days: [...days].sort((a, b) => a - b), lanes, read, table: { head: none.head, rows } };
+      const fig = F && { lanes: F.lanes, waits: F.waits, ran: F.ran, merged: F.merged, median: F.median };
+      return { date, label: shortDate(date), days: [...days].sort((a, b) => a - b), lanes, read, table: { head: none.head, rows }, fig };
     });
     const at = out.length - 1;
     return { dates: out, at, zone: zoneText, runs: RUNS.map(([k, text]) => [k, text]), hours: [6, 9, 12, 15, 18, 21, 0, 3].map(hh => ({ t: hm(hh * 60), x: ((hh * 60 - 300 + 1440) % 1440) / 14.4 })), read: out[at].read, table: out[at].table, driver: DSTEPS !== null };
@@ -1033,6 +1036,12 @@ function model(DATA) {
     const R = DATA.rings;
     return R && R.drawn ? R : { empty: "no Day has merged work yet, so there is no ring to draw." };
   }
+  // The actogram: every date on one clock, counted in Python (actogram); with the sessions missing it draws nothing.
+  function actGraph() {
+    const A = DATA.actogram;
+    if (A && A.missing) return { empty: A.missing };
+    return A && (A.dates || []).some(x => x.segs.length) ? A : { empty: "no session is recorded yet, so there is no date to draw." };
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -1166,7 +1175,7 @@ function model(DATA) {
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -3536,6 +3545,108 @@ function rngDraw(R, get, onDay) {
   return fig;
 }
 
+/* Graph 10 as an actogram: every date on one clock, 05:00 to 05:00, a row each. Every figure is counted in Python
+   (spec_drift_views.actogram); this lays the rows out and words them. A row opens graph 10, folded below, at its date. */
+const ACT_GEO = { w: 1232, x0: 160, x1: 1000, head: 22, foot: 8 };
+function actDraw(A, get, onDay, onDate) {
+  if (!A || A.empty) return null;
+  const $ = id => get("act-" + id), fig = $("fig"), tip = $("tip"), G = ACT_GEO, D = A.dates, T = A.totals;
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => String(Math.round(+v * 100) / 100), X = m => G.x0 + m * (G.x1 - G.x0) / 1440;
+  const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many}`;
+  const hm = m => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`, wall = m => hm((m + 300) % 1440);
+  const hrs = m => `${(m / 60).toFixed(1)} h`, dur = m => { const r = Math.round(m); return r >= 60 ? `${Math.floor(r / 60)} h ${r % 60} min` : `${Math.max(r, m > 0 ? 1 : 0)} min`; };
+  const pct = (a, b) => b ? Math.round(100 * a / b) : 0, sumRan = x => sum(x.ran);
+  const daysOf = x => x.days.length ? daySpan(x.days) : "no Day";
+  const RUN_WORD = ["tests", "GitHub's checks", "other commands"];
+  fig.replaceChildren();
+  const pat = el("pattern", { id: "act-hatch", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, el("defs", {}));
+  el("rect", { class: "act-hatch", width: 1.6, height: 5 }, null, pat);
+  // one row per date, the whole about 400 px high
+  const rh = Math.min(30, 360 / Math.max(1, D.length)), H = G.head + D.length * rh + G.foot, one = rh < 26;
+  fig.setAttribute("viewBox", `0 0 ${G.w} ${f(H)}`);
+  el("text", { class: "act-t-col", x: 4, y: 14 }, `Times ${A.zone}`);
+  const HOURS = [6, 9, 12, 15, 18, 21, 0, 3].map(hh => [hh, X(((hh * 60 - 300) + 1440) % 1440)]);
+  HOURS.forEach(([hh, x]) => el("text", { class: "act-t-hr", x: f(x), y: 14, "text-anchor": "middle" }, hm(hh * 60)));
+  [["busy", 1040], ["waiting", 1104], ["merged · median wait", 1150]].forEach(([t, x]) => el("text", { class: "act-t-col", x, y: 14, "text-anchor": x < 1150 ? "end" : null }, t));
+  const rows = D.map((d, i) => {
+    const y = G.head + i * rh, top = y + 2, mid = y + rh / 2, bot = y + rh - 2;
+    const longest = d.merges.length ? d.merges.reduce((a, b) => b.wait > a.wait ? b : a) : null;
+    const g = el("g", { class: "act-row b", "data-k": i, tabindex: 0, role: "button",
+      "aria-label": `${d.label}, ${daysOf(d)}: busy ${hrs(d.busy)}, ${pct(sumRan(d), d.busy)}% of it waiting on commands; ${n(d.merged, "pull request", "pull requests")} merged. Opens graph 10 at this date.` });
+    el("rect", { class: "act-bg", x: 0, y: f(y), width: G.w, height: f(rh) }, null, g);
+    if (one) { const t = el("text", { class: "act-t-date", x: 8, y: f(mid + 4) }, d.label, g); el("tspan", { class: "act-t-day", dx: 8 }, daysOf(d), t); }
+    else { el("text", { class: "act-t-date", x: 8, y: f(mid - 2) }, d.label, g); el("text", { class: "act-t-day", x: 8, y: f(mid + 11) }, daysOf(d), g); }
+    el("rect", { class: "act-trk", x: G.x0, y: f(top), width: G.x1 - G.x0, height: f(bot - top) }, null, g);
+    d.segs.forEach(([a, b, k]) => el("rect", { class: k === "main" ? "act-s" : "act-mini", x: f(X(a)), y: f(top), width: f(Math.max(0.6, X(b) - X(a))), height: f(mid - top) }, null, g));
+    d.wait_segs.forEach(([a, b]) => el("rect", { class: "act-w", x: f(X(a)), y: f(top), width: f(Math.max(0.6, X(b) - X(a))), height: f(mid - top) }, null, g));
+    d.merges.forEach(m => { if (X(m.at) - X(m.from) >= 1) el("path", { class: "act-ml", d: `M${f(X(m.from))} ${f((mid + bot) / 2)} H${f(X(m.at))}` }, null, g);
+      el("rect", { class: "act-m", x: f(X(m.at) - 0.75), y: f(mid + 1), width: 1.5, height: f(Math.max(1, bot - mid - 1)) }, null, g); });
+    if (d.up_to < 1440) el("rect", { class: "act-unc", x: f(X(d.up_to)), y: f(top), width: f(G.x1 - X(d.up_to)), height: f(bot - top) }, null, g);
+    const num = (x, big, small, anchor) => { const t = el("text", { class: "act-t-num", x, y: f(mid + 4), "text-anchor": anchor }, big, g); if (small) el("tspan", { class: "act-pct" }, small, t); };
+    num(1040, (d.busy / 60).toFixed(1), " h", "end");
+    num(1104, String(pct(sumRan(d), d.busy)), "%", "end");
+    num(1150, String(d.merged), d.median != null ? ` · ${dur(d.median)}` : "", null);
+    return { g, d, longest };
+  });
+  // the 3-hour grid and midnight go over the rows, or each row's track would hide them
+  HOURS.forEach(([hh, x]) => el("path", { class: hh === 0 ? "act-mid" : "act-grid", d: `M${f(x)} ${G.head} V${f(H - G.foot)}` }));
+  fig.setAttribute("aria-label", `${n(D.length, "date", "dates")}, one row each, on one clock from 05:00 to 05:00 (${A.zone}): when sessions were busy, and when each pull request merged with a line back to when it opened.`);
+
+  // the line of figures
+  const fig4 = (num, small, what, sub) => h("div", null, h("div", { class: "act-num" }, num, small ? h("small", null, small) : null), h("div", { class: "act-what" }, what), h("div", { class: "act-sub" }, sub));
+  const R = T.ran, ranAll = sum(R);
+  // "on all 11 dates counted whole" when every date counted whole had one, "on 9 of the 11 dates counted whole" when not
+  const wholeSay = T.after_midnight === T.whole ? `${T.whole === 1 ? "the one date" : `all ${T.whole} dates`} counted whole`
+    : `${T.after_midnight} of the ${T.whole === 1 ? "one date" : `${T.whole} dates`} counted whole`;
+  $("figs").replaceChildren(
+    fig4(String(T.dates), null, `${T.dates === 1 ? "date" : "dates"} with a session`, T.first ? `${shortDate(T.first)} to ${shortDate(T.last)}; on ${wholeSay}, a session was still busy after midnight` : "none counted yet"),
+    fig4((T.busy / 60).toFixed(1), "h", "with a session busy", `two sessions at once counted once; the main session alone ${hrs(T.main)}`),
+    fig4(T.waiting_share == null ? "–" : String(Math.round(100 * T.waiting_share)), T.waiting_share == null ? null : "%", "of it waiting on commands",
+      `${hrs(ranAll)}: tests ${dur(R[0])}, other commands ${dur(R[2])}, GitHub's checks ${dur(R[1])}`),
+    fig4(T.median == null ? "–" : String(Math.round(T.median)), T.median == null ? null : "min", "median wait, opened to merged",
+      T.merged ? `${n(T.merged, "pull request", "pull requests")}; ${T.over_hour} waited over an hour, the longest ${dur(T.longest.wait)} (#${T.longest.pr})` : "no pull request merged yet"));
+
+  // what the picture shows (picked from the figures), and where the model bends
+  const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  const worked = D.filter(d => d.busy > 0), top = worked.length ? worked.reduce((a, b) => b.busy > a.busy ? b : a) : null;
+  if (top) li(finds, `The busiest date was ${top.label}.`, ` ${hrs(top.busy)} with a session busy, ${pct(sumRan(top), top.busy)}% of it waiting on commands; ${n(top.merged, "pull request", "pull requests")} merged.`);
+  if (ranAll >= 1) { const k = R.indexOf(Math.max(...R));
+    li(finds, `${pct(ranAll, T.busy)}% of the busy time was a wait on a command.`, ` Most of it on ${RUN_WORD[k]}: ${hrs(R[k])} of ${hrs(ranAll)}.`); }
+  if (T.merged) li(finds, `Half the pull requests merged within ${dur(T.median)} of opening.`, ` ${T.over_hour} of the ${T.merged} waited over an hour; the longest, #${T.longest.pr}, ${dur(T.longest.wait)}.`);
+  if (T.whole && T.after_midnight) li(finds, "Work runs past midnight.", ` On ${wholeSay}, a session was still busy after 00:00.`);
+  [["A gap is not a rest.", " Only this repository's sessions are drawn; the maintainer's reading and typing leave no mark."],
+    ["Two waits at once count twice.", " The waiting share is every session's waits, sub-agents' included, over the busy time counted once: two sessions waiting at the same time count twice, as graph 10 counts them."],
+    ["A date runs 05:00 to 05:00.", " Work after midnight stays on the evening it belongs to, so a row is a working day, not a calendar one."],
+    ["Times are on the clock of the machine that recorded the sessions.", ` ${A.zone}; GitHub's times are moved to it.`]].forEach(([b, t]) => li(bends, b, t));
+
+  // the exact numbers
+  const td = v => h("td", { class: "r" }, v);
+  $("table").replaceChildren(h("tr", null, ["Date", "Days", "Busy", "Main session", "Waiting", "Waiting share", "Merged", "Median wait"].map(x => h("th", null, x))),
+    ...D.map(d => h("tr", null, h("td", null, d.label), h("td", null, daysOf(d)), td(hrs(d.busy)), td(hrs(d.main)), td(dur(sumRan(d))),
+      td(`${pct(sumRan(d), d.busy)}%`), td(String(d.merged)), td(d.median == null ? "–" : dur(d.median)))));
+
+  // what the pointer says
+  const fill = key => { const r = rows[+key]; if (!r) return false; const d = r.d, w = sumRan(d);
+    tip.replaceChildren(h("div", { class: "t" }, `${d.label} · ${daysOf(d)}`),
+      h("div", { class: "l" }, `Busy ${hrs(d.busy)}, two sessions at once counted once; the main session alone ${hrs(d.main)}.`),
+      h("div", { class: "l" }, `Waiting on commands ${dur(w)}, ${pct(w, d.busy)}%: tests ${dur(d.ran[0])}, GitHub's checks ${dur(d.ran[1])}, other commands ${dur(d.ran[2])}.`),
+      h("div", { class: "l" }, `${n(d.merged, "pull request", "pull requests")} merged${d.median != null ? `, median wait ${dur(d.median)}` : ""}.`),
+      r.longest ? h("div", { class: "l" }, `The longest wait: #${r.longest.pr}, ${dur(r.longest.wait)}${r.longest.cut ? ", opened on an earlier date" : ""}.`) : null,
+      d.up_to < 1440 ? h("div", { class: "l" }, `Counted up to ${wall(d.up_to)}.`) : null);
+    tip.hidden = false; return true; };
+  pointerBox(fig, tip, key => key != null ? fill(key) : false, b => b.getAttribute("data-k"));
+  // a row opens graph 10, folded below, at its date
+  const open = g => { const r = rows[+g.getAttribute("data-k")]; if (!r) return; (onDate || []).forEach(fn => fn(r.d.date)); openFolds(get("g10")); };
+  const rowOf = e => e.target && e.target.closest ? e.target.closest(".act-row") : null;
+  fig.addEventListener("click", e => { const g = rowOf(e); if (g) open(g); });
+  fig.addEventListener("keydown", e => { const g = rowOf(e); if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(g); } });
+  // the page's Day buttons dim every date not of that Day
+  onDay.push(day => rows.forEach(r => r.g.classList.toggle("mk-dim", day != null && !r.d.days.includes(day))));
+  return fig;
+}
+
 /* A link to a graph folded under its new drawing (#g7, #g8, #g9, ...) opens every fold around it, and scrolls to it. */
 function openFolds(target) {
   for (let e = target; e; e = e.parentElement || e.parentNode) if (e.tagName && String(e.tagName).toUpperCase() === "DETAILS") e.open = true;
@@ -3681,13 +3792,15 @@ function draw(M, DATA) {
     else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
 
-  /* Graph 2 as a gel, graphs 3 to 5 as proteins, graph 7 as proofreading, graph 8 as an energy budget and graph 9 as
-     growth rings, in their places; the graphs themselves are folded under them */
-  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw]].forEach(([k, fn]) => {
+  /* Graph 2 as a gel, graphs 3 to 5 as proteins, graph 7 as proofreading, graph 8 as an energy budget, graph 9 as
+     growth rings and graph 10 as an actogram, in their places; the graphs themselves are folded under them */
+  // graph 10 turns to a date the actogram's row names, once both are drawn
+  const onDate = [];
+  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
-    else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
+    else try { fn(g, $, onDay, onDate); } catch (e) { failed(String((e && e.message) || e)); }
   });
 
   /* Graph 1 */
@@ -3964,6 +4077,7 @@ function draw(M, DATA) {
     };
     dates.forEach((c, i) => c.addEventListener("click", () => show(i)));
     onDay.push(day => { const i = m.dates.reduce((k, d, j) => d.days.includes(day) ? j : k, -1); if (i >= 0) show(i); });
+    onDate.push(date => { const i = m.dates.findIndex(d => d.date === date); if (i >= 0) show(i); });
     show(m.at);
   });
 

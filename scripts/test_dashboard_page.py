@@ -95,6 +95,9 @@ def model(data):
         data = dict(data, budget=views.budget(data))
     if isinstance(data.get("days"), list) and "rings" not in data:
         data = dict(data, rings=views.rings(data))
+    # Graph 10's figures per date and the actogram, as spec-drift.py writes them (spec_drift_views.actogram).
+    if "actogram" not in data:
+        data = dict(data, actogram=views.actogram(data))
     return node(MODEL, data)
 
 
@@ -1238,7 +1241,7 @@ class ThemeTest(unittest.TestCase):
 # under their proteins, graph 7 under its proofreading stream, graph 8 under its energy budget and graph 9 under its
 # growth rings (as the mockup at #228 has them).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
-FOLDED = (6, 1, 2, 3, 7, 8, 9)
+FOLDED = (6, 1, 2, 3, 7, 8, 9, 10)
 
 # gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
 # many marks of each kind they drew, and the words of the proteins' figures.
@@ -1290,7 +1293,7 @@ class GelAndProteinPageTest(unittest.TestCase):
     def test_the_gel_and_the_proteins_build_no_html_from_text(self):
         script = read("dashboard.js")
         for name in ("function pointerBox", "function gelDraw", "function protDraw", "function prfDraw", "function atpDraw",
-                     "function rngDraw", "function openFolds", "function foldLinks"):
+                     "function rngDraw", "function actDraw", "function openFolds", "function foldLinks"):
             body = script[script.index(name):]
             body = body[:body.index("\n}\n") if "\n}\n" in body else body.index("\r\n}\r\n")]
             self.assertNotIn("innerHTML", body, name)
@@ -1391,6 +1394,95 @@ class CostAndRingsPageTest(unittest.TestCase):
         self.assertIn("foldLinks();", script[script.index("function draw(M, DATA)"):])
 
 
+# actDraw() on the model of the data from stdin, on a document that keeps every node it is given and the listeners
+# put on it: its rows, merge ticks, wait marks and hatching, its words, the rows the Day buttons dim, and what a click
+# on the first row does (graph 10 turned to its date, its fold opened).
+ACT_DRAW = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", open: false, parentNode: null, on: {}, dim: false,
+  classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle(c, on) { if (c === "mk-dim") n.dim = !!on; }, contains() { return false; } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
+  addEventListener(t, fn) { n.on[t] = fn; }, scrollIntoView() { n.scrolled = true; } };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node, addEventListener() {}, getElementById: id => els[id] || null };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c)));
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const M = model(DATA), days = [], dates = [], A = M.act;
+  const drew = !A.error && !A.empty ? (actDraw(A, $, days, [d => dates.push(d)]), true) : false;
+  const f = $("act-fig"), rows = is(f, ["act-row", "b"]);
+  let dimmed = null, opened = null;
+  if (drew) {
+    days.forEach(fn => fn(DATA.dim_day)); dimmed = rows.filter(r => r.dim).length;
+    const r = rows[0]; r.closest = () => r; f.on.click({ target: r }); opened = [dates, !!$("g10").scrolled];
+  }
+  ({ drew, empty: A.empty || null, error: A.error || null, rows: rows.length, merges: is(f, ["act-m"]).length, waits: is(f, ["act-w"]).length,
+     hatched: is(f, ["act-unc"]).length, words: [$("act-figs"), $("act-finds"), $("act-bends")].map(words).join(" ").replace(/\\s+/g, " "),
+     table: is($("act-table"), []).filter(e => e.tag === "tr").length, onDay: days.length, dimmed, opened })`, ctx)));
+"""
+
+
+def act_data(**source):
+    """The example data, one of its sessions waiting on tests from 09:00 to 09:20, the actogram counted from it."""
+    data = demo_data()
+    s = data["clock"]["sessions"][0]
+    s["runs"] = [[s["from"][:11] + "07:00:00Z", s["from"][:11] + "07:20:00Z", "tests"]]
+    s["ran"] = {"tests": 1200}
+    if source:
+        data["data"] = dict(data["data"], **source)
+    data["actogram"] = views.actogram(data)
+    return data
+
+
+class ActogramPageTest(unittest.TestCase):
+    """actDraw(): a row for each date, its marks, its figures, the Day buttons, and graph 10 opened at a row's date."""
+
+    def test_a_row_for_each_date_and_a_mark_for_each_merge_and_wait(self):
+        data = act_data()
+        data["dim_day"] = 3
+        A, out = data["actogram"], node(ACT_DRAW, data)
+        self.assertEqual((out["drew"], out["error"]), (True, None))
+        self.assertEqual(out["rows"], len(A["dates"]))
+        self.assertEqual(out["merges"], sum(len(d["merges"]) for d in A["dates"]))
+        self.assertEqual(out["waits"], sum(len(d["wait_segs"]) for d in A["dates"]))
+        self.assertEqual(out["waits"], 1)
+        # the last date is counted up to 18:00 on the clock: hatched from there to its end
+        self.assertEqual(out["hatched"], sum(1 for d in A["dates"] if d["up_to"] < 1440))
+        self.assertEqual(out["hatched"], 1)
+        self.assertEqual(out["table"], len(A["dates"]) + 1)
+        for w in ("dates with a session", "with a session busy", "of it waiting on commands", "median wait, opened to merged",
+                  "A gap is not a rest.", "A date runs 05:00 to 05:00.", "Two waits at once count twice."):
+            self.assertIn(w, out["words"])
+        # every date counted whole ran past midnight, or not: "all N" only when the two counts are equal
+        T = A["totals"]
+        said = f"on all {T['whole']} dates counted whole" if T["after_midnight"] == T["whole"] else f"on {T['after_midnight']} of the {T['whole']} dates counted whole"
+        self.assertIn(said, out["words"])
+        self.assertNotRegex(out["words"], r"on (\d+) of the \1 ")
+
+    def test_the_day_buttons_dim_the_other_dates_and_a_row_opens_graph_10_at_its_date(self):
+        data = act_data()
+        data["dim_day"] = 3
+        A, out = data["actogram"], node(ACT_DRAW, data)
+        self.assertEqual(out["onDay"], 1)
+        self.assertEqual(out["dimmed"], sum(1 for d in A["dates"] if 3 not in d["days"]))
+        self.assertGreater(out["dimmed"], 0)
+        self.assertEqual(out["opened"], [[A["dates"][0]["date"]], True])
+
+    def test_without_sessions_json_nothing_is_drawn_and_the_page_says_not_measured_yet(self):
+        for source in (dict(absent=["sessions.json"]), dict(commit=None)):
+            out = node(ACT_DRAW, act_data(**source))
+            self.assertEqual((out["drew"], out["rows"]), (False, 0))
+            self.assertRegex(out["empty"], r"^the dashboard-data branch (has no sessions\.json|is missing), so no session is drawn\.$")
+        loop = read("dashboard.js")
+        loop = loop[loop.index('["rng", rngDraw], ["act", actDraw]]'):]
+        self.assertIn('"Not measured yet: ", rich(g.empty)', loop[:loop.index("});")])
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
@@ -1420,7 +1512,7 @@ class PageFilesTest(unittest.TestCase):
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
         for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll",
-                                                                             "prf-scroll", "atp-scroll", "rng-scroll"]:
+                                                                             "prf-scroll", "atp-scroll", "rng-scroll", "act-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1436,7 +1528,7 @@ class PageFilesTest(unittest.TestCase):
         for n in FOLDED:
             g = model(data)[f"g{n}"]
             self.assertNotIn("error", g)
-            self.assertGreater(len(g.get("merges") or g.get("rows") or g.get("bars") or []), 0, f"graph {n}")
+            self.assertGreater(len(g.get("merges") or g.get("rows") or g.get("bars") or g.get("dates") or []), 0, f"graph {n}")
         out = boot(data)
         self.assertEqual((out["error"], out["logged"]), (None, []))
 
@@ -1461,13 +1553,13 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng)"[ >]', html),
-                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng"] + [f"g{n}" for n in (10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng|act)"[ >]', html),
+                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng", "act", "g11"])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "g10": 3,
+        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "act": 3, "g10": 3,
                  "g11": 4}
         for n, g in group.items():
             at = re.search(f'id="{n}"[ >]', html).start()
@@ -1479,6 +1571,8 @@ class PageFilesTest(unittest.TestCase):
         self.assertLess(html.index('id="atp" '), html.index('id="g8-fold">'))
         self.assertLess(html.index('id="g8-fold">'), html.index('id="rng">'))
         self.assertLess(html.index('id="rng">'), html.index('id="g9-fold">'))
+        self.assertLess(html.index('id="g9-fold">'), html.index('id="act">'))
+        self.assertLess(html.index('id="act">'), html.index('id="g10-fold">'))
         self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
         self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
         self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))
@@ -1525,7 +1619,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(colours(by_os), colours(by_choice))
 
     def test_graph_10_says_in_one_sentence_that_a_date_runs_from_05_00_to_05_00(self):
-        section = re.search(r'<section class="graph" id="g10">.*?</section>', read("index.html"), re.S).group(0)
+        section = re.search(r'<section class="graph mock-fold" id="g10-fold">.*?</section>', read("index.html"), re.S).group(0)
         self.assertIn("A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.", section)
 
     def test_graph_12_has_a_swatch_for_a_commitment_owned_by_a_later_day(self):
