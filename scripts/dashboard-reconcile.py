@@ -216,7 +216,37 @@ def rng_line(m):
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line]
+def act_line(m):
+    """The actogram against graph 10 (folded under it): each date's busy time, two sessions at once counted once, is at
+    least its busiest lane's and at most its lanes' sum; its merge ticks are graph 10's merge marks, and its wait marks
+    are graph 10's marks of a session waiting on a command, summed over the dates."""
+    a, g10 = m.get("act") or {}, m.get("g10") or {}
+    if a.get("error") or g10.get("error"):
+        return False, f"actogram: not drawn ({a.get('error') or g10.get('error')})"
+    bars = [b for x in g10.get("dates") or [] for lane in x["lanes"] for b in lane["bars"]]
+    merges_10 = sum(1 for b in bars if b["cls"] == "merge")
+    waits_10 = sum(1 for b in bars if b["cls"].startswith("run "))
+    if a.get("empty"):
+        agree = merges_10 + waits_10 == 0
+        return agree, (f"actogram: not drawn ({a['empty']}) | graph 10: {merges_10} merge marks, {waits_10} wait marks: "
+                       + ("agree" if agree else "DISAGREE"))
+    figs = {x["date"]: x.get("fig") or {} for x in g10.get("dates") or []}
+    low = high = busy = 0
+    bad = []
+    for x in a["dates"]:
+        lanes = list((figs.get(x["date"]) or {}).get("lanes", {}).values())
+        lo, hi = max(lanes, default=0), sum(lanes)
+        low, high, busy = low + lo, high + hi, busy + x["busy"]
+        if not lo - 0.05 <= x["busy"] <= hi + 0.05 * len(lanes):
+            bad.append(x["date"])
+    merges, waits = sum(len(x["merges"]) for x in a["dates"]), sum(len(x["wait_segs"]) for x in a["dates"])
+    agree = not bad and merges == merges_10 and waits == waits_10
+    return agree, (f"actogram: {len(a['dates'])} dates, busy {busy / 60:.1f} h (lanes {low / 60:.1f} to {high / 60:.1f} h), "
+                   f"{merges} merges, {waits} waits | graph 10: {merges_10} merge marks, {waits_10} wait marks: "
+                   + ("agree" if agree else f"DISAGREE{' (busy outside its lanes on ' + ', '.join(bad) + ')' if bad else ''}"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line]
 
 
 def main(argv=None):
