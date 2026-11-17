@@ -878,5 +878,6 @@
 {"date":"2026-11-17","day":null,"agent":"main","from":"2026-11-17T19:24:48+01:00","to":"2026-11-17T19:25:05+01:00","replies":1},
 {"date":"2026-11-17","day":null,"agent":"main","from":"2026-11-17T19:25:12+01:00","to":"2026-11-17T19:29:28+01:00","replies":28,"ran":{"other":29,"tests":2},"runs":[]},
 {"date":"2026-11-17","day":null,"agent":"general-purpose","from":"2026-11-17T19:28:07+01:00","to":"2026-11-17T19:47:37+01:00","replies":107,"ran":{"other":43,"tests":168},"runs":[]},
-{"date":"2026-11-17","day":null,"agent":"main","from":"2026-11-17T19:47:37+01:00","to":"2026-11-17T19:48:24+01:00","replies":7,"ran":{"other":7},"runs":[]}
+{"date":"2026-11-17","day":null,"agent":"main","from":"2026-11-17T19:47:37+01:00","to":"2026-11-17T19:53:22+01:00","replies":34,"ran":{"other":129,"tests":29},"runs":[]},
+{"date":"2026-11-17","day":null,"agent":"main","from":"2026-11-17T19:48:17+01:00","to":"2026-11-17T19:51:50+01:00","replies":5,"ran":{"other":4},"runs":[]}
 ]
