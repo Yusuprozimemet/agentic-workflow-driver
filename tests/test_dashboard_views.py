@@ -668,5 +668,374 @@ class PageTest(unittest.TestCase):
         self.assertIn("P02", due, "C1.2 named P02 and was replaced by C5.2, which names none")
 
 
+# ringDraw() and readingDraw() from dashboard.js on the data from stdin, on a document that keeps what is made: the
+# marks each drew, counted by class, and what the reading's pointer box says of the first hand-off.
+RING = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, dataset: {}, hidden: false, textContent: "",
+  classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle() {}, contains() { return false; } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { this.kids = c; }, addEventListener() {}, querySelectorAll() { return []; } };
+  return n; };
+const document = { createElementNS(ns, tag) { return node(tag); }, createElement: node, addEventListener() {} };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, els });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c))).length;
+  const M = model(DATA);
+  ringDraw(M.whr, $, [], () => {});
+  readingDraw(M.rdg, $, []);
+  const w = $("whr-fig"), r = $("rdg-fig");
+  ({ whr: { segs: is(w, ["seg"]), gates: is(w, ["gate"]), arcs: is(w, ["parc"]), pins: is(w, ["pin"]), boxes: is(w, ["box"]) },
+     rdg: { cells: is(r, ["cell"]), ivs: is(r, ["iv"]), arcs: is(r, ["ho"]), open: is(r, ["ho", "open"]), num: is(r, ["ho", "open", "num"]),
+            q: is(r, ["q"]), gap: is(r, ["gap"]), ahead: is(r, ["todo-day"]), opens: $("rdg-opens").kids.length },
+     tip: rdgTip(M.rdg, "h", 0) })`, ctx)));
+"""
+
+
+def ring_data():
+    """Four Days in three phases: Days 1 and 2 closed (2 with a promise not built), Day 3 next with no spec, Day 4
+    the stop; between them, merges no Day owns, a stray of Day 1 inside Day 2, and four hand-offs."""
+
+    def row(i, pr, kind, own):
+        return {
+            "i": i,
+            "pr": pr,
+            "kind": kind,
+            "own_day": own,
+            "day": 0,
+            "title": f"PR {pr}",
+            "branch": "",
+            "date": "2026-01-01",
+        }
+
+    rows = [row(0, None, "origin", None), row(1, 1, "spec", 1), row(2, 2, "code", None)]
+    rows += [
+        row(3, 3, "code", 1),
+        row(4, 4, "close", 1),
+        row(5, 5, "other", None),
+        row(6, 6, "spec", None),
+    ]
+    rows += [
+        row(7, 7, "other", None),
+        row(8, 8, "spec", 2),
+        row(9, 9, "code", 1),
+        row(10, 10, "code", 2),
+    ]
+    rows += [row(11, 11, "close", 2), row(12, 12, "other", None)]
+    got = {3: ["C1.1"], 9: ["C1.2"], 10: ["C2.1"]}
+    built, cols = 0, []
+    for r in rows:
+        built += len(got.get(r["i"], []))
+        cols.append(
+            {
+                "pr": r["pr"],
+                "built": built,
+                "written": 4,
+                "got": got.get(r["i"], []),
+                "open": 0,
+                "open_numbered": 0,
+            }
+        )
+    cols[-1].update(open=2, open_numbered=1)
+
+    def ho(hid, to, o, c, how):
+        closed = rows[c]["pr"] if c is not None else None
+        return {
+            "id": hid,
+            "source": "Day 01 Notes",
+            "to": to,
+            "opened": o,
+            "closed": c,
+            "how": how,
+            "text": "a hand-off",
+            "opened_pr": rows[o]["pr"],
+            "closed_pr": closed,
+        }
+
+    hand_offs = [
+        ho("H1.1", [2], 4, 8, "picked"),
+        ho(None, [3], 4, None, None),
+        ho("H2.1", [4], 11, None, None),
+    ]
+    hand_offs.append(ho(None, [1], 0, 4, "lapsed"))
+
+    def crit(cid, day, tag, ticked=True):
+        return {
+            "id": cid,
+            "day": day,
+            "tag": tag,
+            "ticked": ticked,
+            "claim": f"{cid} never built",
+            "replaced_by": [],
+        }
+
+    index = [
+        crit("C1.1", 1, "new"),
+        crit("C1.2", 1, "hold"),
+        crit("C2.1", 2, "new"),
+        crit("C2.2", 2, "new", False),
+    ]
+
+    def prs(*kinds):
+        return [{"number": n, "kind": k, "title": "t"} for n, k in enumerate(kinds)]
+
+    days = [
+        {
+            "day": 1,
+            "status": "done",
+            "phase": 0,
+            "title": "One",
+            "criteria": {"total": 2, "ticked": 2},
+            "prs": prs("spec", "code", "close"),
+        },
+        {
+            "day": 2,
+            "status": "closed",
+            "phase": 0,
+            "title": "Two",
+            "criteria": {"total": 2, "ticked": 1},
+            "prs": prs("spec", "code", "close"),
+        },
+    ]
+    where = {
+        "rows": [
+            {"phase": 0, "days": [1, 2], "stop": 2, "lifted": True, "from_day": None, "cut": False},
+            {
+                "phase": 1,
+                "days": [3, 4],
+                "stop": 4,
+                "lifted": False,
+                "from_day": None,
+                "cut": False,
+            },
+            {"phase": 2, "days": [], "stop": None, "lifted": False, "from_day": 5, "cut": False},
+        ],
+        "names": {"3": "the third", "4": "the fourth"},
+    }
+    score_days = {
+        "1": {"score": 91.5, "low": "proof", "parts": [{"key": "proof", "name": "Proven"}]},
+        "2": {"score": 80.0, "low": "plan", "parts": [{"key": "plan", "name": "On the plan"}]},
+    }
+    return {
+        "rows": rows,
+        "days": days,
+        "order": [1, 2, 3, 4],
+        "criteria_index": index,
+        "look_ahead": {
+            "columns": cols,
+            "hand_offs": hand_offs,
+            "built": 3,
+            "written": 4,
+            "pending": None,
+        },
+        "now": {
+            "generated": "2026-01-02T10:00+00:00",
+            "head": "abcdef1",
+            "last_pr": 12,
+            "current_day": None,
+            "next_step": "Day 3: write its day spec",
+            "stop_after": 4,
+            "open_prs": [],
+        },
+        "score": {"all": {"score": 90.4, "low": "proof", "parts": []}, "days": score_days},
+        "meta": {
+            "phases": ["Ground", "Build", "Chain"],
+            "stops": [2, 4],
+            "where": where,
+            "repo_url": None,
+        },
+    }
+
+
+class WhereRingTest(unittest.TestCase):
+    """where_ring(): the plan as a ring, one segment per Day, as the ring draws it."""
+
+    def ring(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").where_ring(data or ring_data())
+
+    def test_the_ring_counts_the_days_closed_and_left_to_the_stop_as_the_tiles_do(self):
+        w = self.ring()
+        self.assertEqual((w["closed"], w["numbered"], w["left"], w["stop"]), (2, 4, [3, 4], 4))
+        self.assertEqual((w["built"], w["written"]), (3, 4))
+        slots = [(s["k"], s["state"]) for s in w["slots"]]
+        expected = [
+            ("d1", "done"),
+            ("d2", "open"),
+            ("d3", "next"),
+            ("d4", "planned"),
+            ("stub2", "stub"),
+        ]
+        self.assertEqual(slots, expected)
+        self.assertEqual([(g["k"], g["passed"]) for g in w["gates"]], [("s2", True), ("s4", False)])
+        self.assertEqual(w["now"], {"between": [2, 3], "day": None, "slot": 1})
+        self.assertEqual(w["boxes"], [{"day": 2, "ticked": 1, "total": 2, "ids": ["C2.2"]}])
+
+    def test_a_day_with_a_spec_that_has_not_closed_is_not_counted_closed(self):
+        data = ring_data()
+        data["days"][1]["status"] = "in progress"
+        self.assertEqual(self.ring(data)["closed"], 1)
+
+    def test_a_day_says_its_promises_its_pull_requests_and_its_score(self):
+        w = self.ring()
+        d1 = w["slots"][0]
+        self.assertEqual((d1["ticked"], d1["total"], d1["score"], d1["low"]), (2, 2, 92, "proven"))
+        self.assertEqual(d1["prs"], {"n": 3, "code": 1, "spec": 1, "close": 1})
+        self.assertEqual(
+            (w["score"], w["lo"], w["hi"]), (90, {"day": 2, "n": 80}, {"day": 1, "n": 92})
+        )
+        phases = [(p["k"], p["closed"], p["total"]) for p in w["phases"]]
+        self.assertEqual(phases, [("p0", 2, 2), ("p1", 0, 2), ("p2", 0, 0)])
+
+    def test_no_phase_rows_draw_no_ring(self):
+        data = ring_data()
+        data["meta"]["where"] = {"rows": [], "names": {}}
+        self.assertIn("empty", self.ring(data))
+
+
+class ReadingTest(unittest.TestCase):
+    """reading(): every merge in order as a strand, the Days as blocks, the merges between them as stretches, and the
+    hand-offs as arcs, as graph 1's reading draws it."""
+
+    def reading(self):
+        return load("spec_drift_views", "spec_drift_views.py").reading(ring_data())
+
+    def test_the_merges_no_day_owns_are_stretches_between_the_days(self):
+        r = self.reading()
+        strand = [x.get("iv", x.get("m")) for x in r["strand"]]
+        self.assertEqual(strand, [[0], 1, [2], 3, 4, [5, 6, 7], 8, 9, 10, 11, [12]])
+        self.assertEqual((r["stretches"], r["between"], r["merges"]), (4, 6, 13))
+        self.assertEqual(r["between_kinds"], {"origin": 1, "other": 4, "spec": 1})
+        self.assertEqual([m["k"] for m in r["m"][:3]], ["origin", "spec", "other"])
+        whose = [r["m"][i]["w"] for i in (0, 1, 2, 5)]
+        self.assertEqual(
+            whose,
+            [
+                "before Day 1",
+                "Day 1",
+                "outside any Day, merged while Day 1 was open",
+                "outside any Day, merged after Day 1 closed",
+            ],
+        )
+        self.assertEqual(r["m"][9]["g"], [["C1.2", "hold", 1]])
+
+    def test_a_days_main_span_and_its_strays(self):
+        days = {d["day"]: d for d in self.reading()["days"]}
+        self.assertEqual(
+            (days[1]["main"], days[1]["strays"], days[1]["frags"]), ([1, 4], [[9, 9]], 3)
+        )
+        self.assertEqual(
+            (days[2]["main"], days[2]["strays"], days[2]["frags"]), ([10, 11], [[8, 8]], 2)
+        )
+        self.assertEqual((days[2]["ticked"], days[2]["total"]), (1, 2))
+
+    def test_hand_offs_open_and_closed_the_numbered_open_ones_and_the_days_ahead(self):
+        r = self.reading()
+        arcs = [(h["o"], h["c"], h["how"], h["w"]) for h in r["h"]]
+        self.assertEqual(
+            arcs,
+            [
+                (4, 8, "picked", None),
+                (4, None, None, 3),
+                (11, None, None, 4),
+                (0, 4, "lapsed", None),
+            ],
+        )
+        self.assertEqual((r["open"], r["numbered"]), (2, 1))
+        self.assertEqual(r["opens"], [{"h": 2, "id": "H2.1", "to": 4, "pr": 11, "x": "a hand-off"}])
+        ahead = [(a["day"], a["n"], a["w"]) for a in r["ahead"]]
+        self.assertEqual(ahead, [(3, "the third", ["unnumbered"]), (4, "the fourth", ["H2.1"])])
+        self.assertEqual(r["gap"], [{"id": "C2.2", "d": 2, "at": 11, "x": "C2.2 never built"}])
+        self.assertEqual(r["lifted"], [{"day": 2, "at": 11, "between": 1}])
+        self.assertEqual(r["stop"], {"day": 4, "name": "the fourth"})
+
+
+@unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+class RingAndReadingPageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        global reconcile
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+
+    def drawn(self, data):
+        out = subprocess.run(
+            ["node", "-e", RING, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        return json.loads(out.stdout)
+
+    def test_the_ring_and_the_reading_draw_a_mark_for_each_day_gate_merge_stretch_and_hand_off(
+        self,
+    ):
+        data = demo_data.demo()
+        w, r, drawn = data["where_ring"], data["reading"], self.drawn(data)
+        ring = {
+            "segs": len(w["slots"]),
+            # a stop passed is a gate standing open, in two halves
+            "gates": sum(2 if g["passed"] else 1 for g in w["gates"]),
+            "arcs": len(w["phases"]),
+            "pins": 1,
+            "boxes": len(w["boxes"]),
+        }
+        # one mark at a time, so a failure names the mark in a short line
+        for k, want in ring.items():
+            self.assertEqual((k, drawn["whr"][k]), (k, want))
+        self.assertEqual(sorted(drawn["whr"]), sorted(ring))
+        self.assertGreater(drawn["whr"]["gates"], 0)
+        cells = sum(1 for x in r["strand"] if "m" in x)
+        q = sum(len(m["g"]) for m in r["m"]) + len(r["gap"])
+        marks = {
+            "cells": cells,
+            "ivs": r["stretches"],
+            "arcs": len(r["h"]),
+            "open": r["open"],
+            "num": r["numbered"],
+            "q": q,
+            "gap": len(r["gap"]),
+            "ahead": len(r["ahead"]),
+            "opens": len(r["opens"]),
+        }
+        for k, want in marks.items():
+            self.assertEqual((k, drawn["rdg"][k]), (k, want))
+        self.assertEqual(sorted(drawn["rdg"]), sorted(marks))
+        self.assertGreater(drawn["rdg"]["arcs"], 0)
+
+    def test_the_ring_and_the_reading_reconcile_with_the_tiles_and_the_hand_off_ledger(self):
+        m = reconcile.model(demo_data.demo())
+        agree, line = reconcile.ring_line(m)
+        self.assertTrue(agree, line)
+        self.assertRegex(
+            line,
+            r"^where we are: ring \d+ of \d+ Days closed, \d+ of \d+ promises built \| "
+            r"tiles \d+ of \d+, look-ahead \d+ of \d+: agree$",
+        )
+        agree, line = reconcile.reading_line(m)
+        self.assertTrue(agree, line)
+        self.assertRegex(
+            line,
+            r"^reading: \d+ arcs, \d+ open, \d+ numbered \| "
+            r"look-ahead \d+ hand-offs, \d+ open, \d+ numbered: agree$",
+        )
+
+    def test_a_hand_off_quoting_a_script_tag_stays_text_in_the_page_and_in_the_pointer_box(self):
+        data = ring_data()
+        text = "<!-- PROJECT: x --> a second `<script>` </script>"
+        data["look_ahead"]["hand_offs"][0]["text"] = text
+        views = load("spec_drift_views", "spec_drift_views.py")
+        data["where_ring"], data["reading"] = views.where_ring(data), views.reading(data)
+        page = load("spec_drift", "spec-drift.py").build(json.dumps(data))
+        lines = re.findall(r"^window\.SPEC_DRIFT = (.*);$", page, re.MULTILINE)
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(lines[0].count("<"), 0)
+        self.assertEqual(json.loads(lines[0])["reading"]["h"][0]["x"], text)
+        self.assertEqual(page.count("window.SPEC_DRIFT = "), 1)
+        self.assertEqual(self.drawn(data)["tip"]["q"], text)
+
+
 if __name__ == "__main__":
     unittest.main()

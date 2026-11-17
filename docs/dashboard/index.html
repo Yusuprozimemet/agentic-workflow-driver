@@ -33,6 +33,36 @@
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="demo-banner" id="data-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
+    <section class="graph" id="whr" aria-labelledby="whr-h" hidden>
+      <div class="graph-head">
+        <p class="graph-n">Where we are · the old tiles are folded below</p>
+        <h2 id="whr-h">Where we are</h2>
+        <p class="graph-say">Read the ring clockwise from the top: one segment for each Day, a gate at each stop, a marker where the work is. Click a Day to light it in every graph.</p>
+      </div>
+      <div class="lay">
+        <div class="figs" id="whr-figs"></div>
+        <p class="key"><span><svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true"><rect class="seg s-done" x="1" y="1" width="18" height="12" rx="2.5"/></svg>closed</span><span><svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true"><rect class="seg s-open" x="1" y="1" width="18" height="12" rx="2.5"/><rect class="box" x="7.5" y="4.5" width="5" height="5" rx="1" style="stroke-width:1.2"/></svg>closed, a box open</span><span><svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true"><rect class="seg s-next" x="1" y="1" width="18" height="12" rx="2.5"/></svg>next, no spec yet</span><span><svg width="20" height="14" viewBox="0 0 20 14" aria-hidden="true"><rect class="seg s-planned" x="1" y="1" width="18" height="12" rx="2.5"/></svg>no spec yet</span><span><svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true"><text class="t-sc" id="whr-key-sc" x="8" y="11"></text></svg>small number: the Day&#x27;s score</span><span><svg width="22" height="8" viewBox="0 0 22 8" aria-hidden="true"><path class="parc" d="M2 6Q11 0 20 6" style="stroke-width:3"/></svg>a phase</span><span><svg width="8" height="18" viewBox="0 0 8 18" aria-hidden="true"><rect class="gate passed" x="1.5" y="1" width="5" height="6" rx="2.5"/><rect class="gate passed" x="1.5" y="11" width="5" height="6" rx="2.5"/></svg>stop, passed</span><span><svg width="8" height="18" viewBox="0 0 8 18" aria-hidden="true"><rect class="gate ahead" x="1.5" y="1" width="5" height="16" rx="2.5"/></svg>stop ahead</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path class="pin" d="M1 1h10l-5 8z"/><path class="hand" d="M6 9V17"/></svg>now</span></p>
+        <div class="scroll" id="whr-scroll"><svg class="fig" id="whr-fig" viewBox="0 0 572 326" role="group"></svg></div>
+        <div class="side"><dl class="facts" id="whr-facts"></dl></div>
+      </div>
+      <div class="folds">
+        <p class="hint">Point at a Day, a phase's arc or a stop, or reach it with the Tab key, for what it is and how it stands.</p>
+        <details class="exact"><summary>How to read it</summary>
+          <p class="read">The ring is the plan, drawn as one turn of a cell's cycle. It starts at the top and runs clockwise. Each segment is one Day the plan names, in the plan's order, and the arc outside a run of segments is the phase those Days belong to. A filled segment is a closed Day; a dashed one has no spec yet. A gate across the ring is a stop the plan sets: a cell does not go on past a checkpoint until it is signalled to, and this plan starts nothing after a stop until the maintainer says go on. The marker is where the work stands now. The middle says the next step in the page's own words, and how many Days are left before the next stop.</p>
+          <dl class="lg" id="whr-lg"></dl>
+          <p class="stamp" id="whr-stamp"></p>
+        </details>
+        <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+          <div class="cols">
+            <div><h3>What the picture shows</h3><ul class="finds" id="whr-finds"></ul></div>
+            <div><h3>Where the model bends</h3><ul class="plain" id="whr-bends"></ul></div>
+          </div>
+        </details>
+      </div>
+      <div id="whr-tip" hidden></div>
+    </section>
+    <details class="exact mock-top" id="where-fold" hidden>
+      <summary>Where we are as it was, folded: a tile per Day; its tiles still light every graph</summary>
     <section class="where" id="where" aria-labelledby="where-h" hidden>
       <h2 id="where-h">Where we are</h2>
       <p class="graph-say">Rebuilt after every merge from the repository itself: the Day in progress, the next step, and the Days <code>plan.md</code> names ahead. Click a Day to see what it is and to highlight it in every graph.</p>
@@ -50,6 +80,7 @@
         </div>
       </div>
     </section>
+    </details>
     <section class="quality" id="quality" aria-label="Quality of the work" hidden>
       <div class="q-top">
         <div class="q-num"><b id="q-n"></b><small id="q-of"></small></div>
@@ -75,18 +106,151 @@
 
   <h2 class="chapter">Where is it going?<small>what is left before the stop, and whether it is on the plan's yardsticks</small></h2>
 
-  <section class="graph" id="g1">
+  <section class="graph" id="rdg">
+    <div class="graph-head">
+      <p class="graph-n">Graph 1 · the merges read as a gene; the old graph 1 is folded below</p>
+      <h2>How far to the next stop?</h2>
+      <p class="graph-say">Every merge in order, left to right: a block is a Day's work, a thin line the work between Days, the oval is today.</p>
+    </div>
+    <div class="ladder" id="g1-ladder"></div>
+    <div class="figs" id="rdg-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-spec" width="8" height="14" rx="1"/></svg>A Day's work</span><span><svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="strand" d="M0 5H26"/></svg>Between Days</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="q q-new" width="12" height="4" rx="1.6"/></svg>Promises</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><ellipse class="pol" cx="6" cy="9" rx="5" ry="8"/></svg>Today and ahead</span><span><svg class="ho picked" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="v" d="M1 1Q13 17 25 1"/></svg>Hand-offs</span></p>
+    <details class="exact mock-key">
+    <summary>Key, and how to read it</summary>
+    <div>
+    <p class="graph-say">Read it left to right, as a gene is read. The strand is every merge in order. A block is a Day's own work, one cell per merge; the thin line between blocks is the work between Days, squeezed. Under each cell hang the promises that merge built. The oval on the strand is today. Right of it are the Days the plan lists and nobody has specified, and then the stop.</p>
+    <dl class="lg">
+    <dt>A Day's work <small>an exon</small>
+    </dt>
+    <dd>
+    <span>
+    <svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true">
+    <rect class="cell k-spec" width="8" height="14" rx="1"/>
+    </svg>a merge of the Day's spec</span>
+    <span>
+    <svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true">
+    <rect class="cell k-code" width="8" height="14" rx="1"/>
+    </svg>of its code</span>
+    <span>
+    <svg width="9" height="15" viewBox="0 0 9 15" aria-hidden="true">
+    <rect class="cell k-close" x=".7" y=".7" width="7.6" height="13.6" rx="1"/>
+    </svg>the Day's close</span>
+    <span>
+    <svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true">
+    <path class="brk" d="M1 7V2H25V7"/>
+    </svg>the Day's main span; a small number marks a fragment away from it</span>
+    </dd>
+    <dt>Between Days <small>an intron</small>
+    </dt>
+    <dd>
+    <span>
+    <svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true">
+    <path class="strand" d="M0 5H26"/>
+    </svg>tooling, dashboard and plan merges, squeezed; the number over a stretch is how many <span id="rdg-k-between"></span></span>
+    <span>
+    <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true">
+    <path class="strand" d="M0 5H12"/>
+    <rect class="pc" x="5" y=".5" width="2" height="9"/>
+    </svg>a spec or plan change no Day owns <span id="rdg-k-pc"></span></span>
+    <span><span id="rdg-k-kinds"></span></span>
+    </dd>
+    <dt>Promises <small>the transcript</small>
+    </dt>
+    <dd>
+    <span>
+    <svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true">
+    <rect class="q q-new" width="12" height="4" rx="1.6"/>
+    </svg>one promise the merge above it built, for new work</span>
+    <span>
+    <svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true">
+    <rect class="q q-hold" width="12" height="4" rx="1.6"/>
+    </svg>a safety check</span>
+    <span>
+    <svg width="13" height="6" viewBox="0 0 13 6" aria-hidden="true">
+    <rect class="q gap" x=".7" y=".7" width="11.6" height="4.2" rx="1.6"/>
+    </svg>written, never built</span>
+    <span id="rdg-k-bw"></span>
+    </dd>
+    <dt>Today and ahead <small>the polymerase, the template not read</small>
+    </dt>
+    <dd>
+    <span>
+    <svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true">
+    <ellipse class="pol" cx="6" cy="9" rx="5" ry="8"/>
+    </svg>today</span>
+    <span>
+    <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+    <rect class="todo-day" x=".7" y=".7" width="20.6" height="12.6" rx="2"/>
+    </svg>a Day the plan lists, with no spec yet</span>
+    <span>
+    <svg width="8" height="18" viewBox="0 0 8 18" aria-hidden="true">
+    <rect class="term lifted" x="2" y=".7" width="4" height="16.6" rx="1.5"/>
+    </svg>a stop the maintainer lifted</span>
+    <span>
+    <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true">
+    <rect class="term shut" x="5" y="1" width="5" height="17" rx="2"/>
+    <path class="termcap" d="M1 1.4h13"/>
+    </svg>the next stop <small style="color:var(--muted)">(a terminator)</small>
+    </span>
+    </dd>
+    <dt>Hand-offs <small>what a Day left for a later one</small>
+    </dt>
+    <dd>
+    <span>
+    <svg class="ho picked" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true">
+    <path class="v" d="M1 1Q13 17 25 1"/>
+    </svg>picked up <span id="rdg-k-picked"></span></span>
+    <span>
+    <svg class="ho lapsed" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true">
+    <path class="v" d="M1 1Q13 17 25 1"/>
+    </svg>lapsed: the Day it named closed without it <span id="rdg-k-lapsed"></span></span>
+    <span>
+    <svg class="ho withdrawn" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true">
+    <path class="v" d="M1 1Q13 17 25 1"/>
+    </svg>withdrawn: its line was removed <span id="rdg-k-withdrawn"></span></span>
+    <span>
+    <svg class="ho open" width="30" height="10" viewBox="0 0 30 10" aria-hidden="true">
+    <path class="v" d="M1 1V4Q1 7 4 7H25"/>
+    <circle class="oend" cx="26.5" cy="7" r="2.2"/>
+    </svg>open, running to the Day it waits for <span id="rdg-k-open"></span></span>
+    <span>
+    <svg class="ho open num" width="30" height="10" viewBox="0 0 30 10" aria-hidden="true">
+    <path class="v" d="M1 1V4Q1 7 4 7H25"/>
+    <circle class="oend" cx="26.5" cy="7" r="2.2"/>
+    </svg>open and numbered <span id="rdg-k-num"></span></span>
+    </dd>
+    </dl>
+    <p class="hint">Point at a cell for its merge and the promises it built; the hand-offs it opened or closed light up, the closed ones drawn only then. Point at a thin stretch for the merges squeezed into it, and at an arc for the hand-off. The graph ends at the next stop: what comes after is not specified, so it gives no percentage of the whole plan.</p>
+    <p class="stamp" id="rdg-stamp"></p>
+    </div>
+    </details>
+    <div class="scroll" id="rdg-scroll"><svg class="fig" id="rdg-fig" viewBox="0 0 1240 414" role="group"></svg></div>
+    <details class="exact mock-key"><summary>What the picture shows · Open, numbered hand-offs · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="rdg-finds"></ul>
+          <h3>Open, numbered hand-offs</h3><ul class="finds opens" id="rdg-opens"></ul></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="rdg-bends"></ul></div>
+      </div></div>
+    </details>
+    <div id="rdg-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g1-fold">
+    <details class="exact"><summary>Graph 1 as it was, folded: promises built, merge by merge</summary>
+    <div id="g1">
     <div class="graph-head">
       <p class="graph-n">Graph 1</p>
       <h2>How far to the next stop?</h2>
       <p class="graph-say" id="g1-say">One column per merge, oldest on the left, and on past today to what is specified and not merged.</p>
     </div>
-    <div class="ladder" id="g1-ladder"></div>
+    <p class="graph-say small">The level cards moved up into the graph above.</p>
     <div class="legend" id="g1-key"></div>
     <div class="scroll-x" id="g1-plot"></div>
     <p class="limit">The graph ends at the stop: the phases after it are not specified, so it gives no percentage of the whole plan. The hand-offs counted are the numbered ones in each Day's Notes.</p>
     <div class="readout" id="g1-read" aria-live="polite"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g1-table"></table></div></details>
+  </div>
+    </details>
   </section>
 
   <section class="graph" id="g2">

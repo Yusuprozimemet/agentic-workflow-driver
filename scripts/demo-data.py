@@ -11,10 +11,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import criterion_states, gene, merge_graph  # noqa: E402
+from spec_drift_views import criterion_states, gene, merge_graph, reading, where_ring  # noqa: E402
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
+# plan.md's phases with their Days, as spec-drift.py's where_rows reads them: the first phase's stop lifted.
+WHERE = [dict(phase=0, days=[1, 2, 3], stop=3, lifted=True, from_day=None, cut=False),
+         dict(phase=1, days=[4, 5, 6], stop=None, lifted=False, from_day=None, cut=False),
+         dict(phase=2, days=[7, 8], stop=None, lifted=False, from_day=None, cut=False)]
 HEAD = "3a7c1e4f9b2d0e8a6c5b4d3e2f1a0b9c8d7e6f5a"
 FINISHED = ("done", "closed")
 
@@ -491,13 +495,14 @@ def demo():
                            "A panel drawn from this data shows nothing about any real project."],
                   provenance=dict(commit=HEAD, script_edited=False, python="3.12.0", numpy="2.0.0",
                                   chance_draws=1000),
-                  break_line_from_pr=0, project=PROJECT, repo_url=None, phases=PHASES, stops=[], where=dict(rows=[], names={})))
+                  break_line_from_pr=0, project=PROJECT, repo_url=None, phases=PHASES, stops=[3], where=dict(rows=WHERE, names={})))
     # Counted from the example Days' Defect lines as the real data is, so the two cannot drift apart.
     out["defect_counts"] = defect_counts(out["days"])
     criterion_states(out["criteria_index"], out["days"], out["replay"])
     out["gene"] = gene(out["plan"], out["criteria_index"], out["days"])
     out["merge_graph"] = merge_graph(out)
     out["score"] = quality_score(out)
+    out["where_ring"], out["reading"] = where_ring(out), reading(out)
     return out
 
 
