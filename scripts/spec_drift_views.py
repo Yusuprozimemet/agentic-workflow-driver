@@ -428,7 +428,10 @@ def _placed(d):
             whose = f"outside any Day, merged {f'after Day {top} closed' if top in shut else f'while Day {top} was open'}"
         if own is not None and r.get("kind") == "close":
             shut.add(own)
-        out.append(dict(own=own, kind=kind, whose=whose))
+        # `at` and `area` as the page's PLACED has them: the Day a merge is placed at (its own, or the furthest Day
+        # begun; None before Day 1, the page's 0), and whether it is a pull request no Day owns.
+        out.append(dict(own=own, kind=kind, whose=whose, at=own if own is not None else top,
+                        area=bool(r.get("pr")) and own is None))
     return out
 
 
@@ -1135,3 +1138,309 @@ def proofreading(d):
     if missing or not total:
         out["empty"] = missing or "no defect is recorded in any Day's Notes yet, so there is no stream to draw."
     return out
+
+
+# Graph 8 as an energy budget (the mockup at #228's atp): one bead for each BUDGET_UNIT dollars, split by what the
+# dollars bought and by who spent them. A row is split by pricing its tokens again with token-usage.py's own list
+# prices; one that comes out more than BUDGET_OFF off its recorded cost is not split.
+BUDGET_UNIT = 2
+BUDGET_OFF = 0.01
+BUDGET_KINDS = ("re-reading", "writing context", "writing output", "not split")
+BUDGET_WHO = ("main session", "auditors", "defect-rater", "implementer", "other agents")
+_TOKEN_USAGE = []
+
+
+def _token_usage():
+    """scripts/token-usage.py, loaded once: its PRICES and DATED are the list prices the dollars were counted with."""
+    if not _TOKEN_USAGE:
+        import importlib.util
+        import os
+
+        here = os.path.dirname(os.path.abspath(__file__))
+        spec = importlib.util.spec_from_file_location("token_usage", os.path.join(here, "token-usage.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _TOKEN_USAGE.append(module)
+    return _TOKEN_USAGE[0]
+
+
+def _who(agent):
+    """Who spent a row's dollars, as an index of BUDGET_WHO."""
+    a = str(agent or "")
+    return 0 if a == "main" else 1 if "auditor" in a else 2 if a == "defect-rater" else 3 if a == "implementer" else 4
+
+
+def _priced(t, tu):
+    """A token row's dollars split as [re-reading, writing context, writing output], scaled to sum to its recorded
+    cost, and how far off (a fraction of the cost) its tokens priced again came; (None, None) when it is not split.
+    Re-reading is the cache reads; writing context the input and the cache writes, the main session's at the 1-hour
+    price and an agent's at the 5-minute one; writing output the output."""
+    p = tu.PRICES.get(tu.DATED.sub("", t.get("model") or ""))
+    cost = t.get("cost") or 0
+    if p is None:
+        return None, None
+    write = p[2] if t.get("agent") == "main" else p[1]
+    parts = [(t.get("cache_read") or 0) * p[3] / 1e6,
+             ((t.get("input") or 0) * p[0] + (t.get("cache_write") or 0) * write) / 1e6,
+             (t.get("output") or 0) * p[4] / 1e6]
+    again = sum(parts)
+    if abs(again - cost) > BUDGET_OFF * cost:
+        return None, None
+    return ([x * cost / again for x in parts] if again else [0.0, 0.0, 0.0]), (abs(again - cost) / cost if cost else 0.0)
+
+
+def _lr(values, n):
+    """n whole beads shared out over `values` by largest remainder: each gets the whole part of its quota of n, and
+    the beads left go to the largest remainders, the earlier on a tie. They always add up to n."""
+    whole = sum(values)
+    if n <= 0 or whole <= 0:
+        return [0] * len(values)
+    quota = [n * v / whole for v in values]
+    out = [int(q) for q in quota]
+    for i in sorted(range(len(values)), key=lambda i: (-(quota[i] - out[i]), i))[: n - sum(out)]:
+        out[i] += 1
+    return out
+
+
+def _budget_missing(d):
+    """Why the beads cannot be drawn: the dashboard-data branch is missing, or has no token-usage.json."""
+    src = d.get("data")
+    why = "so the dollars are not known and the beads are not drawn."
+    if not src:
+        return None
+    if not src.get("commit"):
+        return f"the {src.get('branch')} branch is missing, {why}"
+    if "token-usage.json" in (src.get("absent") or []):
+        return f"the {src.get('branch')} branch has no token-usage.json, {why}"
+    return None
+
+
+def _budget_col(rows, split, beads):
+    """One column's figures: its dollars by kind and by who, the beads of each, and its rail (the dollars past 150k;
+    None when no row has the figure, as graph 8 reads a row without it: not known)."""
+    k, w = [0.0] * 4, [0.0] * 5
+    for t in rows:
+        parts = split[id(t)]
+        if parts is None:
+            k[3] += t.get("cost") or 0
+        else:
+            for i in range(3):
+                k[i] += parts[i]
+        w[_who(t.get("agent"))] += t.get("cost") or 0
+    known = [t for t in rows if t.get("cost_past_150k") is not None]
+    main = [t for t in known if t.get("agent") == "main"]
+    return dict(u=sum(t.get("cost") or 0 for t in rows), b=beads, k=k, kb=_lr(k, beads), w=w, wb=_lr(w, beads),
+                p=round(sum(t["cost_past_150k"] for t in known), 6) if known else None,
+                pm=round(sum(t["cost_past_150k"] for t in main), 6) if main else None,
+                rp=sum(t.get("replies") or 0 for t in rows),
+                nd=sum(t.get("cost") or 0 for t in rows if t.get("day") is None))
+
+
+def _guard_order(guards):
+    return [g for g in PRF_GUARDS if g in guards] + sorted(str(g) for g in guards if g not in PRF_GUARDS)
+
+
+def budget(d):
+    """Graph 8's dollars as an energy budget: beads of BUDGET_UNIT dollars in a column for each date with token rows,
+    or for each Day and one for no Day. Every figure, bead and share is counted here; dashboard.js lays them out.
+
+    The whole beads are round(total / unit), shared out over the columns by largest remainder; inside a column the
+    kinds and the who are each shared out over its beads the same way. With the dashboard-data branch or its
+    token-usage.json missing, `empty` says why and nothing is drawn."""
+    missing = _budget_missing(d)
+    tokens = [] if missing else list(d.get("tokens") or [])
+    out = dict(_stamp(d), unit=BUDGET_UNIT, kinds_named=list(BUDGET_KINDS), who_named=list(BUDGET_WHO))
+    if missing or not tokens:
+        out["empty"] = missing or ("no token counts yet: they are counted on the maintainer's computer and pushed to "
+                                   "the dashboard-data branch.")
+        return out
+    tu = _token_usage()
+    split, offs = {}, []
+    for t in tokens:
+        parts, off = _priced(t, tu)
+        split[id(t)] = parts
+        if parts is not None:
+            offs.append(off)
+    cost = lambda rows: sum(t.get("cost") or 0 for t in rows)  # noqa: E731
+    total = cost(tokens)
+    beads = _round(total / BUDGET_UNIT)
+    days = sorted(d.get("days") or [], key=lambda x: x.get("day"))
+    # a column for each date, and the Days worked on it (graph 8's rule: the date is within a Day's `worked`)
+    dates = sorted({t.get("date") for t in tokens})
+    by_date = [[t for t in tokens if t.get("date") == x] for x in dates]
+    refused = {}
+    for r in d.get("refusals") or []:
+        if r.get("refused"):
+            mine = refused.setdefault(r.get("date"), {})
+            mine[r.get("guard")] = mine.get(r.get("guard"), 0) + r["refused"]
+    date_cols = []
+    for x, rows, b in zip(dates, by_date, _lr([cost(r) for r in by_date], beads)):
+        on = [y.get("day") for y in days if y.get("worked") and y["worked"][0] <= x <= y["worked"][1]]
+        rf = refused.get(x, {})
+        date_cols.append(dict(_budget_col(rows, split, b), label=x, date=x, days=on,
+                              rf=[[g, rf[g]] for g in _guard_order(rf)], refused=sum(rf.values()),
+                              cut=sum(t.get("cut") or 0 for t in rows)))
+    # a column for each Day the token rows name (the branch the session worked on), and one for no Day
+    named = sorted({t.get("day") for t in tokens if t.get("day") is not None})
+    keys = named + ([None] if any(t.get("day") is None for t in tokens) else [])
+    by_day = [[t for t in tokens if t.get("day") == k] for k in keys]
+    day_cols = []
+    for k, rows, b in zip(keys, by_day, _lr([cost(r) for r in by_day], beads)):
+        seen = sorted({t.get("date") for t in rows})
+        day_cols.append(dict(_budget_col(rows, split, b), label=f"Day {k}" if k is not None else "No Day", day=k,
+                             dates=[seen[0], seen[-1]], n_dates=len(seen)))
+    # a pill for each Day over the date columns it was worked on, in the first lane free
+    pills, lanes = [], []
+    for y in days:
+        w = y.get("worked")
+        idx = [i for i, x in enumerate(dates) if w and w[0] <= x <= w[1]]
+        if not idx:
+            continue
+        lane = next((i for i, end in enumerate(lanes) if end < idx[0]), len(lanes))
+        lanes[lane:lane + 1] = [idx[-1]]
+        pills.append({"day": y.get("day"), "lane": lane, "from": idx[0], "to": idx[-1]})
+    # the figures, the key's dollars and the lists
+    kinds = [sum(c["k"][i] for c in date_cols) for i in range(4)]
+    who = [sum(c["w"][i] for c in date_cols) for i in range(5)]
+    known = [t for t in tokens if t.get("cost_past_150k") is not None]
+    past = sum(t["cost_past_150k"] for t in known)
+    pct = lambda x: _round(100 * x / total) if total else 0  # noqa: E731
+    closed = sum(1 for y in days if _finished(y))
+    states = [c.get("state") for c in d.get("criteria_index") or [] if isinstance(c, dict)]
+    built = sum(1 for s in states if s and s not in ("open", "building")) if any(states) else None
+    unsplit = [t for t in tokens if split[id(t)] is None]
+    model = lambda t: tu.DATED.sub("", t.get("model") or "")  # noqa: E731
+    main_rows = [t for t in tokens if t.get("agent") == "main"]
+    main_model = max(sorted({model(t) for t in main_rows}), default=None,
+                     key=lambda m: cost([t for t in main_rows if model(t) == m]))
+    price = tu.PRICES.get(main_model) if main_model else None
+    all_tokens = sum(t.get(k) or 0 for t in tokens for k in ("input", "cache_write", "cache_read", "output"))
+    own = [c for c in day_cols if c["day"] is not None]
+    no_day = sum(c["nd"] for c in date_cols)
+    guards = {}
+    for c in date_cols:
+        for g, n in c["rf"]:
+            guards[g] = guards.get(g, 0) + n
+    steps = (d.get("driver_runs") or {}).get("steps")
+    sessions = [s for x in steps or [] for s in x.get("sessions") or []]
+    first = lambda cols, f: max(range(len(cols)), key=lambda i: (f(cols[i]), -i)) if cols else None  # noqa: E731
+    out.update(
+        total=total, beads=beads, kinds=kinds, who=who, kind_pct=[pct(x) for x in kinds], who_pct=[pct(x) for x in who],
+        cols=dict(date=date_cols, day=day_cols), pills=pills, lanes=len(lanes),
+        replies=sum(t.get("replies") or 0 for t in tokens), dates=len(dates),
+        closed=closed, per_closed=total / closed if closed else None, built=built,
+        per_built=total / built if built else None,
+        past=past if known else None, past_pct=pct(past) if known else None,
+        past_main=sum(t["cost_past_150k"] for t in known if t.get("agent") == "main") if known else None,
+        past_unknown=len(tokens) - len(known),
+        past_most=first(date_cols, lambda c: (c["p"] or 0) / (c["u"] or 1)) if known else None,
+        # split rows whose dollars past 150k are more than their re-reading: why the rail is not a part of the upkeep
+        rail_over=sum(1 for t in tokens if split[id(t)] is not None and (t.get("cost_past_150k") or 0) > split[id(t)][0]),
+        split=dict(rows=len(tokens) - len(unsplit), dollars=sum(kinds[:3]), off=round(100 * max(offs), 2) if offs else None),
+        unsplit=dict(rows=len(unsplit), dollars=kinds[3], models=sorted({model(t) or "no model" for t in unsplit})),
+        furthest=round(max(abs(c["b"] - c["u"] / BUDGET_UNIT) for c in date_cols), 2),
+        read_tokens_pct=_round(100 * sum(t.get("cache_read") or 0 for t in tokens) / all_tokens) if all_tokens else None,
+        main_model=main_model, write_price=price[2] if price else None, read_price=price[3] if price else None,
+        write_over_read=_round(price[2] / price[3]) if price and price[3] else None,
+        dear=first(date_cols, lambda c: c["u"]), cheap=first(date_cols, lambda c: -c["u"]),
+        no_day=no_day, no_day_pct=pct(no_day),
+        dear_day=first(own, lambda c: c["u"]), cheap_day=first(own, lambda c: -c["u"]),
+        refused=sum(guards.values()), guards=[[g, guards[g]] for g in _guard_order(guards)],
+        most_refused=first(date_cols, lambda c: c["refused"]), cut=sum(c["cut"] for c in date_cols),
+        driver=dict(steps=len(steps), sessions=len(sessions), cost=sum(s.get("cost") or 0 for s in sessions)) if steps else None,
+        prices_checked=tu.PRICES_CHECKED,
+    )
+    return out
+
+
+# Graph 9 as growth rings (the mockup at #228's rng): the kinds of file, in the bands' order, top to bottom. Graph 9
+# counts specs and agent context as one kind; here they are two bands.
+RING_KINDS = ("prod", "test", "spec", "context", "tooling")
+
+
+def _share(x):
+    """A share as the rings print it: a whole percent from 10%, one decimal from 1%, two below; "<0.01%" for a share
+    too small to print, and "0%" for none."""
+    p = 100 * (x or 0)
+    if p <= 0:
+        return "0%"
+    if p >= 9.95:
+        return f"{_round(p)}%"
+    if p >= 0.995:
+        return f"{p:.1f}%"
+    return "<0.01%" if p < 0.005 else f"{p:.2f}%"
+
+
+def _ring(rows, key, **extra):
+    """One ring: its lines by kind, each kind's share as printed and as a fraction (the band's height), its pull
+    requests and what kind each was, and its test lines for each production line."""
+    w = {k: sum((r.get("work") or {}).get(k) or 0 for r in rows) for k in RING_KINDS}
+    lines = sum(w.values())
+    prs = [r for r in rows if r.get("pr")]
+    kinds = {}
+    for r in prs:
+        kinds[r.get("kind") or "other"] = kinds.get(r.get("kind") or "other", 0) + 1
+    dates = sorted(r.get("date") for r in rows if r.get("date"))
+    return dict(extra, key=key, lines=lines, prs=len(prs), pr_list=[r["pr"] for r in prs],
+                pr_kinds=[[k, kinds[k]] for k in ("spec", "code", "close", "other") if kinds.get(k)], w=w,
+                k=[[k, w[k], _share(w[k] / lines) if lines else "0%", w[k] / lines if lines else 0] for k in RING_KINDS],
+                ratio=round(w["test"] / w["prod"], 1) if w["prod"] else None,
+                first=dates[0] if dates else None, last=dates[-1] if dates else None)
+
+
+def rings(d):
+    """Graph 9's lines as growth rings: one ring for each Day, its own pull requests (the Day its branch names), and
+    below, one hatched ring for the work no Day owns, at the Day graph 9 places it beside (`_placed`'s `at`: the
+    furthest Day begun when it merged). Rows before Day 1 began are graph 9's "before Day 1": counted, in no ring.
+    Rows in neither (a Day not in the data, or no pull request after Day 1 began) are `unplaced`, counted apart, so
+    none vanishes. Every width in lines and every share is counted here; dashboard.js turns lines into px."""
+    rows, placed = d.get("rows") or [], _placed(d)
+    pairs = list(zip(rows, placed))
+    days = sorted(d.get("days") or [], key=lambda x: x.get("day"))
+    numbers = {y.get("day") for y in days}
+    inside, outside = [], []
+    for y in days:
+        mine = [r for r, p in pairs if p["own"] == y.get("day")]
+        if mine:
+            inside.append(_ring(mine, f"d{y.get('day')}", day=y.get("day"), title=_plain(y.get("title"))))
+        beside = [r for r, p in pairs if p["area"] and p["at"] == y.get("day")]
+        if beside:
+            outside.append(_ring(beside, f"o{y.get('day')}", at=y.get("day")))
+    is_in = lambda p: p["own"] in numbers  # noqa: E731
+    is_out = lambda p: p["own"] is None and p["area"] and p["at"] in numbers  # noqa: E731
+    inner = _ring([r for r, p in pairs if is_in(p)], "all")
+    outer = _ring([r for r, p in pairs if is_out(p)], "out")
+    before = _ring([r for r, p in pairs if p["own"] is None and p["at"] is None], "before")
+    loose = _ring([r for r, p in pairs if not is_in(p) and not is_out(p) and not (p["own"] is None and p["at"] is None)],
+                  "unplaced")
+    drawn = inner["lines"] + outer["lines"]
+    share = lambda x: _share(x / drawn) if drawn else "0%"  # noqa: E731
+    widths = [x["lines"] for x in inside]
+    ratios = [(x["ratio"], x["day"]) for x in inside if x["ratio"] is not None]
+    top2 = sorted(outside, key=lambda x: -x["lines"])[:2]
+    span = {}
+    for y in days:
+        w = y.get("worked")
+        if w and w[0] and w[1]:
+            n = (datetime.date.fromisoformat(w[1][:10]) - datetime.date.fromisoformat(w[0][:10])).days + 1
+            span[n] = span.get(n, 0) + 1
+    first = lambda xs, f: max(range(len(xs)), key=lambda i: (f(xs[i]), -i)) if xs else None  # noqa: E731
+    return dict(
+        _stamp(d), kinds=list(RING_KINDS), days=inside, outside=outside, before=before, unplaced=loose,
+        inside=dict(inner, share=share(inner["lines"]), n_days=len(inside)), out=dict(outer, share=share(outer["lines"])),
+        total=drawn + before["lines"], drawn=drawn, prs=inner["prs"] + outer["prs"], merges=len(rows),
+        all_lines=sum(sum((r.get("work") or {}).get(k) or 0 for k in RING_KINDS) for r in rows),
+        prod_lines=inner["w"]["prod"] + outer["w"]["prod"], prod_share=share(inner["w"]["prod"] + outer["w"]["prod"]),
+        ratio=inner["ratio"], ratio_low=list(min(ratios)) if ratios else None,
+        ratio_high=list(max(ratios, key=lambda x: (x[0], -x[1]))) if ratios else None,
+        heavy=first(inside, lambda x: x["lines"]), light=first(inside, lambda x: -x["lines"]),
+        wide_out=first(outside, lambda x: x["lines"]), thin_out=first(outside, lambda x: -x["lines"]),
+        spread=round(max(widths) / min(widths), 1) if widths and min(widths) else None,
+        top_out=dict(at=[x["at"] for x in top2], lines=sum(x["lines"] for x in top2),
+                     share=_share(sum(x["lines"] for x in top2) / outer["lines"]) if outer["lines"] else "0%"),
+        # the tallest band of each Day's ring: the kind that leads in the most Days (the earlier kind on a tie)
+        tallest=sorted(([k, sum(1 for x in inside if x["lines"] and max(RING_KINDS, key=lambda j: (x["w"][j], -RING_KINDS.index(j))) == k)]
+                        for k in RING_KINDS), key=lambda kc: (-kc[1], RING_KINDS.index(kc[0])))[:1],
+        spec_over_test=[x["day"] for x in inside if x["w"]["spec"] + x["w"]["context"] > x["w"]["test"]],
+        seasons=[[n, span[n]] for n in sorted(span)],
+    )

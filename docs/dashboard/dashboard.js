@@ -161,11 +161,13 @@ function model(DATA) {
     const D = DATA.data;
     if (!D) return null;
     const what = names => andList(names.map(n => DATA_WHAT[n] || n));
-    // Without the gates' runs and cost, the proofreading stream (spec_drift_views.proofreading) is not drawn at all.
-    const stream = " The proofreading stream is not drawn.";
-    if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.${stream}`;
+    // Without the gates' runs and cost, the proofreading stream (spec_drift_views.proofreading) is not drawn at all;
+    // without the dollars, the energy budget (spec_drift_views.budget) is not.
+    const stream = " The proofreading stream is not drawn.", beads = " The energy budget is not drawn.";
+    if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.${stream}${beads}`;
     if (!(D.absent || []).length) return null;
-    return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.${D.absent.includes("gates.json") ? stream : ""}`;
+    return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.${D.absent.includes("gates.json") ? stream : ""}`
+      + (D.absent.includes("token-usage.json") ? beads : "");
   }
   function head() {
     const g = now.generated || "", when = g.length >= 16 ? `${shortDate(g)} ${g.slice(0, 4)} at ${g.slice(11, 16)}` : g;
@@ -552,7 +554,8 @@ function model(DATA) {
     const asideTotal = sum(bars, x => x.aside ? x.aside.total : 0), asidePrs = sum(bars, x => x.aside ? x.aside.prs : 0);
     const asideSay = bars.some(x => x.aside) ? `Another ${comma(asideTotal)} lines, in ${plural(asidePrs, "pull request", "pull requests")}, are outside any Day (dashboard and tooling work): drawn paler beside the Day that was open when they merged, and in no Day's size or test ratio.` : "";
     const ranked = WORK.map(([k, name]) => [name, all[k]]).sort((a, b) => b[1] - a[1]);
-    return { bars, max: Math.max(1, ...bars.map(x => x.total), ...bars.map(x => x.aside ? x.aside.total : 0)),
+    // `before`: the lines before Day 1, for the rings to be held to (scripts/dashboard-reconcile.py, rng_line).
+    return { bars, before, max: Math.max(1, ...bars.map(x => x.total), ...bars.map(x => x.aside ? x.aside.total : 0)),
       key: [...WORK.map(([k, name]) => [k, name]), ["aside", "Paler: outside any Day"]],
       read: { t: total ? `${comma(total)} lines changed in ${daySpan(days.map(d => d.day))}; the largest share is ${lower(ranked[0][0])}` : "No Day has merged work yet",
         b: total ? [`${ranked.map(([name, v], i) => `${i ? lower(name) : name} ${comma(v)}`).join(", ")}.` + (before ? ` Another ${comma(before)} lines came before Day 1.` : "")
@@ -1020,6 +1023,16 @@ function model(DATA) {
     const P = DATA.proofreading;
     return P && (P.gates || []).length ? P : { empty: "no defect is counted yet, so there is no stream to draw." };
   }
+  /* Graph 8 as an energy budget and graph 9 as growth rings: counted in scripts/spec_drift_views.py (budget, rings).
+     The budget is `empty` with the data branch or its token-usage.json missing, where no bead is drawn. */
+  function atpGraph() {
+    const B = DATA.budget;
+    return B ? B : { empty: "no token counts yet, so there is no bead to draw." };
+  }
+  function rngGraph() {
+    const R = DATA.rings;
+    return R && R.drawn ? R : { empty: "no Day has merged work yet, so there is no ring to draw." };
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -1153,7 +1166,7 @@ function model(DATA) {
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -3191,6 +3204,349 @@ function prfDraw(P, get, onDay) {
   return fig;
 }
 
+/* Graph 8 as an energy budget, as the mockup at #228 draws it: one bead for each $2 of tokens at list prices, in a
+   column for each date or each Day. Counted in scripts/spec_drift_views.py (budget): every bead, dollar and share;
+   this lays them out and words them, and counts nothing. `get` finds an element by its id; `onDay` is the page's Day
+   buttons. Colours are in dashboard.css, under #atp. */
+const ATP_KIND = ["kr", "kw", "ko", "ku"], ATP_WHO = ["wm", "wa", "wd", "wi", "wx"];
+// The layout, from the mockup's coordinates. A bead is 6.6 px on a pitch of 8.6. The columns share the width from
+// x0 to x1, a step each, and are 3 px apart; in a column, the rail (4 px) and 3 px after it the beads, `per` to a row
+// (5 by date; by Day as many as fit), are centred. The tallest column's top row sits at y 24, its dollars 6 px over.
+const ATP_GEO = { pitch: 8.6, bead: 6.6, top: 24, date: { x0: 104, x1: 1192, per: 5 }, day: { x0: 4, x1: 1194, per: Infinity } };
+const atpDates = (a, b) => a === b ? shortDate(a) : a.slice(0, 7) === b.slice(0, 7) ? `${+a.slice(8, 10)} to ${shortDate(b)}` : `${shortDate(a)} to ${shortDate(b)}`;
+function atpDraw(B, get, onDay) {
+  if (!B || B.empty) return null;  // without the dollars there are no beads: the section says why
+  const $ = id => get("atp-" + id), root = get("atp"), fig = $("fig"), tip = $("tip"), G = ATP_GEO;
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => (+v).toFixed(1).replace(/\.0$/, "");
+  const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many}`;
+  const pct = x => B.total ? Math.round(100 * x / B.total) : 0;
+  fig.replaceChildren();
+  const pat = el("pattern", { id: "atp-hatch", width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, el("defs", {}));
+  el("rect", { class: "h-b", width: 4, height: 4 }, null, pat);
+  el("rect", { class: "h-a", width: 1.8, height: 4 }, null, pat);
+  const sayDays = c => c.days.length ? daySpan(c.days) : "no Day worked";
+  const colName = (v, c) => v === "date" ? shortDate(c.date) : c.day != null ? `Day ${c.day}` : "No Day";
+  const colSub = (v, c) => v === "date" ? sayDays(c) : c.day != null ? atpDates(c.dates[0], c.dates[1]) : n(c.n_dates, "date", "dates");
+  const vb = {}, colEls = { date: [], day: [] };
+  ["date", "day"].forEach(v => {
+    const V = G[v], cols = B.cols[v], step = (V.x1 - V.x0) / Math.max(1, cols.length), w = step - 3;
+    const per = Math.max(1, Math.min(V.per, Math.floor((w - 6 - 7 - G.bead) / G.pitch) + 1));
+    const rows = c => Math.ceil(c.b / per), bottom = G.top + (Math.max(1, ...cols.map(rows)) - 1) * G.pitch;
+    const base = bottom + G.bead + 3.5, block = 7 + (per - 1) * G.pitch + G.bead;
+    const g = el("g", { class: `v v-${v}` });
+    el("path", { class: "base", d: `M${V.x0} ${f(base)}H${V.x1}` }, null, g);
+    if (v === "date") { el("text", { class: "t-row", x: 92, y: f(base + 15.5), "text-anchor": "end" }, "date", g);
+      el("text", { class: "t-row", x: 92, y: f(base + 31.5), "text-anchor": "end" }, "hooks refused", g); }
+    cols.forEach((c, i) => {
+      const hx = V.x0 + 1.5 + i * step, bx = hx + (w - block) / 2, cx = hx + w / 2;
+      const b = el("g", { class: "b col", tabindex: i ? -1 : 0, role: "img", "data-v": v, "data-i": i, "aria-label": `${colName(v, c)}, ${colSub(v, c)}, ${money(c.u)}` }, null, g);
+      el("rect", { class: "hit", x: f(hx), y: 2, width: f(w), height: f(base + 36.5), rx: 5 }, null, b);
+      // the rail: the dollars past 150k on the bead scale, a row of `per` beads to 8.6 px
+      if (c.p) { const ht = c.p / B.unit / per * G.pitch; el("rect", { class: "rail", x: f(bx), y: f(bottom + G.bead - ht), width: 4, height: f(ht), rx: 1 }, null, b); }
+      const kinds = c.kb.flatMap((k, j) => Array(k).fill(ATP_KIND[j])), whos = c.wb.flatMap((k, j) => Array(k).fill(ATP_WHO[j]));
+      for (let j = 0; j < c.b; j++)
+        el("rect", { class: `q ${kinds[j]} ${whos[j]}`, x: f(bx + 7 + (j % per) * G.pitch), y: f(bottom - Math.floor(j / per) * G.pitch), width: G.bead, height: G.bead, rx: 1.2 }, null, b);
+      el("text", { class: "t-usd", x: f(cx), y: f(bottom - (Math.max(1, rows(c)) - 1) * G.pitch - 6), "text-anchor": "middle" }, money(c.u), b);
+      el("text", { class: "t-col", x: f(cx), y: f(base + 15.5), "text-anchor": "middle" }, colName(v, c), b);
+      el("text", { class: "t-ref", x: f(cx), y: f(base + (v === "date" ? 31.5 : 30.5)), "text-anchor": "middle" }, v === "date" ? comma(c.refused) : colSub(v, c), b);
+      colEls[v].push({ b, c });
+    });
+    if (v === "date") {
+      el("text", { class: "t-row", x: 92, y: f(base + 53.5), "text-anchor": "end" }, "Day worked on", g);
+      const pg = el("g", { "aria-hidden": "true" }, null, g);
+      B.pills.forEach(p => { const x = V.x0 + 1.5 + p.from * step + 3.5, y = base + 43.5 + 16 * p.lane, pw = (p.to - p.from + 1) * step - 10;
+        el("rect", { class: "pill", x: f(x), y: f(y), width: f(pw), height: 13, rx: 6.5 }, null, pg);
+        el("text", { class: "t-pill", x: f(x + pw / 2), y: f(y + 10), "text-anchor": "middle" }, `Day ${p.day}`, pg); });
+      vb.date = [1198, f(base + 43.5 + 16 * Math.max(1, B.lanes) + 2.8)];
+    } else {
+      vb.day = [1198, f(base + 41.3)];
+      if (cols.some(c => c.day == null)) {
+        const t = el("text", { class: "t-note", x: 12, y: 34 }, null, g);
+        el("tspan", { class: "em" }, `${money(B.no_day)} of ${money(B.total)} (${B.no_day_pct}%) was spent on no Day’s branch.`, t);
+        el("tspan", { x: 12, dy: 17 }, "A session belongs to a Day by the branch it worked on. A Day’s audits and the steps", t);
+        el("tspan", { x: 12, dy: 16 }, `after a merge run on main, so ${B.no_day_pct}% is the most the outside share can be, not its exact size.`, t);
+      }
+    }
+  });
+  const grp = () => root.getAttribute("data-grp") === "day" ? "day" : "date";
+  const frame = v => { fig.setAttribute("viewBox", `0 0 ${vb[v][0]} ${vb[v][1]}`);
+    fig.setAttribute("aria-label", `One column of beads for each ${v === "day" ? "Day, and one for work on no Day" : "date with a session"}, one bead for each $${B.unit} of tokens at list prices`); };
+  frame(grp());
+
+  // the line of figures and the short key
+  const fig4 = (num, small, what, sub) => h("div", null, h("div", { class: "num" }, num, small && h("small", null, small)), h("div", { class: "what" }, what), h("p", { class: "sub" }, sub));
+  const K = B.kinds, W = B.who;
+  $("figs").replaceChildren(
+    fig4(money(B.total), null, "of tokens at list prices", `Not a bill: the maintainer pays a flat subscription. ${n(B.dates, "date", "dates")}, ${n(B.replies, "reply", "replies")}.`),
+    B.closed ? fig4(money(B.per_closed), null, "for each closed Day", `All sessions over ${n(B.closed, "closed Day", "closed Days")}` + (B.built ? `, or ${money(B.per_built)} for each of the ${n(B.built, "promise", "promises")} built.` : "."))
+      : fig4("–", null, "for each closed Day", "No Day is closed yet."),
+    fig4(`${B.kind_pct[0]}%`, "upkeep", "re-reading the conversation", `${money(K[0])}. Writing context took ${B.kind_pct[1]}%, writing output ${B.kind_pct[2]}%.` + (K[3] ? ` ${money(K[3])} could not be split.` : "")),
+    B.past != null ? fig4(`${B.past_pct}%`, "past 150k", "spent in replies that read over 150k tokens", `${money(B.past)}, of which ${money(B.past_main || 0)} in the main session. A fresh session would spare most of it.`
+      + (B.past_unknown ? ` ${n(B.past_unknown, "row has", "rows have")} no such figure, and ${B.past_unknown === 1 ? "is" : "are"} left out.` : ""))
+      : fig4("–", "past 150k", "spent in replies that read over 150k tokens", "No row has that figure yet."));
+  const sw = cls => { const s = document.createElementNS(SVG_NS, "svg"); [["width", 9], ["height", 9], ["viewBox", "0 0 9 9"], ["aria-hidden", "true"]].forEach(([k, v]) => s.setAttribute(k, v));
+    const r = document.createElementNS(SVG_NS, "rect"); [["class", `q ${cls}`], ["x", 1], ["y", 1], ["width", 7], ["height", 7]].forEach(([k, v]) => r.setAttribute(k, v)); s.appendChild(r); return s; };
+  const railIcon = () => { const s = document.createElementNS(SVG_NS, "svg"); [["width", 6], ["height", 14], ["viewBox", "0 0 6 14"], ["aria-hidden", "true"]].forEach(([k, v]) => s.setAttribute(k, v));
+    const r = document.createElementNS(SVG_NS, "rect"); [["class", "rail"], ["x", 1], ["y", 0.5], ["width", 4], ["height", 13], ["rx", 1]].forEach(([k, v]) => r.setAttribute(k, v)); s.appendChild(r); return s; };
+  const item = (cls, word, v) => h("span", null, sw(cls), `${word} `, h("b", null, money(v)));
+  $("key").replaceChildren(h("span", null, sw("qn"), h("span", { class: "kt" }, "one bead is ", h("b", null, `$${B.unit}`), ", rounded")), h("i", { class: "sep" }),
+    h("span", { class: "by-kind" }, h("span", { class: "fam" }, "Upkeep"), item("kr", B.kinds_named[0], K[0]), h("span", { class: "fam" }, "Growth"),
+      item("kw", B.kinds_named[1], K[1]), item("ko", B.kinds_named[2], K[2]), K[3] ? item("ku", B.kinds_named[3], K[3]) : null),
+    h("span", { class: "by-who" }, ...B.who_named.map((w, i) => W[i] ? item(ATP_WHO[i], w, W[i]) : null)), h("i", { class: "sep" }),
+    B.past != null ? h("span", null, railIcon(), "in replies past 150k tokens ", h("b", null, money(B.past))) : null);
+
+  // the folded text: how the beads are rounded and the dollars split, the two tables and the stamp
+  $("k-beads").textContent = comma(B.beads);
+  $("round").textContent = `${n(B.beads, "bead", "beads")} of ${money(B.unit)} make ${money(B.beads * B.unit)}; the data says ${money(B.total)}. The whole beads go to the columns by largest remainder, so the picture always holds ${comma(B.beads)} beads, by date and by Day; the furthest a date’s column is from its dollars is ${B.furthest} of a bead. The colours inside a column are shared out over its beads the same way, so a colour worth less than half a bead in a column may have none there. The figure over a column is its exact dollars.`;
+  const U = B.unsplit, S = B.split;
+  $("split").textContent = `The split by kind uses the list prices in scripts/token-usage.py, checked ${B.prices_checked}. A row is split only when its cost, worked out again from its tokens, is within 1% of the cost in the data: ${S.rows} of ${S.rows + U.rows} rows are (${money(S.dollars)}${S.off != null ? `; the furthest is ${S.off}% off` : ""}), with the main session’s cache writes at the one-hour price and an agent’s at the five-minute price.`
+    + (U.rows ? ` The other ${n(U.rows, "row", "rows")} (${money(U.dollars)}; ${U.models.join(", ")}) ${U.rows === 1 ? "is" : "are"} not: a price set reply by reply, as for a long prompt, or a model not in the list, cannot be worked out again from sums. They are the hollow beads.` : "");
+  const td = v => h("td", { class: "r" }, v), dollars = x => x == null ? "" : (+x).toFixed(2);
+  const tableOf = (head, rows, all) => h("table", null, h("tr", null, head.map(x => h("th", null, x))), rows, all);
+  const KH = ["Re-reading", "Writing context", "Writing output", "Not split"], WH = ["Main session", "Auditors", "Defect-rater", "Implementer", "Other agents"];
+  const DC = B.cols.date;
+  $("tbl-date").replaceChildren(tableOf(["Date", "Days", "Dollars", "Beads", ...KH, "Past 150k", "Past 150k, main", ...WH, "Replies", "Calls refused", "Outputs cut"],
+    DC.map(c => h("tr", null, h("td", null, shortDate(c.date)), h("td", null, c.days.join(", ")), td(dollars(c.u)), td(c.b), c.k.map(x => td(dollars(x))), td(dollars(c.p)), td(dollars(c.pm)),
+      c.w.map(x => td(dollars(x))), td(comma(c.rp)), td(c.refused), td(c.cut))),
+    h("tr", null, h("th", null, "All"), h("td", null, ""), td(dollars(B.total)), td(B.beads), K.map(x => td(dollars(x))), td(dollars(B.past)), td(dollars(B.past_main)),
+      W.map(x => td(dollars(x))), td(comma(B.replies)), td(B.refused), td(B.cut))));
+  $("tbl-day").replaceChildren(tableOf(["Day", "Dates with a session on its branch", "Dollars", "Beads", ...KH, "Past 150k", ...WH, "Replies"],
+    B.cols.day.map(c => h("tr", null, h("td", null, colName("day", c)), h("td", null, colSub("day", c)), td(dollars(c.u)), td(c.b), c.k.map(x => td(dollars(x))), td(dollars(c.p)),
+      c.w.map(x => td(dollars(x))), td(comma(c.rp))))));
+  $("stamp").textContent = `Drawn from the page’s data at ${B.head || "?"}${B.last_pr ? ` (#${B.last_pr})` : ""}, generated ${B.generated}`;
+
+  // what the picture shows, and where the model bends
+  const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  li(finds, `Upkeep is ${B.read_tokens_pct}% of the tokens and ${B.kind_pct[0]}% of the dollars.`, ` Re-reading cost ${money(K[0])} of ${money(B.total)}.`
+    + (B.write_over_read ? ` At list prices a token written to the main session’s cache costs ${B.write_over_read} times a token read from it (${B.main_model}: $${B.write_price} against $${B.read_price.toFixed(2)} a million).` : ""));
+  li(finds, `Growth is ${B.kind_pct[1] + B.kind_pct[2]}%.`, ` Writing new context cost ${money(K[1])} and writing output ${money(K[2])}.` + (U.rows ? ` ${n(U.rows, "row", "rows")} (${money(U.dollars)}) could not be split.` : ""));
+  if (B.past != null) { const top = DC[B.past_most];
+    li(finds, `${money(B.past)} was spent in replies past 150k tokens`, `, ${B.past_pct}% of everything: ${money(B.past_main || 0)} in the main session and ${money(B.past - (B.past_main || 0))} in agents.`
+      + (top && top.p ? ` ${shortDate(top.date)} has the largest share, ${money(top.p)} of its ${money(top.u)}.` : "")); }
+  const agents = ["the auditors", "the defect-rater", "the implementer", "other agents"].map((w, i) => [w, W[i + 1]]).filter(x => x[1]);
+  li(finds, `The main session spent ${B.who_pct[0]}%`, ` (${money(W[0])}).` + (agents.length ? ` ${agents.map(([w, v], i) => `${i ? w : `${w.charAt(0).toUpperCase()}${w.slice(1)} spent`} ${money(v)}`).join(", ")}.` : " No agent spent anything."));
+  const dear = DC[B.dear], cheap = DC[B.cheap];
+  li(finds, `${shortDate(dear.date)} was the dearest date`, ` (${money(dear.u)}${dear.days.length ? `, ${daySpan(dear.days)}` : ""}) and ${shortDate(cheap.date)} the cheapest (${money(cheap.u)}).`);
+  const own = B.cols.day.filter(c => c.day != null);
+  li(finds, `${B.no_day_pct}% was spent on no Day’s branch`, `: ${money(B.no_day)} of ${money(B.total)}. A Day’s audits and the steps after a merge run on main, so this is the most the share can be.`
+    + (own.length ? ` ${colName("day", own[B.dear_day])} cost the most on its own branch (${money(own[B.dear_day].u)}) and ${colName("day", own[B.cheap_day])} the least (${money(own[B.cheap_day].u)}).` : ""));
+  const most = DC[B.most_refused];
+  li(finds, `The hooks refused ${n(B.refused, "call", "calls")}`, (B.guards.length ? ` (${B.guards.map(([g, k]) => `${comma(k)} by the ${g}`).join(", ")})` : "") + ` and cut ${n(B.cut, "long output", "long outputs")}.`
+    + (most && most.refused ? ` ${shortDate(most.date)} had the most refusals, ${comma(most.refused)}.` : ""));
+  if (B.driver) li(finds, "The driver’s own runs are not in these beads.", ` Its run log counts ${n(B.driver.sessions, "session", "sessions")} over ${n(B.driver.steps, "step", "steps")}, ${money(B.driver.cost)}, on the project it drove.`);
+  [["An organism cannot choose its basal rate.", " Here a fresh session lowers it: the hatched rail is what the replies past 150k tokens cost, and one session for each step is meant to spare it."],
+    ["List prices are not the bill.", " The maintainer pays a flat subscription. The beads measure use on the pay-per-token price list, for this repository’s sessions only, counted on the maintainer’s computer."],
+    ["The rail is not a part of the upkeep.", ` The data gives the dollars past 150k for whole replies: reading, writing and output together.${B.rail_over ? ` In ${n(B.rail_over, "row", "rows")} it is larger than the row’s re-reading.` : ""} So it stands beside the beads and is not a colour among them.`],
+    ["Upkeep is not waste.", " A cell that stops its upkeep dies. A reply that does not read the conversation does not know the work. Only the part a shorter conversation would not have read is avoidable."],
+    ["Growth is not all tissue.", " Writing context and output includes the attempts that failed and the checks that passed. The beads count dollars, not what was built."],
+    ["A bead is not a molecule.", ` It is ${money(B.unit)}, rounded: a column or a colour can be up to about one bead from its exact dollars, and a colour worth less than half a bead in a column may have none there.`]].forEach(([b, t]) => li(bends, b, t));
+
+  // what the pointer says
+  const parts = (names, vals) => names.map((x, i) => vals[i] ? `${x} ${money(vals[i])}` : null).filter(Boolean).join(", ") || "nothing";
+  const say = (v, i) => { const c = (B.cols[v] || [])[+i]; if (!c) return null;
+    const l = [`What it bought: ${parts(B.kinds_named, c.k)}.`, `Who spent it: ${parts(B.who_named, c.w)}.`,
+      c.p == null ? "No row has a figure for the replies that read over 150k tokens." : c.p ? `${money(c.p)} of it in replies that read over 150k tokens` + (c.pm != null && c.pm >= c.p ? ", all in the main session." : c.pm ? `, ${money(c.pm)} of that in the main session.` : ", none of that in the main session.") : "Nothing in replies that read over 150k tokens."];
+    if (v === "date") l.push(`${n(c.rp, "reply", "replies")}. The hooks refused ${n(c.refused, "call", "calls")}${c.rf.length ? ` (${c.rf.map(([g, k]) => `${k} by the ${g}`).join(", ")})` : ""}.`, `${money(c.nd)} of it on no Day’s branch.`);
+    else l.push(`${n(c.rp, "reply", "replies")}. Refusals are counted by date, so a Day has none of its own.`);
+    return { t: `${colName(v, c)} · ${colSub(v, c)} · ${money(c.u)}`, l, q: `${n(c.b, "bead", "beads")} of ${money(B.unit)} make ${money(c.b * B.unit)}; the exact figure is ${money(c.u)}.` }; };
+  pointerBox(fig, tip, key => { const d = key && say(...key.split("|")); return d ? tipFill(tip, d) : false; }, b => `${b.getAttribute("data-v")}|${b.getAttribute("data-i")}`);
+  // one Tab stop for the columns; the arrow keys walk along them
+  fig.addEventListener("keydown", e => { const cur = e.target && e.target.closest ? e.target.closest(".col") : null; if (!cur) return;
+    const all = colEls[cur.getAttribute("data-v")].map(x => x.b), i = all.indexOf(cur);
+    const j = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (j == null) return;
+    e.preventDefault(); const k = Math.max(0, Math.min(all.length - 1, j));
+    if (k !== i) { cur.setAttribute("tabindex", "-1"); all[k].setAttribute("tabindex", "0"); all[k].focus(); } });
+  // the two controls: the colour of the beads, and what a column is
+  $("ctl").addEventListener("click", e => { const b = e.target && e.target.closest ? e.target.closest("button[data-set]") : null; if (!b) return;
+    b.parentNode.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    root.setAttribute(`data-${b.getAttribute("data-set")}`, b.getAttribute("data-val"));
+    if (b.getAttribute("data-set") === "grp") frame(b.getAttribute("data-val"));
+    tip.hidden = true; });
+  // the page's Day buttons dim every column not on that Day
+  onDay.push(day => { colEls.date.forEach(x => x.b.classList.toggle("mk-dim", day != null && !x.c.days.includes(day)));
+    colEls.day.forEach(x => x.b.classList.toggle("mk-dim", day != null && x.c.day !== day)); });
+  return fig;
+}
+
+/* Graph 9 as growth rings, as the mockup at #228 draws it: a ring for each Day, as wide as the lines its own pull
+   requests changed, and below, a hatched ring for the work no Day owns, at the Day graph 9 places it. Counted in
+   scripts/spec_drift_views.py (rings): every ring's lines, share and pull requests; this turns lines into px with one
+   scale for both strips, and words them. Colours are in dashboard.css, under #rng. */
+const RNG_NAME = { prod: "Production code", test: "Tests", spec: "Specs", context: "Agent context", tooling: "Tooling" };
+// The layout, from the mockup's coordinates. A strip is 120 px tall (upper y 47, lower y 236); its rings start at x 7,
+// 2 px apart. A ring's left edge is one quadratic, x = x0 + 20t(1 - t), its control 10 px right at mid-height; a band
+// is the sub-curve of it from its start to its end share, and its right edge the same curve `w` px further. One px of
+// width is the same number of lines in both strips: the larger of the upper strip's lines over 745 px and the lower
+// strip's over 1182 px, less the gaps. A ring under 20 px is named under its strip, under a lead.
+const RNG_GEO = { h: 120, gap: 2, x0: 7, up: 47, low: 236, upW: 745, lowW: 1182, label: 20 };
+function rngDraw(R, get, onDay) {
+  if (!R || R.empty) return null;
+  const $ = id => get("rng-" + id), fig = $("fig"), tip = $("tip"), G = RNG_GEO;
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => String(Math.round(+v * 100) / 100);
+  const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many}`;
+  fig.replaceChildren();
+  const pat = el("pattern", { id: "rng-hatch", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, el("defs", {}));
+  el("rect", { class: "hatch", width: 2.1, height: 5 }, null, pat);
+  const D = R.days, O = R.outside, up = sum(D, x => x.lines), low = sum(O, x => x.lines);
+  const L = Math.max(up / Math.max(1, G.upW - G.gap * Math.max(0, D.length - 1)), low / Math.max(1, G.lowW - G.gap * Math.max(0, O.length - 1)), 1e-9);
+  // a point of a ring's left edge at t, and the control point of its sub-curve from t0 to t1 (de Casteljau)
+  const bx = (x0, t) => x0 + 20 * t * (1 - t), cx = (x0, t0, t1) => x0 + 10 * (t0 + t1 - 2 * t0 * t1);
+  const ringName = r => r.day != null ? `Day ${r.day}` : `at Day ${r.at}`;
+  const aria = r => `${r.day != null ? `Day ${r.day}` : `Outside any Day, at Day ${r.at}`}: ${n(r.lines, "line", "lines")} changed in ${n(r.prs, "pull request", "pull requests")}. `
+    + r.k.filter(k => r.day != null || k[1]).map(k => `${lower(RNG_NAME[k[0]])} ${k[2]}`).join(", ");
+  const groups = [];
+  const strip = (rings, y0, hatched) => {
+    let x = G.x0; const mid = y0 + G.h / 2, y1 = y0 + G.h, thin = [];
+    rings.forEach(r => {
+      const w = r.lines / L;
+      if (w >= G.label) { el("text", { class: "t-day", x: f(x + w / 2), y: f(y0 - 19), "text-anchor": "middle" }, ringName(r));
+        el("text", { class: "t-lines", x: f(x + w / 2), y: f(y0 - 7), "text-anchor": "middle" }, comma(r.lines)); }
+      else thin.push({ r, x, w });
+      const b = el("g", { class: hatched ? "b out" : "b", tabindex: 0, role: "img", "data-k": r.key, "aria-label": aria(r) });
+      let t0 = 0, seams = [], pills = [];
+      r.k.forEach(([k, lines, share, frac]) => { if (!lines) return; const t1 = Math.min(1, t0 + frac), ya = y0 + G.h * t0, yb = y0 + G.h * t1, c = cx(x, t0, t1), cy = y0 + G.h * (t0 + t1) / 2;
+        el("path", { class: `k-${k}`, d: `M${f(bx(x, t0))} ${f(ya)} Q${f(c)} ${f(cy)} ${f(bx(x, t1))} ${f(yb)}L${f(bx(x, t1) + w)} ${f(yb)} Q${f(c + w)} ${f(cy)} ${f(bx(x, t0) + w)} ${f(ya)}Z` }, null, b);
+        if (t1 < 0.9999) seams.push([bx(x, t1), yb]);
+        // a band tall enough, in a ring wide enough, carries its share on a pill
+        const pw = 5.89 * share.length + 7;
+        if (yb - ya >= 16 && w >= pw + 4) pills.push([bx(x, (t0 + t1) / 2) + w / 2, (ya + yb) / 2, pw, share]);
+        t0 = t1; });
+      if (hatched) el("path", { class: "over", fill: "url(#rng-hatch)", d: `M${f(x)} ${y0} Q${f(x + 10)} ${mid} ${f(x)} ${y1}L${f(x + w)} ${y1} Q${f(x + w + 10)} ${mid} ${f(x + w)} ${y0}Z` }, null, b);
+      seams.forEach(([sx, sy]) => el("path", { class: "seam", d: `M${f(sx)} ${f(sy)} H${f(sx + w)}` }, null, b));
+      pills.forEach(([px, py, pw, s]) => { el("rect", { class: "pill", x: f(px - pw / 2), y: f(py - 6.5), width: f(pw), height: 13, rx: 3 }, null, b);
+        el("text", { class: "t-share", x: f(px), y: f(py + 3.3), "text-anchor": "middle" }, s, b); });
+      el("path", { class: "late", d: `M${f(x + w)} ${y0} Q${f(x + w + 10)} ${mid} ${f(x + w)} ${y1}` }, null, b);
+      const hw = Math.max(5, w), hx = x + w / 2 - hw / 2;
+      el("path", { class: "hit", d: `M${f(hx)} ${y0} Q${f(hx + 10)} ${mid} ${f(hx)} ${y1}L${f(hx + hw)} ${y1} Q${f(hx + hw + 10)} ${mid} ${f(hx + hw)} ${y0}Z` }, null, b);
+      groups.push({ b, r });
+      x += w + G.gap;
+    });
+    // the rings too thin for a label: one lead under each run of them, and their names and lines after it
+    const runs = []; thin.forEach(t => { const last = runs[runs.length - 1]; if (last && Math.abs(last[last.length - 1].x + last[last.length - 1].w + G.gap - t.x) < 0.01) last.push(t); else runs.push([t]); });
+    runs.forEach(run => { const a = run[0].x + 0.5, z = run[run.length - 1].x + run[run.length - 1].w - 0.5;
+      el("path", { class: "lead", d: `M${f(a)} ${y1 + 6} V${y1 + 3} H${f(Math.max(a, z))} V${y1 + 6}` });
+      const words = run.map(t => `${ringName(t.r)}: ${comma(t.r.lines)}`).join(" · "), right = a + 5.6 * words.length > 1100;
+      el("text", { class: "t-lines", x: f(right ? Math.max(a, z) : Math.max(1, a - 0.5)), y: y1 + 17, "text-anchor": right ? "end" : null }, words); });
+    return x - G.gap;
+  };
+  const head1 = el("text", { class: "t-head", x: 7, y: 10 }, "Inside the Days ");
+  el("tspan", { class: "t-note" }, `· each ring is a Day’s own pull requests · ${n(R.inside.lines, "line", "lines")} in ${n(R.inside.prs, "pull request", "pull requests")}`, head1);
+  const upEnd = strip(D, G.up, false), bark = upEnd + 2.5;
+  if (D.length) {
+    el("circle", { class: "pith", cx: 3, cy: G.up + G.h / 2, r: 2.6 });
+    el("path", { class: "bark", d: `M${f(bark)} ${G.up} Q${f(bark + 10)} ${G.up + G.h / 2} ${f(bark)} ${G.up + G.h}` });
+    el("text", { class: "t-end", x: 1, y: G.up + G.h + 12 }, `pith · Day ${D[0].day}, ${D[0].first}`);
+    el("text", { class: "t-end", x: f(bark + 3.5), y: G.up + G.h + 12, "text-anchor": "end" }, `bark · Day ${D[D.length - 1].day}, ${D[D.length - 1].last}`);
+  }
+  const head2 = el("text", { class: "t-head", x: 7, y: G.low - 37 }, "Outside any Day ");
+  el("tspan", { class: "t-note" }, O.length ? `· each ring is the work merged at that Day, while it was open or after it closed · ${n(R.out.lines, "line", "lines")} in ${n(R.out.prs, "pull request", "pull requests")}` : "· no pull request on no Day’s branch has merged yet", head2);
+  const lowEnd = strip(O, G.low, true);
+  if (O.length) { el("path", { class: "bark", d: `M${f(lowEnd + 2.5)} ${G.low} Q${f(lowEnd + 12.5)} ${G.low + G.h / 2} ${f(lowEnd + 2.5)} ${G.low + G.h}` });
+    el("text", { class: "t-end", x: 1195, y: G.low + G.h + 17, "text-anchor": "end" }, "bark · today"); }
+
+  // the two columns at the top right: the whole project by kind, inside the Days and outside; the narrower is 24 px
+  const sides = [[R.inside, `The ${n(R.inside.n_days, "Day", "Days")}`, "all", false], ...(R.out.lines ? [[R.out, "Outside any Day", "out", true]] : [])];
+  const x1 = Math.max(bark, 300) + 41.5, x2 = (x1 + 1196) / 2 - 4.4, narrow = Math.min(...sides.map(s => s[0].lines)) || 1;
+  const ht = el("text", { class: "t-head", x: f(x1), y: 10 }, "The whole project ");
+  el("tspan", { class: "t-note" }, `· ${n(R.drawn, "line", "lines")}, by what the file is`, ht);
+  sides.forEach(([S, name, key, hatched], i) => {
+    const x = i ? x2 : x1, w = 24 * S.lines / narrow, right = x + w;
+    el("text", { class: "t-day", x: f(x), y: 28 }, name); el("text", { class: "t-lines", x: f(x), y: 40 }, `${comma(S.lines)} · ${S.share}`);
+    const b = el("g", { class: hatched ? "b out" : "b", tabindex: 0, role: "img", "data-k": key, "aria-label": `${name}: ${n(S.lines, "line", "lines")} changed. ` + S.k.map(k => `${lower(RNG_NAME[k[0]])} ${k[2]}`).join(", ") });
+    let y = G.up; const marks = [];
+    S.k.forEach(([k, lines, share, frac]) => { if (!lines) return; const hgt = G.h * frac;
+      el("rect", { class: `k-${k}`, x: f(x), y: f(y), width: f(w), height: f(Math.max(0.4, hgt)) }, null, b);
+      marks.push({ k, lines, share, mid: y + hgt / 2 }); y += hgt; });
+    if (hatched) el("rect", { class: "over", fill: "url(#rng-hatch)", x: f(x), y: G.up, width: f(w), height: G.h }, null, b);
+    el("rect", { class: "hit", x: f(x), y: G.up, width: f((i || sides.length === 1 ? 1196 : x2 - 6) - x), height: G.h }, null, b);
+    groups.push({ b, r: S });
+    // the leads: each kind's label at its band's middle, pushed apart to 12.5 px, between y 52 and 163
+    marks.forEach((m, j) => { m.y = Math.max(m.mid, j ? marks[j - 1].y + 12.5 : 52); });
+    for (let j = marks.length - 1; j >= 0; j--) marks[j].y = Math.min(marks[j].y, j < marks.length - 1 ? marks[j + 1].y - 12.5 : 163);
+    marks.forEach(m => { el("path", { class: "lead", d: `M${f(right + 1)} ${f(m.mid)} L${f(right + 6)} ${f(m.y)} H${f(right + 10)}` });
+      const t = el("text", { class: "t-kind", x: f(right + 12), y: f(m.y + 3.5) }, `${RNG_NAME[m.k]} `);
+      el("tspan", { class: "t-lines" }, `${comma(m.lines)} · ${m.share}`, t); });
+  });
+  fig.setAttribute("viewBox", "0 0 1198 379");
+  fig.setAttribute("aria-label", `Two strips of rings on one scale. Above, one ring for each Day${D.length ? ` from ${D[0].day} to ${D[D.length - 1].day}` : ""}, as wide as the lines its own pull requests changed, ${comma(R.inside.lines)} in all. Below, ${n(O.length, "ring", "rings")} of work outside any Day, ${n(R.out.lines, "line", "lines")}. Each ring is cut into bands by kind of file. Beside them, the whole project by kind`);
+
+  // the line of figures, the scale, the stamp
+  const fig4 = (num, what, sub) => h("div", null, h("div", { class: "num" }, num), h("div", { class: "what" }, what), h("div", { class: "sub" }, sub));
+  const day = i => D[i], ow = i => O[i];
+  $("figs").replaceChildren(
+    fig4(comma(R.drawn), `lines changed in ${n(R.prs, "merged pull request", "merged pull requests")}`, `${comma(R.inside.lines)} inside the ${n(R.inside.n_days, "Day", "Days")}, ${comma(R.out.lines)} outside any Day`),
+    fig4(R.prod_share, "of them are production code", `${n(R.prod_lines, "line", "lines")}. Inside the Days alone: ${R.inside.k[0][2]}`),
+    R.ratio != null ? fig4(R.ratio.toFixed(1), "lines of tests for each line of production code", `inside the Days.${R.ratio_low && R.ratio_high ? ` From ${R.ratio_low[0].toFixed(1)} on Day ${R.ratio_low[1]} to ${R.ratio_high[0].toFixed(1)} on Day ${R.ratio_high[1]}` : ""}`)
+      : fig4("–", "lines of tests for each line of production code", "no production code inside the Days yet"),
+    R.heavy != null ? fig4(`Day ${day(R.heavy).day}`, `is the heaviest: ${n(day(R.heavy).lines, "line", "lines")}`, `the lightest is Day ${day(R.light).day}, ${comma(day(R.light).lines)}.`
+      + (R.wide_out != null ? ` The widest ring outside a Day: at Day ${ow(R.wide_out).at}, ${comma(ow(R.wide_out).lines)}` : "")) : null);
+  $("scale").textContent = comma(L);
+  $("stamp").textContent = `Drawn from the page’s data at ${R.head || "?"}${R.last_pr ? ` (#${R.last_pr})` : ""}, generated ${R.generated} · ${n(R.merges, "merge", "merges")}${D.length ? ` · ${daySpan(D.map(x => x.day))}` : ""}`
+    + (R.before.lines ? ` · ${n(R.before.lines, "line", "lines")} before Day 1, in no ring` : "") + (R.unplaced.lines ? ` · ${n(R.unplaced.lines, "line", "lines")} on neither strip` : "");
+
+  // what the picture shows, and where the model bends
+  const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  const I = R.inside, X = R.out, pctOf = (a, b) => b ? Math.round(100 * a / b) : 0;
+  li(finds, X.lines > I.lines ? "Most of the wood is outside the Days." : "Most of the wood is inside the Days.", ` ${comma(X.lines)} of the ${comma(R.drawn)} lines (${pctOf(X.lines, R.drawn)}%) merged in ${n(X.prs, "pull request", "pull requests")} outside any Day. The ${n(I.n_days, "Day", "Days")}’ own ${n(I.prs, "pull request", "pull requests")} changed ${comma(I.lines)}.`);
+  const isAre = k => k === "test" || k === "spec" ? "are" : "is";
+  if (X.lines) { const top = [...X.k].sort((a, b) => b[1] - a[1]).slice(0, 2).filter(k => k[1]), inK = k => I.k.find(x => x[0] === k);
+    li(finds, "That work is another tissue.", ` Outside the Days, ${top.map((k, i) => `${k[2]}${i ? "" : " of the lines"} are ${lower(RNG_NAME[k[0]])}`).join(" and ")}. Inside them, ${top.map(k => `${lower(RNG_NAME[k[0]])} ${isAre(k[0])} ${inK(k[0])[2]}`).join(" and ")}.`);
+    if (O.length > 2 && 2 * R.top_out.lines > X.lines) li(finds, "Two rings hold most of it.", ` The work at ${andList(R.top_out.at.map(a => `Day ${a}`))} is ${comma(R.top_out.lines)} of the ${comma(X.lines)} lines outside any Day (${R.top_out.share}).`); }
+  li(finds, "Production code grows inside the Days.", ` ${comma(I.w.prod)} of its ${comma(R.prod_lines)} lines are in a Day’s own pull requests.${X.w.prod ? ` Only ${comma(X.w.prod)} ${X.w.prod === 1 ? "is" : "are"} outside.` : ""}`);
+  const [tk, tc] = R.tallest.length ? R.tallest[0] : ["test", 0];
+  if (D.length) li(finds, `${RNG_NAME[tk]} ${isAre(tk)} the tallest band in ${tc === D.length ? "all" : `${tc} of the`} ${n(D.length, "Day’s ring", "Days’ rings")}.`, `${R.spec_over_test.length ? ` Counted graph 9’s way, with specs and agent context as one kind, that kind is larger than tests on ${daySpan(R.spec_over_test)}.` : ""} Over the Days: tests ${comma(I.w.test)}, specs and agent context ${comma(I.w.spec + I.w.context)} (${comma(I.w.spec)} and ${comma(I.w.context)}), production code ${comma(I.w.prod)}, tooling ${comma(I.w.tooling)}.`);
+  if (R.spread != null) li(finds, X.lines ? "The Days’ rings differ less than the others." : "How much the Days’ rings differ.", ` The widest Day is ${R.spread} times the narrowest (Day ${day(R.heavy).day} against Day ${day(R.light).day}).`
+    + (O.length ? ` Outside the Days the widest ring is ${n(ow(R.wide_out).lines, "line", "lines")} and the narrowest ${comma(ow(R.thin_out).lines)}.` : ""));
+  const seasons = R.seasons.map(([k, c]) => `${n(c, "Day", "Days")} took ${n(k, "calendar date", "calendar dates")}`);
+  [["A tree grows one tissue.", " A ring of wood is the same material all through. A Day’s ring is five kinds of file, and the bands are the point of the picture."],
+    ["A deleted line is growth here.", " A ring’s width is lines added plus lines deleted, so removing code widens a ring."],
+    ["A Day is not a season.", ` A tree’s ring is one year. A Day is a step of the plan${seasons.length ? `: ${andList(seasons)}` : ""}. Ring width says how much changed, not how fast.`],
+    ["Old rings do not stay whole.", " Wood laid down stays where it is. A merged Day cannot be changed, but a later Day rewrites the same files, so a ring is what changed then, not what stands today."],
+    ["A tree has no work between its rings.", ` Here the lower strip is ${low > up ? "wider" : "narrower"} than the upper one. It is not a second tree: its rings sit between the Days’ rings in time, and are drawn apart so the Days stay readable.`],
+    ["Some lines are not counted.", " Files a tool writes and binary files are left out, as in graph 9. Breaks on purpose never merge, so checking did more than its lines show."]].forEach(([b, t]) => li(bends, b, t));
+
+  // the exact numbers
+  const td = v => h("td", { class: "r" }, v);
+  const outAt = d => O.find(o => o.at === d);
+  $("table").replaceChildren(h("tr", null, ["Day", ...Object.values(RNG_NAME), "All", "Pull requests merged", "Test lines for each production line", "Outside any Day: lines", "Outside any Day: pull requests"].map(x => h("th", null, x))),
+    // spread: replaceChildren() does not flatten an array, it writes it as text
+    ...D.map(r => h("tr", null, h("td", null, `Day ${r.day}`), r.k.map(k => td(comma(k[1]))), td(comma(r.lines)), td(r.prs), td(r.ratio == null ? "–" : r.ratio.toFixed(1)),
+      td(comma(outAt(r.day) ? outAt(r.day).lines : 0)), td(outAt(r.day) ? outAt(r.day).prs : 0))),
+    h("tr", null, h("td", null, h("b", null, "All")), I.k.map(k => td(h("b", null, comma(k[1])))), td(h("b", null, comma(I.lines))), td(h("b", null, String(I.prs))),
+      td(h("b", null, I.ratio == null ? "–" : I.ratio.toFixed(1))), td(h("b", null, comma(X.lines))), td(h("b", null, String(X.prs)))),
+    h("tr", null, h("td", null, "Outside any Day"), X.k.map(k => td(comma(k[1]))), td(comma(X.lines)), td(X.prs), td("·"), td(""), td("")));
+
+  // what the pointer says: the ring's lines by kind, its pull requests and its test lines for each production line
+  const byKey = new Map(groups.map(g => [g.b.getAttribute("data-k"), g.r]));
+  const fill = key => { const r = byKey.get(key); if (!r) return false;
+    const name = key === "all" ? `The ${n(I.n_days, "Day", "Days")}` : key === "out" ? "Outside any Day" : r.day != null ? `Day ${r.day}` : `Outside any Day, at Day ${r.at}`;
+    tip.replaceChildren(h("div", { class: "t" }, `${name} · ${n(r.lines, "line", "lines")} changed`), r.title ? h("div", { class: "q" }, r.title) : null,
+      h("div", { class: "kt" }, r.k.map(k => [h("i", { class: `rng-sw k-${k[0]}` }), h("span", null, RNG_NAME[k[0]]), h("span", { class: "n" }, comma(k[1])), h("span", { class: "p" }, k[2])])),
+      h("div", { class: "l" }, `${n(r.prs, "pull request", "pull requests")}${r.pr_kinds.length ? ` (${r.pr_kinds.map(([k, c]) => `${c} ${k}`).join(", ")})` : ""}${r.pr_list.length && r.pr_list.length <= 30 ? `: ${r.pr_list.map(p => `#${p}`).join(", ")}` : ""}.`),
+      r.ratio != null ? h("div", { class: "l" }, `${r.ratio.toFixed(1)} test lines for each line of production code.`) : null);
+    tip.hidden = false; return true; };
+  pointerBox(fig, tip, key => key ? fill(key) : false, b => b.getAttribute("data-k"));
+  // the page's Day buttons dim every ring not of that Day, or not placed at it
+  onDay.push(d => groups.forEach(g => g.b.classList.toggle("mk-dim", d != null && g.r.key !== "all" && g.r.key !== "out" && (g.r.day != null ? g.r.day : g.r.at) !== d)));
+  return fig;
+}
+
+/* A link to a graph folded under its new drawing (#g7, #g8, #g9, ...) opens every fold around it, and scrolls to it. */
+function openFolds(target) {
+  for (let e = target; e; e = e.parentElement || e.parentNode) if (e.tagName && String(e.tagName).toUpperCase() === "DETAILS") e.open = true;
+  if (target && target.scrollIntoView) target.scrollIntoView({ block: "start" });
+}
+function foldLinks() {
+  const go = () => { const id = decodeURIComponent((location.hash || "").slice(1)); if (id) openFolds(document.getElementById(id)); };
+  if (typeof addEventListener === "function") addEventListener("hashchange", go);
+  go();
+}
+
 function draw(M, DATA) {
   const $ = id => document.getElementById(id);
   const put = (id, ...kids) => { const box = $(id); box.replaceChildren(...kids.flat(Infinity).filter(c => c != null && c !== false)); return box; };
@@ -3325,9 +3681,9 @@ function draw(M, DATA) {
     else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
 
-  /* Graph 2 as a gel, graphs 3 to 5 as proteins and graph 7 as proofreading, in their places; the graphs themselves are
-     folded under them */
-  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw]].forEach(([k, fn]) => {
+  /* Graph 2 as a gel, graphs 3 to 5 as proteins, graph 7 as proofreading, graph 8 as an energy budget and graph 9 as
+     growth rings, in their places; the graphs themselves are folded under them */
+  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
@@ -3670,6 +4026,7 @@ function draw(M, DATA) {
   put("not-measured", M.notMeasured.map(([name, why]) => h("li", null, h("b", null, name), ": ", rich(why))));
   try { drawHow(DATA, M.promises); } catch (e) { console.error(`how this works: ${(e && e.message) || e}`); }
   document.addEventListener("keydown", e => { if (e.key === "Escape") resets.forEach(r => r()); });
+  foldLinks();
 }
 
 /* ---------- light or dark: the system's choice until the reader picks one ---------- */

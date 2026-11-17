@@ -11,7 +11,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import criterion_states, gel, gene, merge_graph, proofreading, protein, reading, where_ring  # noqa: E402
+from spec_drift_views import (budget, criterion_states, gel, gene, merge_graph, proofreading, protein,  # noqa: E402
+                              reading, rings, where_ring)
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -404,8 +405,11 @@ def demo():
             return dict(bash=6 * n, cut=0, reads=2 * n + 1, whole=n + 1)
         return dict(bash=6 * n, cut=n - 2, reads=n, whole=0)
     tokens = [dict(date=f"2026-10-{n + 2:02d}", day=n, model=model, agent=agent,
-                   input=900 * n + 400, cache_write=12000 * n, cache_read=310000 * n + 2000,
-                   output=5200 * n + 300 if agent == "main" else 2100 * n, replies=40 * n + 7,
+                   # The main session's tokens priced again (scripts/token-usage.py) come within 0.2% of its cost, so
+                   # the energy budget splits them; the implementer's, on Haiku, do not and stay "not split".
+                   input=900 * n + 400, cache_write=150000 * n if agent == "main" else 12000 * n,
+                   cache_read=3000000 * n + 1000000 if agent == "main" else 310000 * n + 2000,
+                   output=70000 * n + 20000 if agent == "main" else 2100 * n, replies=40 * n + 7,
                    cost=round(1.9 * n + 0.4 if agent == "main" else 0.2 * n, 2), **hooks(n),
                    # The story: once the hooks are in, less of the main session's dollars is spent past 150k tokens.
                    cost_past_150k=round((1.9 * n + 0.4) * (0.45, 0.5, 0.55, 0.3, 0.2, 0.15)[n - 1], 2) if agent == "main" else 0.0)
@@ -504,6 +508,7 @@ def demo():
     out["score"] = quality_score(out)
     out["where_ring"], out["reading"] = where_ring(out), reading(out)
     out["gel"], out["protein"], out["proofreading"] = gel(out), protein(out), proofreading(out)
+    out["budget"], out["rings"] = budget(out), rings(out)
     return out
 
 

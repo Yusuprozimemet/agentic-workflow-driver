@@ -1387,3 +1387,190 @@ footer { font-size: 12.5px; color: var(--muted); }
 #prf #prf-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
 #prf #prf-tip .l{margin-top:4px}
 @media (prefers-reduced-motion:reduce){#prf .fig .d{transition:none}}
+
+/* Graph 8 as an energy budget: one bead per fixed number of dollars. Every rule is under #atp; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
+#atp{--atp-read:var(--code);--atp-write:var(--l1);--atp-out:var(--l7);--atp-main:var(--bar);--atp-aud:var(--l5);--atp-rater:var(--l4);--atp-impl:var(--l6);--atp-other:var(--l2);--shadow:rgba(14,17,22,.16)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #atp{--shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #atp{--shadow:rgba(0,0,0,.5)}
+
+/* the line of figures */
+#atp .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 26px;border-block:1px solid var(--line);padding:12px 0}
+#atp .figs>div{min-width:0}
+#atp .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#atp .figs .num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:6px}
+#atp .figs .what{font-weight:600;margin-top:6px;color:var(--ink)}
+#atp .figs .sub{font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:0}
+
+/* controls */
+#atp .ctl{display:flex;flex-wrap:wrap;align-items:center;gap:6px 22px;margin:0;font-size:13px;color:var(--muted)}
+#atp .ctl>div{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+#atp .ctl span{margin-right:2px}
+#atp .ctl button{font:500 12px/1 var(--sans);color:var(--ink-2);background:var(--card);border:1px solid var(--axis);border-radius:15px;padding:0 12px;min-height:30px;cursor:pointer}
+#atp .ctl button:hover{border-color:var(--ink-2)}
+#atp .ctl button[aria-pressed="true"]{background:var(--ink);color:var(--card);border-color:var(--ink)}
+#atp .ctl button:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+
+/* the compact legend */
+#atp .key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 18px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#atp .key span{display:inline-flex;align-items:center;gap:6px}
+#atp .key .by-kind,#atp .key .by-who{gap:5px 16px;flex-wrap:wrap}
+#atp .key b,#atp .lg b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+#atp .key .fam{font:500 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:-6px}
+#atp .key svg,#atp .lg svg{flex:none;overflow:visible}
+#atp .key .sep{width:1px;height:14px;background:var(--line)}
+/* words and a figure in one run of text: not flex items, which the gap would split ("$2 , rounded") */
+#atp .key span.kt,#atp .lg dd>span.kt{display:inline}
+@media (max-width:640px){#atp .key .sep{display:none}}
+#atp[data-by="kind"] .by-who,#atp[data-by="who"] .by-kind{display:none}
+
+/* the beads: round is upkeep (or the main session), square is growth (or an agent) */
+#atp .q{stroke:none}
+#atp[data-by="kind"] .fig .kr,#atp svg:not(.fig) .kr{fill:var(--atp-read);rx:3.5px}
+#atp[data-by="kind"] .fig .kw,#atp svg:not(.fig) .kw{fill:var(--atp-write)}
+#atp[data-by="kind"] .fig .ko,#atp svg:not(.fig) .ko{fill:var(--atp-out)}
+#atp[data-by="kind"] .fig .ku,#atp svg:not(.fig) .ku{fill:var(--card);stroke:var(--s3);stroke-width:1.1;rx:3.5px}
+#atp[data-by="who"] .fig .wm,#atp svg:not(.fig) .wm{fill:var(--atp-main);rx:3.5px}
+#atp[data-by="who"] .fig .wa,#atp svg:not(.fig) .wa{fill:var(--atp-aud)}
+#atp[data-by="who"] .fig .wd,#atp svg:not(.fig) .wd{fill:var(--atp-rater)}
+#atp[data-by="who"] .fig .wi,#atp svg:not(.fig) .wi{fill:var(--atp-impl)}
+#atp[data-by="who"] .fig .wx,#atp svg:not(.fig) .wx{fill:var(--atp-other)}
+#atp .qn{fill:var(--s3);rx:3.5px}
+#atp .t-note{font:400 12px var(--sans);fill:var(--ink-2)}
+#atp .t-note .em{font-weight:600;fill:var(--ink)}
+#atp .rail{fill:url(#atp-hatch);stroke:var(--s3);stroke-width:.8}
+#atp .h-a{fill:var(--ink-2)}
+#atp .h-b{fill:var(--wash)}
+
+/* the figure */
+#atp .scroll{overflow-x:auto;min-width:0}
+#atp .fig{display:block;width:100%;min-width:1080px;height:auto}
+#atp[data-grp="date"] .v-day,#atp[data-grp="day"] .v-date{display:none}
+#atp .t-usd{font:500 10px var(--mono);fill:var(--ink)}
+#atp .t-col{font:600 11px var(--sans);fill:var(--ink)}
+#atp .t-ref{font:400 10px var(--mono);fill:var(--muted)}
+#atp .t-row{font:400 10.5px var(--sans);fill:var(--muted)}
+#atp .t-pill{font:500 10px var(--sans);fill:var(--ink-2)}
+#atp .pill{fill:var(--wash);stroke:var(--line);stroke-width:1}
+#atp .base{stroke:var(--axis);stroke-width:1;fill:none}
+#atp .hit{fill:transparent;pointer-events:all}
+#atp .fig .col{cursor:default}
+#atp .fig .col:focus{outline:none}
+#atp .fig .col:hover .hit{fill:var(--wash)}
+#atp .fig .col:focus-visible .hit{stroke:var(--link);stroke-width:2}
+#atp .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* the folded text */
+#atp details.exact>*:not(summary){margin-top:10px}
+#atp details.exact p{font-size:13px;color:var(--ink-2);max-width:900px;margin-bottom:0}
+#atp .stamp{font:400 12px/1.4 var(--mono);color:var(--muted)}
+#atp .lg{display:grid;grid-template-columns:max-content 1fr;gap:8px 20px;font-size:12.5px;color:var(--ink-2);max-width:980px}
+#atp .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#atp .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#atp .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px 20px;min-width:0}
+#atp .lg dd>span{display:inline-flex;align-items:flex-start;gap:7px}
+#atp .lg dd>span>svg{margin-top:4px}
+@media (max-width:640px){#atp .lg{grid-template-columns:1fr;gap:2px 0}#atp .lg dd{margin-bottom:10px}}
+#atp .tbl{overflow-x:auto}
+#atp .tbl table{white-space:nowrap}
+#atp h3{font:600 15px/1.25 var(--display);margin:0 0 8px}
+#atp .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px 32px}
+#atp .cols>div{min-width:0}
+#atp .finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#atp .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#atp .finds b,#atp .plain b{color:var(--ink);font-weight:600}
+#atp .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#atp #atp-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(380px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#atp #atp-tip[hidden]{display:none}
+#atp #atp-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#atp #atp-tip .l{margin-top:4px}
+#atp #atp-tip .l b{color:var(--ink);font-weight:600}
+#atp #atp-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2);color:var(--muted)}
+
+/* Graph 9 as growth rings, a core from the trunk. Every rule is under #rng; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
+#rng{--rng-shadow:rgba(14,17,22,.16);--rng-ctx:color-mix(in srgb,var(--spec) 46%,var(--card))}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #rng{--rng-shadow:rgba(0,0,0,.5);--rng-ctx:color-mix(in srgb,var(--spec) 52%,var(--card))}}
+:root[data-theme="dark"] #rng{--rng-shadow:rgba(0,0,0,.5);--rng-ctx:color-mix(in srgb,var(--spec) 52%,var(--card))}
+
+#rng .rng-stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:10px 0 0}
+#rng h3{font:600 15px/1.25 var(--display);margin:0 0 8px;text-wrap:balance}
+
+/* the line of figures */
+#rng .rng-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 26px;border-block:1px solid var(--line);padding:12px 0}
+#rng .rng-figs>div{min-width:0}
+#rng .rng-figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#rng .rng-figs .what{font-weight:600;margin-top:5px;color:var(--ink)}
+#rng .rng-figs .sub{font:400 12.5px/1.4 var(--sans);color:var(--muted)}
+
+/* the kinds of file: one colour each, for the picture, the key and the tip */
+#rng .k-prod{fill:var(--code);background:var(--code)}
+#rng .k-test{fill:var(--test);background:var(--test)}
+#rng .k-spec{fill:var(--spec);background:var(--spec)}
+#rng .k-context{fill:var(--rng-ctx);background:var(--rng-ctx)}
+#rng .k-tooling{fill:var(--other);background:var(--other)}
+
+/* the short key */
+#rng .rng-key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 18px;font-size:12.5px;color:var(--ink-2)}
+#rng .rng-key span{display:inline-flex;align-items:center;gap:6px}
+#rng .rng-key .sep{width:1px;height:14px;background:var(--line)}
+#rng .rng-sw{display:inline-block;flex:none;width:12px;height:12px;border-radius:2px}
+#rng .rng-key svg,#rng .rng-lg svg{flex:none;overflow:visible}
+#rng .rng-key .rule{fill:none;stroke:var(--ink-2);stroke-width:1.3}
+
+/* the figure */
+#rng .rng-scroll{overflow-x:auto;min-width:0}
+#rng .rng-fig{display:block;width:100%;min-width:1198px;height:auto}
+#rng .rng-fig text{font-family:var(--sans)}
+#rng .t-head{font:600 11.5px var(--sans);fill:var(--ink)}
+#rng .t-note{font-weight:400;fill:var(--muted)}
+#rng .t-day{font:600 10px var(--sans);fill:var(--ink-2)}
+#rng .t-lines{font:400 9.5px var(--mono);fill:var(--muted)}
+#rng .t-end{font:400 9.5px var(--mono);fill:var(--muted)}
+#rng .t-kind{font:500 10.5px var(--sans);fill:var(--ink-2)}
+#rng .t-share{font:600 9.5px var(--mono);fill:var(--ink)}
+#rng .hatch{fill:var(--card)}
+#rng .over{fill-opacity:.6}
+#rng .seam{fill:none;stroke:var(--card);stroke-width:1}
+#rng .pill{fill:var(--card);fill-opacity:.9}
+#rng .late{fill:none;stroke:var(--ink);stroke-opacity:.5;stroke-width:1.2}
+#rng .bark{fill:none;stroke:var(--s4);stroke-width:3.2;stroke-linecap:round}
+#rng .pith{fill:var(--s4)}
+#rng .lead{fill:none;stroke:var(--s2);stroke-width:1}
+#rng .hit{fill:var(--ink);fill-opacity:0}
+#rng .rng-fig .b{cursor:default}
+#rng .rng-fig .b:focus{outline:none}
+#rng .rng-fig .b:hover .hit{fill-opacity:.1;stroke:var(--ink);stroke-width:1.2}
+#rng .rng-fig .b:focus-visible .hit{fill-opacity:.1;stroke:var(--link);stroke-width:2}
+#rng .rng-hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* the folded text */
+#rng .rng-read{font-size:13.5px;color:var(--ink-2);max-width:900px;margin:10px 0 12px}
+#rng .rng-lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2);max-width:1000px}
+#rng .rng-lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#rng .rng-lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#rng .rng-lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#rng .rng-lg dd span{display:inline-flex;align-items:center;gap:7px}
+@media (max-width:640px){#rng .rng-lg{grid-template-columns:1fr;gap:2px 0}#rng .rng-lg dd{margin-bottom:10px}}
+#rng .rng-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px 32px;padding-top:12px}
+#rng .rng-cols>div{min-width:0}
+#rng .rng-finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#rng .rng-finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#rng .rng-finds b,#rng .rng-plain b{color:var(--ink);font-weight:600}
+#rng .rng-plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#rng #rng-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(380px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--rng-shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#rng #rng-tip[hidden]{display:none}
+#rng #rng-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#rng #rng-tip .q{margin:0 0 6px;color:var(--ink);overflow-wrap:anywhere}
+#rng #rng-tip .l{margin-top:5px;overflow-wrap:anywhere}
+#rng #rng-tip .kt{display:grid;grid-template-columns:12px 1fr auto auto;gap:3px 8px;align-items:center;margin:4px 0 2px}
+#rng #rng-tip .kt .n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--ink)}
+#rng #rng-tip .kt .p{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--muted)}
+
+/* the page's Day buttons dim what is not on that Day; a link to the section lands below the page's top */
+#atp, #rng { scroll-margin-top: 12px; }
+#atp .fig .col{transition:opacity .15s}
+#atp .fig .col.mk-dim{opacity:.25}
+#rng .rng-fig .b{transition:opacity .15s}
+#rng .rng-fig .b.mk-dim{opacity:.25}
+@media (prefers-reduced-motion:reduce){#atp .fig .col,#rng .rng-fig .b{transition:none}}
