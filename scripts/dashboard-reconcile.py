@@ -265,7 +265,7 @@ def rfx_line(m):
     ours = [c["steps"], c["parks"], c["crashed_sessions"], c["open"]]
     prt = [run["of"], len(run["parks"]), len(run["crashes"]), len(run["open"])] if run else None
     agree = ours == table and (prt is None or prt == [c["steps"], c["parks"], c["crashed"], c["open"]])
-    return agree, (f"reflex: {ours[0]} steps, {ours[1]} parks, {c['crashed']} crashed ({ours[2]} sessions), {ours[3]} open | "
+    return agree, (f"reflex: {ours[0]} steps, {ours[1]} parks, {c['crashed']} crashed ({ours[2]} {'session' if ours[2] == 1 else 'sessions'}), {ours[3]} open | "
                    f"proteins' real runs: {', '.join(map(str, prt)) if prt else 'none'} | graph 11: {table[0]} steps, {table[1]} parks, "
                    f"{table[2]} crashed sessions, {table[3]} open: " + ("agree" if agree else "DISAGREE"))
 

@@ -2306,7 +2306,7 @@ class ReflexPageTest(unittest.TestCase):
             (
                 True,
                 (
-                    "reflex: 5 steps, 2 parks, 1 crashed (1 sessions), 1 open | proteins' real runs: "
+                    "reflex: 5 steps, 2 parks, 1 crashed (1 session), 1 open | proteins' real runs: "
                     "5, 2, 1, 1 | graph 11: 5 steps, 2 parks, 1 crashed sessions, 1 open: agree"
                 ),
             ),
