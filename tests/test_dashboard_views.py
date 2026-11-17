@@ -62,7 +62,8 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   const drawn = [], is = cls => made.filter(e => (e.attrs.class || "").split(" ").includes(cls)).length;
   geneDraw(model(DATA).gene, node("div"), node("div"), (n, days) => { drawn.push(days); return n; });
   ({ bands: is("b"), quotes: is("rd") - is("rg"), cells: is("tc"), beads: is("bead"), ring: is("rg"), inner: is("rk"),
-     dated: drawn.length, names: is("t-row"), box: made[0].attrs.viewBox.split(" ").length })`, ctx)));
+     dated: drawn.length, names: is("t-row"), box: made[0].attrs.viewBox.split(" ").length,
+     free: is("free"), free_say: made.filter(e => / no criterion cites$/.test(e.textContent || "")).map(e => e.textContent) })`, ctx)));
 """
 
 
@@ -97,19 +98,6 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
 """
 
 
-def page_replay_look():
-    """REPLAY_LOOK as dashboard.js declares it, as JSON."""
-    with open(os.path.join(ROOT, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
-        text = f.read()
-    body = re.search(r"^const REPLAY_LOOK = (\{.*?^\});", text, re.DOTALL | re.MULTILINE).group(1)
-    return subprocess.run(
-        ["node", "-e", f"console.log(JSON.stringify({body}))"],
-        capture_output=True,
-        encoding="utf-8",
-        check=True,
-    ).stdout
-
-
 class CitationTest(unittest.TestCase):
     def test_a_criterion_cites_only_its_evidence_line_and_its_breaks_trailing_pull_request(self):
         crit = specs.criteria(C10_12)[0]
@@ -139,13 +127,11 @@ class StateTest(unittest.TestCase):
             len({c["state"] for c in data["criteria_index"]}), 8, "the demo shows most states"
         )
 
-    def test_the_replay_groups_are_the_pages(self):
+    def test_the_replay_groups_of_the_recount_are_the_views(self):
         import spec_drift_views as views
 
-        self.assertEqual(
-            {k: v.get("group") for k, v in json.loads(page_replay_look()).items()},
-            views.REPLAY_GROUP,
-        )
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        self.assertEqual(reconcile.REPLAY_GROUP, views.REPLAY_GROUP)
 
     def test_a_criterion_that_stopped_and_holds_again_came_back(self):
         import spec_drift_views as views
@@ -340,6 +326,14 @@ class MergeGraphTest(unittest.TestCase):
 
     def views(self):
         return load("spec_drift_views", "spec_drift_views.py")
+
+    def test_the_merges_no_criterion_cites_are_one_list_the_graph_and_the_gene_read(self):
+        g = self.views().merge_graph(demo_data.demo())
+        self.assertEqual(
+            [u["pr"] for u in g["uncited"]], [m["pr"] for m in g["merges"] if m["loose"]]
+        )
+        self.assertEqual([(u["pr"], u["prod"]) for u in g["uncited"]], [(119, 6)])
+        self.assertEqual(g["all"]["loose"], [119])
 
     def test_a_merge_no_criterion_cites_is_loose_only_when_it_is_code_or_other_and_changed_product_code(
         self,
@@ -546,9 +540,16 @@ class PageTest(unittest.TestCase):
                 True,
                 (
                     "gene: 13 commitments (13 in its classes), 2 uncovered | "
-                    "graph 12: 13 commitments, 2 should be covered by now: agree"
+                    "graph 12: 13 commitments, 2 should be covered by now; "
+                    "1 uncited merges | merge graph: 1: agree"
                 ),
             ),
+        )
+        # the gene's beads and the merge graph's uncited rows held to each other
+        m["gene"]["uncited"] = m["gene"]["uncited"] + m["gene"]["uncited"]
+        agree, line = reconcile.gene_line(m)
+        self.assertEqual(
+            (agree, line[-40:]), (False, "2 uncited merges | merge graph: 1: DISAGREE"[-40:])
         )
 
     def test_the_gene_words_its_strands_its_gaps_and_what_the_pointer_says(self):
@@ -595,6 +596,23 @@ class PageTest(unittest.TestCase):
             ],
         )
         self.assertEqual((drawn["dated"], drawn["names"], drawn["box"]), (16 + 15 + 4 + 4, 7, 4))
+
+    def test_the_gene_draws_a_bead_for_each_merge_no_criterion_cites_and_none_without_one(self):
+        data = demo_data.demo()
+        none = dict(data, merge_graph=dict(data["merge_graph"], uncited=[]))
+        got = []
+        for d in (data, none):
+            out = subprocess.run(
+                ["node", "-e", DRAWN, reconcile.SCRIPT],
+                input=json.dumps(d),
+                capture_output=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(out.returncode, 0, out.stderr[:600])
+            drawn = json.loads(out.stdout)
+            got.append((drawn["free"], drawn["free_say"]))
+        self.assertEqual(got, [(1, ["1 merge no criterion cites"]), (0, [])])
 
     def test_the_merge_graph_draws_a_mark_for_every_criterion_stop_loose_merge_and_finding_on_demo_data(
         self,
@@ -692,6 +710,22 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
             q: is(r, ["q"]), gap: is(r, ["gap"]), ahead: is(r, ["todo-day"]), opens: $("rdg-opens").kids.length },
      tip: rdgTip(M.rdg, "h", 0) })`, ctx)));
 """
+
+# ringDraw() on the same document, then Day 2 chosen on the page's buttons and let go: the segments that say they are
+# the chosen Day (aria-current) before, with Day 2 chosen and after, and how many segments say whether they are.
+RING_DAY = (
+    RING[: RING.index("console.log(")]
+    + r"""console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const onDay = [], marks = () => all($("whr-fig")).filter(e => e.attrs && "aria-current" in e.attrs);
+  const chosen = () => marks().filter(e => e.attrs["aria-current"] === "true").map(e => e.attrs["data-k"]);
+  ringDraw(model(DATA).whr, $, onDay, () => {});
+  const out = [chosen()];
+  onDay.forEach(f => f(2)); out.push(chosen(), marks().length);
+  onDay.forEach(f => f(null)); out.push(chosen());
+  out`, ctx)));
+"""
+)
 
 
 def ring_data():
@@ -855,7 +889,7 @@ class WhereRingTest(unittest.TestCase):
     def ring(self, data=None):
         return load("spec_drift_views", "spec_drift_views.py").where_ring(data or ring_data())
 
-    def test_the_ring_counts_the_days_closed_and_left_to_the_stop_as_the_tiles_do(self):
+    def test_the_ring_counts_the_days_closed_and_left_to_the_stop(self):
         w = self.ring()
         self.assertEqual((w["closed"], w["numbered"], w["left"], w["stop"]), (2, 4, [3, 4], 4))
         self.assertEqual((w["built"], w["written"]), (3, 4))
@@ -958,9 +992,9 @@ class RingAndReadingPageTest(unittest.TestCase):
         global reconcile
         reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
 
-    def drawn(self, data):
+    def drawn(self, data, script=RING):
         out = subprocess.run(
-            ["node", "-e", RING, reconcile.SCRIPT],
+            ["node", "-e", script, reconcile.SCRIPT],
             input=json.dumps(data),
             capture_output=True,
             encoding="utf-8",
@@ -968,6 +1002,13 @@ class RingAndReadingPageTest(unittest.TestCase):
         )
         self.assertEqual(out.returncode, 0, out.stderr[:600])
         return json.loads(out.stdout)
+
+    def test_the_ring_says_which_day_is_chosen_on_that_days_segment(self):
+        # a Day chosen on the page's buttons is dimmed around on the ring, which a screen reader cannot see: its
+        # segment says it is the current one, and no other does
+        data = demo_data.demo()
+        days = sum(1 for s in data["where_ring"]["slots"] if s.get("day") is not None)
+        self.assertEqual(self.drawn(data, RING_DAY), [[], ["d2"], days, []])
 
     def test_the_ring_and_the_reading_draw_a_mark_for_each_day_gate_merge_stretch_and_hand_off(
         self,
@@ -1005,14 +1046,28 @@ class RingAndReadingPageTest(unittest.TestCase):
         self.assertEqual(sorted(drawn["rdg"]), sorted(marks))
         self.assertGreater(drawn["rdg"]["arcs"], 0)
 
-    def test_the_ring_and_the_reading_reconcile_with_the_tiles_and_the_hand_off_ledger(self):
-        m = reconcile.model(demo_data.demo())
-        agree, line = reconcile.ring_line(m)
+    def test_every_closed_hand_off_is_drawn_always_and_a_pointer_or_a_day_only_lights_some(self):
+        # the mockup's form: no rule hides a closed arc until it is lit; pointing dims the others, a Day dims those
+        # not of it, and the hint under the picture says nothing of drawing them only then
+        page = os.path.join(ROOT, "docs", "dashboard")
+        with open(os.path.join(page, "dashboard.css"), encoding="utf-8") as f:
+            css = f.read()
+        with open(os.path.join(page, "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        hides = re.findall(r"#rdg[^{}]*\.ho[^{}]*\{[^}]*display:\s*none", css)
+        self.assertEqual(hides, [])
+        self.assertIn("#rdg .fig.foc .ho:not(.lit){opacity:.12}", css)
+        self.assertNotIn("drawn only then", html)
+
+    def test_the_ring_and_the_reading_reconcile_with_the_days_counted_and_the_hand_off_ledger(self):
+        data = demo_data.demo()
+        m = reconcile.model(data)
+        agree, line = reconcile.ring_line(m, data)
         self.assertTrue(agree, line)
         self.assertRegex(
             line,
             r"^where we are: ring \d+ of \d+ Days closed, \d+ of \d+ promises built \| "
-            r"tiles \d+ of \d+, look-ahead \d+ of \d+: agree$",
+            r"counted from the data: \d+ of \d+ Days, look-ahead \d+ of \d+: agree$",
         )
         agree, line = reconcile.reading_line(m)
         self.assertTrue(agree, line)
@@ -1210,7 +1265,7 @@ class ProteinTest(unittest.TestCase):
         loop = chains["loop"]
         self.assertEqual([x["id"] for x in loop["cells"]], ["C1.1", "C1.10", "C2.1", "C2.3"])
         self.assertEqual([x["id"] for x in chains[None]["cells"]], ["C2.4"])
-        # drawn under the first ability it names (graph 5's rule), though "loop" is listed before "see",
+        # drawn once, under the first ability it names, though "loop" is listed before "see",
         # and says it grows the other
         self.assertEqual([x["id"] for x in chains["see"]["cells"]], ["C1.2", "C2.5"])
         self.assertEqual(chains["see"]["cells"][0]["also"], ["loop"])
@@ -1248,6 +1303,20 @@ class ProteinTest(unittest.TestCase):
         self.assertEqual(runs["recover"]["prs"], [96])
         self.assertEqual(runs["loop"]["open"], [101])
         self.assertEqual(p["used"], {"n": 3, "of": 5, "steps": 5})
+
+    def test_each_days_promises_are_counted_in_all_and_in_each_chain(self):
+        p = self.prt()
+        self.assertEqual(p["per_day"], [[1, 4], [2, 5]])
+        per_chain = {c["key"]: c["per_day"] for c in p["chains"] if c["per_day"]}
+        self.assertEqual(
+            per_chain,
+            {
+                "loop": [[1, 2], [2, 2]],
+                "park": [[1, 1], [2, 1]],
+                "see": [[1, 1], [2, 1]],
+                None: [[2, 1]],
+            },
+        )
 
     def test_no_criteria_draw_no_chains(self):
         data = {"criteria_index": [], "user_stories": {"abilities": [], "stories": []}}
@@ -1602,6 +1671,25 @@ class BudgetTest(unittest.TestCase):
             self.assertEqual([c["label"] for c in cols if sum(c["wb"]) != c["b"]], [])
         self.assertEqual([c["b"] for c in b["cols"]["date"]], [1, 4, 1])
 
+    def test_each_date_counts_the_calls_the_hooks_refused_and_the_outputs_cut(self):
+        data = budget_data()
+        data["refusals"] = [
+            {"date": "2026-01-02", "guard": "read-guard", "refused": 3},
+            {"date": "2026-01-02", "guard": "a-new-guard", "refused": 1},
+            {"date": "2026-01-01", "guard": "read-guard", "refused": 0},
+        ]
+        data["tokens"][0]["cut"] = 2
+        cols = {c["date"]: c for c in self.budget(data)["cols"]["date"]}
+        short = [(cols[x]["refused"], cols[x]["cut"]) for x in sorted(cols)][:2]
+        self.assertEqual(short, [(0, 2), (4, 0)])
+        self.assertEqual(
+            [(x, cols[x]["refused"], cols[x]["rf"], cols[x]["cut"]) for x in sorted(cols)][:2],
+            [
+                ("2026-01-01", 0, [], 2),
+                ("2026-01-02", 4, [["read-guard", 3], ["a-new-guard", 1]], 0),
+            ],
+        )
+
     def test_the_day_view_has_a_column_for_work_on_no_day(self):
         cols = self.budget(budget_data())["cols"]["day"]
         self.assertEqual([(c["day"], c["b"]) for c in cols], [(1, 1), (2, 3), (None, 2)])
@@ -1625,9 +1713,10 @@ class BudgetTest(unittest.TestCase):
         self.assertNotIn("empty", self.budget(budget_data(absent=["sessions.json"])))
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
-    def test_the_budget_reconciles_with_graph_8_on_demo_data(self):
+    def test_the_budget_reconciles_with_the_dollars_counted_on_demo_data(self):
         reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
-        agree, line = reconcile.atp_line(reconcile.model(demo_data.demo()))
+        data = demo_data.demo()
+        agree, line = reconcile.atp_line(reconcile.model(data), data)
         self.assertTrue(agree, line)
         self.assertRegex(
             line, r"^budget: split \$[\d.]+ \+ not split \$[\d.]+ = \$[\d.]+ .*: agree"
@@ -1713,14 +1802,99 @@ class RingsTest(unittest.TestCase):
         self.assertEqual(r["all_lines"], 319)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
-    def test_the_rings_reconcile_with_graph_9(self):
+    def test_the_rings_reconcile_with_the_lines_counted(self):
         reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
         data = rings_data()
         data["rings"] = self.rings(data)
         for d in (data, demo_data.demo()):
-            agree, line = reconcile.rng_line(reconcile.model(d))
+            agree, line = reconcile.rng_line(reconcile.model(d), d)
             self.assertTrue(agree, line)
             self.assertRegex(line, r"^rings: Days [\d,]+ \+ outside [\d,]+ .*: agree")
+
+
+def recheck_data():
+    """Two merges the replay ran on, #10 and #12; C1 proven at #12, C2 unproven, C3 broken at #10 and holding after the
+    last merge (a cell the last re-check has not reached), C4 replaced, C5 not yet in force."""
+
+    def cell(n, criterion, state):
+        return {"n": n, "criterion": criterion, "state": state}
+
+    return {
+        "replay": {
+            "merges": [{"n": 2, "pr": 12}, {"n": 1, "pr": 10}],
+            "cells": [
+                cell(1, "C1", "holds, never broken"),
+                cell(2, "C1", "holds"),
+                cell(1, "C2", "holds, never broken"),
+                cell(1, "C3", "code broken"),
+                cell(3, "C3", "holds"),
+                cell(2, "C4", "holds"),
+                cell(2, "C5", "not yet in force"),
+            ],
+        },
+        "criteria_index": [{"id": "C4", "replaced_by": "C9"}, {"id": "C1"}],
+    }
+
+
+class RecountTest(unittest.TestCase):
+    """The figures dashboard-reconcile.py counts from the data itself, for the sections whose original graph has left
+    the page: each counted by none of spec_drift_views.py's functions."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+
+    def test_the_days_finished_are_those_numbered_in_a_phase_not_cut(self):
+        rows = [
+            {"phase": 0, "days": [1, 2, 3], "cut": False},
+            {"phase": 1, "days": [4, 5], "cut": True},
+            {"phase": 2, "days": [6], "cut": False},
+        ]
+        status = ["done", "closed", "active", "done", "done", "cut"]
+        data = {
+            "meta": {"where": {"rows": rows}},
+            "days": [{"day": n + 1, "status": s} for n, s in enumerate(status)],
+        }
+        self.assertEqual(self.reconcile.days_finished(data), (3, 4))
+        self.assertIsNone(self.reconcile.days_finished({"meta": {"where": {"rows": []}}}))
+
+    def test_the_last_recheck_counts_each_criterion_in_force_at_the_newest_merge(self):
+        got = self.reconcile.last_recheck(recheck_data())
+        self.assertEqual(got, {"pr": 12, "proven": 1, "total": 3})
+        self.assertIsNone(self.reconcile.last_recheck({"replay": {"merges": []}}))
+
+    def test_the_dollars_are_every_token_row_to_the_cent(self):
+        self.assertEqual(self.reconcile.dollars(budget_data()), 11.23)  # 1.21 + 1.02 + 4 + 3 + 2
+        rows = [{"cost": 0.004}, {"cost": 0.003}, {"cost": None}]
+        self.assertEqual(self.reconcile.dollars({"tokens": rows}), 0.01)
+
+    def test_the_lines_are_placed_by_the_branch_and_the_day_begun(self):
+        got = self.reconcile.lines_placed(rings_data())
+        self.assertEqual(
+            (got["days"], got["beside"], got["before"]),
+            ({1: (142, 42), 2: (45, 5)}, {1: 120, 2: 7}, 5),
+        )
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_section_whose_figure_differs_from_the_recount_says_disagree(self):
+        data = demo_data.demo()
+        m = self.reconcile.model(data)
+        # the figure each line holds to its recount, one higher in the view than in the data
+        lines = (
+            ("whr", ["closed"], self.reconcile.ring_line),
+            ("prt", ["rechecked"], self.reconcile.prt_line),
+            ("atp", ["kinds", 3], self.reconcile.atp_line),
+            ("rng", ["inside", "lines"], self.reconcile.rng_line),
+        )
+        for key, path, line in lines:
+            self.assertEqual(line(m, data)[0], True, key)
+            changed = json.loads(json.dumps(m))
+            at = changed[key]
+            for step in path[:-1]:
+                at = at[step]
+            at[path[-1]] += 1
+            agree, said = line(changed, data)
+            self.assertEqual((key, agree, "DISAGREE" in said), (key, False, True))
 
 
 def clock_data(absent=(), commit="abc"):
@@ -1838,7 +2012,8 @@ OLD_CLOCK_DEMO = {
     "2026-10-14": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
     "2026-10-15": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 195],
     "2026-10-16": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 55],
-    "2026-10-17": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 1, 25],
+    # the demo's tooling pull request #119 merged on 17 Oct too, open 22 minutes: two merges, their lower median 22
+    "2026-10-17": [{"main": 430, "implementer": 60, "auditors": 25}, {"main": 0, "implementer": 0, "auditors": 0}, [0, 0, 0], 2, 22],
 }
 OLD_CLOCK_FIXTURE = {
     "2026-03-02": [{"main": 330, "implementer": 90, "auditors": 20}, {"main": 53.9, "implementer": 10, "auditors": 0}, [26.3, 15, 22.6], 2, 40],

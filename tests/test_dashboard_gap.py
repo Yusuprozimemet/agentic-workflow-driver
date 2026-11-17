@@ -4,7 +4,6 @@ scripts/spec-drift.py that the name-gap chart and its caption read."""
 import importlib.util
 import json
 import os
-import re
 import sys
 import tempfile
 import unittest
@@ -141,18 +140,22 @@ class ReplayHistoryTest(unittest.TestCase):
                 self.assertEqual(spec_drift.replay_state({worse, better}), worse, (worse, better))
         self.assertEqual(spec_drift.replay_state({"not yet in force"}), "not yet in force")
 
-    def test_the_page_reads_every_state_replay_history_writes(self):
-        spec = importlib.util.spec_from_file_location(
-            "replay_history", ROOT / "scripts" / "replay-history.py"
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        self.assertEqual(sorted(spec_drift.REPLAY_STATES), sorted(module.STATES))
-        script = (ROOT / "docs" / "dashboard" / "dashboard.js").read_text(encoding="utf-8")
-        look = re.search(r"const REPLAY_LOOK = \{(.*?)\n\};", script, re.DOTALL).group(1)
-        drawn = set(re.findall(r'^\s*"([^"]+)":', look, re.MULTILINE))
-        self.assertEqual(sorted(drawn), sorted(module.STATES))
-        self.assertEqual(sorted(drawn), sorted((*self.WORST_FIRST, "not yet in force")))
+    def test_the_views_read_every_state_replay_history_writes(self):
+        loaded = {}
+        for name, file in (
+            ("replay_history", "replay-history.py"),
+            ("spec_drift_views", "spec_drift_views.py"),
+            ("dashboard_reconcile", "dashboard-reconcile.py"),
+        ):
+            spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / file)
+            loaded[name] = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(loaded[name])
+        states = sorted(loaded["replay_history"].STATES)
+        self.assertEqual(sorted(spec_drift.REPLAY_STATES), states)
+        # the views group each state for the page, and the reconcile script for its own recount
+        self.assertEqual(sorted(loaded["spec_drift_views"].REPLAY_GROUP), states)
+        self.assertEqual(sorted(loaded["dashboard_reconcile"].REPLAY_GROUP), states)
+        self.assertEqual(states, sorted((*self.WORST_FIRST, "not yet in force")))
 
     def test_an_old_holds_row_with_its_teeth_unchecked_reads_as_never_broken(self):
         row = {"day": "01", "platform": "windows", "pr": 9, "sample": "all", "merge": "aaa", "n": 5}

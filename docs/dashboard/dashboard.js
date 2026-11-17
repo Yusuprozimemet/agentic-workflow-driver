@@ -21,19 +21,6 @@ const covered = list => [...list].sort((a, b) => a[0] - b[0]).reduce((acc, [a, b
 const daySpan = ds => !ds.length ? "" : ds.length === 1 ? `Day ${ds[0]}`
   : ds[ds.length - 1] - ds[0] === ds.length - 1 ? `Days ${ds[0]} to ${ds[ds.length - 1]}` : `Days ${andList(ds.map(String))}`;
 
-// What each replay state means to a reader: the group it counts in, and why it was not checked.
-// tests/test_dashboard_gap.py holds these keys to the states scripts/replay-history.py writes.
-const REPLAY_LOOK = {
-  "code broken": { group: "broken" },
-  "test weakened": { group: "repair", why: "its test no longer catches the bug it used to" },
-  "break no longer applies": { group: "repair", why: "the code moved, so the planted bug could not be put back" },
-  "not runnable": { group: "skipped", why: "the check could not run" },
-  "not applicable on this platform": { group: "skipped", why: "it needs a different computer" },
-  "live only": { group: "skipped", why: "it needs a real live run" },
-  "holds, never broken": { group: "unproven" },
-  "holds": { group: "proven" },
-  "not yet in force": { group: null },
-};
 // Every state a promise's tile can be in. The first five are what a re-check can find, and the only ones counted
 // as "re-checked"; each has its own colour and mark (dashboard.css), used for promise states and nothing else.
 const STATES = {
@@ -48,7 +35,6 @@ const STATES = {
   unchecked: { word: "Not re-checked yet", means: "no re-check has run on it" },
 };
 const COUNTED = ["proven", "unproven", "repair", "broken", "skipped"];
-const ALWAYS_KEYED = ["proven", "unproven", "repair", "broken", "skipped"];
 
 // Graph 7's pipeline: every gate a Day's work passes, top to bottom, its stages keyed by name. A gate with `pile` holds
 // the defects the Notes credit to it (a gate's key in the data's proofreading.gates); `guard` and `ci` name what counts how often it stopped something (a
@@ -111,7 +97,6 @@ const PHASE_END = { name: "End of a phase", gates: [
     does: "Once, after the closing pull request of the last phase plan.md names: can the workflow take more autonomy safely, what does it show about agents, do its gates hold? Each from a fresh context." }] };
 const CAUSES = ["spec", "process", "implementation", "environment", "other"];
 const KINDS = { origin: "the first commit", spec: "spec", code: "code", close: "a Day's close", other: "other" };
-const WORK = [["spec", "Spec and agent context"], ["prod", "Production code"], ["test", "Tests"], ["tooling", "Tooling"]];
 const REASONS = { replay_failed: "Replay failed", replay_error: "Replay error", replay_stale: "Replay stale",
   evidence_missing: "Evidence missing", not_seen_red: "Not seen red", test_not_found: "Test not found", handoff_unclaimed: "Hand-off unclaimed",
   not_breakable: "No break possible from the repository", test_skippable: "Can be skipped in CI (expected)",
@@ -122,8 +107,7 @@ const YARD_HINT = { escapes: "fewer is better", refusals: "many of one kind mean
 /* ---------- the model: what each graph draws and says, from the data alone ---------- */
 function model(DATA) {
   const now = DATA.now || {}, days = [...(DATA.days || [])].sort((a, b) => a.day - b.day), current = now.current_day;
-  const stories = (DATA.user_stories || {}).stories || [], named = (DATA.user_stories || {}).abilities || [];
-  const abilityName = key => (named.find(a => a.key === key) || {}).name;
+  const named = (DATA.user_stories || {}).abilities || [];
   const safe = fn => { try { return fn(); } catch (e) { return { error: String((e && e.message) || e) }; } };
   const done = days.filter(finished).map(d => d.day);
   const daysSay = (done.length ? `${daySpan(done)} ${done.length === 1 ? "is" : "are"} closed` : "No Day is closed yet")
@@ -134,8 +118,6 @@ function model(DATA) {
   const countedAt = (DATA.counted || {}).at || null, countedMs = countedAt ? Date.parse(countedAt) : null;
   const countedSay = countedAt ? `${countedAt.slice(11, 16)} on ${shortDate(countedAt)}` : "";
   const TIMES = ((DATA.clock || {}).prs || []).filter(p => p.opened && p.merged);
-  const mergedAt = new Map(TIMES.map(p => [p.number, Date.parse(p.merged)]));
-  const inCount = pr => countedMs == null || !mergedAt.has(pr) || mergedAt.get(pr) <= countedMs;
   // One rule for which Day a pull request belongs to, on every graph: the Day its branch names (`own_day`).
   // A dashboard/ or tooling/ pull request is no Day's work: it is placed by `at`, the furthest Day begun when it merged,
   // and says whether that Day was open or closed by then. A row's `day` is the gap's "Day reached" and is not read here.
@@ -180,187 +162,12 @@ function model(DATA) {
       missing: dataMissing(), now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length, took };
   }
 
-  /* Where we are: plan.md's phases, one tile per Day, with the next step and the next stop (spec-drift.py, where_rows) */
-  function whereNow() {
-    const W = (DATA.meta || {}).where || {}, rows = W.rows || [], names = W.names || {}, phaseNames = (DATA.meta || {}).phases || [];
-    if (!rows.length) return null;
-    const by = Object.fromEntries(days.map(d => [d.day, d])), order = (DATA.order || []).filter(d => typeof d === "number");
-    const open = n => !(by[n] && finished(by[n]));
-    const nextDay = order.find(open), stopAt = now.stop_after != null ? now.stop_after : null;
-    const WORD = { done: "done", open: "closed, boxes open", active: "in progress", ready: "spec written", next: "next, no spec yet",
-      planned: "provisional: plan.md names it, no spec yet", cut: "cut" };
-    const counted = rows.filter(r => !r.cut).flatMap(r => r.days);
-    const tiles = rows.map(r => r.days.map((n, i) => {
-      const d = by[n], c = (d && d.criteria) || {};
-      const state = r.cut || (d && d.status === "cut") ? "cut" : d && finished(d) ? (d.status === "done" ? "done" : "open")
-        : d && n === current ? "active" : d ? "ready" : n === nextDay ? "next" : "planned";
-      const bar = state === "active" && (d.tracks || []).length ? (d.tracks_merged || []).length / d.tracks.length : null;
-      const stop = n === r.stop ? (r.lifted ? "stop, lifted by a course correction" : "stop: the work halts here until the maintainer lifts it") : "";
-      const end = !r.cut && i === r.days.length - 1 && r.phase != null;
-      const what = d ? plain(d.title) : names[n] || "";
-      const label = String(n).padStart(2, "0");
-      const say = [WORD[state], c.total ? `${c.ticked} of ${c.total} criteria ticked` : "",
-        bar != null ? `${(d.tracks_merged || []).length} of ${d.tracks.length} tracks merged` : "", end ? "ends a phase" : "", stop].filter(Boolean);
-      return { day: n, label, state, bar, stop: !!stop, lifted: !!stop && r.lifted, end, text: `Day ${label}${what ? ` · ${what}` : ""} · ${say.join(" · ")}` };
-    }));
-    const span = r => r.days.length ? (r.days.length === 1 ? `Day ${r.days[0]}` : `Days ${Math.min(...r.days)}–${Math.max(...r.days)}`) : "";
-    const out = rows.map((r, i) => ({
-      name: r.phase == null ? "Before the plan's list" : `${r.phase}. ${phaseNames[r.phase] || `Phase ${r.phase}`}${r.cut ? " (cut)" : ""}`,
-      sub: [span(r) || (r.from_day != null ? `from Day ${r.from_day}` : ""), r.stop != null ? `stop at Day ${r.stop}${r.lifted ? ", lifted" : ""}` : ""].filter(Boolean).join(" · "),
-      tiles: tiles[i], unnumbered: r.from_day != null && !r.days.length ? `Not numbered yet: from Day ${r.from_day}` : "" }));
-    const left = stopAt == null ? 0 : order.slice(0, order.indexOf(stopAt) + 1).filter(open).length;
-    const active = current != null && by[current];
-    return { kicker: active ? `Day ${current} in progress` : "Between Days",
-      count: `${counted.filter(n => !open(n)).length} of ${counted.length} numbered Days finished`
-        + (active && (active.tracks || []).length ? ` · Day ${current}: ${(active.tracks_merged || []).length} of ${active.tracks.length} tracks merged` : ""),
-      next: String(now.next_step || ""),
-      stop: stopAt == null ? "" : `Day ${stopAt}${names[stopAt] || by[stopAt] ? `, ${by[stopAt] ? plain(by[stopAt].title) : names[stopAt]}` : ""}, ${left ? plural(left, "Day", "Days") + " to go" : "reached"}. The work halts there until the maintainer lifts it.`,
-      rows: out };
-  }
-
-  /* Graph 3: ability by day */
-  function abilityGraph() {
-    const keyOf = s => named.some(a => a.key === s.ability) ? s.ability : null;
-    const rowsOf = [...named, ...(stories.some(s => keyOf(s) === null) ? [{ key: null, name: "No ability named" }] : [])];
-    const cols = [...days.map(d => ({ day: d.day, label: String(d.day), mark: finished(d) ? "✓" : d.day === current ? "now" : "" })),
-      { day: null, label: "No Day", mark: "" }];
-    const colOf = s => days.some(d => d.day === s.day) ? s.day : null;
-    // An ability's quality score, when quality() has one for it: the row draws it after the name, its parts in the hover.
-    const SC = (safe(quality) || {}).abilities || {};
-    const rows = rowsOf.map(a => ({ key: a.key, name: a.name, role: a.role || null, score: a.key in SC ? SC[a.key].n : null,
-      score_parts: a.key in SC ? SC[a.key].parts : null, cells: cols.map(c => {
-      const prs = stories.filter(s => keyOf(s) === a.key && colOf(s) === c.day).map(s => s.number).sort((x, y) => x - y), n = prs.length;
-      const b = n ? `${plural(n, "merged pull request", "merged pull requests")} grew this ability ${c.day == null
-          ? "between the Days, as tooling and dashboard work, not as a Day's track" : `on Day ${c.day}`}: ${prs.map(p => "#" + p).join(", ")}.`
-        : c.day == null ? "Every pull request for this ability belongs to a Day." : `No pull request grew this ability on Day ${c.day}.`;
-      return { day: c.day, n, prs, level: n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0, t: `${a.name} · ${c.day == null ? "outside any Day" : `Day ${c.day}`}`, b: [b] };
-    }) }));
-    const H = DATA.hand_offs || [], mine = H.filter(h => h.to === current), later = H.filter(h => current != null && h.to > current);
-    const notes = [mine.length && `${mine.filter(h => h.picked).length} of the ${plural(mine.length, "note", "notes")} earlier Days left for Day ${current} ${mine.length === 1 ? "was" : "were"} picked up`,
-      later.length && `${later.length} more wait for ${daySpan([...new Set(later.map(h => h.to))].sort((a, b) => a - b))}, ${later.filter(h => h.id).length || "none"} of them numbered`].filter(Boolean);
-    return { cols, rows,
-      read: { t: stories.length ? `${plural(stories.length, "merged pull request", "merged pull requests")}, each tagged with the ability it grew` : "No merged pull request yet",
-        b: [daysSay + (notes.length ? ` ${notes.join("; ")}.` : "") + (now.stop_after != null ? ` The plan stops for the maintainer after Day ${now.stop_after}.` : "")] },
-      table: { head: ["Ability", ...cols.map(c => c.day == null ? c.label : `Day ${c.label}`), "All"],
-        rows: rows.map(r => [r.name, ...r.cells.map(c => c.n), sum(r.cells, c => c.n)]) } };
-  }
-
-  /* The promises: one reading for graphs 4 and 5, so they cannot disagree. Each promise takes the state of
-     its newest re-check; one whose day is unfinished, or that a later promise replaced, is drawn and not counted. */
+  /* The promises: each criterion with the state scripts/spec_drift_views.py (criterion_states) gave it; the page only
+     reads it. The model's promises key counts them by state, for the how-this-works panel and the cell. */
   function promises() {
-    const rp = DATA.replay || {}, index = DATA.criteria_index || [], byDay = new Map(days.map(d => [d.day, d]));
-    const merges = [...(rp.merges || [])].sort((a, b) => a.n - b.n), byN = new Map(merges.map(m => [m.n, m]));
-    const cells = [...(rp.cells || [])].sort((a, b) => a.n - b.n), latest = new Map(cells.map(c => [c.criterion, c]));
-    const age = pr => pr == null || now.last_pr == null ? "" : pr >= now.last_pr ? ", the latest change" : `, ${plural(now.last_pr - pr, "change", "changes")} ago`;
-    const atClose = new Set(days.flatMap(d => d.broken_at_close || []));
-    // An open Day's promises get their abilities only at its close: until then graph 1 says which pull request built each one.
-    const builtBy = new Map(((DATA.look_ahead || {}).columns || []).filter(c => c.pr != null).flatMap(c => (c.got || []).map(id => [id, c.pr])));
-    const abilityOf = pr => { const s = stories.find(x => x.number === pr), a = s ? s.ability : null; return named.some(k => k.key === a) ? [a] : []; };
-    const tiles = index.map(c => {
-      const day = byDay.get(c.day), cell = latest.get(c.id), look = (cell && REPLAY_LOOK[cell.state]) || {};
-      const pr = builtBy.get(c.id) || null, abilities = (c.abilities || []).length ? c.abilities : abilityOf(pr);
-      // Each criterion's state is worked out in scripts/spec_drift_views.py (criterion_states); the page only reads it.
-      const status = STATES[c.state] ? c.state : "unchecked";
-      const why = status === "replaced" ? `by ${c.replaced_by.join(", ")}` : status === "building" ? `Day ${c.day} is still being built`
-        : (COUNTED.includes(status) && look.why) || STATES[status].means;
-      const seen = c.seen_red || {}, mark = (ok, yes, no) => ok ? `✓ ${yes}` : `✕ ${no}`;
-      const lines = [c.plain || c.claim || ""];
-      if (status === "building" && !c.ticked) lines.push(pr ? `Built by pull request #${pr}. No evidence yet: the Day is not closed.` : "No evidence yet: the Day is not closed.");
-      else lines.push([mark(c.ticked, "ticked at the close", "not ticked"), mark(c.cited, "cites its pull request", "cites no pull request"),
-        mark(c.test_found, "names a test that exists", "names no test that exists"),
-        seen.state ? "✓ a failure was recorded when it was built" : seen.state === false && (seen.none || []).length ? `– no failure could be planted: ${seen.none.join("; ")}`
-          : seen.state === false ? "✕ no failure recorded when built" : "– a failure when built was not measured"].join(" · ")
-        + (atClose.has(c.id) ? " · its check was first seen failing at the close, not in the pull request that wrote it" : ""));
-      const m = cell && byN.get(cell.n), grows = abilities.map(abilityName).filter(Boolean);
-      const last = [COUNTED.includes(status) && m ? `Last re-checked after pull request #${m.pr}${age(m.pr)}${cell.mixed ? "; its checks disagree" : ""}.` : "",
-        grows.length ? `It grew “${grows[0]}”${grows.length > 1 ? `, and also ${andList(grows.slice(1).map(g => `“${g}”`))}` : ""}.` : ""].filter(Boolean).join(" ");
-      if (last) lines.push(last);
-      return { id: c.id, day: c.day, status, abilities, built_by: pr, glyph: STATES[status].glyph || "",
-        t: `${c.id} · ${c.tag === "hold" ? "must keep holding" : "new behaviour"} · ${STATES[status].word}: ${why}`, b: lines };
-    });
+    const tiles = (DATA.criteria_index || []).map(c => ({ id: c.id, day: c.day, status: STATES[c.state] ? c.state : "unchecked" }));
     const n = (list, s) => list.filter(t => t.status === s).length, counted = list => list.filter(t => COUNTED.includes(t.status)).length;
-    const replaced = new Set(index.filter(c => (c.replaced_by || []).length).map(c => c.id)), state = new Map();
-    let k = 0;
-    const hist = merges.map(m => {
-      for (; k < cells.length && cells[k].n <= m.n; k++) if (!replaced.has(cells[k].criterion)) state.set(cells[k].criterion, (REPLAY_LOOK[cells[k].state] || {}).group);
-      const counts = Object.fromEntries(COUNTED.map(g => [g, 0]));
-      state.forEach(g => { if (g) counts[g]++; });
-      const total = sum(Object.values(counts));
-      return { pr: m.pr, counts, total, t: `Re-check after pull request #${m.pr}: ${counts.proven} of ${total} proven`,
-        b: [`${counts.unproven} ${counts.unproven === 1 ? "passes but is" : "pass but are"} not yet proven, ${plural(counts.repair, "needs", "need")} repair, ${counts.broken} broken, ${counts.skipped} not checked here.`] };
-    });
-    const rows = [...new Set(tiles.map(t => t.day))].sort((a, b) => a - b).map(day => {
-      const list = tiles.filter(t => t.day === day), c = counted(list);
-      return { day, tiles: list, count: n(list, "building") === list.length ? "not yet in force" : !c ? "no re-check on record" : `${n(list, "proven")} of ${c} proven` };
-    });
-    const all = counted(tiles), newest = merges[merges.length - 1], first = hist[0], last = hist[hist.length - 1];
-    const loaded = rp.state === "loaded" && all > 0;
-    const building = [...new Set(tiles.filter(t => t.status === "building").map(t => t.day))].sort((a, b) => a - b);
-    const rest = [n(tiles, "replaced") && `${plural(n(tiles, "replaced"), "was", "were")} replaced by later promises`,
-      building.length && `${daySpan(building)}'s ${n(tiles, "building")} are not yet in force`,
-      n(tiles, "open") && `${plural(n(tiles, "open"), "was", "were")} left unticked`, n(tiles, "unchecked") && `${plural(n(tiles, "unchecked"), "has", "have")} no re-check yet`].filter(Boolean);
-    const board = { rows, hist, histMax: Math.max(1, ...hist.map(h => h.total)),
-      key: Object.keys(STATES).filter(s => ALWAYS_KEYED.includes(s) || n(tiles, s)).map(s => ({ status: s, glyph: STATES[s].glyph || "", text: `${STATES[s].word} ${n(tiles, s)}` })),
-      say: `One tile per promise the specs made, ${tiles.length} in all, in the state the last re-check found it.`,
-      histSay: hist.length ? `Is trust growing? The same count at each of the ${plural(hist.length, "change", "changes")} the re-check ran on: ${first.counts.proven} proven of ${first.total} at first, ${last.counts.proven} of ${last.total} now.` : "",
-      read: !loaded ? { t: tiles.length ? "No re-check of the promises is on record" : "No promise yet", b: rest.length ? [`${rest.join("; ")}.`] : [] }
-        : { t: `${n(tiles, "proven")} of the ${all} promises re-checked are proven; ${n(tiles, "broken") ? plural(n(tiles, "broken"), "is broken", "are broken") : "none is broken"}`,
-          b: [`${n(tiles, "unproven")} ${n(tiles, "unproven") === 1 ? "passes but is" : "pass but are"} not yet proven, ${plural(n(tiles, "repair"), "needs", "need")} repair and ${n(tiles, "skipped")} cannot be checked on this computer.`
-            + (rest.length ? ` ${rest.join("; ").replace(/^./, c => c.toUpperCase())}.` : "")
-            + (newest ? ` Last re-check: pull request #${newest.pr}${age(newest.pr)}. It runs after every merge to main, so it trails the newest merge while it runs; an older Day is re-checked at each close and when its breaks are re-recorded.` : "")] },
-      table: { head: ["Day", ...Object.values(STATES).map(s => s.word), "All"],
-        rows: rows.map(r => [`Day ${r.day}`, ...Object.keys(STATES).map(s => n(r.tiles, s)), r.tiles.length]) } };
-    return { tiles, n, counted, board };
-  }
-
-  /* Graph 5: each ability with the promises its pull requests built */
-  function reliedGraph(P) {
-    const groupsOf = list => [...new Set(list.map(t => t.day))].sort((a, b) => a - b).map(day => ({ day, tiles: list.filter(t => t.day === day) }));
-    const rows = named.map(a => {
-      const mine = P.tiles.filter(t => t.abilities[0] === a.key), own = stories.filter(s => s.ability === a.key), c = P.counted(mine);
-      return { key: a.key, name: a.name, tiles: mine, groups: groupsOf(mine), prs: own.length, proven: P.n(mine, "proven"), counted: c,
-        note: mine.length ? "" : own.length && own.every(s => s.day == null) ? "No promise covers this ability. Its pull requests are work outside the Day specs." : "No promise covers this ability yet.",
-        count: (mine.length ? (c ? `${P.n(mine, "proven")} of ${c} proven` : plural(mine.length, "promise", "promises")) + " · " : "") + plural(own.length, "pull request", "pull requests") };
-    });
-    const loose = P.tiles.filter(t => !named.some(a => a.key === t.abilities[0]));
-    if (loose.length) {
-      const ds = [...new Set(loose.map(t => t.day))], building = loose.every(t => t.status === "building");
-      rows.push({ name: building && ds.length === 1 ? `Day ${ds[0]}, still being built` : "Not tied to an ability yet", tiles: loose, groups: groupsOf(loose), prs: 0, proven: 0, counted: 0, loose: true,
-        note: "", count: `${plural(loose.length, "promise", "promises")}, not yet tied to a pull request` });
-    }
-    const real = rows.filter(r => !r.loose), ranked = real.filter(r => r.counted).sort((a, b) => b.proven / b.counted - a.proven / a.counted || b.counted - a.counted);
-    const none = ranked.filter(r => !r.proven), bare = real.filter(r => !r.tiles.length), shared = P.tiles.filter(t => t.abilities.length > 1).length;
-    const b = [none.length && `${andList(none.map(r => `“${r.name}”`))} ${none.length === 1 ? "has" : "have"} none proven yet.`,
-      bare.length && `${plural(bare.length, "ability", "abilities")}, with ${plural(sum(bare, r => r.prs), "pull request", "pull requests")} between them, ${bare.length === 1 ? "has" : "have"} no promise at all.`,
-      shared && `${plural(shared, "promise touches", "promises touch")} more than one ability and ${shared === 1 ? "is" : "are"} drawn under the one most of ${shared === 1 ? "its" : "their"} pull requests grew, the first named when they tie.`].filter(Boolean);
-    const cols = ["proven", "unproven", "repair", "broken", "skipped", "replaced", "building"];
-    return { rows,
-      read: { t: ranked.length && ranked[0].proven ? `“${ranked[0].name}” is the best proven: ${ranked[0].proven} of its ${plural(ranked[0].counted, "re-checked promise", "re-checked promises")}` : "No ability has a proven promise yet", b: [b.join(" ")].filter(Boolean) },
-      table: { head: ["Ability", "Promises", ...cols.map(s => STATES[s].word), "Pull requests"],
-        rows: rows.map(r => [r.name, r.tiles.length, ...cols.map(s => P.n(r.tiles, s)), r.prs]) } };
-  }
-
-  /* Graphs 3 to 5, joined: one line per ability. Its stations are graph 3's cells, its dots the promises reliedGraph(P)
-     puts under it and its ring that row's proven of re-checked, so the map cannot disagree with them. `first` is the
-     column its line starts at; `colour` numbers the line's colour, 0 for a row with no ability. */
-  function mapGraph(A, P, R) {
-    const broke = P.error || R.error || null, cols = A.cols;
-    const relied = new Map(broke ? [] : R.rows.filter(r => !r.loose).map(r => [r.key, r]));
-    const ORDER = ["proven", "unproven", "repair", "broken", "skipped", "open", "building", "replaced", "unchecked"];
-    const tally = t => ORDER.map(s => [s, t.filter(x => x.status === s).length]).filter(([, k]) => k).map(([s, k]) => `${k} ${lower(STATES[s].word)}`).join(", ");
-    const line = (a, r, colour) => {
-      const tiles = r ? r.tiles : [];
-      const cells = a.cells.map(c => {
-        const t = tiles.filter(x => c.day == null ? !cols.some(k => k.day === x.day) : x.day === c.day).sort((u, v) => ORDER.indexOf(u.status) - ORDER.indexOf(v.status));
-        return { day: c.day, n: c.n, tiles: t, t: c.t, b: [...c.b, t.length ? `They made ${plural(t.length, "promise", "promises")}: ${tally(t)}.` : ""].filter(Boolean) };
-      });
-      const first = cells.findIndex(c => c.day != null && (c.n || c.tiles.length));
-      return { key: a.key, name: a.name, role: a.role || null, score: a.score, score_parts: a.score_parts, colour, first, cells,
-        ring: { proven: r ? r.proven : 0, counted: r ? r.counted : 0, t: a.name, b: [r ? r.count : plural(sum(a.cells, c => c.n), "pull request", "pull requests"), r && r.note].filter(Boolean) } };
-    };
-    const lines = A.rows.map((a, k) => line(a, relied.get(a.key), a.key == null ? 0 : (k % 7) + 1));
-    if (!broke) R.rows.filter(r => r.loose).forEach(r => lines.push(line({ key: null, name: r.name, cells: cols.map(c => ({ day: c.day, n: 0, t: "", b: [] })) }, r, 0)));
-    return { cols, lines, broke: broke && String(broke) };
+    return { tiles, n, counted };
   }
 
   /* Graph 6: every merge, with the gap it left, how long it was open, and whether a check failed on it */
@@ -484,86 +291,6 @@ function model(DATA) {
           r.dots.filter(o => o.escaped).length, r.dots.filter(o => o.back).length, r.differ == null ? "" : r.differ, r.tags == null ? "" : r.tags]) } };
   }
 
-  /* Graph 8: what each date cost, and what the hooks stopped on it */
-  function costGraph() {
-    const T = DATA.tokens || [], F = DATA.refusals || [], dates = [...new Set(T.map(t => t.date))].sort();
-    const start = days.map(d => (d.worked || [])[0]).filter(Boolean).sort()[0];
-    const bars = dates.map(date => {
-      const rows = T.filter(t => t.date === date), cost = pick => sum(rows.filter(pick), t => t.cost);
-      const main = cost(t => t.agent === "main"), aud = cost(t => /auditor|rater/.test(t.agent || "")), other = cost(() => true) - main - aud, total = main + aud + other;
-      const out = cost(t => t.day == null);
-      const on = days.filter(d => d.worked && d.worked[0] <= date && date <= d.worked[1]).map(d => d.day);
-      const refused = F.filter(r => r.date === date && r.refused), nRefused = sum(refused, r => r.refused), cut = sum(rows, t => t.cut), replies = sum(rows, t => t.replies);
-      // The date's dollars end at the count: only the pull requests merged by then share them.
-      const prs = (DATA.rows || []).filter(r => r.pr && r.date === date), merged = prs.length, shared = prs.filter(r => inCount(r.pr)).length;
-      // The main session's dollars after a session passed 150k tokens (cost_past_150k): a row without the key is not known, so no row that has it is not zero.
-      const known = rows.filter(t => t.agent === "main" && t.cost_past_150k != null), past = known.length ? sum(known, t => t.cost_past_150k) : null;
-      return { date, label: shortDate(date), days: on, main, aud, other, total, replies, refused: nRefused, cut, merged, shared, past, setup: !start || date < start,
-        day: cost(t => t.day != null), out, share: total ? Math.round(100 * out / total) : null,
-        t: `${shortDate(date)} · ${on.length ? daySpan(on) : !start || date < start ? "before Day 1" : "between Days"} · ${money(total)}`,
-        b: [`Main session ${money(main)}, auditors ${money(aud)}, implementer and others ${money(other)}. ${comma(replies)} replies.`
-          + (past == null ? "" : ` ${money(past)} of the main session's ${money(main)} came after a session passed 150k tokens.`)
-          + ` The hooks refused ${plural(nRefused, "call", "calls")}${refused.length ? ` (${refused.map(r => `${r.refused} by the ${r.guard}`).join(", ")})` : ""} and cut ${plural(cut, "long output", "long outputs")}.`
-          + (!merged ? "" : ` ${plural(merged, "pull request", "pull requests")} merged that date`
-            + (shared === merged ? `: ${money(total / merged)} each, all sessions.` : shared ? `, ${shared} of them before the count at ${countedSay}: ${money(total / shared)} each, all sessions.`
-              : `, none of them before the count at ${countedSay}.`))] };
-    });
-    const all = sum(bars, b => b.total), main = sum(bars, b => b.main), setup = bars.filter(b => b.setup), work = bars.filter(b => !b.setup);
-    const pastBars = bars.filter(b => b.past != null), pastKey = pastBars.length ? [["past", `Of the main session, after a session passed 150k tokens ${money(sum(pastBars, b => b.past))}`]] : [];
-    const later = (DATA.rows || []).filter(r => r.pr && !inCount(r.pr)).length, shared = sum(work, x => x.shared);
-    const newest = ((DATA.rows || [])[(DATA.rows || []).length - 1] || {}).date, lastDate = dates[dates.length - 1];
-    const b = [setup.length && work.length ? `${plural(setup.length, "date", "dates")} of set-up cost ${money(sum(setup, x => x.total))} before Day 1.` : "",
-      work.length ? `The Days cost ${money(sum(work, x => x.total))} over ${plural(work.length, "date", "dates")}, on which ${plural(shared, "pull request", "pull requests")} merged${shared < sum(work, x => x.merged) ? " before the count" : ""}.` : "",
-      `The hooks refused ${plural(sum(bars, x => x.refused), "call", "calls")} and cut ${plural(sum(bars, x => x.cut), "long output", "long outputs")}.`,
-      pastBars.length ? `Over ${plural(pastBars.length, "date", "dates")} where it is known, ${money(sum(pastBars, x => x.past))} of the main session's ${money(sum(pastBars, x => x.main))} came after a session passed 150k tokens.` : "",
-      countedAt ? `Counted on the maintainer's computer up to ${countedSay}${later ? `: ${plural(later, "pull request has", "pull requests have")} merged since, and what ${later === 1 ? "it" : "they"} cost is not in yet` : ""}.`
-      // With no count on record, the last date is counted up to the last count run on it: what merged later that date is in the pull requests and not in the dollars.
-      : newest && lastDate && newest >= lastDate ? `Counted on the maintainer's computer, so ${shortDate(lastDate)} is counted only up to the last count run on it${newest > lastDate ? ", and nothing after it is in yet" : ""}.` : ""].filter(Boolean);
-    // By Day: the split of the dates' dollars, and the most the outside share can be (a Day's audits run on main, so they count as outside).
-    const dayAll = sum(bars, x => x.day), outAll = sum(bars, x => x.out), outPct = Math.round(100 * outAll / (all || 1));
-    return { bars, max: Math.max(0.01, ...bars.map(x => x.total)),
-      key: [["main", `Main session ${money(main)}`], ["rest", `Auditors and the implementer ${money(all - main)}`], ...pastKey],
-      byDay: bars.length ? { key: [["day", `A Day's work ${money(dayAll)}`], ["out", `Outside any Day ${money(outAll)}`]],
-        t: `${money(outAll)} of ${money(all)} (${outPct}%) was spent outside any Day`,
-        b: `A session belongs to a Day by the branch it worked on. A Day's audits and post-merge steps run on main, so they count as outside: ${outPct}% is the most the outside share can be, not its exact size.` } : null,
-      say: "What each date's tokens would cost on the pay-per-token API, at list prices. This repository's sessions only, counted on the maintainer's computer. The maintainer pays a flat subscription, so this measures usage and is not a bill.",
-      read: { t: bars.length ? `${money(all)} of tokens at list prices; ${Math.round(100 * main / (all || 1))}% of it in the main session` : "No token counts yet", b: bars.length ? [b.join(" ")] : ["They are counted on the maintainer's computer when a session starts or ends, and pushed to the dashboard-data branch."] },
-      table: { head: ["Date", "Days", "Main session, $", "Main session after 150k, $", "Auditors, $", "Implementer and others, $", "Replies", "Calls refused", "Outputs cut", "Pull requests merged", "Merged before the count"],
-        rows: bars.map(x => [x.label, x.days.join(", "), x.main.toFixed(2), x.past == null ? "" : x.past.toFixed(2), x.aud.toFixed(2), x.other.toFixed(2), x.replies, x.refused, x.cut, x.merged, x.shared]) } };
-  }
-
-  /* Graph 9: the lines each day changed, by what the file is */
-  function workGraph() {
-    const R = DATA.rows || [], part = (r, k) => { const w = r.work || {}; return k === "spec" ? (w.spec || 0) + (w.context || 0) : w[k] || 0; };
-    const of = list => Object.fromEntries(WORK.map(([k]) => [k, sum(list, r => part(r, k))]));
-    // A Day's bar is its own pull requests (by `own_day`); the area work placed beside it is drawn paler and counts in no Day.
-    const breakdown = w => WORK.map(([k, name], i) => `${i ? lower(name) : name} ${comma(w[k])}`).join(", ");
-    const bars = days.map(d => {
-      const mine = R.filter((r, i) => PLACED[i].own === d.day), w = of(mine), total = sum(Object.values(w)), prs = mine.filter(r => r.pr).length;
-      const ratio = w.prod ? (w.test / w.prod).toFixed(1) : "–";
-      const beside = R.filter((r, i) => PLACED[i].area && PLACED[i].at === d.day), aw = of(beside), atotal = sum(Object.values(aw)), aprs = beside.filter(r => r.pr).length;
-      return { day: d.day, w, total, prs, ratio, label: total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total),
-        t: `Day ${d.day}${d.day === current ? " (in progress)" : ""} · ${comma(total)} lines changed`,
-        b: [`${breakdown(w)}. ${plural(prs, "pull request", "pull requests")} merged.` + (w.prod ? ` ${ratio} test lines for each production line.` : "")],
-        aside: atotal > 0 || aprs > 0 ? { w: aw, total: atotal, prs: aprs, label: atotal >= 1000 ? `${(atotal / 1000).toFixed(1)}k` : String(atotal),
-          t: `Outside any Day · merged while Day ${d.day} was open or after it closed · ${comma(atotal)} lines changed`,
-          b: [`${breakdown(aw)}. ${plural(aprs, "pull request", "pull requests")} merged. No Day's size or test ratio counts them.`] } : null };
-    });
-    const all = of(R.filter((r, i) => days.some(d => d.day === PLACED[i].own))), total = sum(Object.values(all));
-    const before = sum(Object.values(of(R.filter((r, i) => PLACED[i].own == null && PLACED[i].at === 0))));
-    const asideTotal = sum(bars, x => x.aside ? x.aside.total : 0), asidePrs = sum(bars, x => x.aside ? x.aside.prs : 0);
-    const asideSay = bars.some(x => x.aside) ? `Another ${comma(asideTotal)} lines, in ${plural(asidePrs, "pull request", "pull requests")}, are outside any Day (dashboard and tooling work): drawn paler beside the Day that was open when they merged, and in no Day's size or test ratio.` : "";
-    const ranked = WORK.map(([k, name]) => [name, all[k]]).sort((a, b) => b[1] - a[1]);
-    // `before`: the lines before Day 1, for the rings to be held to (scripts/dashboard-reconcile.py, rng_line).
-    return { bars, before, max: Math.max(1, ...bars.map(x => x.total), ...bars.map(x => x.aside ? x.aside.total : 0)),
-      key: [...WORK.map(([k, name]) => [k, name]), ["aside", "Paler: outside any Day"]],
-      read: { t: total ? `${comma(total)} lines changed in ${daySpan(days.map(d => d.day))}; the largest share is ${lower(ranked[0][0])}` : "No Day has merged work yet",
-        b: total ? [`${ranked.map(([name, v], i) => `${i ? lower(name) : name} ${comma(v)}`).join(", ")}.` + (before ? ` Another ${comma(before)} lines came before Day 1.` : "")
-          + (asideSay ? ` ${asideSay}` : "") + " Breaks on purpose never merge, so checking did more than its lines show."] : [] },
-      table: { head: ["Day", ...WORK.map(w => w[1]), "All", "Pull requests merged", "Test lines for each production line", "Outside any Day: lines", "Outside any Day: pull requests"],
-        rows: bars.map(x => [`Day ${x.day}`, ...WORK.map(([k]) => x.w[k]), x.total, x.prs, x.ratio, x.aside ? x.aside.total : 0, x.aside ? x.aside.prs : 0]) } };
-  }
-
   /* Graph 2: the plan's yardsticks, each on its own scale, against the kit's baseline where it has one */
   // The parks row on a Day with driver steps and no figure in the lab notebook: the parks over those steps stand in for it.
   // Only the figure is filled in; no average is worked out from it.
@@ -619,8 +346,8 @@ function model(DATA) {
         return { day, value: v.value, text: show(r, v.value), h: v.value ? Math.max(0.06, v.value / max) : 0.03, over,
           t: `${r.name} · Day ${day}: ${show(r, v.value)}` + (r.baseline != null ? `${over ? ", above" : ", within"} the baseline of ${show(r, r.baseline)}` : ""), b: [v.text || ""] };
       });
-      // The cost row's count changed at Day 7 (outside work counted until then): the row says so, and graph 8's By Day view has the split.
-      return { key: r.key, name: r.name, foot: r.key === "cost" ? "Days 1 to 6 count every pull request merged since the last count, outside work included; from Day 7 on, each Day counts its own only. The two halves of the row do not compare; graph 8's By Day view has the split." : null,
+      // The cost row's count changed at Day 7 (outside work counted until then): the row says so, and graph 8's columns by Day have the split.
+      return { key: r.key, name: r.name, foot: r.key === "cost" ? "Days 1 to 6 count every pull request merged since the last count, outside work included; from Day 7 on, each Day counts its own only. The two halves of the row do not compare; graph 8, with a column for each Day, has the split." : null,
         cells, line: r.baseline != null ? r.baseline / max : null, base: r.baseline != null ? show(r, r.baseline) : "",
         over: cells.filter(c => c.over).length, n: vals.length, last: vals[vals.length - 1],
         note: r.baseline != null ? `kit's baseline: ${show(r, r.baseline)}` : `no baseline${YARD_HINT[r.key] ? `; ${YARD_HINT[r.key]}` : ""}`, show: v => show(r, v),
@@ -1149,7 +876,9 @@ function model(DATA) {
       b: [G.uncovered.length ? `${plural(G.uncovered.length, "commitment is", "commitments are")} due by Day ${G.closed_to} and named by no criterion in force: ${andList(G.uncovered)}. Graph 12's "should be covered by now" lists the same.`
         : `Every commitment due by Day ${G.closed_to} is named by a criterion in force.`,
         `${plural(G.criteria, "criterion", "criteria")} make ${plural(G.quotes, "quote", "quotes")} of the plan; ${G.in_force} of them are in force and make ${G.live_quotes}.`] };
-    return { figs, cols, ring, off: (G.off || []).length, crit, rows, finds, expected, bends, total, stacks: G.stacks || { written: 0, cells: 0 }, read, uncovered: G.uncovered,
+    // the merges no criterion cites: the merge graph's own list (spec_drift_views.uncited_merges), so the two cannot differ
+    const uncited = ((DATA.merge_graph || {}).uncited || []).map(u => ({ pr: u.pr, title: plain(u.title), prod: u.prod }));
+    return { figs, cols, ring, off: (G.off || []).length, crit, rows, finds, expected, bends, total, stacks: G.stacks || { written: 0, cells: 0 }, read, uncovered: G.uncovered, uncited,
       table: { head: ["Commitment", "Section", "Reaches", "Criteria as written", "In force, and their state"],
         rows: cols.map(c => [`${c.id} · ${c.short}`, c.section, c.cls === "proved" ? `proved code (${c.sub === "full" ? "in full" : "in part"})` : c.cls === "untranscribed" ? `never transcribed (${c.sub})` : c.cls === "spliced" ? "spliced out" : says[c.cls],
           c.written.map(q => q.id).join(", "), c.cells.map(q => `${q.id} ${q.state}${q.back ? ", came back" : ""}`).join("; ")]) } };
@@ -1179,10 +908,8 @@ function model(DATA) {
   }
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
-  const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
-  return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph),
+  return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
+    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph),
     cel: { stations: CEL_STATIONS.map(s => s.id), loops: CEL_LOOPS.map(l => HOW_BACK[l.back][0]) }, how: { steps: HOW_IDS, back: HOW_BACK.map(b => b[0]) }, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
@@ -1239,7 +966,7 @@ const howText = x => x == null ? "" : Array.isArray(x) ? x.map(howText).join("")
 
 /* The seven steps one promise takes, built once as nodes: the folded panel (drawHow) and the cell (celDraw) both take
    their texts from here. The excerpts are the build's own reading of the plan, the newest finished day's spec and its
-   record, put in as text. `tally` is graph 4's count of the re-checked promises, so the two cannot disagree. */
+   record, put in as text. `tally` is the model's count of the re-checked promises (its promises key), the proteins' own. */
 function howSteps(DATA, tally) {
   const X = DATA.how_this_works || {};
   const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
@@ -1328,7 +1055,7 @@ function drawHow(DATA, tally) {
     $("how-fold").open = true;
     $("how-step-" + s).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
-  // A step link anywhere on the page (graph 4 has four) opens the walk-through at that step.
+  // A step link anywhere on the page (the proteins have four) opens the walk-through at that step.
   document.addEventListener("click", e => {
     const b = e.target.closest && e.target.closest("[data-how]");
     if (b) { e.preventDefault(); show(b.dataset.how, !spine.contains(b)); }
@@ -1431,11 +1158,14 @@ function celDraw(DATA, tally, get) {
   });
   // each station's pane: its words, the real text, and who acts after it
   const pane = (S, i) => {
-    const s = stepOf(S.id), body = s.body, intro = body[0] && body[0].tagName && String(body[0].tagName).toUpperCase() === "P" ? body[0] : null;
-    const links = body.filter(n => n && n.className === "how-src"), real = body.filter(n => n !== intro && !links.includes(n));
+    const s = stepOf(S.id), body = s.body, isP = n => n && n.tagName && String(n.tagName).toUpperCase() === "P" && !n.className;
+    const intro = isP(body[0]) ? body[0] : null;
+    // a plain paragraph that ends the step, after its real text, closes the left column, as in the mockup
+    const last = body.filter(Boolean).slice(-1)[0], coda = body.length > 1 && last !== intro && isP(last) ? last : null;
+    const links = body.filter(n => n && n.className === "how-src"), real = body.filter(n => n !== intro && n !== coda && !links.includes(n));
     const gate = s.gate && s.gate.length ? s.gate : null;
     return h("div", { class: `pane k-${s.kind}`, id: `cel-pane-${i + 1}`, role: "region", "aria-label": `Station ${i + 1}: ${s.name}`, hidden: true },
-      h("div", { class: "say" }, h("p", { class: "kicker" }, `Station ${i + 1} of ${CEL_STATIONS.length} · ${CEL_REGION[s.kind]}`), h("h3", null, s.name), h("p", { class: "line" }, s.line), intro),
+      h("div", { class: "say" }, h("p", { class: "kicker" }, `Station ${i + 1} of ${CEL_STATIONS.length} · ${CEL_REGION[s.kind]}`), h("h3", null, s.name), h("p", { class: "line" }, s.line), intro, coda),
       h("div", { class: "real", tabindex: 0, role: "group", "aria-label": `The real text for station ${i + 1}` }, real),
       gate || links.length ? h("div", { class: "foot" }, gate ? h("p", { class: "next" }, h("span", null, "After this station"), " ", gate) : null,
         links.length ? h("p", { class: "links" }, links) : null) : null);
@@ -1475,7 +1205,7 @@ function celDraw(DATA, tally, get) {
   $("finds").replaceChildren(...[
     chosen ? [`The promise followed is ${chosen.id}.`, `It is a promise of Day ${chosen.day}.${claim ? ` It says: ${claim}` : ""}`] : ["No promise is followed in this build.", "The build that writes the page found none to follow."],
     [`${STEPS.length} stations, ${checks} checks by someone else.`, whos.map(([w, n]) => `${WORD[n] || n} by ${w}`).join(", ") + ". The writer's own two checks are station 4 and station 5."],
-    tally.counts.length ? [`All ${plural(tally.total, "promise", "promises")} at their latest re-check.`, `${tally.counts.map(([s, n]) => `${n} ${lower(STATES[s].word)}`).join(", ")}. This is graph 4's count, shown under station 7.`]
+    tally.counts.length ? [`All ${plural(tally.total, "promise", "promises")} at their latest re-check.`, `${tally.counts.map(([s, n]) => `${n} ${lower(STATES[s].word)}`).join(", ")}. This is the proteins' count, shown under station 7.`]
       : ["No re-check is on record.", "Station 7 has nothing to show yet."],
     [`${String(WORD[CEL_LOOPS.length] || CEL_LOOPS.length).replace(/^./, c => c.toUpperCase())} ways back, one of them out of the cell.`, "Three return to an earlier station. The fourth stops the work until a person answers."],
     ["One check in the text is not drawn.", "Station 6 says automation replays the recorded evidence against the closing commit. It has no mark of its own on the path."],
@@ -1909,6 +1639,13 @@ function geneDraw(m, box, tip, forDays) {
     [["t-big", 4, String(m.off)], ["t-n", 18, m.off === 1 ? "criterion" : "criteria"], ["t-row", 98, "Off the plan"], ["t-bio", 111, "A PLASMID"],
       ["t-n", 125, "criteria in force that name no commitment"], hollow && ["t-n", 138, `${hollow} more ${hollow === 1 ? "was" : "were"} replaced: the hollow arcs`]]
       .filter(Boolean).forEach(([cls, dy, s]) => el("text", { class: cls, x: r1(RX), y: RY + dy, "text-anchor": "middle" }, s));
+    // under the ring, as the mockup has them: a bead for each merge that changed product code and that no criterion cites
+    const U2 = m.uncited || [];
+    if (U2.length) {
+      const say = `${U2.length} ${U2.length === 1 ? "merge" : "merges"} no criterion cites`, x0 = RX - (12 * U2.length + 2 + 5.6 * say.length) / 2 + 4.4;
+      U2.forEach((u, i) => el("circle", { class: "free", "data-m": u.pr, cx: r1(x0 + 12 * i), cy: RY + 146, r: 4.4 }));
+      el("text", { class: "t-n", x: r1(x0 + 12 * (U2.length - 1) + 14), y: RY + 150 }, say);
+    }
   }
   svg.setAttribute("viewBox", `0 0 ${r1(W)} ${r1(H)}`); svg.setAttribute("class", "fig"); svg.id = "gene-fig"; svg.setAttribute("role", "group");
   svg.setAttribute("aria-label", "The plan drawn as a gene, the criteria as its transcript, the code as its protein");
@@ -1918,7 +1655,8 @@ function geneDraw(m, box, tip, forDays) {
   // the pointer: what a mark is, and every other mark of the same commitment or the same criterion lit
   const byId = new Map(cols.map(c => [c.id, c])), line = (cls, s) => h("div", { class: cls || null }, s);
   const fill = t => {
-    const col = byId.get(t.dataset.p), c = m.crit[t.dataset.c];
+    const col = byId.get(t.dataset.p), c = m.crit[t.dataset.c], u = t.dataset.m && (m.uncited || []).find(x => String(x.pr) === t.dataset.m);
+    if (u) { tip.replaceChildren(line("t", `#${u.pr}`), line("", u.title), line("st", `${plural(u.prod, "line", "lines")} of product code, cited by no criterion`)); return true; }
     if (c) { const q = col && col.written.find(z => z.id === t.dataset.c);
       tip.replaceChildren(line("t", c.head), line("", c.text), line("q", q ? `Names ${col.id} (${col.short})${q.quote ? `: “${q.quote}”` : ""}` : "Plan: none"), line("st", c.code), ...c.more.map(s => line("q", s))); }
     else if (col) tip.replaceChildren(...col.tip.map(([cls, s]) => line(cls, s)));
@@ -1931,7 +1669,7 @@ function geneDraw(m, box, tip, forDays) {
   const light = (sel, cls) => { clear(); const hit = svg.querySelectorAll(sel); if (!hit.length) return; hit.forEach(e => e.classList.add("lit")); svg.classList.add(cls); };
   const follow = t => t.dataset.c ? light(`[data-c="${t.dataset.c}"]`, "focc") : t.dataset.p ? light(`[data-p="${t.dataset.p}"]`, "foc") : clear();
   const hide = () => { tip.hidden = true; clear(); };
-  svg.addEventListener("pointerover", e => { const t = e.target.closest("[data-c],[data-id]"); if (t && fill(t)) { place(e.clientX, e.clientY); follow(t); } else hide(); });
+  svg.addEventListener("pointerover", e => { const t = e.target.closest("[data-c],[data-id],[data-m]"); if (t && fill(t)) { place(e.clientX, e.clientY); follow(t); } else hide(); });
   svg.addEventListener("pointermove", e => { if (!tip.hidden) place(e.clientX, e.clientY); });
   svg.addEventListener("pointerleave", hide);
   svg.addEventListener("focusin", e => { const b = e.target.closest(".b"); if (b && fill(b)) { const r = b.getBoundingClientRect(); place(r.left, r.bottom); follow(b); } });
@@ -2171,7 +1909,9 @@ function ringDraw(W, get, onDay, press) {
   fig.addEventListener("focusout", () => { tip.hidden = true; });
   if (typeof addEventListener === "function") addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
   // the page's Day buttons light a Day on the ring, and its phase
+  // the chosen Day is also said to a screen reader, on its segment (aria-current): dimming the others says nothing to it
   onDay.push(day => groups.forEach(g => { const k = g.getAttribute("data-k"), m = /^d(\d+)$/.exec(k), p = /^p(\d+)$/.exec(k);
+    if (m) g.setAttribute("aria-current", day != null && +m[1] === day ? "true" : "false");
     g.classList.toggle("mk-dim", day != null && (m ? +m[1] !== day : p ? !(phaseOf(+p[1]).days || []).includes(day) : false)); }));
   // at phone width the ring scrolls sideways in its card: open it centred on the ring, not on its left labels
   const sc = $("scroll"); if (sc.scrollWidth > sc.clientWidth) sc.scrollLeft = (sc.scrollWidth - sc.clientWidth) / 2;
@@ -2218,8 +1958,8 @@ function rdgTip(R, k, v) {
 /* Graph 1 read as a gene, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
    merges between Days as thin stretches, the promises built under each merge, today as the polymerase, the Days with
    no spec ahead and the stop, and the hand-offs as arcs. Layout only, as the mockup at #228 drew it: every count it
-   prints is in DATA.reading, counted by scripts/spec_drift_views.py (reading). A closed hand-off's arc shows only
-   while its merge or a Day of it is pointed at or chosen; an open one is always drawn. `get` finds an element by its
+   prints is in DATA.reading, counted by scripts/spec_drift_views.py (reading). Every hand-off's arc is drawn, closed or open;
+   pointing at one, or at its merge, lights it and fades the others, and a Day chosen fades those not of it. `get` finds an element by its
    id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #rdg. */
 function readingDraw(R, get, onDay) {
   const NS = "http://www.w3.org/2000/svg", $ = id => get("rdg-" + id), fig = $("fig"), tip = $("tip");
@@ -2422,7 +2162,7 @@ function readingDraw(R, get, onDay) {
   fig.addEventListener("focusin", e => { const b = mark(e); if (b && show(b.getAttribute("data-k"), b.getAttribute("data-v"))) { const r = b.getBoundingClientRect(); place(r.left, r.bottom); focusOn(b); } });
   fig.addEventListener("focusout", () => { tip.hidden = true; clear(); });
   if (typeof addEventListener === "function") addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
-  // a Day chosen on the page's buttons: its merges, its promises and its hand-offs stay lit, the closed ones drawn
+  // a Day chosen on the page's buttons: its merges, its promises and its hand-offs stay as they are, the rest fade
   const own = (i, day) => i != null && m[i] && m[i].own === day;
   onDay.push(day => {
     Object.keys(cells).forEach(i => cells[i].classList.toggle("mk-dim", day != null && !own(+i, day)));
@@ -2900,7 +2640,7 @@ function gelDraw(G, get, onDay) {
     ["A band is one number, not a quantity of material.", " Its thickness and its darkness measure nothing. The darkest band only marks the last Day counted."],
     ["An empty lane is not a zero.", ` A band on the floor of the gel is a figure of zero. An empty lane is a Day with no figure${emptiest && emptiest.empty ? `: ${emptiest.empty} of the ${N} lanes for ${GEL_SHORT[emptiest.key] || emptiest.key}` : ""}.`],
     ["The ladder is short, and half of it moves.", ` It has at most two bands, because the kit recorded only ${n(kits.length, "figure", "figures")}${kits.length ? `: ${andList(kits.map(p => `${fmt(p, p.kit)} for ${p.key}`))}` : ""}. The other band, the average so far, shifts with every Day. A real ladder is a fixed standard.`],
-    ["Dollars are API list prices, not a bill.", " As in graph 8, they say what the tokens would cost at list price, not what was paid."]].forEach(([b, t]) => li(bends, "", b, t));
+    ["Dollars are API list prices, not a bill.", " They say what the tokens would cost at list price, not what was paid."]].forEach(([b, t]) => li(bends, "", b, t));
   pointerBox(fig, tip, k => k != null && D[k] ? tipFill(tip, D[k]) : false, b => b.getAttribute("data-k"));
   // the page's Day buttons dim every other Day's lane
   onDay.push(day => lanes.forEach(([b, d]) => b.classList.toggle("mk-dim", day != null && d !== day)));
@@ -2985,6 +2725,8 @@ function protDraw(P, get, onDay) {
     });
     return { gs, places, xL, xR, cx, Y };
   };
+  // a row of cards, then 28.5 to the next group's heading and 8.5 from it to the cards, as in the mockup
+  const ROWGAP = 37;
   let top = 20.5, lastTop = top;
   const walk = [];
   lines.forEach(line => {
@@ -2999,7 +2741,8 @@ function protDraw(P, get, onDay) {
       el("rect", { class: "tl", x: f(x0), y: f(top), width: 228.6, height: H, rx: 8 }, null, box);
       const name = el("text", { class: "t-name", x: f(xt), y: f(top + 22.5) }, null, box);
       wrap(c.name, 30).forEach((l, j) => el("tspan", { x: f(xt), dy: j ? 15 : 0 }, l, name));
-      const sub = el("text", { class: "t-sub", x: f(xt), y: f(top + 36.5 + extra) }, null, box);
+      // its figures right under its own name, one line lower only when that name wraps (the chain keeps the row's line)
+      const sub = el("text", { class: "t-sub", x: f(xt), y: f(top + 36.5 + (wrap(c.name, 30).length > 1 ? 15 : 0)) }, null, box);
       if (c.score != null) el("tspan", { class: "b sc", "data-k": "sc", "data-v": c.key, tabindex: 0 }, `score ${c.score}`, sub);
       el("tspan", {}, `${c.score == null ? "no score" : ""} · ${n(c.cells.length, "promise", "promises")}`, sub);
       walk.push(c.cells.length ? chainAt(c, x0, top + 66 + extra, shapes[i], true).gs : []);
@@ -3018,7 +2761,7 @@ function protDraw(P, get, onDay) {
       D[`pr:${key}`] = { t: `${c.name} · ${n(k + c.between.length, "pull request", "pull requests")}`, l: [...prs.map(x => `Day ${x[0]}: ${nums(x[1], 12)}`),
         c.between.length ? ["q", `Between Days: ${nums(c.between, 8)}. They grew the ability and built no promise drawn here.`] : null] };
       D[`ring:${key}`] = { t: `${c.name} · ${c.proven} of ${c.rechecked} proven`, l: [`${n(c.cells.length, "promise", "promises")} in the chain: ${Object.entries(c.counts).map(([s, v]) => `${v} ${lower(STATES[s] ? STATES[s].word : s)}`).join(", ")}.`,
-        ["q", "The count is graph 3's: only the promises the last re-check counted. A replaced promise, and one written and not built, stay in the chain and out of the count."]] };
+        ["q", "The count is only of the promises the last re-check counted. A replaced promise, and one written and not built, stay in the chain and out of the count."]] };
       if (c.score != null) D[`sc:${key}`] = { t: `${c.name} · score ${c.score}`, l: [`The dashboard's score for the ability, out of 100${c.parts ? `: ${c.parts}` : ""}.`] };
       const R = c.run;
       if (R) {
@@ -3051,11 +2794,11 @@ function protDraw(P, get, onDay) {
             ["q", `The chain above is ${c.proven} of ${c.rechecked} proven: by tests, not by a stop in a real run.`], from] };
       }
     });
-    top += H + 23;
+    top += H + ROWGAP;
   });
   // how to read one: the shortest rung chain of six or more, folded narrower, with four numbered marks
   const free = 5 - lines[lines.length - 1].length, ex = rungs.filter(c => c.cells.length >= 6).sort((a, b) => a.cells.length - b.cells.length)[0];
-  let VH = top - 23 + 36;
+  let VH = top - ROWGAP + 2.5;
   if (ex && free >= 2) {
     const x0 = 0.5 + (5 - free) * SLOT + 15, kp = el("g", { class: "keyp", "aria-label": "How to read a protein" });
     el("text", { class: "t-name", x: f(x0), y: f(lastTop + 22.5) }, "How to read one", kp);
@@ -3094,7 +2837,7 @@ function protDraw(P, get, onDay) {
   const between = C.reduce((s, c) => s + c.between.length, 0), shared = C.flatMap(c => c.cells).filter(x => x.also.length).length;
   [["The fold's shape means nothing.", " Only the order along the chain does. A chain turns where its tile runs out of room, and two cells that touch across a row have nothing to do with each other."],
     ["A real protein folds one way, and works or does not.", " These work residue by residue: a chain with one hollow cell still has every other promise proven."],
-    ["Time is only the Day numbers.", " A chain says the order promises were built in, not how long it took. The Day axis is in the folded graph below."],
+    ["Time is only the Day numbers.", " A chain says the order promises were built in, not how long it took. A small number marks where a new Day starts, and nothing here is drawn to a Day's length."],
     ["Pull requests between Days grew an ability and added no residue.", ` ${n(between, "pull request is", "pull requests are")} counted under a chain and drawn nowhere in it.`],
     ["A residue sits in one protein only.", ` ${n(shared, "promise touches", "promises touch")} more than one ability. Each is drawn once, under the first of its abilities in the dashboard's order. The pointer says which others it grew.`],
     ["A replaced residue stays in the chain.", ` In a cell it would be cut out. Here the ${cnt("replaced")} hollow cells keep their place, so a chain's length is every promise ever made for the ability.`]].forEach(([b, t]) => li(bends, b, t));
@@ -3102,7 +2845,7 @@ function protDraw(P, get, onDay) {
   const kin = id => { const x = byId[id]; if (!x) return []; const ids = [...x.replaced_by]; Object.values(byId).forEach(y => { if (y.replaced_by.includes(id)) ids.push(y.id); }); return ids.length ? [id, ...ids] : []; };
   const light = ids => { fig.classList.remove("foc"); Object.values(cellOf).forEach(g => g.classList.remove("lit")); const on = ids.filter(id => cellOf[id]); on.forEach(id => cellOf[id].classList.add("lit")); if (on.length) fig.classList.add("foc"); };
   const cellTip = x => ({ t: `${x.id} · Day ${x.day} · ${x.tag === "hold" ? "safety check" : "new work"}`, l: [x.text,
-    ["st", `${PRT_SAYS[x.state].replace(/^./, c => c.toUpperCase())}${x.state === "proven" && x.back ? "; the replay once saw it stop, and it came back" : ""}${x.state === "replaced" ? `: ${x.replaced_by.join(", ")}` : ""}${x.last && COUNTED.includes(x.state) ? ` (last re-checked at #${x.last})` : ""}. Graph 3 calls it “${(STATES[x.state] || STATES.unchecked).word}”.`],
+    ["st", `${PRT_SAYS[x.state].replace(/^./, c => c.toUpperCase())}${x.state === "proven" && x.back ? "; the replay once saw it stop, and it came back" : ""}${x.state === "replaced" ? `: ${x.replaced_by.join(", ")}` : ""}${x.last && COUNTED.includes(x.state) ? ` (last re-checked at #${x.last})` : ""}.`],
     ["q", x.prs.length ? `Cites ${n(x.prs.length, "pull request", "pull requests")}: ${nums(x.prs, 10)}.` : "Cites no pull request."],
     ...x.stops.filter(s => x.state !== "replaced" || s.held).map(s => ["q", `At #${s.pr} the replay first reported “${s.state}”${s.held ? `, and it held again by #${s.held}.` : ", and it has not been seen holding since."}`]),
     x.also.length ? ["q", `Drawn here, and it also grows: ${x.also.map(a => (C.find(c => c.key === a) || {}).name || a).join(", ")}.`] : null] });
@@ -3115,10 +2858,15 @@ function protDraw(P, get, onDay) {
   finds.addEventListener("pointerleave", () => light([]));
   // the page's Day buttons light one Day's promises
   const days = fig.querySelectorAll ? () => [...fig.querySelectorAll(".t-day")] : () => [];
+  // what the line above the chains says: every Day's promises, or the chosen Day's, chain by chain, as the view counts them
+  const dayOf = list => new Map(list || []), wrote = P.per_day || [];
+  const sayDay = day => { if (day == null) { say.textContent = wrote.length ? `Every Day: ${n(P.written, "promise", "promises")}, ${wrote.length > 1 ? `Days ${wrote[0][0]} to ${wrote[wrote.length - 1][0]}` : `Day ${wrote[0][0]}`}.` : ""; return; }
+    const k = dayOf(wrote).get(day) || 0, parts = C.map(c => [c, dayOf(c.per_day).get(day) || 0]).filter(p => p[1]);
+    say.textContent = `Day ${day}: ${k ? `${n(k, "promise", "promises")}, ${parts.map(([c, m]) => `${m} in “${c.name}”`).join(", ")}.` : "no promise."}`; };
+  sayDay(null);
   onDay.push(day => { Object.values(cellOf).forEach(g => g.classList.toggle("off", day != null && +g.getAttribute("data-d") !== day));
     days().forEach(t => t.classList.toggle("off", day != null && +t.getAttribute("data-d") !== day));
-    const k = day == null ? 0 : Object.values(byId).filter(x => x.day === day).length, in_ = day == null ? 0 : C.filter(c => c.cells.some(x => x.day === day)).length;
-    say.textContent = day == null ? "" : k ? `Day ${day}: ${n(k, "promise", "promises")}, in ${n(in_, "chain", "chains")}.` : `Day ${day} made no promise.`; });
+    sayDay(day); });
   return fig;
 }
 
@@ -3564,7 +3312,7 @@ function atpDraw(B, get, onDay) {
 }
 
 /* Graph 9 as growth rings, as the mockup at #228 draws it: a ring for each Day, as wide as the lines its own pull
-   requests changed, and below, a hatched ring for the work no Day owns, at the Day graph 9 places it. Counted in
+   requests changed, and below, a hatched ring for the work no Day owns, at the furthest Day begun when it merged. Counted in
    scripts/spec_drift_views.py (rings): every ring's lines, share and pull requests; this turns lines into px with one
    scale for both strips, and words them. Colours are in dashboard.css, under #rng. */
 const RNG_NAME = { prod: "Production code", test: "Tests", spec: "Specs", context: "Agent context", tooling: "Tooling" };
@@ -3591,7 +3339,11 @@ function rngDraw(R, get, onDay) {
   const aria = r => `${r.day != null ? `Day ${r.day}` : `Outside any Day, at Day ${r.at}`}: ${n(r.lines, "line", "lines")} changed in ${n(r.prs, "pull request", "pull requests")}. `
     + r.k.filter(k => r.day != null || k[1]).map(k => `${lower(RNG_NAME[k[0]])} ${k[2]}`).join(", ");
   const groups = [];
-  const strip = (rings, y0, hatched) => {
+  // a word's box, about 5.6 px a character, from 9 px above its baseline to 2 below, and whether two boxes touch
+  const box = (x, y, len, end) => { const w = 5.6 * len, x0 = end ? x - w : x; return [x0, x0 + w, y - 9, y + 2]; };
+  const hits = (p, q) => p[0] < q[1] + 2 && q[0] < p[1] + 2 && p[2] < q[3] && q[2] < p[3];
+  // `taken`: the boxes of the words already under the strip (its pith and bark); each run's words are added to it
+  const strip = (rings, y0, hatched, taken) => {
     let x = G.x0; const mid = y0 + G.h / 2, y1 = y0 + G.h, thin = [];
     rings.forEach(r => {
       const w = r.lines / L;
@@ -3617,28 +3369,51 @@ function rngDraw(R, get, onDay) {
       groups.push({ b, r });
       x += w + G.gap;
     });
-    // the rings too thin for a label: one lead under each run of them, and their names and lines after it
+    // the rings too thin for a label: one lead under each run of them, and their names and lines after it. Words that
+    // would touch words already there go to the run's other side, or a line lower on a longer lead, until they touch none.
     const runs = []; thin.forEach(t => { const last = runs[runs.length - 1]; if (last && Math.abs(last[last.length - 1].x + last[last.length - 1].w + G.gap - t.x) < 0.01) last.push(t); else runs.push([t]); });
-    runs.forEach(run => { const a = run[0].x + 0.5, z = run[run.length - 1].x + run[run.length - 1].w - 0.5;
-      el("path", { class: "lead", d: `M${f(a)} ${y1 + 6} V${y1 + 3} H${f(Math.max(a, z))} V${y1 + 6}` });
+    runs.forEach(run => { const a = run[0].x + 0.5, z = Math.max(a, run[run.length - 1].x + run[run.length - 1].w - 0.5);
       const words = run.map(t => `${ringName(t.r)}: ${comma(t.r.lines)}`).join(" · "), right = a + 5.6 * words.length > 1100;
-      el("text", { class: "t-lines", x: f(right ? Math.max(a, z) : Math.max(1, a - 0.5)), y: y1 + 17, "text-anchor": right ? "end" : null }, words); });
+      let at = null;
+      for (let k = 0; !at; k++) for (const end of right ? [true, false] : [false, true]) {
+        const x = end ? z : Math.max(1, a - 0.5), y = y1 + 17 + 12 * k, b = box(x, y, words.length, end);
+        if (!at && (k > 8 || (b[0] >= 0 && b[1] <= 1198 && !taken.some(t => hits(t, b))))) at = { x, y, end, b };
+      }
+      // a longer lead runs down to its words, and is not drawn where it would cross words already there
+      const lx = at.end ? z : a, stop = at.y - 10;
+      let more = "", from = y1 + 6;
+      if (at.y > y1 + 17) {
+        taken.filter(t => t[0] <= lx && lx <= t[1]).map(t => [t[2] - 1, t[3] + 1]).sort((p, q) => p[0] - q[0]).forEach(([c0, c1]) => {
+          if (Math.min(c0, stop) - from > 0.5) more += ` M${f(lx)} ${f(from)} V${f(Math.min(c0, stop))}`;
+          from = Math.max(from, c1); });
+        if (stop - from > 0.5) more += ` M${f(lx)} ${f(from)} V${f(stop)}`;
+      }
+      taken.push(at.b);
+      el("path", { class: "lead", d: `M${f(a)} ${y1 + 6} V${y1 + 3} H${f(z)} V${y1 + 6}` + more });
+      el("text", { class: "t-lines", x: f(at.x), y: at.y, "text-anchor": at.end ? "end" : null }, words); });
     return x - G.gap;
   };
   const head1 = el("text", { class: "t-head", x: 7, y: 10 }, "Inside the Days ");
   el("tspan", { class: "t-note" }, `· each ring is a Day’s own pull requests · ${n(R.inside.lines, "line", "lines")} in ${n(R.inside.prs, "pull request", "pull requests")}`, head1);
-  const upEnd = strip(D, G.up, false), bark = upEnd + 2.5;
+  // the pith's and the bark's words are placed first, so the thin rings' words keep clear of them
+  const bark = G.x0 + sum(D, r => r.lines / L) + G.gap * Math.max(0, D.length - 1) + 2.5, endY = G.up + G.h + 12;
+  const pith = D.length ? `pith · Day ${D[0].day}, ${D[0].first}` : "", barkW = D.length ? `bark · Day ${D[D.length - 1].day}, ${D[D.length - 1].last}` : "";
+  const upTaken = D.length ? [box(1, endY, pith.length, false), box(bark + 3.5, endY, barkW.length, true)] : [];
+  strip(D, G.up, false, upTaken);
   if (D.length) {
     el("circle", { class: "pith", cx: 3, cy: G.up + G.h / 2, r: 2.6 });
     el("path", { class: "bark", d: `M${f(bark)} ${G.up} Q${f(bark + 10)} ${G.up + G.h / 2} ${f(bark)} ${G.up + G.h}` });
-    el("text", { class: "t-end", x: 1, y: G.up + G.h + 12 }, `pith · Day ${D[0].day}, ${D[0].first}`);
-    el("text", { class: "t-end", x: f(bark + 3.5), y: G.up + G.h + 12, "text-anchor": "end" }, `bark · Day ${D[D.length - 1].day}, ${D[D.length - 1].last}`);
+    el("text", { class: "t-end", x: 1, y: endY }, pith);
+    el("text", { class: "t-end", x: f(bark + 3.5), y: endY, "text-anchor": "end" }, barkW);
   }
-  const head2 = el("text", { class: "t-head", x: 7, y: G.low - 37 }, "Outside any Day ");
+  // the lower strip moves down as far as the upper strip's words reach, 4 px clear of its heading's top
+  const LOW = G.low + Math.max(0, Math.max(0, ...upTaken.map(b => b[3])) + 4 - (G.low - 46));
+  const head2 = el("text", { class: "t-head", x: 7, y: LOW - 37 }, "Outside any Day ");
   el("tspan", { class: "t-note" }, O.length ? `· each ring is the work merged at that Day, while it was open or after it closed · ${n(R.out.lines, "line", "lines")} in ${n(R.out.prs, "pull request", "pull requests")}` : "· no pull request on no Day’s branch has merged yet", head2);
-  const lowEnd = strip(O, G.low, true);
-  if (O.length) { el("path", { class: "bark", d: `M${f(lowEnd + 2.5)} ${G.low} Q${f(lowEnd + 12.5)} ${G.low + G.h / 2} ${f(lowEnd + 2.5)} ${G.low + G.h}` });
-    el("text", { class: "t-end", x: 1195, y: G.low + G.h + 17, "text-anchor": "end" }, "bark · today"); }
+  const lowTaken = O.length ? [box(1195, LOW + G.h + 17, "bark · today".length, true)] : [];
+  const lowEnd = strip(O, LOW, true, lowTaken);
+  if (O.length) { el("path", { class: "bark", d: `M${f(lowEnd + 2.5)} ${LOW} Q${f(lowEnd + 12.5)} ${LOW + G.h / 2} ${f(lowEnd + 2.5)} ${LOW + G.h}` });
+    el("text", { class: "t-end", x: 1195, y: LOW + G.h + 17, "text-anchor": "end" }, "bark · today"); }
 
   // the two columns at the top right: the whole project by kind, inside the Days and outside; the narrower is 24 px
   const sides = [[R.inside, `The ${n(R.inside.n_days, "Day", "Days")}`, "all", false], ...(R.out.lines ? [[R.out, "Outside any Day", "out", true]] : [])];
@@ -3663,7 +3438,7 @@ function rngDraw(R, get, onDay) {
       const t = el("text", { class: "t-kind", x: f(right + 12), y: f(m.y + 3.5) }, `${RNG_NAME[m.k]} `);
       el("tspan", { class: "t-lines" }, `${comma(m.lines)} · ${m.share}`, t); });
   });
-  fig.setAttribute("viewBox", "0 0 1198 379");
+  fig.setAttribute("viewBox", `0 0 1198 ${Math.round(Math.max(379 + LOW - G.low, ...lowTaken.map(b => b[3] + 4)))}`);
   fig.setAttribute("aria-label", `Two strips of rings on one scale. Above, one ring for each Day${D.length ? ` from ${D[0].day} to ${D[D.length - 1].day}` : ""}, as wide as the lines its own pull requests changed, ${comma(R.inside.lines)} in all. Below, ${n(O.length, "ring", "rings")} of work outside any Day, ${n(R.out.lines, "line", "lines")}. Each ring is cut into bands by kind of file. Beside them, the whole project by kind`);
 
   // the line of figures, the scale, the stamp
@@ -3691,7 +3466,7 @@ function rngDraw(R, get, onDay) {
     if (O.length > 2 && 2 * R.top_out.lines > X.lines) li(finds, "Two rings hold most of it.", ` The work at ${andList(R.top_out.at.map(a => `Day ${a}`))} is ${comma(R.top_out.lines)} of the ${comma(X.lines)} lines outside any Day (${R.top_out.share}).`); }
   li(finds, "Production code grows inside the Days.", ` ${comma(I.w.prod)} of its ${comma(R.prod_lines)} lines are in a Day’s own pull requests.${X.w.prod ? ` Only ${comma(X.w.prod)} ${X.w.prod === 1 ? "is" : "are"} outside.` : ""}`);
   const [tk, tc] = R.tallest.length ? R.tallest[0] : ["test", 0];
-  if (D.length) li(finds, `${RNG_NAME[tk]} ${isAre(tk)} the tallest band in ${tc === D.length ? "all" : `${tc} of the`} ${n(D.length, "Day’s ring", "Days’ rings")}.`, `${R.spec_over_test.length ? ` Counted graph 9’s way, with specs and agent context as one kind, that kind is larger than tests on ${daySpan(R.spec_over_test)}.` : ""} Over the Days: tests ${comma(I.w.test)}, specs and agent context ${comma(I.w.spec + I.w.context)} (${comma(I.w.spec)} and ${comma(I.w.context)}), production code ${comma(I.w.prod)}, tooling ${comma(I.w.tooling)}.`);
+  if (D.length) li(finds, `${RNG_NAME[tk]} ${isAre(tk)} the tallest band in ${tc === D.length ? "all" : `${tc} of the`} ${n(D.length, "Day’s ring", "Days’ rings")}.`, `${R.spec_over_test.length ? ` Counted with specs and agent context as one kind, that kind is larger than tests on ${daySpan(R.spec_over_test)}.` : ""} Over the Days: tests ${comma(I.w.test)}, specs and agent context ${comma(I.w.spec + I.w.context)} (${comma(I.w.spec)} and ${comma(I.w.context)}), production code ${comma(I.w.prod)}, tooling ${comma(I.w.tooling)}.`);
   if (R.spread != null) li(finds, X.lines ? "The Days’ rings differ less than the others." : "How much the Days’ rings differ.", ` The widest Day is ${R.spread} times the narrowest (Day ${day(R.heavy).day} against Day ${day(R.light).day}).`
     + (O.length ? ` Outside the Days the widest ring is ${n(ow(R.wide_out).lines, "line", "lines")} and the narrowest ${comma(ow(R.thin_out).lines)}.` : ""));
   const seasons = R.seasons.map(([k, c]) => `${n(c, "Day", "Days")} took ${n(k, "calendar date", "calendar dates")}`);
@@ -3700,7 +3475,7 @@ function rngDraw(R, get, onDay) {
     ["A Day is not a season.", ` A tree’s ring is one year. A Day is a step of the plan${seasons.length ? `: ${andList(seasons)}` : ""}. Ring width says how much changed, not how fast.`],
     ["Old rings do not stay whole.", " Wood laid down stays where it is. A merged Day cannot be changed, but a later Day rewrites the same files, so a ring is what changed then, not what stands today."],
     ["A tree has no work between its rings.", ` Here the lower strip is ${low > up ? "wider" : "narrower"} than the upper one. It is not a second tree: its rings sit between the Days’ rings in time, and are drawn apart so the Days stay readable.`],
-    ["Some lines are not counted.", " Files a tool writes and binary files are left out, as in graph 9. Breaks on purpose never merge, so checking did more than its lines show."]].forEach(([b, t]) => li(bends, b, t));
+    ["Some lines are not counted.", " Files a tool writes and binary files are left out. Breaks on purpose never merge, so checking did more than its lines show."]].forEach(([b, t]) => li(bends, b, t));
 
   // the exact numbers
   const td = v => h("td", { class: "r" }, v);
@@ -3923,7 +3698,9 @@ function rfxDraw(R, get) {
   return fig;
 }
 
-/* A link to a graph folded under its new drawing (#g7, #g8, #g9, ...) opens every fold around it, and scrolls to it. */
+/* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10, #g11) opens every fold around it, and
+   scrolls to it. A link to a graph that has left the page (#g3, #g4, #g5, #g8, #g9) lands on the empty anchor in the
+   section drawn in its place, which is in no fold. */
 function openFolds(target) {
   for (let e = target; e; e = e.parentElement || e.parentNode) if (e.tagName && String(e.tagName).toUpperCase() === "DETAILS") e.open = true;
   if (target && target.scrollIntoView) target.scrollIntoView({ block: "start" });
@@ -4017,47 +3794,15 @@ function draw(M, DATA) {
   }));
   put("days", h("span", null, "Highlight one Day in every graph:"), chips);
 
-  /* Where we are: a tile lights its Day as its chip does; a Day with no spec only says what it is */
-  const W = M.where && !M.where.error ? M.where : null;
-  $("where").hidden = !W;
-  $("where-fold").hidden = !W;
-  $("now").hidden = !!W;
-  if (W) {
-    const READ = "Click a Day to see what it is, and to highlight it in every graph.";
-    put("where-kick", W.kicker);
-    put("where-count", W.count);
-    put("where-next", rich(W.next));
-    put("where-stop", W.stop ? [h("strong", null, "Next stop: "), W.stop] : "");
-    const tiles = [];
-    put("where-rows", W.rows.map(r => h("div", { class: "where-row" },
-      h("div", { class: "where-phase" }, h("b", null, r.name), h("small", null, r.sub)),
-      h("div", { class: "where-tiles" }, r.tiles.map(t => {
-        const b = h("button", { type: "button", class: `wt ${t.state}${t.stop ? (t.lifted ? " stop lifted" : " stop") : ""}`, "aria-pressed": "false", "aria-label": t.text, title: t.text },
-          t.label, t.end && h("i", { class: "wt-end" }), t.bar != null && h("i", { class: "wt-bar" }, h("i", { style: `width:${Math.round(t.bar * 100)}%` })));
-        b.addEventListener("click", () => {
-          const i = M.days.findIndex(d => d.day === t.day), on = b.getAttribute("aria-pressed") !== "true";
-          if (i >= 0) chips[on ? i + 1 : 0].click();
-          tiles.forEach(x => x.b.setAttribute("aria-pressed", x.t === t && on ? "true" : "false"));
-          put("where-read", on ? t.text : READ);
-        });
-        tiles.push({ b, t });
-        return b;
-      }), r.unnumbered && h("span", { class: "wt-wide" }, r.unnumbered)))));
-    put("where-read", READ);
-    const KEY = [["done", "Done"], ["open", "Closed, boxes open"], ["next", "Next"], ["active", "In progress (bar: tracks merged)"], ["planned", "Provisional"]];
-    put("where-key", [...KEY.map(([s, w]) => h("span", null, h("i", { class: `wt key ${s}` }), w)),
-      h("span", null, h("i", { class: "wt key planned" }, h("i", { class: "wt-end" })), "Ends a phase"),
-      h("span", null, h("i", { class: "wt key planned stop" }), "A stop")]);
-    onDay.push(day => tiles.forEach(x => x.b.setAttribute("aria-pressed", x.t.day === day ? "true" : "false")));
-  }
-
-  /* Where we are, as a ring, in the old panel's place: a Day on it presses its button, a second press lets it go */
+  /* Where we are, as a ring: a Day on it presses its button, a second press lets it go. The ring's middle says the next
+     step, so the plain Now line hides while the ring is drawn, and is all the page says of where the work is without it. */
   {
     const w = M.whr, failed = e => { put("whr-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`whr: ${e}`); };
     const press = day => { const i = M.days.findIndex(d => d.day === day); chips[i >= 0 && lit !== day ? i + 1 : 0].click(); };
     $("whr").hidden = !!w.empty;
+    $("now").hidden = false;
     if (w.error) failed(w.error);
-    else if (!w.empty) try { ringDraw(w, $, onDay, press); } catch (e) { failed(String((e && e.message) || e)); }
+    else if (!w.empty) try { ringDraw(w, $, onDay, press); $("now").hidden = true; } catch (e) { failed(String((e && e.message) || e)); }
   }
 
   /* Graph 1 read as a gene, in graph 1's place; graph 1 is folded under it, its level cards drawn in it */
@@ -4069,7 +3814,7 @@ function draw(M, DATA) {
   }
 
   /* Graph 2 as a gel, graphs 3 to 5 as proteins, graph 7 as proofreading, graph 8 as an energy budget, graph 9 as
-     growth rings and graph 10 as an actogram, in their places; the graphs themselves are folded under them */
+     growth rings and graph 10 as an actogram, in their places; graphs 2, 7 and 10 are folded under theirs */
   // graph 10 turns to a date the actogram's row names, once both are drawn
   const onDate = [];
   [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
@@ -4138,61 +3883,6 @@ function draw(M, DATA) {
       r.need && h("p", null, r.need),
       typeof r.of === "number" && h("span", { class: "track", role: "img", "aria-label": `${r.run} of ${r.of}` }, h("i", { style: `width:${Math.max(2, 100 * r.run / Math.max(1, r.of)).toFixed(1)}%` })),
       h("small", null, r.state))));
-  });
-
-  /* Graphs 3 to 5, joined: the line map mapGraph() laid out, and the trust strip (graph 4's history) under it */
-  graph("g3", (m, mark) => {
-    const B = M.g4, R = M.g5, L = M.map;
-    if (L.error) throw new Error(L.error);
-    if (L.broke) console.error(`g3: the promises could not be read: ${L.broke}`);
-    const n = L.cols.length, lastDay = n - 2, grid = `grid-template-columns:minmax(10rem, 14rem) repeat(${n}, minmax(52px, 1fr)) 6.5rem`;
-    const ROLE = { rung: "Needed to climb the levels", rail: "Rails: needed at every level" };
-    const NS = "http://www.w3.org/2000/svg", svg = (tag, a) => { const e = document.createElementNS(NS, tag); Object.entries(a).forEach(([k, v]) => e.setAttribute(k, v)); return e; };
-    const ring = ({ proven, counted }) => {
-      const s = svg("svg", { viewBox: "0 0 30 30", class: "ring", "aria-hidden": "true" }), C = 2 * Math.PI * 11;
-      s.append(svg("circle", { cx: 15, cy: 15, r: 11, class: "ring-track" }));
-      if (counted) s.append(svg("circle", { cx: 15, cy: 15, r: 11, class: "ring-arc", "stroke-dasharray": `${(C * proven / counted).toFixed(2)} ${C.toFixed(2)}`, transform: "rotate(-90 15 15)" }));
-      return s;
-    };
-    const row = a => {
-      const colour = a.colour ? `var(--l${a.colour})` : "var(--axis)";
-      const kids = [h("div", { class: "map-name" }, h("i", { class: "map-badge", style: `background:${colour}` }), a.name,
-        a.score != null && h("span", { class: "map-score", title: a.score_parts }, `score ${a.score}`))];
-      a.cells.forEach((c, i) => {
-        const size = 2 * (5 + Math.sqrt(c.n) * 1.7);
-        const cell = h("div", { class: "map-cell", style: `grid-column:${i + 2}` },
-          a.first >= 0 && c.day != null && i >= a.first && h("span", { class: "map-seg", style: `left:${i === a.first ? "50%" : "0"};right:${i === lastDay ? "50%" : "0"};background:${colour}` }),
-          c.day == null && c.n > 0 && h("span", { class: "map-seg between", style: `background:${colour}` }),
-          c.n ? mark(h("button", { type: "button", class: "station", style: `width:${px(size)};height:${px(size)}` }, size >= 16 ? String(c.n) : ""), c)
-            : c.tiles.length ? h("span", { class: "station small" }) : null,
-          c.tiles.length > 0 && h("div", { class: "map-dots" }, c.tiles.map(x => mark(h("button", { type: "button", class: `tile ${x.status}` }), x))));
-        kids.push(c.day == null ? cell : forDays(cell, [c.day]));
-      });
-      kids.push(mark(h("button", { type: "button", class: "map-ring", style: `grid-column:${n + 2}` }, ring(a.ring),
-        h("span", null, a.ring.counted ? `${a.ring.proven} of ${a.ring.counted}` : "none yet")), a.ring));
-      return h("div", { class: "map-row", style: grid }, kids);
-    };
-    const rows = [h("div", { class: "map-row head", style: grid }, h("div", { class: "map-name" }),
-      L.cols.map((c, i) => { const x = h("div", { class: "map-h", style: `grid-column:${i + 2}` }, c.day == null ? "Between Days" : `Day ${c.day}`, h("small", null, c.mark)); return c.day == null ? x : forDays(x, [c.day]); }),
-      h("div", { class: "map-h", style: `grid-column:${n + 2}` }, "Proven"))];
-    let role = null;
-    L.lines.forEach(a => {
-      if (a.role && a.role !== role) { role = a.role; rows.push(h("div", { class: "map-group" }, ROLE[role] || role)); }
-      rows.push(row(a));
-    });
-    put("g3-plot", h("div", { class: "map", style: `min-width:${Math.max(720, 230 + 56 * n + 110)}px` }, rows, L.broke && h("p", { class: "load-error" }, `The promises could not be drawn: ${L.broke}`)));
-    key("g3-key", [...(L.broke ? [] : B.key.map(k => [`tile ${k.status}`, k.text, k.glyph])), ["station", "A Day's pull requests for the ability"], ["map-badge", "An ability's line, from the Day it was first built"]]);
-    $("g3-hist-say").textContent = L.broke ? "" : B.histSay;
-    put("g3-hist", L.broke ? [] : B.hist.map(x => mark(h("button", { type: "button", class: "strip-col" },
-      ["skipped", "broken", "repair", "unproven", "proven"].map(s => h("span", { class: s, style: `height:${px(x.counts[s] * 48 / B.histMax)}` }))), x)));
-    const last = !L.broke && B.hist[B.hist.length - 1];
-    put("g3-hist-n", last ? [String(last.counts.proven), " of ", String(last.total), h("small", null, `proven, over ${plural(B.hist.length, "re-check", "re-checks")}`)] : []);
-    $("g3-trust").hidden = !last;
-    if (!L.broke) {
-      mark.base({ t: B.read.t, b: [...B.read.b, `${R.read.t}.`, ...R.read.b, ...m.read.b] });
-      table("g4-table", B.table);
-      table("g5-table", R.table);
-    }
   });
 
   /* Graph 6 */
@@ -4266,52 +3956,6 @@ function draw(M, DATA) {
       h("span", null, `A cell shows at most ${SIEVE_CAP} dots; "+N" counts the rest. The share on the right: tags a blind reader gave differently, and ↑ or ↓ against the Day read before.`));
     put("g7-plot", pipeline);
     put("g7-days", h("details", { class: "by-day" }, h("summary", null, "By Day: each Day's catches side by side"), sieveKey, h("div", { class: "scroll-x" }, sieve)));
-  });
-
-  /* Graphs 8 and 9: stacked bars over a shared baseline, with rows of counts under them */
-  function bars(g, m, mark, items, parts, under) {
-    const H = 150;
-    const stack = x => parts.map(([cls, value]) => [cls, value(x) / m.max * H]).filter(p => p[1] >= 1).map(([cls, hgt], i) => h("span", { class: `seg ${cls}${i ? "" : " cap"}`, style: `height:${Math.max(2, Math.round(hgt))}px` }));
-    put(`${g}-plot`, h("div", { class: "bars" }, items.map(x => forDays(mark(h("button", { type: "button", class: x.pale ? "bar aside" : "bar" }, h("b", null, x.top), stack(x)), x), x.lit))),
-      h("div", { class: "bar-labels" }, items.map(x => forDays(h("div", null, x.under), x.lit))),
-      under.map(([name, value]) => h("div", { class: "bar-extra" }, h("p", null, name), h("div", { class: "mono" }, items.map(x => forDays(h("div", null, value(x)), x.lit))))));
-  }
-  graph("g8", (m, mark) => {
-    $("g8-say").textContent = m.say;
-    const items = m.bars.map(x => ({ ...x, top: `$${Math.round(x.total)}`, under: x.label, lit: x.days }));
-    const hooks = [["Calls the hooks refused", x => x.refused ? String(x.refused) : "·"], ["Long outputs the hooks cut short", x => x.cut ? String(x.cut) : "·"]];
-    if (!m.byDay) {
-      key("g8-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-      bars("g8", m, mark, items, [["rest", x => x.aud + x.other], ["past", x => x.past || 0], ["main", x => x.main - (x.past || 0)]], hooks);
-      return;
-    }
-    // The same dates two ways: by who ran each session (the view above), or by the Day each session worked on.
-    const byWho = h("button", { type: "button", "aria-pressed": "true" }, "By who"), byDay = h("button", { type: "button", "aria-pressed": "false" }, "By Day");
-    const toggles = h("div", { class: "g10-dates" }, byWho, byDay);
-    const show = who => {
-      byWho.setAttribute("aria-pressed", who ? "true" : "false");
-      byDay.setAttribute("aria-pressed", who ? "false" : "true");
-      mark.base(m.read);
-      put("g8-key", toggles, (who ? m.key : m.byDay.key).map(([k, text]) => h("span", null, h("i", { class: `sw ${k}` }), text)));
-      if (who) {
-        bars("g8", m, mark, items, [["rest", x => x.aud + x.other], ["past", x => x.past || 0], ["main", x => x.main - (x.past || 0)]], hooks);
-        put("g8-byday");
-      } else {
-        bars("g8", m, mark, items, [["out", x => x.out], ["day", x => x.day]], [["Outside any Day", x => x.share == null ? "·" : `${x.share}%`], ...hooks]);
-        put("g8-byday", h("strong", null, m.byDay.t), ` ${m.byDay.b}`);
-      }
-    };
-    byWho.addEventListener("click", () => show(true));
-    byDay.addEventListener("click", () => show(false));
-    show(true);
-  });
-  graph("g9", (m, mark) => {
-    key("g9-key", m.key.map(([k, text]) => [`sw ${k}`, text]));
-    // A Day's paler bar of outside-any-Day work follows its own bar, and counts in no Day's size.
-    const items = m.bars.flatMap(x => [{ ...x, top: x.label, under: String(x.day), lit: [x.day] },
-      ...(x.aside ? [{ ...x.aside, top: x.aside.label, under: "+", lit: [x.day], pale: true, prs: x.aside.prs, ratio: "·" }] : [])]);
-    bars("g9", m, mark, items, m.key.filter(([k]) => k !== "aside").reverse().map(([k]) => [k, x => x.w[k]]),
-      [["Pull requests merged", x => String(x.prs)], ["Test lines for each production line", x => x.ratio]]);
   });
 
   /* Graph 2 */
