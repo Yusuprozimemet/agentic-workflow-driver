@@ -168,7 +168,55 @@ def prf_line(m):
                         + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line]
+def atp_line(m):
+    """The energy budget against graph 8 (folded under it): what it split by kind plus what it could not split is graph
+    8's dollars, to the cent; and the whole beads are the dollars over the unit, rounded, in both views."""
+    a, g8 = m.get("atp") or {}, m.get("g8") or {}
+    if a.get("error") or g8.get("error"):
+        return False, f"budget: not drawn ({a.get('error') or g8.get('error')})"
+    theirs = round(sum(b.get("total") or 0 for b in g8.get("bars") or []), 2)
+    if a.get("empty"):
+        return theirs == 0, f"budget: not drawn | graph 8: ${theirs:.2f}: " + ("agree" if theirs == 0 else "DISAGREE")
+    split, rest = round(sum(a["kinds"][:3]), 2), round(a["kinds"][3], 2)
+    ours, unit, beads = round(sum(a["kinds"]), 2), a["unit"], a["beads"]
+    views = [sum(c["b"] for c in a["cols"][v]) for v in ("date", "day")]
+    agree = ours == theirs == round(a["total"], 2) and views == [beads, beads] and beads == int(a["total"] / unit + 0.5)
+    return agree, (f"budget: split ${split:.2f} + not split ${rest:.2f} = ${ours:.2f} | graph 8: ${theirs:.2f}: "
+                   + ("agree" if agree else f"DISAGREE (beads by date {views[0]}, by Day {views[1]})")
+                   + f"; {beads} beads x ${unit} = ${beads * unit:.2f} against ${a['total']:.2f} exact")
+
+
+def rng_line(m):
+    """The rings against graph 9 (folded under them): the Days' lines, the lines outside any Day and the lines before
+    Day 1 are graph 9's bars, its paler bars beside them and its "before Day 1"; specs plus agent context are graph 9's
+    spec, Day by Day. Rows in neither (a Day not in the data, no pull request after Day 1 began) are in no ring and no
+    bar of graph 9; they are printed, and the rings' total with them must be every row's lines, so none vanishes."""
+    r, g9 = m.get("rng") or {}, m.get("g9") or {}
+    if r.get("error") or g9.get("error"):
+        return False, f"rings: not drawn ({r.get('error') or g9.get('error')})"
+    bars = g9.get("bars") or []
+    days_9, out_9 = sum(b["total"] for b in bars), sum((b.get("aside") or {}).get("total", 0) for b in bars)
+    before_9 = g9.get("before") or 0
+    if r.get("empty"):
+        agree = days_9 + out_9 + before_9 == 0
+        return agree, "rings: no ring | graph 9: " + ("no line either: agree" if agree else "DISAGREE")
+    days, out, before = r["inside"]["lines"], r["out"]["lines"], r["before"]["lines"]
+    per_day = {x["day"]: (x["lines"], x["w"]["spec"] + x["w"]["context"]) for x in r["days"]}
+    per_day_9 = {b["day"]: (b["total"], b["w"]["spec"]) for b in bars if b["total"]}
+    per_at = {x["at"]: x["lines"] for x in r["outside"]}
+    per_at_9 = {b["day"]: b["aside"]["total"] for b in bars if b.get("aside") and b["aside"]["total"]}
+    spec, ctx, spec_9 = r["inside"]["w"]["spec"], r["inside"]["w"]["context"], sum(b["w"]["spec"] for b in bars)
+    loose = r["unplaced"]["lines"]
+    differ = [w for w, a, b in (("Days", (days, per_day), (days_9, per_day_9)), ("outside", (out, per_at), (out_9, per_at_9)),
+                                ("before Day 1", before, before_9), ("spec", spec + ctx, spec_9),
+                                ("every row", r["total"] + loose, r["all_lines"])) if a != b]
+    return not differ, (f"rings: Days {days:,} + outside {out:,} + before Day 1 {before:,} = {r['total']:,} | graph 9: "
+                        f"Days {days_9:,} + beside {out_9:,} + before Day 1 {before_9:,} = {days_9 + out_9 + before_9:,}; "
+                        f"specs {spec:,} + context {ctx:,} = graph 9's spec {spec_9:,}; {loose:,} lines in neither: "
+                        + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line]
 
 
 def main(argv=None):

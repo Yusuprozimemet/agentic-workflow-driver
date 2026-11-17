@@ -1524,5 +1524,204 @@ class ProofreadingTest(unittest.TestCase):
         )
 
 
+def budget_data(absent=(), commit="abc"):
+    """Five token rows over three dates. Priced again with token-usage.py's list prices
+    (claude-opus-5-5: 4, 5, 8, 0.20, 20 a million): A is 0.41% off its cost and is split; B, an
+    auditor's cache write at the five-minute price, is 2% off and is not; C, the implementer's, is
+    exact; D's model has no price; E has no cost_past_150k, so its date's rail is unknown."""
+
+    def tok(date, day, agent, model, cost, past=None, **n):
+        row = {"date": date, "day": day, "agent": agent, "model": model, "cost": cost, "replies": 3}
+        row.update({k: n.get(k, 0) for k in ("input", "cache_write", "cache_read", "output")})
+        if past is not None:
+            row["cost_past_150k"] = past
+        return row
+
+    opus = "claude-opus-5-5"
+    return {
+        "tokens": [
+            tok(
+                "2026-01-01",
+                1,
+                "main",
+                opus,
+                1.21,
+                0.5,
+                input=1000,
+                cache_write=100000,
+                cache_read=1000000,
+                output=10000,
+            ),
+            tok("2026-01-01", None, "spec-auditor", opus, 1.02, 0.0, cache_write=200000),
+            tok(
+                "2026-01-02",
+                2,
+                "implementer",
+                opus,
+                4.0,
+                0.0,
+                cache_write=400000,
+                cache_read=5000000,
+                output=50000,
+            ),
+            tok("2026-01-02", None, "main", "a-model-with-no-price", 3.0, 1.0, output=10),
+            tok("2026-01-03", 2, "defect-rater", opus, 2.0, output=100000),
+        ],
+        "refusals": [{"date": "2026-01-01", "guard": "read-guard", "refused": 2}],
+        "days": [
+            {"day": 1, "status": "done", "worked": ["2026-01-01", "2026-01-01"]},
+            {"day": 2, "status": "active", "worked": ["2026-01-02", "2026-01-03"]},
+        ],
+        "data": {"branch": "dashboard-data", "commit": commit, "at": None, "absent": list(absent)},
+        "now": {"head": "abcdef1234", "last_pr": 2, "generated": "2026-01-04T09:00+00:00"},
+    }
+
+
+class BudgetTest(unittest.TestCase):
+    """budget(): graph 8's dollars as beads of $2, split by kind and by who, by date and by Day."""
+
+    def budget(self, data):
+        return load("spec_drift_views", "spec_drift_views.py").budget(data)
+
+    def test_a_row_more_than_1pct_off_is_not_split_and_a_split_rows_parts_sum_to_its_cost(self):
+        b = self.budget(budget_data())
+        self.assertEqual([round(x, 2) for x in b["kinds"]], [1.2, 2.81, 3.2, 4.02])
+        self.assertEqual((b["split"]["rows"], b["unsplit"]["rows"]), (3, 2))
+        self.assertEqual(round(sum(b["kinds"]), 2), round(b["total"], 2))
+        self.assertEqual(round(b["total"], 2), 11.23)
+        self.assertEqual([round(x, 2) for x in b["who"]], [4.21, 1.02, 2.0, 4.0, 0.0])
+
+    def test_largest_remainder_keeps_the_whole_beads_and_each_column_within_one(self):
+        b = self.budget(budget_data())
+        self.assertEqual(b["beads"], 6)
+        for view in ("date", "day"):
+            cols = b["cols"][view]
+            self.assertEqual(sum(c["b"] for c in cols), 6, view)
+            self.assertEqual([c["label"] for c in cols if abs(c["b"] - c["u"] / 2) >= 1], [])
+            self.assertEqual([c["label"] for c in cols if sum(c["kb"]) != c["b"]], [])
+            self.assertEqual([c["label"] for c in cols if sum(c["wb"]) != c["b"]], [])
+        self.assertEqual([c["b"] for c in b["cols"]["date"]], [1, 4, 1])
+
+    def test_the_day_view_has_a_column_for_work_on_no_day(self):
+        cols = self.budget(budget_data())["cols"]["day"]
+        self.assertEqual([(c["day"], c["b"]) for c in cols], [(1, 1), (2, 3), (None, 2)])
+        self.assertEqual(round(cols[-1]["u"], 2), 4.02)
+
+    def test_the_rail_is_unknown_on_a_date_with_no_past_150k_figure(self):
+        cols = self.budget(budget_data())["cols"]["date"]
+        self.assertEqual([c["p"] for c in cols], [0.5, 1.0, None])
+
+    def test_the_days_worked_on_each_date_and_their_pills(self):
+        b = self.budget(budget_data())
+        self.assertEqual([c["days"] for c in b["cols"]["date"]], [[1], [2], [2]])
+        self.assertEqual(
+            [(p["day"], p["from"], p["to"], p["lane"]) for p in b["pills"]],
+            [(1, 0, 0, 0), (2, 1, 2, 0)],
+        )
+
+    def test_with_the_data_branch_or_its_token_usage_json_missing_there_is_no_budget(self):
+        for data in (budget_data(commit=None), budget_data(absent=["token-usage.json"])):
+            self.assertTrue("empty" in self.budget(data), "the beads would be drawn")
+        self.assertNotIn("empty", self.budget(budget_data(absent=["sessions.json"])))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_budget_reconciles_with_graph_8_on_demo_data(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        agree, line = reconcile.atp_line(reconcile.model(demo_data.demo()))
+        self.assertTrue(agree, line)
+        self.assertRegex(
+            line, r"^budget: split \$[\d.]+ \+ not split \$[\d.]+ = \$[\d.]+ .*: agree"
+        )
+
+
+def rings_data():
+    """A start with lines before Day 1, two Days and two pull requests on no Day's branch: #3
+    merged while Day 1 was open, #6 while Day 2 was."""
+
+    def row(pr, own, kind, **work):
+        w = dict.fromkeys(("spec", "context", "prod", "test", "tooling"), 0)
+        w.update(work)
+        branch = f"day-0{own}/x" if own else "tooling/x" if pr else ""
+        return {
+            "pr": pr,
+            "own_day": own,
+            "kind": kind,
+            "branch": branch,
+            "work": w,
+            "date": "2026-01-0" + str(pr or 1),
+            "title": f"#{pr}",
+        }
+
+    return {
+        "rows": [
+            row(None, None, "origin", spec=5),
+            row(1, 1, "spec", spec=30, context=10),
+            row(2, 1, "code", prod=40, test=60),
+            row(3, None, "other", tooling=100, test=20),
+            row(4, 1, "close", spec=2),
+            row(5, 2, "code", prod=10, test=30, context=5),
+            row(6, None, "other", tooling=7),
+        ],
+        "days": [
+            {"day": 1, "status": "done", "title": "One"},
+            {"day": 2, "status": "active", "title": "Two"},
+        ],
+        "now": {"head": "abcdef1234", "last_pr": 6, "generated": "2026-01-07T09:00+00:00"},
+    }
+
+
+class RingsTest(unittest.TestCase):
+    """rings(): graph 9's lines as growth rings, a Day's own work above, work on no Day below."""
+
+    def rings(self, data):
+        return load("spec_drift_views", "spec_drift_views.py").rings(data)
+
+    def test_a_pull_request_belongs_to_the_day_graph_9_gives_it(self):
+        r = self.rings(rings_data())
+        self.assertEqual(
+            [(x["day"], x["lines"], x["prs"]) for x in r["days"]], [(1, 142, 3), (2, 45, 1)]
+        )
+        self.assertEqual(
+            [(x["at"], x["lines"], x["prs"]) for x in r["outside"]], [(1, 120, 1), (2, 7, 1)]
+        )
+        self.assertEqual((r["before"]["lines"], r["unplaced"]["lines"]), (5, 0))
+
+    def test_specs_and_agent_context_are_two_bands(self):
+        day1 = self.rings(rings_data())["days"][0]
+        self.assertEqual(
+            [(k[0], k[1]) for k in day1["k"]],
+            [("prod", 40), ("test", 60), ("spec", 32), ("context", 10), ("tooling", 0)],
+        )
+        self.assertEqual([k[2] for k in day1["k"]], ["28%", "42%", "23%", "7.0%", "0%"])
+
+    def test_a_share_is_rounded_as_the_picture_shows_it(self):
+        share = load("spec_drift_views", "spec_drift_views.py")._share
+        cases = [
+            (0.2239, "22%"),
+            (0.0328, "3.3%"),
+            (0.0028, "0.28%"),
+            (0.000465, "0.05%"),
+            (0, "0%"),
+            (1, "100%"),
+            (0.00001, "<0.01%"),
+        ]
+        self.assertEqual([share(x) for x, _ in cases], [w for _, w in cases])
+
+    def test_the_totals_are_graph_9s(self):
+        r = self.rings(rings_data())
+        self.assertEqual((r["inside"]["lines"], r["out"]["lines"], r["total"]), (187, 127, 319))
+        self.assertEqual(r["all_lines"], 319)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_rings_reconcile_with_graph_9(self):
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        data = rings_data()
+        data["rings"] = self.rings(data)
+        for d in (data, demo_data.demo()):
+            agree, line = reconcile.rng_line(reconcile.model(d))
+            self.assertTrue(agree, line)
+            self.assertRegex(line, r"^rings: Days [\d,]+ \+ outside [\d,]+ .*: agree")
+
+
 if __name__ == "__main__":
     unittest.main()

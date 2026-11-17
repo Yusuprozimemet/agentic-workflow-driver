@@ -603,8 +603,52 @@
 
   <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
 
-  <div class="pair">
-    <section class="graph" id="g8">
+  <section class="graph" id="atp" data-by="kind" data-grp="date">
+    <div class="graph-head">
+      <p class="graph-n">Graph 8 · drawn as an energy budget; the old graph 8 is folded below</p>
+      <h2>What did it cost?</h2>
+      <p class="graph-say">One bead is $2 of tokens at list prices, stacked by date: round beads kept the conversation in mind, square ones made something new.</p>
+    </div>
+    <div class="figs" id="atp-figs"></div>
+    <div class="ctl" id="atp-ctl">
+      <div role="group" aria-label="Colour the beads by"><span>Colour by</span><button type="button" data-set="by" data-val="kind" aria-pressed="true">What it bought</button><button type="button" data-set="by" data-val="who" aria-pressed="false">Who spent it</button></div>
+      <div role="group" aria-label="One column for each"><span>A column for each</span><button type="button" data-set="grp" data-val="date" aria-pressed="true">Date</button><button type="button" data-set="grp" data-val="day" aria-pressed="false">Day</button></div>
+    </div>
+    <p class="key" id="atp-key"></p>
+    <div class="scroll" id="atp-scroll"><svg class="fig" id="atp-fig" viewBox="0 0 1198 266" role="group"></svg></div>
+    <p class="hint">Point at a column, or Tab to one and use the arrow keys, for its dollars by kind and by who, its replies and the calls the hooks refused. The figure over a column is its exact dollars. A Day's button above dims every column not on that Day.</p>
+    <details class="exact"><summary>How to read it</summary>
+      <p>Each column is a date with a session, and a taller column is a dearer date. One bead is $2 of tokens at list prices. Read a column from the bottom: the round beads are upkeep, the dollars spent reading the conversation again on every reply. The square beads above them are growth: writing new context, then writing output. The hatched rail beside a column is as tall as the dollars spent in replies that read more than 150k tokens, the part a fresh session would mostly spare. The buttons colour the same beads by who spent them, or stack them by the Day whose branch the session worked on. The pills under the dates are the Days worked on each date.</p>
+      <dl class="lg">
+        <dt>A bead <small>a unit of energy</small></dt>
+        <dd><span class="kt">$2 of tokens at the list prices of the pay-per-token API, rounded. <i class="n" id="atp-k-beads"></i> beads in all, the same beads in every view.</span></dd>
+        <dt>Upkeep <small>basal metabolism</small></dt>
+        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q kr" x="1" y="1" width="7" height="7"/></svg>round: re-reading. Every reply reads the whole conversation again from the cache. It is spent whether or not anything is built.</span></dd>
+        <dt>Growth <small>building new tissue</small></dt>
+        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q kw" x="1" y="1" width="7" height="7"/></svg>square: writing context. What a reply adds to the conversation is written to the cache, and fresh input is counted with it.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q ko" x="1" y="1" width="7" height="7"/></svg>square: writing output. The replies themselves: code, specs, commands and reports.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q ku" x="1" y="1" width="7" height="7"/></svg>hollow: a row whose cost could not be split.</span></dd>
+        <dt>Past 150k <small>a rate a fresh start lowers</small></dt>
+        <dd><span><svg width="6" height="14" viewBox="0 0 6 14" aria-hidden="true"><rect class="rail" x="1" y="0.5" width="4" height="13" rx="1"/></svg>the hatched rail: the dollars of the replies that read more than 150k tokens, on the same scale as the beads beside it. It counts whole replies, so it is not one of the colours. A row with no such figure is not known, and is left out of it.</span></dd>
+        <dt>Who spent it <small>the organs</small></dt>
+        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wm" x="1" y="1" width="7" height="7"/></svg>main session</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wa" x="1" y="1" width="7" height="7"/></svg>auditors</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wd" x="1" y="1" width="7" height="7"/></svg>defect-rater</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wi" x="1" y="1" width="7" height="7"/></svg>implementer</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wx" x="1" y="1" width="7" height="7"/></svg>other agents</span><span>round is the main session, square an agent it started. The auditors are every agent with auditor in its name; other agents are those the other four names do not cover.</span></dd>
+      </dl>
+      <p id="atp-round"></p>
+      <p id="atp-split"></p>
+      <div class="tbl" id="atp-tbl-date"></div>
+      <div class="tbl" id="atp-tbl-day"></div>
+      <p class="stamp" id="atp-stamp"></p>
+    </details>
+    <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+      <div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="atp-finds"></ul></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="atp-bends"></ul></div>
+      </div>
+    </details>
+    <div id="atp-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g8-fold">
+    <details class="exact"><summary>Graph 8 as it was, folded: dollars by date</summary>
+    <div id="g8">
       <div class="graph-head">
         <p class="graph-n">Graph 8</p>
         <h2>What did it cost?</h2>
@@ -615,9 +659,61 @@
       <p id="g8-byday"></p>
       <div class="readout tall" id="g8-read" aria-live="polite"></div>
       <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g8-table"></table></div></details>
-    </section>
+    </div>
+    </details>
+  </section>
 
-    <section class="graph" id="g9">
+  <section class="graph" id="rng">
+    <div class="graph-head">
+      <p class="graph-n">Graph 9 · drawn as growth rings; the old graph 9 is folded below</p>
+      <h2>Where did the work go?</h2>
+      <p class="graph-say">Each ring is a Day, as wide as the lines its pull requests changed, and its bands show what kind of file they were in.</p>
+    </div>
+    <div class="rng-figs" id="rng-figs"></div>
+    <div class="rng-key">
+      <span><i class="rng-sw k-prod"></i>Production code</span>
+      <span><i class="rng-sw k-test"></i>Tests</span>
+      <span><i class="rng-sw k-spec"></i>Specs</span>
+      <span><i class="rng-sw k-context"></i>Agent context</span>
+      <span><i class="rng-sw k-tooling"></i>Tooling</span>
+      <i class="sep" aria-hidden="true"></i>
+      <span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect class="k-spec" width="18" height="14" rx="1"/></svg>a Day's own work</span>
+      <span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect class="k-spec" width="18" height="14" rx="1"/><rect class="over" width="18" height="14" rx="1" fill="url(#rng-hatch)"/></svg>hatched: outside any Day</span>
+      <i class="sep" aria-hidden="true"></i>
+      <span><svg width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path class="rule" d="M1 2V10M19 2V10M1 6H19"/></svg>width: lines changed</span>
+      <span><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><path class="rule" d="M2 1H10M2 15H10M6 1V15"/></svg>height: share of the ring</span>
+    </div>
+    <div class="rng-scroll" id="rng-scroll"><svg class="rng-fig" id="rng-fig" viewBox="0 0 1198 379" role="group"></svg></div>
+    <p class="rng-hint">Point at a ring, or reach it with the Tab key, for the Day, its pull requests and its lines by kind. Both strips share one scale: a ring 1 px wide is about <span id="rng-scale"></span> lines. A Day's button above dims every ring not of that Day.</p>
+    <details class="exact"><summary>How to read it</summary>
+      <p class="rng-read">Read each strip from the left, the first Day, to the right, today. A wide ring is a heavy Day: its width is the lines added plus the lines deleted in the Day's own merged pull requests. Inside a ring the bands are stacked in one fixed order, and a band's height is that kind's share of the ring, so a band's area is its lines. The lower strip is the work that belongs to no Day, mostly the dashboard and the tooling. It is placed as graph 9 places it, at the Day that was open, or had last closed, when it merged, and it counts in no Day's size. The two columns at the top right add each strip up. Why rings: a ring records how much a tree grew in one season and cannot be changed afterwards, as a merged Day cannot.</p>
+      <dl class="rng-lg">
+        <dt>A ring <small>a growth ring: one season's wood</small></dt>
+        <dd><span><svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true"><rect class="k-prod" width="24" height="5"/><rect class="k-test" y="5" width="24" height="8"/><rect class="k-spec" y="13" width="24" height="5"/><path class="late" d="M24.6 0V18"/></svg>the merged pull requests of one Day, by the Day their branch names. The dark line at its right edge is where the Day ends</span></dd>
+        <dt>Its width <small>ring width: how much the tree grew</small></dt>
+        <dd><span>lines added plus lines deleted, printed above the ring. Files a tool writes (the dashboard's count files, lock files, screenshots) and binary files are left out</span></dd>
+        <dt>Its bands <small>tissue: what the season's growth was made of</small></dt>
+        <dd><span><i class="rng-sw k-prod"></i>production code: the driver itself, and any file no other kind names</span><span><i class="rng-sw k-test"></i>tests</span><span><i class="rng-sw k-spec"></i>specs: the plan and the Days' specs</span><span><i class="rng-sw k-context"></i>agent context: other Markdown, the agents' briefs and settings, the docs</span><span><i class="rng-sw k-tooling"></i>tooling: scripts, workflows, the dashboard</span><span>Always in this order, top to bottom. Graph 9 counts specs and agent context as one kind; here they are two bands of one hue. A band tall enough carries its share.</span></dd>
+        <dt>Hatched rings <small>no counterpart: a tree grows nothing between its rings</small></dt>
+        <dd><span><svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect class="k-tooling" width="18" height="14" rx="1"/><rect class="over" width="18" height="14" rx="1" fill="url(#rng-hatch)"/></svg>pull requests on no Day's branch. Graph 9 draws them as a paler bar beside the Day. A ring too thin for a label is named under the strip</span></dd>
+        <dt>The two ends <small>pith and bark</small></dt>
+        <dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><circle class="pith" cx="3" cy="7" r="2.6"/><path class="bark" d="M22 2V12"/></svg>the dot is the pith, the first Day. The thick line is the bark, the last merge counted</span></dd>
+      </dl>
+      <p class="rng-stamp" id="rng-stamp"></p>
+    </details>
+    <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+      <div class="rng-cols">
+        <div><h3>What the picture shows</h3><ul class="rng-finds" id="rng-finds"></ul></div>
+        <div><h3>Where the model bends</h3><ul class="rng-plain" id="rng-bends"></ul></div>
+      </div>
+    </details>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="rng-table"></table></div></details>
+    <div id="rng-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g9-fold">
+    <details class="exact"><summary>Graph 9 as it was, folded: lines by Day</summary>
+    <div id="g9">
       <div class="graph-head">
         <p class="graph-n">Graph 9</p>
         <h2>Where did the work go?</h2>
@@ -627,8 +723,9 @@
       <div class="bar-plot" id="g9-plot"></div>
       <div class="readout tall" id="g9-read" aria-live="polite"></div>
       <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g9-table"></table></div></details>
-    </section>
-  </div>
+    </div>
+    </details>
+  </section>
 
   <section class="graph" id="g10">
     <div class="graph-head">

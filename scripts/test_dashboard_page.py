@@ -67,7 +67,7 @@ PLAN_BAR = r"""
 const fs = require("fs"), vm = require("vm");
 const node = tag => { const n = { tag, attrs: {}, kids: [], textContent: "", hidden: false,
   setAttribute(k, v) { this.attrs[k] = String(v); }, appendChild(c) { this.kids.push(c); return c; }, append(...c) { c.forEach(x => this.kids.push(x)); },
-  replaceChildren(...c) { this.kids = c.flat(); }, addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }) };
+  replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c.flat(); }, addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }) };
   n.style = { set cssText(v) { n.attrs.style = v; } }; Object.defineProperty(n, "className", { set(v) { this.attrs.class = v; }, get() { return this.attrs.class || ""; } });
   return n; };
 const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document: { createElementNS: (ns, tag) => node(tag), createElement: tag => node(tag) },
@@ -90,6 +90,11 @@ def model(data):
     # Graph 7's gates, phases and cost per catch, as spec-drift.py writes them (spec_drift_views.proofreading).
     if isinstance(data.get("days"), list) and "proofreading" not in data:
         data = dict(data, proofreading=views.proofreading(data))
+    # Graph 8's beads and graph 9's rings, as spec-drift.py writes them (spec_drift_views.budget, rings).
+    if "budget" not in data:
+        data = dict(data, budget=views.budget(data))
+    if isinstance(data.get("days"), list) and "rings" not in data:
+        data = dict(data, rings=views.rings(data))
     return node(MODEL, data)
 
 
@@ -1192,7 +1197,7 @@ class BootTest(unittest.TestCase):
         self.assertFalse(gone["missing"]["hidden"])
         self.assertEqual(gone["missing"]["text"], "The dashboard-data branch is missing, so this page leaves out the dollars, the hooks' refusals, the gates' "
                          "runs and cost, the sessions' times, when the sessions were last counted, the driver's steps and the "
-                         "re-checks of finished promises. The proofreading stream is not drawn.")
+                         "re-checks of finished promises. The proofreading stream is not drawn. The energy budget is not drawn.")
         one = boot(data(data=source("abc", ["replay-history.json"])))
         self.assertEqual(one["missing"]["text"], "The dashboard-data branch has no replay-history.json, so this page leaves out "
                          "the re-checks of finished promises.")
@@ -1230,9 +1235,10 @@ class ThemeTest(unittest.TestCase):
 
 # The cards with a plot of their own: graphs 3 to 5 are one card, under graph 3's id. Graph 6 is folded, for good,
 # under the merge graph that took its place, graph 1 under its reading as a gene, graph 2 under its gel and graphs 3 to 5
-# under their proteins, graph 7 under its proofreading stream (as the mockup at #228 has them).
+# under their proteins, graph 7 under its proofreading stream, graph 8 under its energy budget and graph 9 under its
+# growth rings (as the mockup at #228 has them).
 CARDS = (1, 2, 3, 6, 7, 8, 9, 10, 11)
-FOLDED = (6, 1, 2, 3, 7)
+FOLDED = (6, 1, 2, 3, 7, 8, 9)
 
 # gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
 # many marks of each kind they drew, and the words of the proteins' figures.
@@ -1241,7 +1247,7 @@ const fs = require("fs"), vm = require("vm"), els = {};
 const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
   classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle() {} },
   setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
-  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { this.kids = c; }, addEventListener() {} };
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {} };
   Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
   return n; };
 const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
@@ -1283,10 +1289,106 @@ class GelAndProteinPageTest(unittest.TestCase):
 
     def test_the_gel_and_the_proteins_build_no_html_from_text(self):
         script = read("dashboard.js")
-        for name in ("function pointerBox", "function gelDraw", "function protDraw", "function prfDraw"):
+        for name in ("function pointerBox", "function gelDraw", "function protDraw", "function prfDraw", "function atpDraw",
+                     "function rngDraw", "function openFolds", "function foldLinks"):
             body = script[script.index(name):]
             body = body[:body.index("\n}\n") if "\n}\n" in body else body.index("\r\n}\r\n")]
             self.assertNotIn("innerHTML", body, name)
+
+
+# atpDraw() and rngDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
+# many marks of each kind they drew, their words, the banner, and openFolds() on a link into a fold.
+ATP_RNG = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", open: false, parentNode: null,
+  classList: { add(c) { n.attrs.class = ((n.attrs.class || "") + " " + c).trim(); }, remove() {}, toggle() {}, contains() { return false; } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {}, scrollIntoView() { n.scrolled = true; } };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node, addEventListener() {}, getElementById: id => els[id] || null };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const is = (root, sel) => all(root).filter(e => sel.every(c => ((e.attrs && e.attrs.class) || "").split(" ").includes(c))).length;
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const keyed = (root, re) => all(root).filter(e => e.attrs && re.test(e.attrs["data-k"] || "")).length;
+  const M = model(DATA), days = [];
+  const drew = k => !M[k].error && !M[k].empty;
+  if (drew("atp")) atpDraw(M.atp, $, days);
+  if (drew("rng")) rngDraw(M.rng, $, days);
+  const a = $("atp-fig"), r = $("rng-fig");
+  // a link into a fold: the details around it open, and it is scrolled to
+  const fold = document.createElement("details"), inner = document.createElement("div"), target = document.createElement("div");
+  fold.tagName = "DETAILS"; inner.tagName = "DIV"; target.tagName = "DIV"; inner.parentNode = fold; target.parentNode = inner;
+  openFolds(target);
+  ({ atp: { drew: drew("atp"), error: M.atp.error || null, cols: is(a, ["b", "col"]), beads: is(a, ["q"]), rails: is(a, ["rail"]), pills: is(a, ["pill"]),
+            words: [a, $("atp-figs"), $("atp-key"), $("atp-finds"), $("atp-round"), $("atp-split")].map(words).join(" ").replace(/\\s+/g, " ") },
+     rng: { drew: drew("rng"), error: M.rng.error || null, days: keyed(r, /^d\\d+$/), outside: keyed(r, /^o\\d+$/), sides: keyed(r, /^(all|out)$/),
+            hatched: is(r, ["b", "out"]), leads: is(r, ["lead"]), words: [r, $("rng-figs"), $("rng-finds")].map(words).join(" ").replace(/\\s+/g, " ") },
+     missing: M.head.missing, onDay: days.length, fold: [fold.open, !!target.scrolled] })`, ctx)));
+"""
+
+
+def demo_data():
+    spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
+    demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(demo)
+    return demo.demo()
+
+
+class CostAndRingsPageTest(unittest.TestCase):
+    """Graph 8 as an energy budget and graph 9 as growth rings, drawn by the page."""
+
+    def test_the_budget_draws_a_column_for_each_date_and_each_day_and_every_bead_in_both(self):
+        data = demo_data()
+        B, out = data["budget"], node(ATP_RNG, data)
+        self.assertEqual((out["atp"]["drew"], out["atp"]["error"]), (True, None))
+        self.assertEqual(out["atp"]["cols"], len(B["cols"]["date"]) + len(B["cols"]["day"]))
+        self.assertEqual(out["atp"]["beads"], 2 * B["beads"])
+        self.assertEqual(out["atp"]["rails"], sum(1 for v in ("date", "day") for c in B["cols"][v] if c["p"]))
+        self.assertEqual(out["atp"]["pills"], len(B["pills"]))
+        self.assertIn("one bead is $2 , rounded", out["atp"]["words"])
+        self.assertIn("of tokens at list prices Not a bill", out["atp"]["words"])
+        self.assertEqual(out["onDay"], 2)  # each hooks into the page's Day buttons
+
+    def test_the_rings_draw_a_ring_for_each_day_and_for_the_work_beside_it(self):
+        data = demo_data()
+        R, out = data["rings"], node(ATP_RNG, data)
+        self.assertEqual((out["rng"]["drew"], out["rng"]["error"]), (True, None))
+        self.assertEqual((out["rng"]["days"], out["rng"]["outside"]), (len(R["days"]), len(R["outside"])))
+        # work on no Day's branch: one thin ring and one wide one, both hatched, the thin one named under a lead
+        def row(pr, own, kind, **work):
+            w = dict.fromkeys(("spec", "context", "prod", "test", "tooling"), 0)
+            w.update(work)
+            return dict(pr=pr, own_day=own, kind=kind, work=w, date=f"2026-01-0{pr}", branch="")
+        data = dict(rows=[row(1, 1, "code", prod=300, test=500), row(2, None, "other", tooling=900), row(3, 2, "code", test=40, spec=10),
+                          row(4, None, "other", tooling=5)],
+                    days=[dict(day=1, status="done", title="One"), dict(day=2, status="active", title="Two")],
+                    now=dict(head="abc", last_pr=4, generated="2026-01-05T00:00+00:00"))
+        out = node(ATP_RNG, dict(data, rings=views.rings(data)))["rng"]
+        self.assertEqual((out["days"], out["outside"], out["sides"], out["hatched"]), (2, 2, 2, 3))
+        self.assertGreaterEqual(out["leads"], 1)
+        self.assertIn("at Day 2: 5", out["words"])
+        self.assertIn("850 inside the 2 Days, 905 outside any Day", out["words"])
+
+    def test_without_token_usage_json_the_budget_is_not_drawn_and_the_banner_says_so(self):
+        for source in (dict(branch="dashboard-data", commit="abc", at=None, absent=["token-usage.json"]),
+                       dict(branch="dashboard-data", commit=None, at=None, absent=[])):
+            data = demo_data()
+            data["data"] = source
+            data["budget"] = views.budget(data)
+            out = node(ATP_RNG, data)
+            self.assertEqual((out["atp"]["drew"], out["atp"]["cols"], out["atp"]["beads"]), (False, 0, 0))
+            self.assertIn("The energy budget is not drawn.", out["missing"])
+            self.assertTrue(out["rng"]["drew"])  # the rings need nothing from the data branch
+
+    def test_a_link_to_a_folded_graph_opens_its_fold(self):
+        self.assertEqual(node(ATP_RNG, demo_data())["fold"], [True, True])
+        script = read("dashboard.js")
+        self.assertIn('addEventListener("hashchange", go)', script)
+        self.assertIn("foldLinks();", script[script.index("function draw(M, DATA)"):])
 
 
 class PageFilesTest(unittest.TestCase):
@@ -1318,7 +1420,7 @@ class PageFilesTest(unittest.TestCase):
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
         for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll",
-                                                                             "prf-scroll"]:
+                                                                             "prf-scroll", "atp-scroll", "rng-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1334,7 +1436,7 @@ class PageFilesTest(unittest.TestCase):
         for n in FOLDED:
             g = model(data)[f"g{n}"]
             self.assertNotIn("error", g)
-            self.assertGreater(len(g.get("merges") or g.get("rows") or []), 0, f"graph {n}")
+            self.assertGreater(len(g.get("merges") or g.get("rows") or g.get("bars") or []), 0, f"graph {n}")
         out = boot(data)
         self.assertEqual((out["error"], out["logged"]), (None, []))
 
@@ -1359,19 +1461,24 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf)">', html),
-                         ["rdg", "gel", "prt", "g12", "mrg", "prf"] + [f"g{n}" for n in (8, 9, 10, 11)])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng)"[ >]', html),
+                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng"] + [f"g{n}" for n in (10, 11)])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "g8": 3, "g9": 3, "g10": 3, "g11": 4}
+        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "g10": 3,
+                 "g11": 4}
         for n, g in group.items():
-            at = html.index(f'id="{n}">')
+            at = re.search(f'id="{n}"[ >]', html).start()
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
         self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
         self.assertLess(html.index('id="g6-fold">'), html.index('id="prf">'))
         self.assertLess(html.index('id="prf">'), html.index('id="g7-fold">'))
+        self.assertLess(html.index('id="g7-fold">'), html.index('id="atp" '))
+        self.assertLess(html.index('id="atp" '), html.index('id="g8-fold">'))
+        self.assertLess(html.index('id="g8-fold">'), html.index('id="rng">'))
+        self.assertLess(html.index('id="rng">'), html.index('id="g9-fold">'))
         self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
         self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
         self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))
