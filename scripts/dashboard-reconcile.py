@@ -148,7 +148,27 @@ def prt_line(m):
                    + ("agree" if agree else f"DISAGREE{why}"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line]
+def prf_line(m):
+    """The proofreading stream against graph 7 (folded under it): the defects in all, the catches of each layer (graph
+    7's phases, counted from its own dots), and each gate's catches and cost per catch."""
+    p, g7 = m.get("prf") or {}, m.get("g7") or {}
+    if p.get("error") or g7.get("error"):
+        return False, f"proofreading: not drawn ({p.get('error') or g7.get('error')})"
+    if p.get("empty") and not p.get("gates"):
+        agree = not any(r.get("dots") for r in g7.get("rows") or [])
+        return agree, "proofreading: no stream | graph 7: " + ("no defect either: agree" if agree else "DISAGREE")
+    ours = (p["total"], [x["caught"] for x in p["layers"]], [(g["key"], g["caught"], g["per"]) for g in p["gates"]])
+    dots = sum(len(r.get("dots") or []) for r in g7.get("rows") or [])
+    theirs = (dots, [x["n"] for x in (g7.get("pipe") or {}).get("phases") or []],
+              [(g.get("key"), g.get("n"), g.get("per")) for g in g7.get("gates") or []])
+    differ = [w for w, a, b in zip(("total", "layers", "gates"), ours, theirs) if a != b]
+    priced = sum(1 for _, _, per in ours[2] if per is not None)
+    return not differ, (f"proofreading: {ours[0]} defects, layers {'/'.join(map(str, ours[1]))}, {priced} gates priced | "
+                        f"graph 7: {theirs[0]} dots, phases {'/'.join(map(str, theirs[1]))}: "
+                        + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line]
 
 
 def main(argv=None):

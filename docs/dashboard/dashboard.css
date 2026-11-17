@@ -1297,3 +1297,93 @@ footer { font-size: 12.5px; color: var(--muted); }
 #prt .finds li:focus-visible{outline:2px solid var(--link);outline-offset:2px}
 #prt .finds li[data-t]{cursor:default}
 @media (prefers-reduced-motion:reduce){#prt .fig .rs,#prt .fig .t-day{transition:none}}
+
+/* Graph 7 as proofreading: one stream of defects, thinning at each layer of checking. Every rule is under #prf; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
+#prf { scroll-margin-top: 12px; }
+#prf{--prf-flow:#cdd4de;--prf-flow-2:#b3bcc9;--shadow:rgba(14,17,22,.16)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #prf{--prf-flow:#3b434f;--prf-flow-2:#566070;--shadow:rgba(0,0,0,.5)}}
+:root[data-theme="dark"] #prf{--prf-flow:#3b434f;--prf-flow-2:#566070;--shadow:rgba(0,0,0,.5)}
+
+#prf .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:0}
+#prf h3{font:600 16px/1.25 var(--display);margin:0 0 10px;text-wrap:balance}
+
+/* the line of figures */
+#prf .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 26px;border-block:1px solid var(--line);padding:14px 0}
+#prf .figs>div{min-width:0}
+#prf .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#prf .figs .num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:5px}
+#prf .figs .what{font-weight:600;margin-top:6px;color:var(--ink)}
+#prf .figs .sub{display:block;font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:0}
+
+/* legend */
+#prf .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#prf .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#prf .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
+#prf .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#prf .lg dd span{display:inline-flex;align-items:center;gap:7px}
+/* a key line whose count is filled from data keeps its words in one span, so the flex row does not split them */
+#prf .lg dd span.kt{display:block}#prf .lg i.n{font-style:normal}
+#prf .lg svg{flex:none;overflow:visible}
+@media (max-width:640px){#prf .lg{grid-template-columns:1fr;gap:2px 0}#prf .lg dd{margin-bottom:10px}}
+
+/* the figure */
+#prf .scroll{overflow-x:auto;min-width:0}
+#prf .fig{display:block;width:100%;min-width:1180px;height:auto}
+#prf .fig text{font-family:var(--sans)}
+#prf .t-name{font:600 12.5px var(--sans);fill:var(--ink)}
+#prf .t-name .k{font:500 11px var(--mono);fill:var(--muted)}
+#prf .t-bio{font:500 10px var(--mono);letter-spacing:.06em;fill:var(--muted)}
+#prf .t-sec{font:400 10.5px var(--sans);fill:var(--ink-2)}
+#prf .t-note{font:400 10.5px var(--sans);fill:var(--muted)}
+#prf .t-on{font:700 26px var(--display);fill:var(--ink);font-variant-numeric:tabular-nums}
+#prf .t-on.m{font-size:20px}#prf .t-on.s{font-size:13px}#prf .t-on.xs{font:700 11.5px var(--sans)}
+#prf .t-cap{font:500 10.5px var(--sans);fill:var(--ink-2)}
+#prf .t-drop{font:600 10.5px var(--sans);fill:var(--ink);paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
+#prf .t-drop.in{stroke:none}
+#prf .t-g{font:600 11.5px var(--sans);fill:var(--ink)}
+#prf .t-gn{font:700 12px var(--sans);fill:var(--ink);font-variant-numeric:tabular-nums}
+#prf .t-gs{font:400 10px var(--sans);fill:var(--muted)}
+#prf .t-cost{font:500 10px var(--mono);fill:var(--ink-2)}
+#prf .t-big{font:700 22px var(--display);fill:var(--ink);font-variant-numeric:tabular-nums}
+#prf .flow{fill:var(--prf-flow)}
+#prf .flow-in{fill:url(#prf-grad-in)}
+#prf .leakflow{fill:url(#prf-pat-leak);stroke:var(--repair);stroke-width:1;stroke-dasharray:3 2}
+#prf .mem{fill:var(--card);stroke:var(--s3);stroke-width:1.3}
+#prf .mem-c{fill:none;stroke:var(--s3);stroke-width:1.2;stroke-dasharray:1 3.2;stroke-linecap:round}
+#prf .bin{fill:var(--well);stroke:var(--line);stroke-width:1}
+#prf .bin.leak{fill:var(--card);stroke:var(--repair);stroke-width:1.2;stroke-dasharray:4 3}
+#prf .bin.out{fill:var(--card);stroke:var(--s3);stroke-width:1}
+#prf .sep{stroke:var(--line);stroke-width:1}
+#prf .tail{fill:none;stroke:var(--s3);stroke-width:1.3;stroke-dasharray:1.5 4;stroke-linecap:round}
+#prf .c-spec{fill:var(--spec)}#prf .c-process{fill:var(--process)}#prf .c-implementation{fill:var(--code)}#prf .c-environment{fill:var(--env)}#prf .c-other{fill:var(--other)}
+#prf .rg{fill:none;stroke:var(--ink);stroke-width:1.2}
+#prf .hit{fill:#000;fill-opacity:0;stroke:none}
+#prf .hbar{fill:var(--bar-2)}
+#prf .fig .b{cursor:default}
+#prf .fig .b:focus{outline:none}
+#prf .fig g.b:focus-visible>.hit{stroke:var(--link);stroke-width:2}
+#prf .fig g.grp:hover>.hit{fill-opacity:.05}
+#prf .fig .d{transition:opacity .15s}
+#prf .fig.foc .d:not(.lit){opacity:.22}
+#prf .fig .d.mk-dim{opacity:.2}
+#prf .hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* CI's row of counts, under the figure */
+#prf .ci{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;border-top:1px solid var(--line);padding-top:12px;font-size:12.5px;color:var(--ink-2);margin:0}
+#prf .ci .h{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#prf .ci b{font:700 15px/1 var(--display);color:var(--ink);font-variant-numeric:tabular-nums;margin-right:5px}
+#prf .ci .rest{color:var(--muted);flex-basis:100%}
+
+/* lists */
+#prf .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:22px 32px;border-top:1px solid var(--line);padding-top:16px}
+#prf .cols>div{min-width:0}
+#prf .finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+#prf .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
+#prf .finds b,#prf .plain b{color:var(--ink);font-weight:600}
+#prf .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
+
+#prf #prf-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
+#prf #prf-tip[hidden]{display:none}
+#prf #prf-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
+#prf #prf-tip .l{margin-top:4px}
+@media (prefers-reduced-motion:reduce){#prf .fig .d{transition:none}}

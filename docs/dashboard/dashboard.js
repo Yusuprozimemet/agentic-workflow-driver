@@ -15,9 +15,6 @@ const finished = d => d.status === "done" || d.status === "closed" || d.status =
 const openFor = m => m >= 60 ? `${(m / 60).toFixed(1)} h` : plural(Math.max(1, Math.round(m)), "minute", "minutes");
 const plain = s => String(s == null ? "" : s).replace(/`/g, "");
 const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
-// A Defect line's found: or cause: value as scripts/spec-drift.py's gate_report reads it: older Notes write
-// "The auditor (spec-auditor)". scripts/test_dashboard_page.py holds the two to the same values.
-const tagOf = v => String(v == null ? "" : v).trim().toLowerCase().replace(/^the /, "").replace(/ \(.*\)$/, "");
 // Minutes covered by a list of [from, to] intervals, a minute two of them share counted once.
 const covered = list => [...list].sort((a, b) => a[0] - b[0]).reduce((acc, [a, b]) => ({ n: acc.n + Math.max(0, b - Math.max(a, acc.end)), end: Math.max(acc.end, b) }), { n: 0, end: -Infinity }).n;
 // "Days 1 to 6" for a run of days, "Days 1, 2 and 4" for one with a hole in it.
@@ -53,26 +50,8 @@ const STATES = {
 const COUNTED = ["proven", "unproven", "repair", "broken", "skipped"];
 const ALWAYS_KEYED = ["proven", "unproven", "repair", "broken", "skipped"];
 
-// The gates a defect can be caught at, in the order work passes them. A found: value that names none of
-// them (a track, a review, the session itself) was noticed during the work.
-const GATES = [
-  { key: "auditor", name: "Auditors, before any code", at: "the auditors" },
-  { key: "spec-change PR", name: "The spec-change pull request", at: "the spec-change pull request" },
-  { key: "seen red", name: "A test seen failing", at: "a test seen failing" },
-  { key: "break on purpose", name: "A break on purpose", at: "a break on purpose" },
-  { key: "review", name: "The main session's diff review", at: "the diff review" },
-  { key: "work", name: "Noticed during the work", at: "the work" },
-  { key: "close", name: "The close", at: "the close" },
-  { key: "rehearsal", name: "The close's rehearsal", at: "the rehearsal" },
-  { key: "evidence replay", name: "The evidence replay", at: "the evidence replay" },
-  { key: "dashboard", name: "The dashboard", at: "the dashboard" },
-  { key: "Day review", name: "A later Day's review", at: "a later Day's review" },
-];
-// The gate a found: value names, as spec_drift_metrics.found_stage reads it; anything else was noticed during the work.
-const gateOf = v => { const f = tagOf(v); return /^day \d+ review$/.test(f) ? "Day review"
-  : (GATES.find(g => g.key.toLowerCase() === f && g.key !== "work" && g.key !== "Day review") || { key: "work" }).key; };
 // Graph 7's pipeline: every gate a Day's work passes, top to bottom, its stages keyed by name. A gate with `pile` holds
-// the defects the Notes credit to it (a GATES key); `guard` and `ci` name what counts how often it stopped something (a
+// the defects the Notes credit to it (a gate's key in the data's proofreading.gates); `guard` and `ci` name what counts how often it stopped something (a
 // hook's refusals, a CI workflow's failed pull requests); `nc` marks a gate nothing counts yet; `inPr` a check counted
 // under PR checks. The track loop wraps the writing alone (`loop`); the spec change, each track and the close all pass
 // CI and the merge. The hooks run in every stage: HOOKS is drawn beside the pipe. PHASE_END comes after the Day's pipe.
@@ -130,9 +109,6 @@ const PHASE_END = { name: "End of a phase", gates: [
   { names: ["plan-auditor"], subs: ["after a phase's last close"], nc: true, does: "On fresh main after a phase's last closing pull request merged: what did the phase change that the next one must know? Its catches sit in the auditors' tray at the top: the Notes do not say which auditor." },
   { names: ["security-ops-auditor", "agentic-engineering-auditor", "architecture-auditor"], subs: ["after Phase 3's close", "", ""], nc: true,
     does: "Once, after the closing pull request of the last phase plan.md names: can the workflow take more autonomy safely, what does it show about agents, do its gates hold? Each from a fresh context." }] };
-// The bar above the pipe: when the catches came, in four phases.
-const PHASES = [["Before any code", ["auditor", "spec-change PR"]], ["While writing", ["seen red", "break on purpose", "review", "work"]], ["At the close", ["close", "rehearsal"]],
-  ["After the merge", ["evidence replay", "dashboard", "Day review"]]];
 const CAUSES = ["spec", "process", "implementation", "environment", "other"];
 const KINDS = { origin: "the first commit", spec: "spec", code: "code", close: "a Day's close", other: "other" };
 const WORK = [["spec", "Spec and agent context"], ["prod", "Production code"], ["test", "Tests"], ["tooling", "Tooling"]];
@@ -160,7 +136,6 @@ function model(DATA) {
   const TIMES = ((DATA.clock || {}).prs || []).filter(p => p.opened && p.merged);
   const mergedAt = new Map(TIMES.map(p => [p.number, Date.parse(p.merged)]));
   const inCount = pr => countedMs == null || !mergedAt.has(pr) || mergedAt.get(pr) <= countedMs;
-  const dayInCount = day => countedMs == null || !TIMES.some(p => p.day === day && Date.parse(p.merged) > countedMs);
   // One rule for which Day a pull request belongs to, on every graph: the Day its branch names (`own_day`).
   // A dashboard/ or tooling/ pull request is no Day's work: it is placed by `at`, the furthest Day begun when it merged,
   // and says whether that Day was open or closed by then. A row's `day` is the gap's "Day reached" and is not read here.
@@ -186,9 +161,11 @@ function model(DATA) {
     const D = DATA.data;
     if (!D) return null;
     const what = names => andList(names.map(n => DATA_WHAT[n] || n));
-    if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.`;
+    // Without the gates' runs and cost, the proofreading stream (spec_drift_views.proofreading) is not drawn at all.
+    const stream = " The proofreading stream is not drawn.";
+    if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.${stream}`;
     if (!(D.absent || []).length) return null;
-    return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.`;
+    return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.${D.absent.includes("gates.json") ? stream : ""}`;
   }
   function head() {
     const g = now.generated || "", when = g.length >= 16 ? `${shortDate(g)} ${g.slice(0, 4)} at ${g.slice(11, 16)}` : g;
@@ -425,25 +402,27 @@ function model(DATA) {
         rows: merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.date || "", m.gap == null ? "" : m.gap.toFixed(1), m.mins == null ? "" : Math.round(m.mins), m.failed ? "yes" : ""]) } };
   }
 
-  /* Graph 7: the sieve. Each defect at the gate that caught it */
+  /* Graph 7: the sieve. Each defect at the gate that caught it. Its rules are counted in scripts/spec_drift_views.py
+     (proofreading), the same fields the proofreading stream reads: the gates, each defect's gate, layer, cause and
+     marks, the four phases, and the cost per catch over the Days merged by the count. */
   function sieveGraph() {
-    const spent = new Map(((DATA.gate_report || {}).gates || []).filter(g => g.found).map(g => [g.found, g]));
-    const back = new Map((((DATA.defect_recurrence || {}).recurrences) || []).map(r => [r.id, r.same_as]));
+    const PR = DATA.proofreading || {}, gateList = PR.gates || [], layerList = PR.layers || [];
+    const read7 = new Map((PR.defects || []).map(o => [`${o.day}:${o.i}`, o]));
     const rows = days.map(d => {
       const dots = (d.defects || []).map((x, i) => {
-        const gate = GATES.find(g => g.key === gateOf(x.found)), cause = CAUSES.includes(tagOf(x.cause)) ? tagOf(x.cause) : "other";
-        const m = /^Day 0*(\d+)$/i.exec(x.made || ""), made = m ? +m[1] : null, escaped = made != null && made !== d.day;
-        const where = escaped ? `Made on Day ${made} and caught on Day ${d.day}` + (made < d.day ? `: it escaped for ${plural(d.day - made, "Day", "Days")}.` : ".")
-          : made != null ? `Made and caught on Day ${d.day}.` : /^none$/i.test(x.made || "") ? "Made outside any Day: in the plan, a tool or a machine."
+        const o = read7.get(`${d.day}:${i}`), gate = o && gateList.find(g => g.key === o.gate);
+        if (!gate) return null;
+        const made = typeof o.made === "number" ? o.made : null, cause = o.cause;
+        const where = o.escaped ? `Made on Day ${made} and caught on Day ${d.day}` + (made < d.day ? `: it escaped for ${plural(d.day - made, "Day", "Days")}.` : ".")
+          : made != null ? `Made and caught on Day ${d.day}.` : o.made === "none" ? "Made outside any Day: in the plan, a tool or a machine."
           : `Caught on Day ${d.day}; its line does not say which Day made it.`;
-        // Who noticed a defect caught in the work: a track, a review, the session itself, or something else.
-        const f = tagOf(x.found), by = gate.key !== "work" ? null : /^track\b/.test(f) ? "track" : f === "self" ? "self" : "other";
-        return { id: x.id || `Day ${d.day}, defect ${i + 1}`, day: d.day, gate: gate.key, cause, escaped, back: back.has(x.id), by,
-          t: `${x.id || `Day ${d.day}, defect ${i + 1}`} · ${cause} · caught by: ${lower(gate.name)}`,
-          b: [where + (back.has(x.id) ? ` The same problem as ${back.get(x.id)}, back again.` : "") + (gate.key === "work" && x.found ? ` Noticed by: ${x.found}.` : "")] };
-      });
+        // Who noticed a defect caught in the work (`by`): a track, the session itself, or something else.
+        return { id: o.id, day: d.day, gate: gate.key, layer: o.layer, cause, escaped: o.escaped, back: o.back, by: o.by,
+          t: `${o.id} · ${cause} · caught by: ${lower(gate.name)}`,
+          b: [where + (o.back ? ` The same problem as ${o.same_as}, back again.` : "") + (o.noticed ? ` Noticed by: ${o.noticed}.` : "")] };
+      }).filter(Boolean);
       const R = d.relabel ? Object.values(d.relabel) : null;
-      return { day: d.day, dots, cells: GATES.map(g => dots.filter(o => o.gate === g.key)), differ: R ? sum(R, r => r[1] - r[0]) : null, tags: R ? sum(R, r => r[1]) : null,
+      return { day: d.day, dots, cells: gateList.map(g => dots.filter(o => o.gate === g.key)), differ: R ? sum(R, r => r[1] - r[0]) : null, tags: R ? sum(R, r => r[1]) : null,
         note: R ? `${sum(R, r => r[1] - r[0])} of ${sum(R, r => r[1])}` : finished(d) ? "not read yet" : "read at its close" };
     });
     // The By Day view's note: each read Day's share of tags read differently, and whether it rose or fell since the last read Day (#213, B10).
@@ -451,24 +430,26 @@ function model(DATA) {
     rows.forEach(r => { if (!r.tags) return; const pct = Math.round(100 * r.differ / r.tags);
       r.note += ` · ${pct}%${prevPct == null ? "" : pct > prevPct ? " ↑" : pct < prevPct ? " ↓" : " ="}`; prevPct = pct; });
     const all = rows.flatMap(r => r.dots), at = k => all.filter(o => o.gate === k).length, by = c => all.filter(o => o.cause === c).length;
-    const gates = GATES.map(g => { const s = spent.get(g.key);
-      return { name: g.name, sub: `${at(g.key)} caught` + (s ? ` · ${plural(s.runs, "run", "runs")} · ${money(s.cost)}` : g.key === "work" ? " · tracks, the session" : "") }; });
+    // A gate with runs on record (gates.json, on the data branch) says them; with the branch or the file missing, none does.
+    const gates = gateList.map(g => ({ key: g.key, name: g.name, n: at(g.key), per: g.per,
+      sub: `${at(g.key)} caught` + (g.runs != null ? ` · ${plural(g.runs, "run", "runs")} · ${money(g.cost)}` : g.key === "work" ? " · tracks, the session" : "") }));
     // A gate's dollars end at the count, so they are shared over the catches of the Days whose pull requests were all merged by then.
-    const late = rows.filter(r => r.dots.length && !dayInCount(r.day)).map(r => r.day), inAt = k => rows.filter(r => !late.includes(r.day)).flatMap(r => r.dots).filter(o => o.gate === k).length;
-    const each = GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && inAt(g.key)).map(([g, s]) => [s.cost / inAt(g.key), g.at]).sort((a, b) => a[0] - b[0]);
+    const late = PR.late || [];
+    const each = gateList.filter(g => g.per != null).map(g => [g.per, g.at]).sort((a, b) => a[0] - b[0]);
     const read = rows.filter(r => r.tags), nEsc = all.filter(o => o.escaped).length, nBack = all.filter(o => o.back).length;
     const b = [by("spec") ? `${by("spec")} ${by("spec") === 1 ? "was" : "were"} in a spec.` : "",
       `${nEsc} escaped from an earlier Day and ${nBack} came back.`,
       read.length ? `A second reader gave ${sum(read, r => r.differ)} of ${sum(read, r => r.tags)} tags differently.` : "",
       each.length ? `Each catch cost about ${andList(each.map(([c, name]) => `${money(c)} at ${name}`))}${late.length ? `, over the catches of the Days in the count: ${daySpan(late)} had a pull request merge after it` : ""}.` : "",
-      countedAt && spent.size ? `The gates' runs and dollars are counted up to ${countedSay}.` : ""].filter(Boolean);
+      countedAt && gateList.some(g => g.runs != null) ? `The gates' runs and dollars are counted up to ${countedSay}.` : ""].filter(Boolean);
     // The pipeline: the same dots, at the same gates, with how often the other gates stopped something, over all dates.
-    const per = new Map(GATES.map(g => [g, spent.get(g.key)]).filter(([g, s]) => s && s.cost > 0 && inAt(g.key)).map(([g, s]) => [g.key, s.cost / inAt(g.key)]));
+    const per = new Map(gateList.filter(g => g.per != null).map(g => [g.key, g.per]));
     const refused = {}, failed = {};
     (DATA.refusals || []).forEach(r => { refused[r.guard] = (refused[r.guard] || 0) + (r.refused || 0); });
     (DATA.verification || []).forEach(v => new Set(v.failed_in || []).forEach(w => { failed[w] = (failed[w] || 0) + 1; }));
-    const merged = (DATA.rows || []).filter(r => r.pr).length, hooks = ((DATA.gate_report || {}).gates || []).find(g => g.gate === "hooks");
-    const runs = keys => { const s = keys.map(k => spent.get(k)).filter(Boolean); return s.length ? `${plural(sum(s, x => x.runs), "run", "runs")} · ${money(sum(s, x => x.cost))}` : ""; };
+    const merged = (DATA.rows || []).filter(r => r.pr).length, hooks = PR.hooks && PR.hooks.cost != null ? PR.hooks : null;
+    const runs = keys => { const s = keys.map(k => gateList.find(g => g.key === k)).filter(g => g && g.runs != null);
+      return s.length ? `${plural(sum(s, x => x.runs), "run", "runs")} · ${money(sum(s, x => x.cost))}` : ""; };
     const nRefused = sum(Object.values(refused)), prFails = failed["PR checks"] || 0;
     const notes = { "Before any code": runs(["auditor"]) && `auditors: ${runs(["auditor"])}`,
       "Writing a track, on this machine": runs(["seen red", "break on purpose"]) && `seen red and breaks: ${runs(["seen red", "break on purpose"])}`,
@@ -488,7 +469,7 @@ function model(DATA) {
         t: g.names.join(" and "), b: [g.does, [caught, stop, plain].filter(Boolean).join("; ") + "."].filter(s => s !== ".") };
     }) });
     const stages = PIPE.map((st, si) => segment(st, si + 1)), band = segment(HOOKS, null), phaseEnd = segment(PHASE_END, null);
-    const phases = PHASES.map(([name, ks]) => { const c = all.filter(o => ks.includes(o.gate)).length; return { name, n: c, pct: all.length ? Math.round(100 * c / all.length) : 0 }; });
+    const phases = layerList.map((L, i) => { const c = all.filter(o => o.layer === i).length; return { name: L.name, n: c, pct: all.length ? Math.round(100 * c / all.length) : 0 }; });
     const pipe = { stages, hooks: band, phase_end: phaseEnd, phases, escaped: nEsc, gates: sum([...stages, band], s => sum(s.gates, g => g.names.length)) };
     return { gates, rows, pipe,
       key: [...CAUSES.filter(c => c !== "other" || by(c)).map(c => ({ cls: `dot ${c}`, text: `${c.charAt(0).toUpperCase() + c.slice(1)} ${by(c)}` })),
@@ -496,7 +477,7 @@ function model(DATA) {
       say: `Work flows down the pipe, through ${pipe.gates} gates in ${stages.length} stages, with the hooks beside them all; the spec change, each track and the close are each a pull request, and each passes CI and your merge. Each dot is one defect from a Day's Notes, ${all.length} in all, at the gate that caught it: the lower its tray, the later the catch. A grey number is how often a gate stopped something, over all dates. Point at a gate's name for what it checks.`,
       read: { t: !all.length ? "No defect is recorded yet" : at("auditor") ? `${plural(all.length, "defect", "defects")}; the auditors caught ${at("auditor")} of them before any code was written` : `${plural(all.length, "defect", "defects")} in the Days' Notes`,
         b: all.length ? [b.join(" ")] : [] },
-      table: { head: ["Day", ...GATES.map(g => g.name), ...CAUSES.map(c => `Cause: ${c}`), "Escaped", "Came back", "Tags read differently", "Tags"],
+      table: { head: ["Day", ...gateList.map(g => g.name), ...CAUSES.map(c => `Cause: ${c}`), "Escaped", "Came back", "Tags read differently", "Tags"],
         rows: rows.map(r => [`Day ${r.day}`, ...r.cells.map(c => c.length), ...CAUSES.map(c => r.dots.filter(o => o.cause === c).length),
           r.dots.filter(o => o.escaped).length, r.dots.filter(o => o.back).length, r.differ == null ? "" : r.differ, r.tags == null ? "" : r.tags]) } };
   }
@@ -1033,6 +1014,12 @@ function model(DATA) {
     if (!P || !(P.chains || []).length) return { empty: (P && P.empty) || "no criterion is on record yet, so there is no chain to fold." };
     return Object.assign({}, P, { chains: P.chains.map(c => Object.assign({}, c, { parts: c.key in Q ? Q[c.key].parts : null })) });
   }
+  /* Graph 7 as proofreading: counted in scripts/spec_drift_views.py (proofreading); `empty` with the data branch or its
+     gates.json missing, where the stream is not drawn. */
+  function prfGraph() {
+    const P = DATA.proofreading;
+    return P && (P.gates || []).length ? P : { empty: "no defect is counted yet, so there is no stream to draw." };
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -1166,7 +1153,7 @@ function model(DATA) {
   const g3 = safe(abilityGraph), g5 = P.error ? P : safe(() => reliedGraph(P));
   return { head: head(), where: safe(whereNow), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
     attention: attention(), quality: safe(quality), g3, g4: P.error ? P : P.board, g5, map: g3.error ? g3 : safe(() => mapGraph(g3, P, g5)), g6: safe(mergeGraph), g7: safe(sieveGraph),
-    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    g8: safe(costGraph), g9: safe(workGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
 }
@@ -2930,6 +2917,280 @@ function protDraw(P, get, onDay) {
   return fig;
 }
 
+/* Graph 7 as proofreading, as the mockup at #228 draws it: one stream of defects, thinning left to right at each layer
+   of checking. Counted in scripts/spec_drift_views.py (proofreading), by graph 7's rules; this lays it out and words
+   it, and counts nothing. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in
+   dashboard.css, under #prf. */
+const PRF_MEM = [316, 704, 872, 1060];  // each layer's membrane, left to right
+// The trays under the stream, [x, width]: one per layer for its gates, the leak's after the first layer, the marks'.
+const PRF_TRAY = { layers: [[20.5, 299], [514.5, 193], [726.5, 149], [894.5, 169]], leak: [338.5, 165], out: [1084.5, 167] };
+const PRF_WORD = ["no", "one", "two", "three", "four", "five", "six"];
+function prfDraw(P, get, onDay) {
+  if (!P || P.empty) return null;  // without the gates' runs and cost there is no stream: the section says why
+  const $ = id => get("prf-" + id), fig = $("fig"), tip = $("tip");
+  const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
+  const f = v => (+v).toFixed(1).replace(/\.0$/, "");
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const G = P.gates, L = P.layers, T = P.total, k = Math.min(0.4, 143.6 / T), Y0 = 66, last = L.length - 1;
+  const leak = G.find(g => g.key === P.leak), lower1 = s => s.charAt(0).toLowerCase() + s.slice(1);
+  const layerWord = i => lower1(L[i].name), gateAt = key => (G.find(g => g.key === key) || {}).at;
+  fig.replaceChildren();
+  fig.setAttribute("aria-label", "All defects as one stream running left to right through four layers of checking; under each layer a tray of the defects caught there, one dot each, grouped by gate; at the right what the Days' own checks let through; below, the hooks' refusals");
+  const defs = el("defs", {});
+  const grad = el("linearGradient", { id: "prf-grad-in", x1: 0, x2: 1, y1: 0, y2: 0 }, null, defs);
+  el("stop", { offset: 0, "stop-color": "var(--prf-flow)", "stop-opacity": 0 }, null, grad);
+  el("stop", { offset: 1, "stop-color": "var(--prf-flow)", "stop-opacity": 1 }, null, grad);
+  const pat = el("pattern", { id: "prf-pat-leak", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+  el("rect", { width: 6, height: 6, fill: "var(--prf-flow)" }, null, pat);
+  el("rect", { width: 2.2, height: 6, fill: "var(--prf-flow-2)" }, null, pat);
+
+  // the stream: each layer's catches drop out at its membrane, the leak's before the second layer's gates
+  const drops = [];
+  L.forEach((x, i) => {
+    if (leak && leak.layer === i) drops.push({ n: leak.caught, R: PRF_TRAY.leak[0] + 131.5, leak: true, layer: i });
+    drops.push({ n: x.caught - (leak && leak.layer === i ? leak.caught : 0), R: PRF_MEM[i] - 5, layer: i });
+  });
+  let left = T;
+  drops.forEach(d => { d.before = left; left -= d.n; d.after = left; d.w = d.n * k; d.x0 = d.R - d.w - 9; });
+  const shown = drops.filter(d => d.n > 0);
+  el("rect", { class: "flow-in", x: 20, y: Y0, width: 34, height: f(T * k) });
+  let from = 53.5;
+  shown.forEach(d => { el("rect", { class: "flow", x: f(from), y: Y0, width: f(d.x0 + 0.5 - from), height: f(d.before * k) }); from = d.x0; });
+  if (left > 0) el("rect", { class: "flow", x: f(from), y: Y0, width: f(1252 - from), height: f(left * k) });
+  shown.forEach(d => { const top = Y0 + d.after * k, w = d.w, R = d.R;
+    const p = `M${f(d.x0)} ${f(top)}A${f(w + 9)} ${f(w + 9)} 0 0 1 ${f(R)} ${f(top + w + 9)}V245H${f(R - w)}V${f(top + w + 9)}A9 9 0 0 0 ${f(d.x0)} ${f(top + w)}Z`;
+    el("path", { class: "flow", d: p });
+    if (d.leak) el("path", { class: "leakflow", d: p }); });
+  el("path", { class: "tail", d: "M1070 67H1252" });
+
+  // the trays, each gate's dots in it; a tray grows when its gates need more room than the mockup's
+  const trays = L.map((x, i) => ({ xw: PRF_TRAY.layers[i], layer: i, gates: G.filter(g => g.layer === i && g !== leak) }));
+  if (leak) trays.splice(leak.layer, 0, { xw: PRF_TRAY.leak, layer: leak.layer, gates: [leak], leak: true });
+  const bins = trays.map(t => el("rect", { class: t.leak ? "bin leak" : "bin", x: t.xw[0], y: 240.5, width: t.xw[1], height: 275, rx: 6 }));
+  shown.forEach(d => { el("rect", { class: "flow", x: f(d.R - d.w), y: 238, width: f(d.w), height: 6 });
+    if (d.leak) el("rect", { class: "leakflow", x: f(d.R - d.w), y: 238, width: f(d.w), height: 6, style: "stroke:none" }); });
+  const index = new Map(P.defects.map((o, i) => [o, i])), ix = new Map(P.defects.map((o, i) => [o.id, i]));
+  const dotEls = [], dotsOf = {}, grpOf = {}, perOf = {};
+  const cost = g => [g.runs != null ? `${n(g.runs, "run", "runs")} · ${money(g.cost)}` : "", g.per != null ? `about ${money(g.per)} a catch` : "",
+    g.by ? `by: tracks ${g.by.track} · self ${g.by.self} · other ${g.by.other}` : "", g.caught ? "" : "none in the Notes yet"].filter(Boolean);
+  let deepest = 0;
+  trays.forEach(t => {
+    const [x, w] = t.xw, per = Math.floor((w - 23) / 13), hx = x + 6.5, hw = w - 13, tx = hx + 5, rx = hx + hw - 5;
+    let bottom = null;
+    t.gates.forEach(g => {
+      const gi = G.indexOf(g);
+      let y = 253;
+      if (bottom != null) { el("path", { class: "sep", d: `M${f(tx)} ${f(bottom + 6)}H${f(rx)}` }); y = bottom + 10; }
+      const grp = el("g", { class: "b grp", "data-k": "g", "data-v": gi, "data-per": per, tabindex: 0, role: "group", "aria-label": `${g.label}: ${g.caught} caught` });
+      const hit = el("rect", { class: "hit", x: f(hx), y: f(y), width: f(hw), height: 0, rx: 4 }, null, grp);
+      el("text", { x: f(tx), y: f(y + 14), class: "t-g" }, g.label, grp);
+      el("text", { x: f(rx), y: f(y + 14), class: "t-gn", "text-anchor": "end" }, String(g.caught), grp);
+      if (g.sub) el("text", { x: f(tx), y: f(y + 26), class: "t-gs" }, g.sub, grp);
+      const top = y + (g.sub ? 32 : 20), mine = P.causes.flatMap(c => P.defects.filter(o => o.gate === g.key && o.cause === c));
+      grpOf[gi] = grp; perOf[gi] = per; dotsOf[gi] = [];
+      mine.forEach((o, j) => {
+        const cx = tx + (j % per) * 13, cy = top + Math.floor(j / per) * 13, c = `c-${o.cause}`, i = index.get(o);
+        const b = el("g", { class: ["b", "d", o.escaped && "sq", o.back && "bk"].filter(Boolean).join(" "), "data-k": "d", "data-v": i, "data-g": gi, tabindex: -1, role: "img",
+          "aria-label": `${o.id}, Day ${o.day}, ${o.cause}, ${g.at}${o.back ? ", came back" : ""}${o.escaped ? ", made on an earlier Day" : ""}` });
+        el("rect", { class: "hit", x: f(cx), y: f(cy), width: 13, height: 13 }, null, b);
+        if (o.escaped && o.back) { el("rect", { class: "rg", x: f(cx + 0.8), y: f(cy + 0.8), width: 11.4, height: 11.4, rx: 2.6 }, null, b);
+          el("rect", { class: c, x: f(cx + 2.8), y: f(cy + 2.8), width: 7.4, height: 7.4, rx: 1.2 }, null, b); }
+        else if (o.escaped) el("rect", { class: c, x: f(cx + 2.8), y: f(cy + 2.8), width: 7.4, height: 7.4, rx: 1.2 }, null, b);
+        else if (o.back) { el("circle", { class: "rg", cx: f(cx + 6.5), cy: f(cy + 6.5), r: 5.6 }, null, b); el("circle", { class: c, cx: f(cx + 6.5), cy: f(cy + 6.5), r: 3.4 }, null, b); }
+        else el("circle", { class: c, cx: f(cx + 6.5), cy: f(cy + 6.5), r: 4 }, null, b);
+        dotEls[i] = { b, o }; dotsOf[gi].push(b);
+      });
+      let ly = top + Math.ceil(mine.length / per) * 13;
+      cost(g).forEach(s => { ly += 12; el("text", { x: f(tx), y: f(ly), class: "t-cost" }, s, grp); });
+      bottom = ly + 5;
+      hit.setAttribute("height", f(bottom - y));
+    });
+    // the close's tray ends with the second reader, who reads every Day's tags at its close
+    if (t.layer === 2 && !t.leak) {
+      const sy = (bottom == null ? 247 : bottom + 6), R = P.reader;
+      el("path", { class: "sep", d: `M${f(tx)} ${f(sy)}H${f(rx)}` });
+      el("text", { x: f(tx), y: f(sy + 18), class: "t-g" }, "A second reader");
+      el("text", { x: f(tx), y: f(sy + 30), class: "t-gs" }, "relabel.py, the defect-rater");
+      const said = R ? [`${comma(R.differ)} of ${comma(R.tags)} tags read`, "differently"] : ["no Day's tags read", "yet"];
+      said.forEach((s, j) => el("text", { x: f(tx), y: f(sy + 42 + 12 * j), class: "t-cost" }, s));
+      bottom = sy + 42 + 12 * (said.length - 1) + 5;
+    }
+    deepest = Math.max(deepest, bottom || 0);
+  });
+
+  // the layers: a membrane each, and what it caught of what reached it
+  L.forEach((x, i) => { const mx = PRF_MEM[i];
+    el("rect", { class: "mem", x: f(mx - 3.5), y: 57, width: 7, height: 180, rx: 3.5 });
+    el("path", { class: "mem-c", d: `M${mx} 62V232` });
+    const say = `catches ${x.caught} of ${x.reached} · ${x.pct}%`;
+    const b = el("g", { class: "b lay", "data-k": "L", "data-v": i, tabindex: 0, role: "group", "aria-label": `Layer ${i + 1}, ${x.name}: ${say}` });
+    el("rect", { class: "hit", x: f(mx + 4 - 172), y: 6, width: 172, height: 48, rx: 4 }, null, b);
+    const t = el("text", { x: f(mx + 4), y: 20, class: "t-name", "text-anchor": "end" }, null, b);
+    el("tspan", { class: "k" }, String(i + 1), t); el("tspan", {}, ` ${x.name}`, t);
+    el("text", { x: f(mx + 4), y: 33, class: "t-bio", "text-anchor": "end" }, x.bio.toUpperCase(), b);
+    el("text", { x: f(mx + 4), y: 48, class: "t-sec", "text-anchor": "end" }, say, b); });
+  el("text", { x: 20, y: 48, class: "t-note" }, "Every defect in the Days' Notes");
+  // how many are still in the stream: before the first drop, and after each membrane
+  const label = (x, count, first) => { const hh = count * k, cap = first ? "defects, none caught yet" : "still uncaught";
+    if (hh >= 100) { el("text", { x: f(x), y: f(Y0 + hh / 2 + 5), class: "t-on", "text-anchor": "middle" }, comma(count)); el("text", { x: f(x), y: f(Y0 + hh / 2 + 22), class: "t-cap", "text-anchor": "middle" }, cap); }
+    else if (hh >= 40) { el("text", { x: f(x), y: f(Y0 + hh / 2 + 2), class: "t-on m", "text-anchor": "middle" }, comma(count)); el("text", { x: f(x), y: f(Y0 + hh / 2 + 17), class: "t-cap", "text-anchor": "middle" }, cap); }
+    else el("text", { x: f(x), y: f(Y0 + hh / 2 + (hh >= 16 ? 4.6 : 4)), class: hh >= 16 ? "t-on s" : "t-on xs", "text-anchor": "middle" }, `${comma(count)} ${cap}`); };
+  if (shown.length) label((53.5 + shown[0].x0 + 0.5) / 2, T, true);
+  L.slice(0, last).forEach((x, i) => { const next = shown.find(d => d.layer > i);
+    if (x.went_on > 0) label((PRF_MEM[i] + (next ? next.x0 : 1252)) / 2, x.went_on, false); });
+  shown.forEach(d => { const word = d.leak ? `${comma(d.n)}, no gate` : `${comma(d.n)} caught`;
+    if (d.w >= 60) el("text", { x: f(d.R - d.w / 2), y: 232, class: "t-drop in", "text-anchor": "middle" }, word);
+    else el("text", { x: f(d.x0 + 3), y: 228, class: "t-drop", "text-anchor": "end" }, word); });
+
+  // past every layer: what the Days' own checks let through, the escapes and the problems that came back
+  const out = el("rect", { class: "bin out", x: PRF_TRAY.out[0], y: 240.5, width: PRF_TRAY.out[1], height: 275, rx: 6 });
+  el("text", { x: 1084, y: 20, class: "t-name" }, "Past every layer");
+  el("text", { x: 1084, y: 33, class: "t-bio" }, "WHAT SURVIVES IS A MUTATION");
+  el("text", { x: 1084, y: 48, class: "t-sec" }, `${L[last].went_on} left in the count`);
+  ["The count ends at zero: a", "defect is counted only once", "somebody found it. What nobody", "found is not here."].forEach((s, j) => el("text", { x: 1084, y: 91 + 13 * j, class: "t-note" }, s));
+  el("text", { x: 1096, y: 267, class: "t-g" }, "Let through by a Day's");
+  el("text", { x: 1096, y: 280, class: "t-g" }, "own checks");
+  const M = P.marks, perLayer = m => m.layers.map((c, i) => c ? `${layerWord(i)} ${c}` : "").filter(Boolean);
+  let my = 288;
+  [["esc", M.escaped, `${M.escaped.n} made on an earlier Day, caught on a later one`, ["made on an earlier Day,", "caught on a later one"]],
+    ["back", M.back, `${M.back.n} the same problem as an earlier defect, back again`, ["the same problem as an", "earlier defect, back again"]]].forEach(([key, m, aria, sec]) => {
+    const b = el("g", { class: "b mk", "data-k": "mk", "data-v": key, tabindex: 0, role: "group", "aria-label": aria });
+    const hit = el("rect", { class: "hit", x: 1091, y: my, width: 154, height: 0, rx: 4 }, null, b);
+    if (key === "esc") el("rect", { class: "c-other", x: 1097, y: my + 8, width: 9, height: 9, rx: 1.4 }, null, b);
+    else { el("circle", { class: "rg", cx: 1102, cy: my + 14, r: 6.4 }, null, b); el("circle", { class: "c-other", cx: 1102, cy: my + 14, r: 3.8 }, null, b); }
+    el("text", { x: 1116, y: my + 23, class: "t-big" }, comma(m.n), b);
+    sec.forEach((s, j) => el("text", { x: 1096, y: my + 36 + 13 * j, class: "t-sec" }, s, b));
+    const lines = perLayer(m);
+    lines.forEach((s, j) => el("text", { x: 1096, y: my + 64 + 12 * j, class: "t-cost" }, s, b));
+    const bottom = lines.length ? my + 64 + 12 * (lines.length - 1) + 6 : my + 55;
+    hit.setAttribute("height", f(bottom - my)); my = bottom + 2;
+  });
+  el("text", { x: 1096, y: f(my + 9), class: "t-gs" }, `${n(M.both, "dot carries", "dots carry")} both marks`);
+  deepest = Math.max(deepest, my + 9);
+  const H = Math.max(275, deepest + 14 - 240.5);
+  [...bins, out].forEach(r => r.setAttribute("height", f(H)));
+
+  // the hooks, beside the stream: they refuse a call, they catch no defect
+  const B = 240.5 + H + 22, HK = P.hooks || { guards: [], refused: 0 }, most = Math.max(1, ...HK.guards.map(g => g.refused)), sc = Math.min(2.2, 250 / most);
+  const BH = Math.max(66, 16 * HK.guards.length + 18);
+  el("rect", { class: "bin out", x: 20.5, y: f(B), width: 1231, height: BH, rx: 6 });
+  el("text", { x: 32, y: f(B + 20.5), class: "t-name" }, "The hooks");
+  el("text", { x: 98, y: f(B + 20.5), class: "t-bio" }, "REFLEXES");
+  el("text", { x: 32, y: f(B + 37.5), class: "t-sec" }, "They refuse a call. They do not catch a defect,");
+  el("text", { x: 32, y: f(B + 51.5), class: "t-sec" }, "so they are not in the stream.");
+  let end = 434;
+  HK.guards.forEach((g, i) => { const w = g.refused * sc, y = B + 16 * i;
+    const b = el("g", { class: "b hk", "data-k": "h", "data-v": g.guard, tabindex: 0, role: "img", "aria-label": `${g.guard}: ${g.refused} refused` });
+    el("rect", { class: "hit", x: 342, y: f(y + 9.5), width: f(w + 132), height: 15, rx: 3 }, null, b);
+    el("text", { x: 426, y: f(y + 20.5), class: "t-sec", "text-anchor": "end" }, g.guard, b);
+    el("rect", { class: "hbar", x: 434, y: f(y + 12.5), width: f(w), height: 9, rx: 1.5 }, null, b);
+    el("text", { x: f(434 + w + 6), y: f(y + 21), class: "t-gn" }, comma(g.refused), b);
+    end = Math.max(end, 434 + w); });
+  el("text", { x: f(end + 70), y: f(B + 29.5), class: "t-big" }, comma(HK.refused));
+  el("text", { x: f(end + 70 + 51), y: f(B + 29.5), class: "t-sec" }, "calls refused, all dates");
+  if (HK.runs != null) el("text", { x: f(end + 70), y: f(B + 47.5), class: "t-cost" }, `${n(HK.runs, "run", "runs")} · ${money(HK.cost)}`);
+  ["cap-output trims long output.", "It never refuses, so it has", "no count here."].forEach((s, j) => el("text", { x: 1014, y: f(B + 23.5 + 14 * j), class: "t-note" }, s));
+  fig.setAttribute("viewBox", `0 0 1272 ${f(B + BH + 9.5)}`);
+
+  // the line of figures, the key's counts, CI's counts and the stamp
+  const fig4 = (num, small, what, sub) => h("div", null, h("div", { class: "num" }, num, small && h("small", null, small)), h("div", { class: "what" }, what), h("div", { class: "sub" }, sub));
+  const priced = G.filter(g => g.per != null).sort((a, b) => a.per - b.per), cheap = priced[0], dear = priced[priced.length - 1];
+  const late = P.late.length ? `; ${daySpan(P.late)} left out, merged after it` : "";
+  const reachedLast = L[last].reached;
+  $("figs").replaceChildren(
+    fig4(comma(T), null, "defects", `in the Notes of ${n(P.days.length, "Day", "Days")}; ${P.cause_counts.spec} ${P.cause_counts.spec === 1 ? "was" : "were"} in a spec`),
+    fig4(`${L[0].share}%`, null, "caught before any code", `${L[0].caught} of ${T}, by the auditors and the spec-change pull request`),
+    fig4(`${Math.round(100 * reachedLast / T)}%`, null, `reached "${lower1(L[last].name)}"`, `${reachedLast} of ${T} got past the close`),
+    priced.length ? fig4(money(cheap.per), priced.length > 1 ? `to ${money(dear.per)}` : null, priced.length > 1 ? "a catch, cheapest and dearest gate" : "a catch, at the one gate with a cost",
+      `${priced.length > 1 ? `${cheap.at}; ${dear.at}` : cheap.at}. Of the ${n(priced.length, "gate", "gates")} with a cost on record, over the catches of the Days merged by the count${late}`)
+      : fig4("–", null, "a catch", "no gate has a cost on record yet"));
+  const icon = (shape, cls) => { const s = document.createElementNS(SVG_NS, "svg"); const a = { width: 9, height: 9, viewBox: "-4.5 -4.5 9 9", "aria-hidden": "true" };
+    for (const x in a) s.setAttribute(x, a[x]); const c = document.createElementNS(SVG_NS, shape); c.setAttribute("class", cls); c.setAttribute("r", 4); s.appendChild(c); return s; };
+  $("k-total").textContent = comma(T);
+  $("k-causes").replaceChildren(...P.causes.filter(c => P.cause_counts[c]).map(c => h("span", null, icon("circle", `c-${c}`), `${c} ${comma(P.cause_counts[c])}`)));
+  $("k-back").textContent = comma(M.back.n); $("k-esc").textContent = comma(M.escaped.n); $("k-leak").textContent = comma(leak ? leak.caught : 0);
+  const CI = P.ci, ciName = w => w === "Evidence replay" ? "Evidence replay (the close's rehearsal)" : w, rehearsal = G.find(g => g.key === "rehearsal");
+  $("ci").replaceChildren(h("span", { class: "h" }, "CI on every pull request"), ...CI.workflows.map(w => h("span", null, h("b", null, comma(w.failed)), ciName(w.name))),
+    h("span", { class: "rest" }, CI.counted ? `Pull requests each workflow failed on, of ${comma(CI.merged)} merged; ${comma(CI.failed_any)} had at least one failed workflow. CI is not in the stream: the Notes credit it no defect, except through the close's rehearsal, which has ${rehearsal ? rehearsal.caught : 0} so far.`
+      : "No workflow run is counted yet. CI is not in the stream: the Notes credit it no defect, except through the close's rehearsal."));
+  const at = P.counted_at ? ` · the gates' runs and dollars are counted up to ${String(P.counted_at).slice(0, 16).replace("T", " ")}` : "";
+  $("stamp").textContent = `Drawn from the page's data at ${P.head || "?"}${P.last_pr ? ` (#${P.last_pr})` : ""}, generated ${P.generated}${at}`;
+
+  // what the picture shows, and where the model bends
+  const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
+  const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  li(finds, "Each layer, of what reached it.", " " + L.map((x, i) => i === last && x.caught === x.reached
+    ? `${x.name}: the last ${comma(x.caught)}, all of them, because nothing uncaught is counted.` : `${x.name}: ${comma(x.caught)} of ${comma(x.reached)} (${x.pct}%).`).join(" "));
+  if (leak) { const Lk = L[leak.layer], gated = G.filter(g => g.layer === leak.layer && g !== leak), by = leak.by || { track: 0, self: 0, other: 0 };
+    const above = G.filter(g => g !== leak && g.caught > leak.caught);
+    const rank = !above.length ? "more than any gate caught" : above.length <= 2 ? `more than any gate caught except ${andList(above.map(g => g.at))}` : `fewer than ${above.length} of the gates caught`;
+    li(finds, `The leak is ${comma(leak.caught)}.`, ` Of the ${comma(Lk.caught)} that left the stream ${lower1(Lk.name)}, the ${PRF_WORD[gated.length] || gated.length} gates caught ${comma(Lk.caught - leak.caught)} and ${comma(leak.caught)} ${leak.caught === 1 ? "was" : "were"} only noticed in the work (tracks ${by.track}, the session itself ${by.self}${by.other ? `, other ${by.other}` : ""}). That is ${T ? Math.round(100 * leak.caught / T) : 0}% of all defects, ${rank}.`); }
+  const unpriced = G.filter(g => g.per == null && g !== leak).map(g => g.at);
+  li(finds, "A catch costs", priced.length ? `, cheapest first, over the catches of the Days merged by the count: ${priced.map(g => `about ${money(g.per)} at ${g.at} (${money(g.cost)} over ${n(g.in_count, "catch", "catches")})`).join("; ")}.`
+    + (P.late.length ? ` ${daySpan(P.late)} had a pull request merge after the count, so ${P.late.length === 1 ? "its" : "their"} catches share none of the dollars.` : "")
+    + (unpriced.length ? ` The other gates have no cost on record (${andList(unpriced)}).` : "") : ": no gate has a cost on record yet.");
+  const lastN = M.escaped.layers[last];
+  li(finds, `${comma(M.escaped.n)} escaped a Day.`, M.escaped.n ? ` They were made on an earlier Day and found on a later one: ${perLayer(M.escaped).join(", ")}.`
+    + (lastN < M.escaped.n ? ` Only ${lastN} of them sit${lastN === 1 ? "s" : ""} in the last layer, because a later Day found the rest while writing or closing its own work.` : " All of them sit in the last layer.") : " None was made on an earlier Day.");
+  const backAt = G.filter(g => g.back).sort((a, b) => b.back - a.back).map(g => `${g.at} ${g.back}`);
+  li(finds, `${comma(M.back.n)} came back.`, (M.back.n ? ` The same problem as an earlier defect, caught again: ${backAt.join(", ")}. ${M.both} of them ${M.both === 1 ? "is" : "are"} also escapes.` : " No defect names an earlier one as the same problem.")
+    + ` They are not the ${comma(M.after_merge)} caught after the merge: the two sets share ${comma(M.shared)}.`);
+  const R = P.reader;
+  li(finds, "A second reader", R ? ` gave ${comma(R.differ)} of ${comma(R.tags)} tags differently.` + (R.stage ? ` For the tag that decides the tray, the gate that caught it, that is ${comma(R.stage[0])} of ${comma(R.stage[1])} defects (${R.stage[1] ? Math.round(100 * R.stage[0] / R.stage[1]) : 0}%).` : "")
+    : " has read no Day's tags yet.");
+  if (P.hooks) li(finds, "The hooks", ` refused ${n(P.hooks.refused, "call", "calls")}${P.hooks.guards.length ? ` (${P.hooks.guards.map(g => `${g.guard} ${g.refused}`).join(", ")})` : ""}${P.hooks.cost != null ? ` for ${money(P.hooks.cost)}` : ""}. No defect in the Notes is credited to them.`);
+  [["Only what was found.", " A defect here is one somebody found and wrote in a Day's Notes. So the stream ends at zero, and it says nothing of what nobody found. In a cell, what survives is exactly what is not seen."],
+    ["The checks are not fixed machinery.", " A cell's three checks do not change. Here a gate is added or changed between Days: the close's rehearsal is counted only from Day 12, and before that its catches sit with the evidence replay."],
+    [`${n(P.days.length, "Day", "Days")} in one stream.`, " Each Day passes the layers once; the picture pools them. A square dot in \"while writing\" passed all four layers of the Day that made it and is drawn where a later Day noticed it."],
+    ["Later is drawn further right,", " not lower as on the pipe below. Inside a layer the order means nothing: the leak is drawn before the gates only to keep it apart."],
+    ["The leak is not a membrane.", " \"Noticed in the work\" is where a defect goes when its line names no gate. A catch by a gate the Notes do not name is counted there too."],
+    ["The cost of a catch", " divides a gate's dollars by its catches on the Days whose pull requests all merged by the count, as graph 7 does: the dollars end at the count, and a Day still merging would share them with catches not yet paid for. It ignores what the gate prevented, and a gate that catches nothing has no price at all."]].forEach(([b, t]) => li(bends, b, t));
+
+  // what the pointer says
+  const where = o => typeof o.made === "number" && o.made !== o.day ? `Made on Day ${o.made} and caught on Day ${o.day}` + (o.made < o.day ? `: it escaped for ${n(o.day - o.made, "Day", "Days")}.` : ".")
+    : typeof o.made === "number" ? `Made and caught on Day ${o.day}.` : o.made === "none" ? "Made outside any Day: in the plan, a tool or a machine." : `Caught on Day ${o.day}; its line does not say which Day made it.`;
+  const causes = g => P.causes.map((c, i) => g.causes[i] ? `${c} ${g.causes[i]}` : "").filter(Boolean).join(", ");
+  const extra = g => g.by ? `By: tracks ${g.by.track}, the session itself ${g.by.self}, other ${g.by.other}.` : g.key === "rehearsal" && CI.counted ? `CI's Evidence replay check failed on ${n(CI.rehearsal, "pull request", "pull requests")}.` : "";
+  const hookDoes = g => (HOOKS.gates.find(x => x.guard === g) || {}).does;
+  const say = (kind, v) => {
+    if (kind === "d") { const o = P.defects[+v], g = G.find(x => x.key === o.gate);
+      return { t: `${o.id} · Day ${o.day} · ${o.cause}`, l: [`Caught by: ${g.at} (${layerWord(o.layer)}).`, where(o), o.back ? `Came back: the same problem as ${o.same_as}, back again.` : "", o.noticed ? `Noticed by: ${o.noticed}.` : ""] }; }
+    if (kind === "g") { const g = G[+v];
+      return { t: g.label + (g.sub ? ` · ${g.sub}` : ""), l: [`${n(g.caught, "defect", "defects")} caught` + (g.caught ? `: ${causes(g)}.` : "."),
+        g.runs != null ? `${n(g.runs, "run", "runs")} · ${money(g.cost)}` + (g.per != null ? ` · about ${money(g.per)} a catch, over its ${n(g.in_count, "catch", "catches")} on the Days merged by the count.` : ".") : "Its runs and cost are not counted.", extra(g), g.does] }; }
+    if (kind === "L") { const x = L[+v]; return { t: `${x.name} · ${x.bio}`, l: [`${x.reached} reached it. ${x.caught} caught here (${x.pct}%). ${x.went_on} went on.`, x.what] }; }
+    if (kind === "h") { const g = HK.guards.find(x => x.guard === v); return g ? { t: `${g.guard} · ${n(g.refused, "call", "calls")} refused`, l: [hookDoes(g.guard)] } : null; }
+    if (kind === "mk" && v === "esc") return { t: `${n(M.escaped.n, "defect", "defects")} made on an earlier Day`, l: ["Counted as graph 7 counts it: the line's made: names a Day, and it is not the Day whose Notes record the defect. A line that says none (made in the plan, a tool or a machine) is not counted.",
+      `Drawn square, in the tray of the gate that caught it on the later Day: ${perLayer(M.escaped).join(", ") || "none"}.`] };
+    if (kind === "mk" && v === "back") return { t: `${n(M.back.n, "problem", "problems")} that came back`, l: ["Counted as graph 7 counts it: the defect's line names an earlier defect as the same problem.",
+      `Drawn ringed, where it was caught again: ${perLayer(M.back).join(", ") || "none"}.`, `Came back is not after the merge: of the ${comma(M.after_merge)} caught after the merge, ${comma(M.shared)} came back.`] };
+    return null;
+  };
+  // pointing at a ringed dot lights the defect it repeats; at a gate, its dots; at a mark, the dots that carry it
+  let lit = [];
+  const clear = () => { fig.classList.remove("foc"); lit.forEach(e => e.classList.remove("lit")); lit = []; };
+  const light = list => { if (!list.length) return; list.forEach(e => { e.classList.add("lit"); lit.push(e); }); fig.classList.add("foc"); };
+  const focusOn = b => { const kind = b.getAttribute("data-k"), v = b.getAttribute("data-v");
+    if (kind === "d") { const o = P.defects[+v], j = o.same_as != null ? ix.get(o.same_as) : null; if (j != null && dotEls[j]) light([b, dotEls[j].b]); }
+    else if (kind === "mk") light(dotEls.filter(x => x && (v === "esc" ? x.o.escaped : x.o.back)).map(x => x.b));
+    else if (kind === "g") light(dotsOf[v] || []); };
+  pointerBox(fig, tip, (key, b) => { clear(); const d = key && say(...key.split("|")); if (!d) return false; focusOn(b); return tipFill(tip, d); },
+    b => `${b.getAttribute("data-k")}|${b.getAttribute("data-v")}`);
+  // the arrow keys walk a gate's dots, a row at a time up and down; Escape goes back to the gate
+  fig.addEventListener("keydown", e => { const b = e.target && e.target.closest ? e.target.closest(".b") : null; if (!b) return;
+    const kind = b.getAttribute("data-k"), gi = kind === "g" ? b.getAttribute("data-v") : kind === "d" ? b.getAttribute("data-g") : null; if (gi == null) return;
+    const dots = dotsOf[gi] || [], i = dots.indexOf(b), per = perOf[gi], grp = grpOf[gi];
+    if (e.key === "Escape" && kind === "d") { grp.focus(); e.preventDefault(); return; }
+    if (!dots.length) return;
+    const to = { ArrowRight: i + 1, ArrowLeft: i < 0 ? null : i - 1, ArrowDown: i < 0 ? 0 : i + per, ArrowUp: i < 0 ? null : i - per, Home: 0, End: dots.length - 1 }[e.key];
+    if (to == null) return;
+    e.preventDefault();
+    if (to < 0) grp.focus(); else dots[Math.min(to, dots.length - 1)].focus(); });
+  // the page's Day buttons dim every other Day's dots
+  onDay.push(day => dotEls.forEach(x => x && x.b.classList.toggle("mk-dim", day != null && x.o.day !== day)));
+  return fig;
+}
+
 function draw(M, DATA) {
   const $ = id => document.getElementById(id);
   const put = (id, ...kids) => { const box = $(id); box.replaceChildren(...kids.flat(Infinity).filter(c => c != null && c !== false)); return box; };
@@ -3064,8 +3325,9 @@ function draw(M, DATA) {
     else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
 
-  /* Graph 2 as a gel, and graphs 3 to 5 as proteins, in their places; the graphs themselves are folded under them */
-  [["gel", gelDraw], ["prt", protDraw]].forEach(([k, fn]) => {
+  /* Graph 2 as a gel, graphs 3 to 5 as proteins and graph 7 as proofreading, in their places; the graphs themselves are
+     folded under them */
+  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));

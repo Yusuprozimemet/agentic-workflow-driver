@@ -542,7 +542,43 @@
     </details>
   </section>
 
-  <section class="graph" id="g7">
+  <section class="graph" id="prf">
+    <div class="graph-head">
+      <p class="graph-n">Graph 7 · drawn as proofreading; the old graph 7 is folded below</p>
+      <h2>Does the checking work, and is it worth it?</h2>
+      <p class="graph-say">One stream of defects, thinning left to right at each layer of checking; a dot under a layer is one defect caught there.</p>
+    </div>
+    <div class="figs" id="prf-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="9" height="9" viewBox="-4.5 -4.5 9 9" aria-hidden="true"><circle class="c-spec" r="4"/></svg>A defect</span><span><svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true"><circle class="rg" r="5.6"/><circle class="c-other" r="3.4"/></svg>Its marks</span><span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect class="flow" width="26" height="12"/></svg>The stream</span><span><svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true"><rect class="hbar" width="26" height="8" rx="1.5"/></svg>Beside the stream</span></p>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+<div><p class="graph-say">Read it left to right. The grey stream is every defect the Days' Notes record, and it is as wide as the defects not yet caught. At each layer of checking, the ones caught there drop into the tray below: one dot each, grouped by the gate that caught them. The hatched part left the stream with no gate at all.</p>
+<dl class="lg" id="prf-key">
+    <dt>A defect <small>a copying error</small></dt>
+    <dd><span><span class="kt">One dot is one defect a Day's Notes record (<i class="n" id="prf-k-total"></i>), coloured by its cause:</span></span><span class="causes" id="prf-k-causes"></span></dd>
+    <dt>Its marks <small>what got past a Day</small></dt>
+    <dd><span><svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true"><circle class="rg" r="5.6"/><circle class="c-other" r="3.4"/></svg><span class="kt">ringed: the same problem came back (<i class="n" id="prf-k-back"></i>). Its line in the Notes names an earlier defect as the same one. Not the same set as the defects caught after the merge.</span></span><span><svg width="9" height="9" viewBox="-4.5 -4.5 9 9" aria-hidden="true"><rect class="c-other" x="-3.8" y="-3.8" width="7.6" height="7.6" rx="1.2"/></svg><span class="kt">square: made on an earlier Day (<i class="n" id="prf-k-esc"></i>). Its line names, as the Day that made it, another Day than the one whose Notes record it.</span></span></dd>
+    <dt>The stream <small>the new strand</small></dt>
+    <dd><span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect class="flow" width="26" height="12"/></svg>as wide as the defects not yet caught, to scale</span><span><svg width="9" height="18" viewBox="0 0 9 18" aria-hidden="true"><rect class="mem" x="1" y="1" width="7" height="16" rx="3.5"/></svg>a layer of checking; what it catches drops into the tray below it</span><span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect class="flow" width="26" height="12"/><rect class="leakflow" x=".5" y=".5" width="25" height="11"/></svg><span class="kt">hatched: left the stream with no gate, only noticed in the work. A leak (<i class="n" id="prf-k-leak"></i>).</span></span></dd>
+    <dt>Beside the stream <small>refusals and failed checks</small></dt>
+    <dd><span><svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true"><rect class="hbar" width="26" height="8" rx="1.5"/></svg>the hooks refuse a call and CI fails a pull request. The Notes credit neither with a defect, so they are counted apart.</span></dd>
+  </dl>
+<p class="hint">Point at a dot for the defect, at a gate's name for its catches, runs and cost, and at a layer's name for what it removed. With the keyboard, Tab moves from gate to gate and the arrow keys walk a gate's dots. A ringed dot lights up the defect it repeats. A Day's button above dims every other Day's dots.</p>
+<p class="stamp" id="prf-stamp"></p></div>
+    </details>
+    <div class="scroll" id="prf-scroll"><svg class="fig" id="prf-fig" viewBox="0 0 1272 613" role="group"></svg></div>
+    <p class="ci" id="prf-ci"></p>
+    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="prf-finds"></ul></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="prf-bends"></ul></div>
+      </div></div>
+    </details>
+    <div id="prf-tip" hidden></div>
+  </section>
+
+  <section class="graph mock-fold" id="g7-fold">
+    <details class="exact"><summary>Graph 7 as it was, folded: the pipe, gate by gate</summary>
+    <div id="g7">
     <div class="graph-head">
       <p class="graph-n">Graph 7</p>
       <h2>Does the checking work, and is it worth it?</h2>
@@ -561,6 +597,8 @@
     </div>
     <div id="g7-days"></div>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
+  </div>
+    </details>
   </section>
 
   <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
