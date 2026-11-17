@@ -106,26 +106,38 @@ CAVEATS = [
 ]
 
 
-# The files this script is split into, beside it: a change to any of them starts the cache over
-# (load_cache) and counts as the script edited (provenance).
+# The files this script is split into, beside it: a change to any of them counts as the script
+# edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
            "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
            "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_views.py")
+# The files that make each part of the cache: a part starts over when one of its files changes
+# (load_cache), and an edit to any other file keeps it. "git" is git's own output for commits named
+# by SHA, as spec_drift_git.py reads it. "code" and "flags" are what spec_drift_metrics.py counts in
+# git grep's output, with spec_drift_common.py's patterns, at the merges spec_drift_git.py lists.
+# "comments" is the git grep spec_drift_handoffs.py runs at each merge (day_comments).
+COUNTED_BY = ("spec_drift_git.py", "spec_drift_common.py", "spec_drift_metrics.py")
+CACHE_PARTS = dict(git=("spec_drift_git.py",), code=COUNTED_BY, flags=COUNTED_BY,
+                   comments=("spec_drift_git.py", "spec_drift_handoffs.py"))
 
 
 def load_cache(path):
-    version = hashlib.sha256()
-    for name in SOURCES:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name), "rb") as f:
-            version.update(f.read().replace(b"\r\n", b"\n"))
-    version = version.hexdigest()
+    scripts, made_by = os.path.dirname(os.path.abspath(__file__)), {}
+    for part, names in CACHE_PARTS.items():
+        version = hashlib.sha256()
+        for name in names:
+            with open(os.path.join(scripts, name), "rb") as f:
+                version.update(f.read().replace(b"\r\n", b"\n"))
+        made_by[part] = version.hexdigest()
     try:
         with open(path, encoding="utf-8") as f:
             cached = json.load(f)
-    except (OSError, ValueError):
-        cached = {}
+        was = cached.get("made_by") or {}
+    except (OSError, ValueError, AttributeError):
+        cached, was = {}, {}
     CACHE.clear()
-    CACHE.update(cached if cached.get("version") == version else dict(version=version))
+    CACHE.update({part: cached[part] for part in CACHE_PARTS
+                  if was.get(part) == made_by[part] and isinstance(cached.get(part), dict)}, made_by=made_by)
 
 
 def save_cache(path):

@@ -257,8 +257,9 @@ class SpecDriftTest(unittest.TestCase):
         beside = sorted(n for n in os.listdir(HERE) if re.fullmatch(r"spec_drift_\w+\.py", n))
         self.assertEqual(sorted(sd.SOURCES), sorted(["spec-drift.py", *beside]))
 
-    def test_a_change_to_any_file_of_the_script_starts_the_cache_over(self):
-        # The script is split into modules beside it: an edit to one of them is an edit to it.
+    def test_a_change_to_a_file_that_makes_the_cache_starts_it_over(self):
+        # The script is split into modules beside it: an edit to the git reader starts the cache
+        # over, and an edit to a view keeps it (tests/test_spec_drift_speed.py has each part).
         folder = tempfile.mkdtemp(prefix="spec-drift-split-")
         self.addCleanup(shutil.rmtree, folder, True)
         for name in sd.SOURCES:
@@ -272,10 +273,14 @@ class SpecDriftTest(unittest.TestCase):
         sd.save_cache(cache)
         sd.load_cache(cache)
         self.assertEqual(sd.CACHE["git"], {"k": "v"})
-        with open(os.path.join(folder, sd.SOURCES[-1]), "a", encoding="utf-8") as f:
+        with open(os.path.join(folder, "spec_drift_views.py"), "a", encoding="utf-8") as f:
             f.write("# edited\n")
         sd.load_cache(cache)
-        self.assertEqual(sorted(sd.CACHE), ["version"])
+        self.assertEqual(sd.CACHE["git"], {"k": "v"})
+        with open(os.path.join(folder, "spec_drift_git.py"), "a", encoding="utf-8") as f:
+            f.write("# edited\n")
+        sd.load_cache(cache)
+        self.assertEqual(sorted(sd.CACHE), ["made_by"])
 
     def test_a_comment_naming_a_spec_name_is_not_code(self):
         rows = self.repo.merge({"src/Foo.java": "// FooService comes later\n /* FooService */\n",
