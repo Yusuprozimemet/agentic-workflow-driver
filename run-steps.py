@@ -13,8 +13,8 @@ file. live-check [--state] [--claude] [--python] runs the driver's own tests on 
 Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
 refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] [--watch [--poll]] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; with --watch it prints again every --poll seconds until no session is live; it takes no lock and writes nothing. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] [--limit-hours] does one step's checks in order:
-halt, config, lock, the driver's own repository, preflight, the tree brought to main, decide, the
-evidence run, then the run log;
+halt, config, the driver's own repository (the project is the driver's folder, or both share an
+origin URL), lock, the driver's folder left clean, preflight, the tree brought to main, decide, the evidence run, then the run log;
 for now it prints "would start: <sentence>" and starts nothing."""
 
 import argparse
