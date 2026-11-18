@@ -218,7 +218,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config`.
       Evidence: `StatusTest.test_full_report`, `StatusTest.test_mode_forms`, `StatusTest.test_no_merged`, `StatusTest.test_no_parks`, `StatusTest.test_in_progress`, `StatusTest.test_writes_nothing`, `StatusTest.test_torn_log`, `StatusTest.test_gh_down`, `StatusTest.test_bad_config` (#126).
       broken: status drops the refusals line → AssertionError: Lists differ: ['mod[627 chars]f', 'cost: $1.20, merged pull requests 2, $0.6[93 chars]ked'] != ['mod[627 chars]f', 'refusals: 3', 'cost: $1.20, merged pull r[108 chars]ked'] (#126)
-      broken: status skipping the config → AssertionError: "mode: off\nlevel: 1\nhalt: none\nrun's i[225 chars]ed\n" != '' (#126)
+      broken: status skipping the config → AssertionError: "mode: off\nlevel: 1\nhalt: none\nrun's i[219 chars]ed\n" != '' (#250)
       broken: a log that cannot be read passing as empty → AssertionError: Lists differ: ['in progress: none', 'steps: none', 'parks by reason: n[144 chars]ked'] != ['in progress: unknown', 'run log: the run log cannot be read at line 2'] (#126)
       Replaces: C07.18 — was: the same, with break reports that ended at the `cost` line.
 - [x] C08.3 **new** — An `end` line whose `session` is `["s1"]` or whose `refused` is `"x"`, a
