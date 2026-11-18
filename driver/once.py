@@ -1,5 +1,6 @@
 """--once does one step's checks in order, and the first that applies ends the run: the halt file,
-the config, the lock, the driver's own repository, the kit and the CLI (preflight), the project's
+the config, the driver's own repository (the project is the driver's folder, or both share an origin
+URL), the lock, the driver's folder left clean, the kit and the CLI (preflight), the project's
 issues (the STOP switch), the run log, the parks, the decision, the evidence run, then the
 step's failures. Steps 10 and 11 open the run's issue, write `run.json`, the settings and the run
 log's start line, then start one `claude -p` session, its prompt on stdin. Step 12 reads the
@@ -28,6 +29,7 @@ import threading
 import time
 import uuid
 from collections import namedtuple
+from pathlib import Path
 
 from driver import box, github, issues, livecheck, lock, runlog, status, stream, switchlog, tree
 from driver import home as driver_home
@@ -361,6 +363,34 @@ def halted_line(halt):
     return f"cannot start: halted: `{halt}` exists; run-steps.py clear removes it"
 
 
+def remote_url(folder):
+    # The origin's URL, or None. With no origin, git ls-remote --get-url prints the word "origin"
+    # back, so that word is no URL: two folders with no origin are not one repository.
+    try:
+        done = subprocess.run(
+            ["git", "ls-remote", "--get-url", "origin"],
+            cwd=folder,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    text = done.stdout.decode("utf-8", errors="replace").strip()
+    if done.returncode != 0 or text in ("", "origin"):
+        return None
+    return text
+
+
+def own_repository(home, project):
+    # True when the project is the driver's own folder, or when both folders share an origin URL.
+    if os.path.normcase(str(Path(project).resolve())) == os.path.normcase(
+        str(Path(home).resolve())
+    ):
+        return True
+    url = remote_url(project)
+    return url is not None and url == remote_url(home)
+
+
 def run(args, home, read_facts, body=None):
     # read_facts is passed in from run-steps.py, so the dry run's own function is used unchanged.
     if hasattr(os, "setpgid"):
@@ -379,6 +409,9 @@ def run(args, home, read_facts, body=None):
     args.stale_minutes = config.get("stale_minutes", 10)
     # The config is read even when --project is given: later tracks need its budget_usd.
     project = args.project if args.project is not None else config["project"]
+    # Before the lock, so that a refused start takes none and leaves no state folder behind.
+    if own_repository(home, project):
+        return refuse([f"cannot start: `{project}` is the driver's own repository"])
     refusal = lock.take(args.state)
     if refusal:
         return refuse([refusal])

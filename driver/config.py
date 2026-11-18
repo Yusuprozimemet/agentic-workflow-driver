@@ -3,8 +3,8 @@ load() checks the whole file and returns every problem as one line, so a person 
 pass. The optional container_image and container_secrets come as a pair, and a session's container
 needs both. The optional stale_minutes, a number above 0 (10 when absent), is how long a session may
 go without an event before the run's issue says so. The optional review, true or false, turns the
-reviewer on; absent is off. Plain stdlib: the file is read as UTF-8 bytes, and a problem is never
-raised."""
+reviewer on; absent is off. The optional level, 1 or 2, is 1 when absent. Plain stdlib: the file is
+read as UTF-8 bytes, and a problem is never raised."""
 
 import json
 import os
@@ -31,6 +31,11 @@ def is_steps(value):
 
 def is_abs_path(value):
     return isinstance(value, str) and os.path.isabs(value)
+
+
+def is_level(value):
+    # 2.0 equals 2 and True equals 1 in Python: a level is the int 1 or 2, so the type is tested first.
+    return isinstance(value, int) and not isinstance(value, bool) and value in (1, 2)
 
 
 def problems(path, config):
@@ -69,6 +74,9 @@ def problems(path, config):
     # Absent is off: the reviewer runs only when driver.json says true.
     if "review" in config and not isinstance(config["review"], bool):
         lines.append(f"cannot start: {path}'s review must be true or false")
+    # Absent is 1: nothing reads level yet, so the driver runs as it did before the key existed.
+    if "level" in config and not is_level(config["level"]):
+        lines.append(f"cannot start: {path}'s level must be 1 or 2")
     return lines
 
 

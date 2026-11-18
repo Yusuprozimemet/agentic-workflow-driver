@@ -2,6 +2,7 @@
 for any other. The project's origin and the driver copy's origin are set per case."""
 
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -51,3 +52,46 @@ class OwnRepositoryTest(unittest.TestCase):
             (code, out.splitlines(), err.splitlines()),
             (1, ["park: the project has no origin/main"], []),
         )
+
+    def assert_refused(self, folder, copy, code, out, err, project_text):
+        # The refusal names the project as given. Nothing ran: no gh or claude call, and no state folder,
+        # so no lock was taken. The three checks are one tuple, so a failure names which one differs.
+        same(
+            self,
+            (code, out.splitlines(), err.replace(project_text, "<project>").splitlines()),
+            (2, [], ["cannot start: `<project>` is the driver's own repository"]),
+        )
+        gh_calls = folder / "gh" / "calls.jsonl"
+        claude_calls = folder / "claude" / "calls.jsonl"
+        same(
+            self,
+            (
+                not gh_calls.exists() or gh_calls.read_bytes() == b"",
+                not claude_calls.exists(),
+                not (folder / "state").exists(),
+            ),
+            (True, True, True),
+        )
+
+    def test_same_folder(self):
+        # The project is the driver's own folder, so the run refuses before the lock and before any call.
+        folder, copy, flags = self.case("same")
+        code, out, err = once(copy, *flags, "--project", str(copy))
+        self.assert_refused(folder, copy, code, out, err, str(copy))
+
+    def test_same_origin(self):
+        # The driver copy's origin is the project's, so the two are one repository, whatever the folders.
+        folder, copy, flags = self.case("origin")
+        url = (
+            subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=folder / "project",
+                capture_output=True,
+                check=True,
+            )
+            .stdout.decode()
+            .strip()
+        )
+        git(copy, "remote", "add", "origin", url)
+        code, out, err = once(copy, *flags)
+        self.assert_refused(folder, copy, code, out, err, str((folder / "project").resolve()))
