@@ -23,6 +23,6 @@
 {"date":"2026-11-16","guard":"step-guard","refused":3},
 {"date":"2026-11-17","guard":"read-guard","refused":10},
 {"date":"2026-11-18","guard":"auditor-guard","refused":4},
-{"date":"2026-11-18","guard":"read-guard","refused":4},
+{"date":"2026-11-18","guard":"read-guard","refused":5},
 {"date":"2026-11-18","guard":"step-guard","refused":1}
 ]
