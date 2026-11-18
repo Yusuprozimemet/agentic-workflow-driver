@@ -218,7 +218,7 @@ ABILITIES = (
 
 # What each finished day's promises grew, the first being the chain the proteins draw them in.
 DAY_ABILITIES = {1: ("rehearse",), 2: ("rehearse", "stop"), 3: ("stop",), 4: ("loop",), 5: ("park", "loop")}
-# One made-up defect at each gate: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
+# One made-up defect at each gate but the track-reviewer's: its day, ID, found:, cause:, made: and same-as:, as a Defect line has them.
 DEFECTS = (
     (1, "D1.1", "auditor", "spec", "Day 01", None),
     (1, "D1.2", "spec-change PR", "process", "Day 01", None),

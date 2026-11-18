@@ -4,7 +4,7 @@
     python scripts/auditor-guard.py stop    # SubagentStop: exit 2 if the repository changed
 
 The hooks run for every Bash command and every subagent's stop; the guard acts only when the
-hook's `agent_type` is one of AUDITORS, the six agents whose brief says "Read-only" and that have
+hook's `agent_type` is one of AUDITORS, the seven agents whose brief says "Read-only" and that have
 Bash, and lets the main session and every other agent through. Hooks in an agent's frontmatter
 were the first wiring: the terminal's Claude Code 2.1.170 ran them, the VS Code extension's
 2.1.312 ignored them. Settings hooks run on both, inside subagents.
@@ -67,7 +67,7 @@ WRAPPERS = {"env", "command", "time", "nohup", "xargs", "sudo", "exec", "then", 
             "if", "while", "until", "!", "{", "}"}
 SHELLS = {"bash", "sh", "zsh", "powershell", "pwsh"}
 AUDITORS = {"plan-auditor", "spec-auditor", "security-ops-auditor", "agentic-engineering-auditor",
-            "architecture-auditor", "instrument-auditor"}
+            "architecture-auditor", "instrument-auditor", "track-reviewer"}
 SEPARATORS = {";", "|", "||", "&", "&&", "(", ")", ">", ">>", "<", "<<", "|&", ";;"}
 
 

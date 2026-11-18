@@ -134,6 +134,7 @@ the CI checks gate its PRs, and every agent's work reaches `main` only through o
 |---|---|---|---|
 | main session | all | `step-guard.py` (after "merged": no subagent, repository edit, branch, commit, push or PR until a new session); `read-guard.py`; `cap-output.py` | every CI check on its PRs; the maintainer's merge; the evidence replay after a close |
 | implementer | Read, Edit, Write, Grep, Glob, Bash | `read-guard.py`; `cap-output.py` | the main session's diff review, full checks and breaks (`break.py`); then the PR's CI, "Track tests seen red" and the project's tests among them |
+| track-reviewer | Read, Grep, Glob, Bash | as the plan-auditor | the main session, which takes or leaves each finding; its catches are counted apart (`found: track-reviewer`) |
 | plan-auditor, spec-auditor | Read, Grep, Glob, Bash | `auditor-guard.py` (writing git and `gh` commands refused; repository compared at its stop); `read-guard.py`; `cap-output.py` | the maintainer, who decides what becomes a PR |
 | security-ops-, agentic-engineering-, architecture-auditor | Read, Grep, Glob, Bash | as the plan-auditor | the maintainer; the three reports are read side by side |
 | defect-rater | Read | `read-guard.py` | `relabel.py compare` against the day's tags, in the closing PR |

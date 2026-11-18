@@ -1458,6 +1458,7 @@ def with_prf(data):
 GATE_KEYS = [
     "auditor",
     "spec-change PR",
+    "track-reviewer",
     "seen red",
     "break on purpose",
     "review",
@@ -1469,7 +1470,7 @@ GATE_KEYS = [
     "Day review",
 ]
 OLD_DEMO = {
-    "caught": [1] * 11,
+    "caught": [1, 1, 0] + [1] * 9,  # the track-reviewer's gate has no demo defect
     "layers": [2, 4, 2, 3],
     "per": {
         "auditor": "$2.40",
@@ -1479,7 +1480,7 @@ OLD_DEMO = {
     },
 }
 OLD_FIXTURE = {
-    "caught": [3, 0, 1, 0, 0, 2, 0, 0, 1, 0, 1],
+    "caught": [3, 0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 1],
     "layers": [3, 3, 0, 2],
     "per": {"auditor": "$1.50"},
 }
@@ -1498,7 +1499,10 @@ class ProofreadingTest(unittest.TestCase):
 
     def test_the_counts_are_graph_7s_on_the_demo_data_and_on_a_day_merged_after_the_count(self):
         p = self.prf(demo_data.demo())
-        self.assertEqual([g["key"] for g in p["gates"]], GATE_KEYS)
+        keys = [g["key"] for g in p["gates"]]
+        # the missing keys first: a list short enough for a report to hold whole
+        self.assertEqual([k for k in GATE_KEYS if k not in keys], [])
+        self.assertEqual(keys, GATE_KEYS)
         f = self.prf(prf_data())
         # field by field, gate by gate: a short report break.py can record (unittest shortens long dicts)
         for got, old in ((self.counts(p), OLD_DEMO), (self.counts(f), OLD_FIXTURE)):
@@ -1517,6 +1521,8 @@ class ProofreadingTest(unittest.TestCase):
             "the auditor (plan)": "auditor",
             "The spec-change PR": "spec-change PR",
             "Track B": "work",
+            "track-reviewer": "track-reviewer",
+            "Track-reviewer (the brief)": "track-reviewer",
             "self": "work",
             "work": "work",
             "a reviewer nobody named": "work",
@@ -1535,7 +1541,7 @@ class ProofreadingTest(unittest.TestCase):
         for data in (prf_data(commit=None), prf_data(absent=["gates.json"])):
             p = self.prf(data)
             self.assertTrue("empty" in p, "the stream would be drawn")
-            self.assertEqual([g["cost"] for g in p["gates"]], [None] * 11)
+            self.assertEqual([g["cost"] for g in p["gates"]], [None] * 12)
             self.assertIsNone(p["hooks"])
         self.assertNotIn("empty", self.prf(prf_data(absent=["sessions.json"])))
 
@@ -1558,7 +1564,7 @@ class ProofreadingTest(unittest.TestCase):
         data = demo_data.demo()
         out, p = prf_node(data), data["proofreading"]
         guards = {r["guard"] for r in data["refusals"] if r["refused"]}
-        want = {"dots": p["total"], "grps": 11, "lays": 4, "hooks": len(guards), "marks": 2}
+        want = {"dots": p["total"], "grps": 12, "lays": 4, "hooks": len(guards), "marks": 2}
         self.assertEqual({k: out["prf"][k] for k in want}, want)
         self.assertEqual(p["total"], 11)
         self.assertEqual(out["onDay"], 1)  # it hooks into the page's Day buttons
@@ -1580,7 +1586,7 @@ class ProofreadingTest(unittest.TestCase):
             self.assertIn("The proofreading stream is not drawn.", out["missing"])
             # graph 7 still puts each defect at its gate, with no gate's cost
             self.assertEqual(out["g7"]["phases"], OLD_FIXTURE["layers"])
-            self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 11)
+            self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 12)
             self.assertFalse(any("run" in s for s in out["g7"]["subs"]), out["g7"]["subs"])
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")

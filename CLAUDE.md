@@ -160,7 +160,7 @@ the others' reports: their disagreement is part of the result.
 
 "Read-only" is enforced as far as a hook can: `.claude/settings.json` runs
 `scripts/auditor-guard.py` on every Bash command and every subagent's stop. For the six
-auditors with Bash it blocks a git command that changes a repository (but `git -C <absolute
+auditors with Bash, and the track-reviewer, it blocks a git command that changes a repository (but `git -C <absolute
 path> fetch` into another repository, a scratch clone, passes) and a `gh` command that is
 not a read, and at the auditor's stop it compares HEAD, the refs, the stash and `git status` with
 what they were and sends the auditor back once if they changed; the main session and other agents
@@ -185,6 +185,11 @@ implementer never commits or pushes.
 A brief that carries the spec's exact expected outputs lets the implementer finish in one pass.
 Before sending it, run `python scripts/brief-check.py <brief file>`: it fails when a backticked
 name sits in another file than the one the line names (D07.24, D08.77).
+Then give the brief's file to the **track-reviewer** agent (`.claude/agents/track-reviewer.md`),
+with the word "brief": from a fresh context it greps the callers of what the brief changes,
+walks each fake's states and works out each expected count, which nothing checked before the
+implementer's first run (D09.22, D09.23, D11.24, D12.33). Fix the brief before sending it, and
+record each finding you take as a Defect line, `found: track-reviewer`.
 Every track PR shows its new tests failing first (`specs/README.md`). When the tests live under
 `tests/`, `python scripts/seen-red.py --expect <regex> -- <the test command>` runs the branch's
 `tests/` on `main`'s code in a scratch worktree and prints the `seen red: ... → <what it reported>`
@@ -202,8 +207,12 @@ a track that owns a `new` criterion and passes the rest.
 Run it at the track's start, not after its code: the brief gives the spec's Red today, and the
 implementer writes the tests, runs `seen-red.py --expect` on them and stops if they are not red
 for that reason, before any code (the maintainer's choice, #212 S6). Run it again yourself before
-the PR; breaks stay with the main session. Review the diff with the checklist in
-[Reviewing a track's diff](specs/README.md#reviewing-a-tracks-diff). A `new` test already green on `main`
+the PR; breaks stay with the main session. Before the breaks, send the track-reviewer again,
+with the word "diff" and the PR body's draft: it answers the checklist in
+[Reviewing a track's diff](specs/README.md#reviewing-a-tracks-diff) and checks each claim of the
+PR against the diff (D11.30, D11.31). Then read the diff yourself: what it found is
+`found: track-reviewer`, what you find after it `found: review`. It is not the driver's reviewer
+(`rules/reviewer.md`), which reads the pull request once it is open. A `new` test already green on `main`
 is a spec defect, a hold or a test that checks the wrong thing; four reached CI's check after their
 track's code was written (D09.26, D10.12, D10.13, D11.19), and the code was written for nothing.
 

@@ -49,6 +49,7 @@ const PIPE = [
     { names: ["plan-links.py"], nc: true, does: "Every criterion's Plan: line must quote the plan's own words." }] },
   { name: "Writing a track, on this machine", loop: true, gates: [
     { names: ["brief-check.py"], nc: true, does: "Fails when a backticked name in the implementer's brief sits in another file than the line names." },
+    { names: ["track-reviewer"], subs: ["the brief, then the diff"], pile: "track-reviewer", does: "An agent with a fresh context reads each track twice: the brief before the implementer starts (the callers of what it changes, each fake's states, each expected count), and the diff before the pull request (the review checklist, and every claim the pull request makes). Counted from Day 13." },
     { names: ["seen-red.py"], pile: "seen red", does: "Runs the branch's new tests on main's code: they must fail, for the reason the spec gives." },
     { names: ["break.py"], pile: "break on purpose", does: "Breaks the code on purpose and runs the check twice with the break in, then puts the bytes back. A test that still passes would not catch a real failure. With --record it writes the break into the Day's record, specs/breaks/day-NN.json." },
     { names: ["break-lines.py"], nc: true, does: "Prints the pull request's manifest: and broken: lines from the Day's break record, so they are copied, never retyped." },
