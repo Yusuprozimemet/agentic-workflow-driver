@@ -1470,8 +1470,8 @@ GATE_KEYS = [
     "Day review",
 ]
 OLD_DEMO = {
-    "caught": [1, 1, 0] + [1] * 9,  # the track-reviewer's gate has no demo defect
-    "layers": [2, 4, 2, 3],
+    "caught": [1] * 12,
+    "layers": [2, 5, 2, 3],
     "per": {
         "auditor": "$2.40",
         "seen red": "$3.60",
@@ -1566,7 +1566,7 @@ class ProofreadingTest(unittest.TestCase):
         guards = {r["guard"] for r in data["refusals"] if r["refused"]}
         want = {"dots": p["total"], "grps": 12, "lays": 4, "hooks": len(guards), "marks": 2}
         self.assertEqual({k: out["prf"][k] for k in want}, want)
-        self.assertEqual(p["total"], 11)
+        self.assertEqual(p["total"], 12)
         self.assertEqual(out["onDay"], 1)  # it hooks into the page's Day buttons
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
@@ -1595,7 +1595,7 @@ class ProofreadingTest(unittest.TestCase):
         agree, line = reconcile.prf_line(reconcile.model(demo_data.demo()))
         self.assertTrue(agree, line)
         self.assertRegex(
-            line, r"^proofreading: 11 defects, layers 2/4/2/3, .* \| graph 7: .*: agree$"
+            line, r"^proofreading: 12 defects, layers 2/5/2/3, .* \| graph 7: .*: agree$"
         )
 
 

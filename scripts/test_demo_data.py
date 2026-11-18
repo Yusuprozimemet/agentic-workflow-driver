@@ -78,7 +78,7 @@ class DemoData(unittest.TestCase):
         self.assertEqual(sorted(s for s, n in m["promises"]["states"].items() if n),
                          ["broken", "building", "open", "proven", "repair", "replaced", "skipped", "unproven"])
         # A defect at every gate, and the parks, which the notebook has not counted, read from the driver's steps.
-        self.assertEqual([sum(len(r["cells"][i]) for r in m["g7"]["rows"]) for i in range(11)], [1] * 11)
+        self.assertEqual([sum(len(r["cells"][i]) for r in m["g7"]["rows"]) for i in range(12)], [1] * 12)
         self.assertEqual(m["g2"]["waiting"], [])
         parks = next(r for r in m["g2"]["rows"] if r["key"] == "parks")
         self.assertEqual([c["day"] for c in parks["cells"] if c.get("value") is not None], [4, 5, 6])
