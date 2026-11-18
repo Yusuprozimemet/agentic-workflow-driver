@@ -285,12 +285,50 @@ def wait_evidence(args, project, record, sha):
     return poll(args, project, record, read)
 
 
-def wait_merge(args, project, number, record, human_only, read_facts, git=("git",)):
+def reviewed_head(records, number):
+    # The head of the newest review line for the pull request, when that review has no blocker; else None.
+    for record in reversed(records or []):
+        if record.get("event") == "review" and record.get("pr") == number:
+            return record.get("head") if record.get("blockers") == 0 else None
+    return None
+
+
+def level_2_merge(args, project, number, level2, asked):
+    # Level 2's merge, decided once per pull request: the count, then the driver's own repository, then
+    # the head of the newest review line, then gh pr merge with that head. Returns the (line, code) that
+    # ends the wait, or None to go on waiting as at level 1. Whether it merged is read from GitHub next.
+    records, _ = runlog.read(args.state)
+    in_a_row = status.level_2_run(records) if records is not None else 0
+    if in_a_row < status.LEVEL_2_RUN:
+        line = (
+            f"level 2: #{number} waits for the maintainer: "
+            f"{in_a_row} of {status.LEVEL_2_RUN} in a row"
+        )
+        print(line, flush=True)
+        runlog.level(args.state, number, line)
+        asked.append(False)
+        return None
+    home, started = level2
+    _, reason = driver_home.check(home, started)
+    if reason:
+        return f"halt: {reason}; #{number} not merged", 1
+    head = reviewed_head(records, number)
+    if head is None:
+        # Track E2 parks here; until then no merge is asked.
+        asked.append(False)
+        return None
+    github.merge(project, args.gh, number, head)
+    asked.append(True)
+    return None
+
+
+def wait_merge(args, project, number, record, human_only, read_facts, git=("git",), level2=None):
     # After wait_pr's green: the path check, the maintainer's merge (no bound on it), main pulled,
     # and the evidence run on the new origin/main head. Returns (line, code, keys); (None, 0, {})
     # means the next step can start. keys is a gated park's pr and head, for once.finish; {} in
-    # every other return.
-    heads, keys = [], {}
+    # every other return. level2 is (home, started) at level 2, and the driver then asks the merge
+    # itself once, at the first OPEN read whose path check passes (level_2_merge).
+    heads, keys, asked = [], {}, []
 
     def read():
         state, _, paths, body, reason, head = github.pr_state(project, args.gh, number)
@@ -309,8 +347,10 @@ def wait_merge(args, project, number, record, human_only, read_facts, git=("git"
             return (f"park: #{number} was closed without a merge", 1), None
         if state == "MERGED":
             changed = None if head is None or heads[0] is None else head != heads[0]
-            runlog.merged(args.state, number, head, changed)
+            runlog.merged(args.state, number, head, changed, "driver" if True in asked else None)
             return (None, 0), None
+        if level2 is not None and state == "OPEN" and not asked:
+            return level_2_merge(args, project, number, level2, asked), None
         return None, None
 
     line, code = poll(args, project, record, read)
@@ -453,7 +493,13 @@ def steps(args, home, project, read_facts, config):
         keys = {}
         if line is None:
             line, code, keys = wait_merge(
-                args, project, record["pr"], record, config["human_only"], read_facts
+                args,
+                project,
+                record["pr"],
+                record,
+                config["human_only"],
+                read_facts,
+                level2=(home, started) if config.get("level") == 2 else None,
             )
         if line is None:
             if count >= config["steps_per_night"]:
