@@ -307,7 +307,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `bodies.jsonl`; with `comment_code` 1 it returns a reason that is not `None`. Red today:
       `issues` has no `pr_comment`, and the fake `gh` exits 99 on `pr comment`.
       Test: `ReviewCommentTest.test_pr_comment`.
-      Plan: none — where the findings go, the maintainer's choice of 2026-11-15.
+      Plan: N35 "The reviewer's findings go in one comment on the pull request"
       Evidence: `ReviewCommentTest.test_pr_comment` passes on `main` at `3774c34` (#208); live, `gh pr comment 208 --body-file -` printed the comment's URL and exited 0 (gh 2.93.0, #208).
       seen red: python -m unittest tests.test_review_verdict on main → FAILED (errors=10) (#208)
       broken: C12.10 the comment sent to the issue, not the pull request → AssertionError: 'gh pr comment exited 1' is not None (#208)

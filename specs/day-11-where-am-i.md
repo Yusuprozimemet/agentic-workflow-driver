@@ -185,7 +185,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       among them, around the run's issue and `run.json`.
       Replaces: C10.15 — was: the container's inner `claude -p` carried today's flags,
       `--output-format json` among them.
-      Plan: N30 "The driver runs claude -p with --output-format stream-json --verbose"
+      Plan: N30 "The driver runs claude -p with --output-format stream-json --verbose"; P60 "with --output-format stream-json --verbose in place of json"; N14 "The driver passes --permission-mode auto on every call"; P04 "it passes its hooks with `--settings` and its rules with `--append-system-prompt-file`"
       Evidence: `OnceTest.test_session_command` and `BoxSessionTest.test_session_runs_in_the_container` pass on `main` at `6f51a22`, after Track F (#170, #178); `tests/test_once.py`'s only change since `c8e5963` is the two flags.
       seen red: python -m unittest tests.test_once.OnceTest.test_session_command tests.test_box_session.BoxSessionTest.test_session_runs_in_the_container on main → AssertionError: Lists differ: [['ru[581 chars]t', 'json', '--max-budget-usd', '5', '--permis[171 chars]d>']] != [['ru[581 chars]t', 'stream-json', '--verbose', '--max-budget-[191 chars]d>']] (#170)
 - [x] C11.2 **new** — `driver.stream.result` on a stdout of four lines, a `system` `init`
