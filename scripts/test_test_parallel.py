@@ -9,6 +9,7 @@ import contextlib
 import importlib.util
 import io
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -84,6 +85,28 @@ class TestParallelTest(unittest.TestCase):
         self.assertIn("  U.test_also failed 3 of 3", counts, "U.test_also is not counted")
         self.assertIn("  T.test_it failed 1 of 3", counts, "T.test_it is not counted")
         self.assertIn("test_two.py failed 3 of 3", counts)
+
+    def test_repeat_of_runs_the_named_files_again_and_the_rest_once_as_the_load(self):
+        # D12.34: a test failed in a full run, and passed 25 of 25 alone under --repeat 5.
+        self.write("test_flaky.py", FLAKY)
+        self.write("test_fails.py", FAILS)
+        self.write("test_passes.py", PASSES)
+        try:
+            code, out = self.main("--repeat", "3", "--of", "test_flaky.py", "-j", "1")
+        except SystemExit as e:
+            self.fail(f"--of is not an option: exit {e.code}")
+        self.assertEqual(re.findall(r"^Ran \d+ tests(?= in .* workers; )", out, re.MULTILINE), ["Ran 5 tests"])
+        counts = [line for line in out.splitlines() if line.startswith("test_") and " failed " in line]
+        self.assertEqual(counts, ["test_fails.py failed 1 of 1", "test_flaky.py failed 1 of 3"])
+        self.assertEqual(code, 1)
+
+    def test_repeat_of_a_file_the_run_does_not_hold_is_refused(self):
+        self.write("test_passes.py", PASSES)
+        try:
+            code, out = self.main("--repeat", "3", "--of", "test_gone.py")
+        except SystemExit as e:
+            self.fail(f"--of is not an option: exit {e.code}")
+        self.assertEqual(code, 2, "a file the run does not hold was not refused")
 
 
 if __name__ == "__main__":

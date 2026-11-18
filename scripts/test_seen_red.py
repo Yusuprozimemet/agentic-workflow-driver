@@ -110,6 +110,37 @@ class SeenRedTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn(" on main → AssertionError: 2 != 0", run.stdout)
 
+    def test_a_red_whose_report_a_break_could_not_record_is_refused(self):
+        # D12.37, D12.40: the tests compared long values, so their breaks reported "[N chars]", which
+        # break.py refuses; that was found at the break, after the code was written.
+        self.write("app.py", "def double(x):\n    return x * 2\n")
+        self.write("tests/test_app.py", TEST + "\n    def test_a_long_value(self):\n"
+                   "        self.assertEqual(['x' * 200, double('ab')], ['x' * 200, 'abab'])\n")
+        run = self.seen_red()
+        self.assertEqual(run.returncode, 1, "a red that holds [N chars] is not refused")
+        self.assertIn("holds a value unittest shortened ([", run.stdout)
+        self.assertIn("break.py refuses", run.stdout)
+        self.assertNotIn("seen red:", run.stdout)
+
+    def test_every_failing_test_s_line_is_read_not_only_the_last(self):
+        # One command runs several new tests; the line reported is the last one's.
+        self.write("app.py", "def double(x):\n    return x * 2\n")
+        self.write("tests/test_app.py", NEW_TEST + "\n    def test_a_session(self):\n        self.assertEqual("
+                   "double('ab'), 'session 0b5d8a52-7c1e-4f6a-9d3b-2e8f1a4c6b7d')\n")
+        run = self.seen_red()
+        self.assertEqual(run.returncode, 1, "the first failing test's line was not read")
+        self.assertIn("holds a uuid (0b5d8a52-7c1e-4f6a-9d3b-2e8f1a4c6b7d)", run.stdout)
+        self.assertNotIn("seen red:", run.stdout)
+
+    def test_the_scratch_worktree_s_own_path_in_a_report_is_written_tmp(self):
+        # The run is in a temporary directory: its path is not the test's doing, and reaches no PR.
+        self.write("app.py", "def double(x):\n    return x * 2\n")
+        self.write("tests/test_app.py", "import os\n" + TEST + "\n    def test_where(self):\n"
+                   "        self.assertEqual(os.getcwd(), double('ab'))\n")
+        run = self.seen_red()
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(run.stdout.count(" on main → AssertionError: '<tmp>"), 1, "the report's path is not <tmp>")
+
     def test_a_new_test_that_passes_on_the_base_is_refused(self):
         self.write("tests/test_app.py", TEST + "\n    def test_zero(self):\n        self.assertEqual(double(0), 0)\n")
         run = self.seen_red()

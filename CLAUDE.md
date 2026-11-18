@@ -189,7 +189,10 @@ Every track PR shows its new tests failing first (`specs/README.md`). When the t
 `tests/`, `python scripts/seen-red.py --expect <regex> -- <the test command>` runs the branch's
 `tests/` on `main`'s code in a scratch worktree and prints the `seen red: ... → <what it reported>`
 line for the PR; exit 1 means they pass there, or fail for another reason than `--expect`, the
-spec's Red today (D08.67). Otherwise, without a Track 0 or an extra commit, stash the
+spec's Red today (D08.67), or a failure line holds what `break.py` refuses in a break's report
+(a uuid, a pid, a commit hash, an absolute path, "[N chars]"): the test is rewritten then, before
+the code, not at the break (D12.37, D12.40). A red that passes is not a break's report proved
+fit: a break may reach another assertion. Otherwise, without a Track 0 or an extra commit, stash the
 code change (`git stash push -- <the code's directory>`), run the new tests on `main`'s code,
 compare with what the spec says fails today, `git stash pop`, and put what they reported in the
 PR. CI's "Track tests seen red" re-runs each `new` criterion's test this way when the
@@ -212,7 +215,11 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 - Run `python scripts/pre-push.py --title "<PR title>" --body <body file>` on the committed
   branch: one line per PR check with a local command (`invariants.py main HEAD`, "Frozen files
   stay unedited", among them), exit 1 on any failure; "A track's breaks replay" needs Linux and
-  only says so. The items below say what each one is for.
+  only says so. The items below say what each one is for. Its "Tests" line runs the test files
+  the branch changes 5 times each inside the whole run (`test-parallel.py --repeat 5 --of
+  <files>`), which CI does not: a test that fails on and off under load is met in the PR that
+  wrote it, not in a later track's full run (D12.34 passed 25 of 25 alone). The scripts' own
+  tests (`scripts/test_*.py`) are not repeated.
 - Run the check-only style command `ruff check . && ruff format --check .`; it must fail on unformatted code and never rewrite files.
 - While working, run only the test files the change touches
   (`python scripts/test-parallel.py "test_setup*.py"`, a glob under `tests/`), and name them in
@@ -228,7 +235,8 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   `numpy` (`ContractTest` loads `scripts/spec-drift.py`). CI runs the style check and the
   serial command, nothing the local commands do not. A failing file's output is kept in
   `.claude/state/test-failures/` and its path printed: a failure seen once is not lost
-  (D07.27, D08.81). For a file that fails on and off, `--repeat 10 <file>` says how often.
+  (D07.27, D08.81). For a file that fails on and off, `--repeat 10 <file>` says how often, and
+  `--repeat 10 --of <file>` says it with the whole suite as the load.
 - There is no test report directory: read unittest's "Ran N tests" and "OK" lines, and that N is
   the count the change should give, not the exit code.
 - A test that passes before and after a change proves nothing until it has been seen to fail.

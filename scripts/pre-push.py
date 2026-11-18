@@ -14,6 +14,11 @@ which CI replays on the merge commit and this script only names: rehearse it wit
 Why: of the checks that failed on a first push, "Frozen files stay unedited" had a local command
 that "Before pushing" did not name (#212 S23, #213 B12). This list is every check CI runs, so a
 check added to CI and not here fails `test_pre_push.py`.
+
+"Tests" does one thing CI does not: the test files the branch changes run 5 times each inside the
+whole run (`test-parallel.py --repeat 5 --of`), the suite being the load. Nine of Days 9 to 12's
+late defects were a test that fails on and off under load, each met in a later track's full run;
+alone, one passed 25 of 25 (D12.34). The scripts' own tests (scripts/test_*.py) are not repeated.
 """
 
 import argparse
@@ -26,6 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KEPT = os.path.join(ROOT, ".claude", "state", "pre-push")
 PY = sys.executable
 LIMIT = 400
+REPEAT = 5  # under load D12.36 failed 3 of 5 and D12.39 4 of 10
 SECTIONS = ("## User story", "## What I built", "## Why this approach", "## Contract impact", "## How to run",
             "## Self-check")
 # spec-drift-tests.yml runs the scripts' tests only when the change touches one of these.
@@ -54,9 +60,15 @@ def has(path):
     return os.path.exists(os.path.join(ROOT, path))
 
 
+def changed_tests(files):
+    """The changed files test-parallel.py runs: tests/test*.py itself, still there."""
+    return sorted(f[len("tests/"):] for f in files if re.fullmatch(r"tests/test[^/]*\.py", f) and has(f))
+
+
 def checks(a, base, branch, files):
     """(CI's name, commands to run in order, or a str: why it is skipped or failed without a run)."""
     body = open(a.body, encoding="utf-8").read() if a.body else None
+    again = changed_tests(files)
     size = changed_lines(base)
     oversized = body is not None and re.search(r"(?mi)^\s*Oversized:\s*\S", body)
     md = [f for f in files if f.endswith(".md") and os.path.exists(os.path.join(ROOT, f))]
@@ -64,7 +76,8 @@ def checks(a, base, branch, files):
                            if n.startswith("test_") and n.endswith(".py"))
     return [
         ("Style check", [["ruff", "check", "."], ["ruff", "format", "--check", "."]]),
-        ("Tests", "skip: --skip-tests" if a.skip_tests else [[PY, "scripts/test-parallel.py"]]),
+        ("Tests", "skip: --skip-tests" if a.skip_tests else
+         [[PY, "scripts/test-parallel.py"] + (["--repeat", str(REPEAT), "--of", *again] if again else [])]),
         ("Description uses the template",
          "skip: pass --body <file>" if body is None else
          [] if all(s.lower() in body.lower() for s in SECTIONS) else
@@ -139,7 +152,9 @@ def main(argv=None):
             continue
         code, output = run(what, env)
         if not code:
-            print(f"ok   {name}" + ("" if what else ": nothing to run"))
+            again = changed_tests(files) if name == "Tests" else []
+            print(f"ok   {name}" + ("" if what else ": nothing to run")
+                  + (f": {', '.join(again)} run {REPEAT} times in it" if again else ""))
             continue
         failed += 1
         os.makedirs(KEPT, exist_ok=True)
