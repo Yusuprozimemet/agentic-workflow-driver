@@ -183,7 +183,7 @@ def review_pass(args, home, project, number, record, command, config):
     where = f"#{number} (session `{session}`)"
     after = review.snapshot(project)
     if None in after.values():
-        return f"cannot read the project: git failed before the review of #{number}", 2, []
+        return f"cannot read the project: git failed after the review of #{number}", 2, []
     what = review.changed(before, after)
     if what:
         return f"park: the reviewer changed {what} in the project on {where}", 1, []
