@@ -62,7 +62,8 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   const drawn = [], is = cls => made.filter(e => (e.attrs.class || "").split(" ").includes(cls)).length;
   geneDraw(model(DATA).gene, node("div"), node("div"), (n, days) => { drawn.push(days); return n; });
   ({ bands: is("b"), quotes: is("rd") - is("rg"), cells: is("tc"), beads: is("bead"), ring: is("rg"), inner: is("rk"),
-     dated: drawn.length, names: is("t-row"), box: made[0].attrs.viewBox.split(" ").length,
+     dated: drawn.length, names: is("t-row"), box: made[0].attrs.viewBox.split(" ").length, secdiv: is("secdiv"),
+     sizes: [...new Set(made.filter(e => (e.attrs.class || "").split(" ").includes("b")).map(e => e.attrs.width + "x" + e.attrs.height))],
      free: is("free"), free_say: made.filter(e => / no criterion cites$/.test(e.textContent || "")).map(e => e.textContent) })`, ctx)));
 """
 
@@ -596,6 +597,47 @@ class PageTest(unittest.TestCase):
             ],
         )
         self.assertEqual((drawn["dated"], drawn["names"], drawn["box"]), (16 + 15 + 4 + 4, 7, 4))
+
+    def test_the_gene_splits_what_was_never_transcribed_and_draws_every_band_the_same_size(self):
+        data = demo_data.demo()
+        m = reconcile.model(data)["gene"]
+        self.assertEqual(" ".join(f["cls"] for f in m["figs"][-3:]), "regulatory switched overdue")
+        self.assertEqual(
+            [(f["cls"], f["n"], f["what"]) for f in m["figs"][-3:]],
+            [
+                ("regulatory", 1, "is regulatory"),
+                ("switched", 1, "is switched off for now"),
+                ("overdue", 1, "should be on by now"),
+            ],
+        )
+        tip = {c["id"]: dict(c["tip"])["st"] for c in m["cols"]}
+        self.assertEqual(
+            (tip["P10"], tip["N03"]),
+            (
+                (
+                    "Regulatory: a rule for how people work. It steers the work and never becomes code, "
+                    "so no criterion is expected."
+                ),
+                (
+                    "Switched off until Day 7: a real gene with no criterion yet. "
+                    "It turns on when that Day writes its checks."
+                ),
+            ),
+        )
+        self.assertEqual(
+            [b for b, _ in m["expected"][:2]], ["1 regulatory region", "1 switched-off gene"]
+        )
+        out = subprocess.run(
+            ["node", "-e", DRAWN, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        drawn = json.loads(out.stdout)
+        # one size for every band; a line in each of the five section gaps inside an arm, none at the arm break
+        self.assertEqual((drawn["sizes"], drawn["secdiv"]), (["6.4x24"], 5))
 
     def test_the_gene_draws_a_bead_for_each_merge_no_criterion_cites_and_none_without_one(self):
         data = demo_data.demo()

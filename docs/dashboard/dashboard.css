@@ -618,7 +618,9 @@ footer { font-size: 12.5px; color: var(--muted); }
 #gene .cap { fill: none; stroke: var(--ink); stroke-width: 1.4; }
 #gene .gs1 { fill: var(--g1); } #gene .gs2 { fill: var(--g2); } #gene .gs3 { fill: var(--g3); } #gene .gs4 { fill: var(--g4); }
 #gene .rule { fill: url(#gene-pat-rule); stroke: var(--s3); stroke-width: .8; }
-#gene .notdue { fill: var(--card); stroke: var(--s3); stroke-width: 1; stroke-dasharray: 2.2 1.6; }
+#gene .notdue { fill: var(--card); stroke: var(--s2); stroke-width: 1; stroke-dasharray: 2.2 1.6; }
+/* a thin line in the slot between two sections of plan.md; the tube (.cap-bg) stays the card's white */
+#gene .secdiv { stroke: var(--g3); stroke-width: 1.2; }
 #gene .overdue { fill: url(#gene-pat-over); }
 #gene .pinch { fill: var(--s3); }
 #gene .tri.changed { fill: var(--ink-2); }
