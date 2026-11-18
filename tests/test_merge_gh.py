@@ -42,8 +42,8 @@ NO_RULES = ok([])
 
 class GhCase(unittest.TestCase):
     def setUp(self):
-        # Imported here, not at the top, as in GitHubTest: where driver/github.py lacks the function,
-        # each test fails alone with AttributeError.
+        # Imported here, not at the top, as in GitHubTest: where driver/github.py lacks the
+        # function, each test fails alone with AttributeError.
         self.github = importlib.import_module("driver.github")
 
     def scratch(self):
@@ -165,6 +165,34 @@ class ProtectionTest(GhCase):
                     }
                 ),
                 RULES: {"code": 1, "out": "", "err": "gh: Server Error (HTTP 500)\n"},
+            },
+        )
+        self.assertEqual(self.github.protection(str(folder), gh), "gh api exited 1")
+
+    def test_ruleset_bypass(self):
+        # Beyond C13.3's cases (the track-reviewer's finding): a ruleset that names a bypass
+        # actor requires nothing that counts.
+        folder = self.scratch()
+        gh = fake_gh(
+            folder,
+            api={
+                CLASSIC: NOT_PROTECTED,
+                RULES: ok(RULES_7),
+                RULESET_7: ok({"id": 7, "bypass_actors": [{"actor_id": 5}]}),
+            },
+        )
+        self.assertEqual(self.github.protection(str(folder), gh), "main allows a bypass")
+
+    def test_classic_fails(self):
+        # Beyond C13.3's cases: only a 404 on the classic call means "not protected"; any other
+        # failure is a reason.
+        folder = self.scratch()
+        gh = fake_gh(
+            folder,
+            api={
+                CLASSIC: {"code": 1, "out": "", "err": "gh: Forbidden (HTTP 403)\n"},
+                RULES: ok(RULES_7),
+                RULESET_7: ok({"id": 7, "bypass_actors": []}),
             },
         )
         self.assertEqual(self.github.protection(str(folder), gh), "gh api exited 1")
