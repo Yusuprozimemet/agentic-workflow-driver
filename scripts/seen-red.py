@@ -16,6 +16,14 @@ not the behaviour the test asserts. `--expect <regex>` makes that mechanical: gi
 Red today, and a failure whose output does not match it exits 1 (D08.67: a `.get` failed on
 `None` where the spec's red was a `KeyError`, and only review saw it).
 
+It exits 1, too, when a failure line holds what break.py refuses in a break's report: a uuid, a pid,
+a commit hash, an absolute path, or a value unittest shortened to "[N chars]". The break comes
+after the code is written, and ten of Days 9 to 12's late defects were a new test's report found
+unfit there (D09.29 to D12.40); the rule refuses 9 of the 49 `seen red:` lines those Days' track
+PRs recorded. It reads every assertion line, since one command may run several new tests, and the
+line reported. It does not prove a break's report fit: the red shows the assertion `main`'s code
+fails first, and a break may reach another. The scratch worktree's own path is written <tmp>.
+
 The step was a Note, not a script, and did not carry: a pilot of the kit merged two tracks whose new
 tests were never seen red on the code before them.
 """
@@ -99,6 +107,19 @@ def on_base(base, commands, files):
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+ASSERTION = next(p for p in break_.REPORTED if "AssertionError" in p.pattern)
+
+
+def unfit(output):
+    """(what, its text, the line) for the first failure line that holds what break.py refuses in a
+    break's report, or None: each assertion line, then the line reported."""
+    hits = [m.group(0) for line in output.splitlines() if (m := ASSERTION.search(line))]
+    for line in map(break_.untemp, hits + [break_.reported(output)]):
+        if found := break_.unstable(line):
+            return (*found, line)
+    return None
+
+
 def refuse(message):
     print(f"seen-red.py: {message}", file=sys.stderr)
     return 2
@@ -139,7 +160,14 @@ def main(args=None):
         print(f"The check failed on {a.base}, but not as --expect says: it is red for another reason "
               f"(an import, a fixture, a .get where the spec reads a key).\n  last line: {break_.reported(output)}")
         return 1
-    print(f"seen red: {command} on {a.base} → {break_.reported(output)}")
+    if found := unfit(output):
+        name, text, line = found
+        print(f"The check failed on {a.base}, but a failure line holds {name} ({text}), which another run or "
+              "machine prints differently: break.py refuses the same in a break's report, after the code is "
+              "written. Have the test print a fixed word in its place (<uuid>, <head>, <pid>, a relative path), "
+              f"or, for [N chars], compare something short and fixed.\n  line: {line}")
+        return 1
+    print(f"seen red: {command} on {a.base} → {break_.untemp(break_.reported(output))}")
     return 0
 
 

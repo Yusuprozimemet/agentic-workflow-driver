@@ -25,9 +25,20 @@ def workflows():
 
 
 class PrePushTest(unittest.TestCase):
-    def names(self, **args):
+    def names(self, files=("scripts/x.py", "README.md"), **args):
         a = argparse.Namespace(**{"body": None, "title": None, "skip_tests": False, **args})
-        return {name: what for name, what in pp.checks(a, "HEAD", "tooling/x", ["scripts/x.py", "README.md"])}
+        return {name: what for name, what in pp.checks(a, "HEAD", "tooling/x", list(files))}
+
+    def test_changed_test_files_run_several_times_inside_the_whole_run(self):
+        # Nine tests failed on and off under load on Days 9 to 12, and one of them passed 25 of 25
+        # alone (D12.34): the files a branch changes are repeated with the whole suite as the load.
+        [plain] = self.names()["Tests"]
+        self.assertEqual(plain[1:], ["scripts/test-parallel.py"])
+        # A deleted file, a file in a folder under tests/ and the scripts' own tests are not repeated.
+        files = ["tests/test_on.py", "tests/test_gone.py", "tests/fakes/test_x.py", "scripts/test_pre_push.py"]
+        [again] = self.names(files=files)["Tests"]
+        self.assertEqual(again[2:], ["--repeat", "5", "--of", "test_on.py"])
+        self.assertEqual(self.names(files=files, skip_tests=True)["Tests"], "skip: --skip-tests")
 
     def test_every_check_ci_runs_on_a_pull_request_has_a_line(self):
         # A check added to CI and not to pre-push.py is the one a first push meets (#212 S23, #213 B12).

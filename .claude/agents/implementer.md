@@ -41,7 +41,11 @@ do not guess which one is right.
   `python scripts/seen-red.py --expect "<the brief's Red today>" -- <the test command>` (tests
   under `tests/`; for a test elsewhere, run it on the unchanged code). If it exits 1, the test
   passes on `main` or fails for another reason: stop and report it, with what it printed; do not
-  write the code. Otherwise put its `seen red:` line in your report, then write the code.
+  write the code. It exits 1, too, when a failure line holds what `scripts/break.py` refuses
+  in a break's report (a uuid, a pid, a commit hash, an absolute path, unittest's "[N chars]"),
+  and names it: that one is yours to fix. Rewrite the test to compare something short and
+  fixed, run it again, and say in your report what you changed. Otherwise put its `seen red:`
+  line in your report, then write the code.
   - Every wait and poll has a bound that fails the test: a regression must not hang it.
   - A test that would pass on the code before your change does not test it: say which line of
     the old code it fails on.

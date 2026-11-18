@@ -54,13 +54,16 @@ before running the breaks, most frequent first, and record what the review catch
 
 - [ ] **Timing (10; D10.18, D11.29, D12.35, D12.39).** Does a new or touched test depend on a poll,
       a sleep, an exit code read too early or a wall-clock bound? It passes 10 of 10 under
-      `test-parallel.py --repeat 10` in a full run.
+      `test-parallel.py --repeat 10` in a full run. `pre-push.py` runs each changed test file 5
+      times inside the whole run (`--repeat 5 --of <files>`); 10 is still the review's own run.
 - [ ] **Red for another reason (9; D05.7, D07.29, D10.14, D10.22).** On `main`'s code, does each new
       test fail by an assertion, for the reason the spec gives, and not by an error in setup?
 - [ ] **A branch no test sees (8; D05.3, D06.6, D07.28, D12.38).** For each branch the diff adds,
       which assertion fails if it is deleted or short-circuited?
 - [ ] **A report that differs between runs (7; D04.10, D05.8, D10.15, D12.32).** Could any failure
-      message hold a uuid, pid, hash, absolute path, path separator or set order?
+      message hold a uuid, pid, hash, absolute path, path separator or set order? `seen-red.py`
+      refuses the first four, and "[N chars]", in the lines `main`'s code fails by; a break may
+      reach another assertion, so read the rest.
 - [ ] **Collisions (3; D09.25, D09.28, D11.28).** Are changed signatures, new module names and
       edited expressions grepped against their callers and every Day's break finds?
       `brief-check.py` names the callers a brief misses.
@@ -74,11 +77,11 @@ kind marked "none" needs its own gate if it comes back again.
 
 | Kind | Lines | Last | Gate now |
 |---|---|---|---|
-| A break's report differs between runs (pid, uuid, time) | D03.17, D04.6 and 9 more | Day 07 | `break.py` refuses the report |
+| A break's report differs between runs or machines (pid, uuid, time, hash, "[N chars]") | D03.17, D04.6 and 9 more, D12.26, D12.32, D12.37, D12.40 | Day 12 | `break.py` refuses the report; `seen-red.py` refuses the same in the red, at the track's start, before the code |
 | A report holds Windows-only text | D06.23, D07.40, D08.83 | Day 08 | "A track's breaks replay", on Linux |
 | Git Bash rewrote a `/path` argument | D05.5, D10.17, D11.22 | Day 11 | `break.py` refuses it (this rung's PR) |
 | A multi-line find on a CRLF tree | D08.68, D08.72 | Day 08 | `break.py` writes it in the file's endings |
-| A test fails on and off under load | D07.27, D08.76, D10.18, D11.25, D11.29, D11.32, D12.34–36 | Day 12 | none: fixed in #222 and #225; "Timing" above |
+| A test fails on and off under load | D07.27, D08.76, D10.18, D11.25, D11.29, D11.32, D12.34–36, D12.39 | Day 12 | `pre-push.py`, "Tests": the test files a branch changes run 5 times inside the whole run; "Timing" above |
 | A Red today the code no longer gives | D03.14, D06.10, D06.16, D06.20, D06.21 | Day 06 | `seen-red.py --expect` at the track's start |
 | Red by an error, not an assertion | D07.29, D07.32, D08.67, D10.14, D12.33 | Day 12 | `seen-red.py --expect`; "Red for another reason" above |
 | A PR over 400 changed lines | D06.5, D07.15, D07.17, D07.20, D07.33 | Day 07 | `pre-push.py`, "Diff stays reviewable" |

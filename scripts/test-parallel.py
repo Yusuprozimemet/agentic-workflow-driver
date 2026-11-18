@@ -13,11 +13,14 @@ A failing file's whole output is kept in .claude/state/test-failures/ (gitignore
 path printed: two flaky failures (D07.27, D08.81) were seen once, not kept, and their cause is
 still unknown. --repeat N runs each file N times and says how often each failed, and how often
 each failing test in it did: a file's first failure is printed in full, and a second test failing
-behind it (C09.4 behind C09.3, #212 S23) is named only in that count.
+behind it (C09.4 behind C09.3, #212 S23) is named only in that count. With --of, only the files
+named run N times and the others once, as the load: a test that failed in a full run passed 25 of
+25 alone (D12.34). pre-push.py runs a branch's changed test files this way.
 
     python scripts/test-parallel.py            # all tests, one worker per CPU
     python scripts/test-parallel.py -j 4 test_once_*.py
     python scripts/test-parallel.py --repeat 10 test_once_halt.py
+    python scripts/test-parallel.py --repeat 5 --of test_heartbeat.py test_issues.py
 """
 
 import argparse
@@ -99,22 +102,28 @@ def main(argv=None):
     parser.add_argument("pattern", nargs="?", default="test*.py")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4)
     parser.add_argument("--repeat", type=int, default=1, metavar="N", help="run each file N times")
+    parser.add_argument("--of", nargs="+", default=[], metavar="FILE",
+                        help="with --repeat, the files to run N times; the others run once, as the load")
     args = parser.parse_args(argv)
 
     jobs = sorted(p.name for p in TESTS.glob(args.pattern))
     if not jobs:
         print("no test files match", file=sys.stderr)
         return 2
+    if missing := sorted(set(args.of) - set(jobs)):
+        print(f"--of names what the run does not hold: {', '.join(missing)}", file=sys.stderr)
+        return 2
+    count = {name: max(args.repeat, 1) if not args.of or name in args.of else 1 for name in jobs}
     times = load_times()
     # Slowest first, so a long file does not start last and leave workers idle.
     jobs.sort(key=lambda name: -times.get(name, 1.0))
 
     start = time.monotonic()
     rounds = range(max(args.repeat, 1))
-    shared = [(name, n) for n in rounds for name in jobs if name not in SOLO]
+    shared = [(name, n) for n in rounds for name in jobs if name not in SOLO and n < count[name]]
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
         results = list(pool.map(lambda job: dict(run(job[0]), round=job[1]), shared))
-    results += [dict(run(name), round=n) for n in rounds for name in jobs if name in SOLO]
+    results += [dict(run(name), round=n) for n in rounds for name in jobs if name in SOLO and n < count[name]]
     elapsed = time.monotonic() - start
 
     times.update({r["name"]: round(r["seconds"], 2) for r in results})
@@ -141,10 +150,10 @@ def main(argv=None):
         f"({args.jobs} workers; slowest {slowest['name']} {slowest['seconds']:.1f}s)"
     )
     for name in sorted({r["name"] for r in failed}) if args.repeat > 1 else ():
-        print(f"{name} failed {sum(r['name'] == name for r in failed)} of {args.repeat}")
+        print(f"{name} failed {sum(r['name'] == name for r in failed)} of {count[name]}")
         runs = [failing_tests(r["output"]) for r in failed if r["name"] == name]
         for test in dict.fromkeys(t for tests in runs for t in tests):
-            print(f"  {test} failed {sum(test in tests for tests in runs)} of {args.repeat}")
+            print(f"  {test} failed {sum(test in tests for tests in runs)} of {count[name]}")
     if failed:
         print(f"FAILED ({len(failed)}: {', '.join(sorted({r['name'] for r in failed}))})")
         return 1
