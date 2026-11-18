@@ -956,6 +956,11 @@ class DefectCountTest(unittest.TestCase):
         self.assertIn("review", sd.STAGES)
         self.assertNotIn("review", sd.EARLY)
 
+    def test_the_track_reviewers_catches_are_a_stage_apart_from_the_work_and_the_diff_review(self):
+        self.assertEqual([sd.found_stage(f, 13) for f in ("track-reviewer", "Track-reviewer", "Track R", "review")],
+                         ["track-reviewer", "track-reviewer", "work", "review"])
+        self.assertNotIn("track-reviewer", sd.EARLY)
+
 
 class RepoUrlTest(unittest.TestCase):
     """The page's source links name the repository it was built from, not a fixed one."""

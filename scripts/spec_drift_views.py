@@ -925,6 +925,10 @@ PRF_GATES = (
          label="The spec-change pull request", sub="",
          does="The pull request that fixes what the auditors found in the Day's spec, before any track starts. A "
          "defect found while writing it is caught here."),
+    dict(key="track-reviewer", name="The track-reviewer", at="the track-reviewer", label="The track-reviewer",
+         sub="the brief, then the diff",
+         does="An agent with a fresh context reads each track twice: the brief before the implementer starts, and "
+         "the diff before the pull request. Counted from Day 13."),
     dict(key="seen red", name="A test seen failing", at="a test seen failing", label="A test seen failing",
          sub="seen-red.py",
          does="Runs the branch's new tests on main's code: they must fail, for the reason the spec gives."),
@@ -959,8 +963,9 @@ PRF_GATES = (
 PRF_LAYERS = (
     dict(name="Before any code", bio="reading the template", gates=("auditor", "spec-change PR"),
          what="The auditors read the spec against the code before anything is copied from it."),
-    dict(name="While writing", bio="proofreading", gates=("seen red", "break on purpose", "review", "work"),
-         what="Checks run as each track is written: the test seen failing, the break on purpose, the diff review."),
+    dict(name="While writing", bio="proofreading", gates=("track-reviewer", "seen red", "break on purpose", "review", "work"),
+         what="Checks run as each track is written: the track-reviewer on the brief and the diff, the test seen "
+         "failing, the break on purpose, the diff review."),
     dict(name="At the close", bio="repair after the copy", gates=("close", "rehearsal"),
          what="The Day is finished and read again: every criterion is ticked with its evidence."),
     dict(name="After the merge", bio="surveillance", gates=("evidence replay", "dashboard", "Day review"),

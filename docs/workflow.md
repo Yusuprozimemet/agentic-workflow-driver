@@ -25,6 +25,8 @@ flowchart LR
     SA -- "findings, read-only" --> S
     S -- "brief" --> I
     I -- "diff, never commits" --> S
+    S -- "the brief, then the diff" --> TR["track-reviewer<br/>one track, twice:<br/>brief, then diff"]
+    TR -- "findings, read-only" --> S
     S -- "PR" --> CI
     CI -- "green or red" --> M
     S -- "after each merge" --> D

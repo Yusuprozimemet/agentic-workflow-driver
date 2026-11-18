@@ -223,6 +223,7 @@ DEFECTS = (
     (1, "D1.1", "auditor", "spec", "Day 01", None),
     (1, "D1.2", "spec-change PR", "process", "Day 01", None),
     (2, "D2.1", "Track A", "implementation", "Day 01", "D1.1"),
+    (3, "D3.2", "track-reviewer", "process", "Day 03", None),
     (3, "D3.1", "seen red", "implementation", "Day 03", None),
     (4, "D4.1", "break on purpose", "process", "none", None),
     (4, "D4.2", "review", "implementation", "Day 04", None),

@@ -684,10 +684,11 @@ def gate_report(days, gates, refused):
 
 
 # The closed list of found: values (specs/README.md), read into stages. self and Track <X> are one
-# stage, the work; review, the main session's diff review, is a stage of its own. Before the twelfth Day (specs/README.md), evidence replay named both
+# stage, the work; review, the main session's diff review, is a stage of its own, and so is track-reviewer, the
+# agent's reading of a track's brief and diff. Before the twelfth Day (specs/README.md), evidence replay named both
 # the close's rehearsal and the replay after its merge: those lines are read as "unsplit", not
 # rewritten. A value off the list is in no stage, and reported.
-STAGES = ("auditor", "spec-change PR", "seen red", "break on purpose", "review", "work", "close", "rehearsal",
+STAGES = ("auditor", "spec-change PR", "track-reviewer", "seen red", "break on purpose", "review", "work", "close", "rehearsal",
           "evidence replay", "unsplit", "dashboard", "Day review")
 EARLY = ("auditor", "spec-change PR")  # before any code: every other stage is a late catch
 SPLIT_FROM = 12

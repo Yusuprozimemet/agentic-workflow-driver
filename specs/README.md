@@ -50,7 +50,9 @@ The main session's review of the implementer's diff caught 7 defects in 12 Days;
 cause was the code were caught later, by a break (16), the implementer itself (9), a test seen red
 (3), the close or an escape (#212, S5; counted 2026-11-16). Ask these of every track's diff
 before running the breaks, most frequent first, and record what the review catches as
-`found: review`:
+`found: review`. From Day 13 the **track-reviewer** agent answers them first, from a fresh
+context, and checks each claim of the PR against the diff; what it catches is
+`found: track-reviewer`, and `found: review` stays the main session's own reading after it:
 
 - [ ] **Timing (10; D10.18, D11.29, D12.35, D12.39).** Does a new or touched test depend on a poll,
       a sleep, an exit code read too early or a wall-clock bound? It passes 10 of 10 under
@@ -85,8 +87,8 @@ kind marked "none" needs its own gate if it comes back again.
 | A Red today the code no longer gives | D03.14, D06.10, D06.16, D06.20, D06.21 | Day 06 | `seen-red.py --expect` at the track's start |
 | Red by an error, not an assertion | D07.29, D07.32, D08.67, D10.14, D12.33 | Day 12 | `seen-red.py --expect`; "Red for another reason" above |
 | A PR over 400 changed lines | D06.5, D07.15, D07.17, D07.20, D07.33 | Day 07 | `pre-push.py`, "Diff stays reviewable" |
-| A brief names a name's wrong home or misses a caller | D07.24, D08.77, D09.28 | Day 09 | `brief-check.py` |
-| A brief's fake or expected count is wrong | D08.74, D09.22, D09.23, D11.24 | Day 11 | none: the implementer's first run |
+| A brief names a name's wrong home or misses a caller | D07.24, D08.77, D09.28 | Day 09 | `brief-check.py`; the track-reviewer, on the brief |
+| A brief's fake or expected count is wrong | D08.74, D09.22, D09.23, D11.24 | Day 11 | the track-reviewer, on the brief, before the implementer starts |
 | A branch no test sees | D07.21, D07.28 | Day 07 | "A branch no test sees" above |
 | A new name collides with an old one | D09.25, D11.28 | Day 11 | `brief-check.py` callers; "Collisions" above |
 | Evidence worded so the replay cannot read it | D10.26, D11.33 | Day 11 | `close-evidence.py --rehearse` |
@@ -235,12 +237,13 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   an ID and three fields:
   - the ID, after `**Defect**`: `D<NN>.<n>`, the day's defects numbered from 1 in the order they
     are written (`- **Defect** D28.1 — found: …`). A short spec's Defect lines take none.
-  - `found:` where, exactly one of `auditor`, `spec-change PR` (before any code); `review`,
+  - `found:` where, exactly one of `auditor`, `spec-change PR` (before any code);
+    `track-reviewer` (the agent's reading of a track's brief or diff, from Day 13), `review`,
     `seen red` (a new test that passed on `main`'s code), `break on purpose`, `self`, `Track <X>`
     (before merge); `close`, `rehearsal` (the close's rehearsal failed, before its merge),
     `evidence replay` (the replay after its merge failed), `dashboard`, `Day <NN> review` (after
     the track merged: an escape). The list is closed: `spec-drift.py` prints any other value as
-    "not on the list". It reads `self`, `review` and `Track <X>` as one stage, the work, and
+    "not on the list". It reads `self` and `Track <X>` as one stage, the work, and
     before Day 12, when `evidence replay` named both replays, reads that value as "unsplit". It
     counts, per Day, the Defect lines per criterion, the late ones (any stage after the two
     before any code) and the escapes, and the blind rater's agreement per tag
