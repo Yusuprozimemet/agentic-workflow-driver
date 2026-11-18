@@ -798,10 +798,17 @@ function model(DATA) {
       fails: [C.fails === 1 ? "reaches code that is broken" : "reach code that is broken", "the last replay found a criterion that names it failing"],
       unbuilt: [C.unbuilt === 1 ? "is named, not built yet" : "are named, not built yet", "its criteria are written in a Day still open, or left unticked"],
       spliced: [C.spliced === 1 ? "is spliced out" : "are spliced out", "only replaced criteria name them, so they stop at the spec"],
-      untranscribed: [C.untranscribed === 1 ? "was never transcribed" : "were never transcribed",
-        [U.rule && plural(U.rule, "rule about people", "rules about people"), U.later && `${U.later} not due yet`, U.due && `${U.due} overdue`].filter(Boolean).join(", ") || "no criterion ever named it"]};
-    const ALWAYS = ["proved", "unproved", "unreplayable", "spliced", "untranscribed"];
-    const figs = Object.keys(CLASS).filter(k => ALWAYS.includes(k) || C[k]).map(k => ({ cls: k, n: C[k] || 0, what: CLASS[k][0], sub: CLASS[k][1] }));
+      // never transcribed, in three: a rule for people (regulatory), a gene whose Day is still ahead (switched off), and overdue
+      regulatory: [U.rule === 1 ? "is regulatory" : "are regulatory", "rules for how people work: they steer the work and never become code, so no criterion is expected"],
+      switched: [U.later === 1 ? "is switched off for now" : "are switched off for now", "real genes, not due yet: each turns on when its Day writes the checks"],
+      overdue: ["should be on by now", U.due ? overdueSub() : `none: every commitment due by Day ${G.closed_to} was transcribed at least once`]};
+    function overdueSub() {
+      const by = [...new Set(G.commitments.filter(c => c.sub === "due").map(c => c.settled_by))];
+      return by.length === 1 && by[0] != null ? `overdue, all recorded as due by Day ${by[0]}` : "overdue: due by a Day that has closed, and no criterion ever named them";
+    }
+    const N = { ...C, regulatory: U.rule, switched: U.later, overdue: U.due };
+    const ALWAYS = ["proved", "unproved", "unreplayable", "spliced", "regulatory", "switched", "overdue"];
+    const figs = Object.keys(CLASS).filter(k => ALWAYS.includes(k) || N[k]).map(k => ({ cls: k, n: N[k] || 0, what: CLASS[k][0], sub: CLASS[k][1] }));
     const WORD = { proven: "holds, and a break on purpose proved its test", unproven: "holds; its test was never seen to fail", skipped: "the replay cannot run this check",
       repair: "its test needs repair (the recorded break no longer applies, or the test stopped catching it)", broken: "not holding at the newest replay",
       building: "written, not built yet", open: "left unticked", unchecked: "not re-checked yet", replaced: "replaced" };
@@ -809,8 +816,9 @@ function model(DATA) {
     const says = { unproved: "Reaches code that holds, but no test for it was ever seen to fail.", unreplayable: "Reaches a check the replay cannot run.",
       repair: "Reaches a test that needs repair.", fails: "Reaches code that is not holding at the newest replay.", unbuilt: "Named, and not built yet." };
     const owed = c => c.settled_by != null ? ` Recorded in specs/plan/overdue.json, to be settled by Day ${c.settled_by}.` : "";
-    const reach = c => c.cls === "untranscribed" ? { rule: "A rule about people, which no test can check. No criterion is expected.",
-        later: c.owner_day != null ? `Not due yet (Day ${c.owner_day}), and no criterion names it.` : "No Day owns it yet, and no criterion names it.",
+    const reach = c => c.cls === "untranscribed" ? { rule: "Regulatory: a rule for how people work. It steers the work and never becomes code, so no criterion is expected.",
+        later: c.owner_day != null ? `Switched off until Day ${c.owner_day}: a real gene with no criterion yet. It turns on when that Day writes its checks.`
+          : "Switched off: no Day owns it yet, and no criterion names it.",
         due: `Overdue: due by Day ${c.owner_day}, and no criterion names it.${owed(c)}` }[c.sub]
       : c.cls === "spliced" ? `Spliced out: every criterion that named it was replaced, and the replacement does not name it.${owed(c)}`
       : c.cls !== "proved" ? says[c.cls]
@@ -818,7 +826,7 @@ function model(DATA) {
       : `Reaches code that holds. A break on purpose proved ${(c.tally || {}).proven || 0} of the ${c.cells.length} criteria in force that name it; the rest: ${Object.entries(c.tally || {}).filter(([k]) => k !== "proven").map(([k, n]) => `${n} ${REST[k] || k}`).join(", ")}.`;
     const cols = G.commitments.map(c => ({ ...c, reach: reach(c),
       tip: [["t", `${c.id} · ${c.short}`], c.text && ["", c.text],
-        ["q", `Section: ${c.section}${c.rule ? " · a rule about people" : c.owner_day != null ? ` · due by Day ${c.owner_day}` : ""}`], ["st", reach(c)],
+        ["q", `Section: ${c.section}${c.rule ? " · regulatory" :c.owner_day != null ? ` · due by Day ${c.owner_day}` : ""}`], ["st", reach(c)],
         c.written.length && ["q", `Named in ${plural(c.written.length, "quote", "quotes")} by ${plural(c.criteria, "criterion", "criteria")}, replaced ones included`],
         c.change && ["q", `${c.change === "changed" ? "The plan later rewrote it." : "Reworded only."} ${c.note || ""}`.trim()]].filter(Boolean) }));
     // what the pointer says of one criterion: the same lines wherever the criterion is drawn, and the quote of the commitment under it
@@ -864,8 +872,8 @@ function model(DATA) {
       back.length && { ids: cols.filter(c => c.cells.some(q => q.back)).map(c => c.id), b: `${back.join(", ")}.`,
         text: `The replay once saw ${back.length === 1 ? "this criterion" : "each of these"} stop holding, or its recorded break stop applying, and ${back.length === 1 ? "it" : "each"} came back. ${back.length === 1 ? "It is" : "They are"} in force and ${back.length === 1 ? "holds" : "hold"} now; the edge is ${back.length === 1 ? "its" : "their"} history.` }].filter(Boolean);
     const rules = cols.filter(c => c.sub === "rule"), later = cols.filter(c => c.sub === "later"), gone = G.criteria - G.in_force;
-    const expected = [rules.length && [`${plural(rules.length, "rule about people", "rules about people")}`, `, which no test can check: ${ids(rules)}. In the model these are regulatory regions: they steer the work and never appear in the product.`],
-      later.length && [`${later.length} not due yet`, `: ${later.map(c => c.owner_day != null ? `${c.id} (Day ${c.owner_day})` : `${c.id} (no Day yet)`).join(", ")}.`],
+    const expected = [rules.length && [plural(rules.length, "regulatory region", "regulatory regions"), `: ${ids(rules)}. Like promoters and switches in DNA, they never become protein: they are rules for how people work, which no test can check, and they steer the work without appearing in the product.`],
+      later.length && [plural(later.length, "switched-off gene", "switched-off genes"), `, real genes that turn on later, when their Day writes the checks: ${later.map(c => c.owner_day != null ? `${c.id} (Day ${c.owner_day})` : `${c.id} (no Day yet)`).join(", ")}.`],
       gone && [`${gone} of the ${G.criteria} criteria ${gone === 1 ? "was" : "were"} replaced`, " by a later one. Their quotes are the hollow dashes. Most of what they named is still named by another criterion."]].filter(Boolean);
     const bends = [["Named is not done.", " A filled bead means a criterion that names the commitment holds and was proved. It does not mean the whole commitment is delivered."],
       spliced.length && [`The ${spliced.length === 1 ? "one" : spliced.length} spliced out ${spliced.length === 1 ? "is" : "are"} a reading of the \`Plan:\` lines.`, " Nobody has checked yet whether the replacing criteria still cover them in substance."],
@@ -881,7 +889,7 @@ function model(DATA) {
     const uncited = ((DATA.merge_graph || {}).uncited || []).map(u => ({ pr: u.pr, title: plain(u.title), prod: u.prod }));
     return { figs, cols, ring, off: (G.off || []).length, crit, rows, finds, expected, bends, total, stacks: G.stacks || { written: 0, cells: 0 }, read, uncovered: G.uncovered, uncited,
       table: { head: ["Commitment", "Section", "Reaches", "Criteria as written", "In force, and their state"],
-        rows: cols.map(c => [`${c.id} · ${c.short}`, c.section, c.cls === "proved" ? `proved code (${c.sub === "full" ? "in full" : "in part"})` : c.cls === "untranscribed" ? `never transcribed (${c.sub})` : c.cls === "spliced" ? "spliced out" : says[c.cls],
+        rows: cols.map(c => [`${c.id} · ${c.short}`, c.section, c.cls === "proved" ? `proved code (${c.sub === "full" ? "in full" : "in part"})` : c.cls === "untranscribed" ? `never transcribed (${{ rule: "regulatory", later: "switched off", due: "overdue" }[c.sub] || c.sub})` : c.cls === "spliced" ? "spliced out" : says[c.cls],
           c.written.map(q => q.id).join(", "), c.cells.map(q => `${q.id} ${q.state}${q.back ? ", came back" : ""}`).join("; ")]) } };
   }
 
@@ -1528,7 +1536,8 @@ const GENE_BEAD = { unproved: "unproved", unreplayable: "norun", repair: "stale"
 function geneDraw(m, box, tip, forDays) {
   const svg = document.createElementNS(SVG_NS, "svg"), el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
   const cols = m.cols, U = 6.4, P = 7.85, X0 = 150, DASH = 4.4, CELL = 4.6, r1 = n => Math.round(n * 10) / 10;
-  // where each band stands: one slot is left empty between two sections, and two where the plan's second arm begins
+  // where each band stands: one slot is left between two sections, with a thin line in it, and two where the plan's
+  // second arm begins, with no line: the arms are two caps
   const X = [], XL = [], live = cols.map((c, i) => i).filter(i => cols[i].cells.length), at = new Map(live.map((i, k) => [i, k]));
   cols.forEach((c, i) => { const p = cols[i - 1]; X.push(i ? X[i - 1] + P + (c.arm !== p.arm ? 2 * P : c.section !== p.section ? P : 0) : X0); });
   live.forEach((i, k) => { const c = cols[i], p = cols[live[k - 1]]; XL.push(k ? XL[k - 1] + P + (c.arm !== p.arm || c.section !== p.section ? P : 0) : X0); });
@@ -1559,11 +1568,12 @@ function geneDraw(m, box, tip, forDays) {
     el("rect", cap, null, el("clipPath", { id: `gene-cap${k}` }));
     el("rect", { ...cap, class: "cap-bg" });
     const g = el("g", { "clip-path": `url(#gene-cap${k})` });
-    a.forEach(i => {
-      const c = cols[i], x = r1(X[i]);
-      const band = c.sub === "rule" ? { class: "b rule", x, y: Y.band + 6, width: U, height: 12 } : c.sub === "later" ? { class: "b notdue", x: r1(X[i] + 0.6), y: Y.band + 2.5, width: 5.2, height: 19 }
-        : { class: `b ${c.sub === "due" ? "overdue" : `gs${shade(c.written.length)}`}`, x, y: Y.band, width: U, height: 24 };
-      el("rect", { ...band, "data-p": c.id, "data-id": c.id, tabindex: 0, "aria-label": `${c.id} · ${c.short}: ${c.reach}` }, null, g);
+    // every band the same size, whatever it is: its fill alone says regulatory, switched off, overdue or how often named
+    a.forEach((i, j) => {
+      const c = cols[i], look = { rule: "rule", later: "notdue", due: "overdue" }[c.sub] || `gs${shade(c.written.length)}`;
+      if (j && c.section !== cols[a[j - 1]].section) { const x = Math.round((X[a[j - 1]] + U + X[i]) * 50) / 100;
+        el("line", { class: "secdiv", x1: x, x2: x, y1: Y.band, y2: Y.band + 24 }, null, g); }
+      el("rect", { class: `b ${look}`, x: r1(X[i]), y: Y.band, width: U, height: 24, "data-p": c.id, "data-id": c.id, tabindex: 0, "aria-label": `${c.id} · ${c.short}: ${c.reach}` }, null, g);
     });
     el("rect", { ...cap, class: "cap" });
   });
@@ -4088,7 +4098,8 @@ function draw(M, DATA) {
     const dot = (cls, r) => sign(14, 14, ["circle", { class: cls, cx: 7, cy: 7, r }]);
     const SIGN = { proved: () => dot("proved", 6), unproved: () => dot("unproved", 5.2), unreplayable: () => dot("norun", 5.5), repair: () => dot("stale", 6), fails: () => dot("broken", 6),
       unbuilt: () => dot("unbuilt", 5.5), spliced: () => sign(22, 14, ["path", { class: "arc", d: "M1 12 Q11 -6 21 12" }], ["rect", { class: "ex skip", x: 7, y: 7, width: 8, height: 6, rx: 1.5 }]),
-      untranscribed: () => sign(12, 16, ["rect", { class: "notdue", x: 1, y: 1, width: 10, height: 14 }]) };
+      regulatory: () => sign(12, 16, ["rect", { class: "rule", x: 1, y: 1, width: 10, height: 14 }]), switched: () => sign(12, 16, ["rect", { class: "notdue", x: 1, y: 1, width: 10, height: 14 }]),
+      overdue: () => sign(12, 16, ["rect", { class: "overdue", x: 1, y: 1, width: 10, height: 14 }]) };
     put("gene-figs", m.figs.map(f => h("div", null, h("div", { class: "num" }, SIGN[f.cls](), String(f.n)), h("div", { class: "what" }, f.what), h("div", { class: "sub" }, f.sub))));
     $("gene-total").textContent = String(m.total);
     const fig = geneDraw(m, $("gene-plot"), $("gene-tip"), forDays);
