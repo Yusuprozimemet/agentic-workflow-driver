@@ -57,3 +57,19 @@ class LevelTwoBlockerTest(unittest.TestCase):
             + container_merges(6, 2)
         )
         self.assertEqual(status.level_2_run(records), 7)
+
+    def test_blocker_park_ends_the_count(self):
+        # The reviewer's park after two fixes ends the count, so only the two merges after it count.
+        records = (
+            container_merges(1, 5)
+            + [
+                {
+                    "event": "park",
+                    "step": "Day 01 Track A: x",
+                    "line": "park: the reviewer still has a blocker on #9 after two fixes",
+                    "pr": 9,
+                }
+            ]
+            + container_merges(6, 2)
+        )
+        self.assertEqual(status.level_2_run(records), 2)
