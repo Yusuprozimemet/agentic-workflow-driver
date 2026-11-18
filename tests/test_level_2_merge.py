@@ -1,5 +1,5 @@
 """Day 13's level 2 merge in `on` (driver/loop.py, wait_merge): C13.17 first, at level 1 nothing merges,
-however much else holds. C13.8 to C13.11 are here too."""
+however much else holds. C13.8 to C13.13 are here too."""
 
 import contextlib
 import io
@@ -27,6 +27,8 @@ from tests.test_tree import MERGE, recorded
 
 # The pull request's merge as the driver asks it: the head named, so gh refuses a moved pull request.
 PR_MERGE = ["pr", "merge", "12", "--merge", "--match-head-commit", HEAD]
+# A head that is not the review's: the pull request moved after the review.
+MOVED = "b" * 40
 
 
 def seeded_run(k):
@@ -157,14 +159,16 @@ class LevelMergeTest(ReviewCase, unittest.TestCase):
         path = case.root / "state" / "run.jsonl"
         return [json.loads(line) for line in path.read_bytes().splitlines()]
 
-    def direct(self, views, seeded, human_only=(), home_change=None):
+    def direct(self, views, seeded, human_only=(), home_change=None, merge_code=0):
         # MergeWaitTest's project, fake gh and git recorder; the run log seeded; a clean driver folder as home,
-        # its HEAD as started. home_change(home) runs after started is read. Returns (line, code, keys, out,
-        # case, home, started).
+        # its HEAD as started. home_change(home) runs after started is read; merge_code is the code the fake
+        # gh exits on pr merge. Returns (line, code, keys, out, case, home, started).
         case = merge_wait.MergeWaitTest("test_closed_parks")
         case.setUp()
         self.addCleanup(case.doCleanups)
         case.build(views)
+        if merge_code != 0:
+            rewrite(case.root / "gh" / "fake.json", merge_code=merge_code)
         (case.root / "state" / "run.jsonl").write_bytes(
             b"".join(json.dumps(r).encode("utf-8") + b"\n" for r in seeded)
         )
@@ -286,3 +290,52 @@ class LevelMergeTest(ReviewCase, unittest.TestCase):
         found = ((line, code), case.gh_of("pr", "merge"))
         want = ("halt: the driver's repository moved from `<head>` to `<head>`; #12 not merged", 1)
         same(self, found, (want, []))
+
+    def test_head_moved_parks(self):
+        # C13.12: the head the pull request has now is not the reviewed one: the wait parks with pr and head
+        # kept, and no merge is asked, with 15 merges in a row and a clean review on HEAD.
+        views = [view("OPEN", head=MOVED), view("MERGED", head=MOVED)]
+        line, code, keys, _, case, _, _ = self.direct(views, seeded_run(15))
+        found = ((line, code), keys == {"pr": 12, "head": MOVED}, case.gh_of("pr", "merge"))
+        same(self, found, (("park: #12 moved after the review", 1), True, []))
+
+    def test_no_clean_review_parks(self):
+        # C13.12: with no review line for #12, or one with a blocker, there is no clean review of the head: the
+        # wait parks as a moved head, and no merge is asked, with 15 merges in a row.
+        blocked = {"event": "review", "pr": 12, "session": R, "head": HEAD, "blockers": 1}
+        seeds = [container_merges(101, 15), container_merges(101, 15) + [blocked]]
+        views = [view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        for index, seeded in enumerate(seeds):
+            with self.subTest(index=index):
+                line, code, keys, _, case, _, _ = self.direct(views, seeded)
+                found = ((line, code), keys == {"pr": 12, "head": HEAD}, case.gh_of("pr", "merge"))
+                same(self, found, (("park: #12 moved after the review", 1), True, []))
+
+    def test_merge_fails_parks(self):
+        # C13.13: gh pr merge exits 1 and the pull request reads CLOSED: the wait parks with the exit named,
+        # the merge asked once, and no merged line written.
+        views = [view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("CLOSED", head=HEAD)]
+        line, code, keys, _, case, _, _ = self.direct(views, seeded_run(15), merge_code=1)
+        found = (
+            (line, code, keys),
+            [call == PR_MERGE for call in case.gh_of("pr", "merge")],
+            [r for r in self.log_of(case) if r.get("event") == "merged" and r.get("pr") == 12],
+        )
+        want = (("park: the merge of #12 failed: gh pr merge exited 1", 1, {}), [True], [])
+        same(self, found, want)
+
+    def test_merge_fails_but_merged(self):
+        # C13.13: gh pr merge exits 1, but the pull request then reads MERGED: the wait goes on to the merged
+        # line, which has no by, since the merge was not the driver's.
+        views = [view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        line, code, keys, _, case, _, _ = self.direct(views, seeded_run(15), merge_code=1)
+        found = (
+            (line, code, keys),
+            [call == PR_MERGE for call in case.gh_of("pr", "merge")],
+            [
+                "by" in r
+                for r in self.log_of(case)
+                if r.get("event") == "merged" and r.get("pr") == 12
+            ],
+        )
+        same(self, found, ((None, 0, {}), [True], [False]))
