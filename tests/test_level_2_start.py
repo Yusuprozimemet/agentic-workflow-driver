@@ -64,6 +64,10 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
     names = box_session.BoxSessionTest.names
     run_steps = preflight.BoxPreflightTest.run_steps
 
+    def holds(self):
+        # main's protection holds, so that a break of the case's own condition reaches a session's start.
+        rewrite(self.folder / "gh" / "fake.json", api={CLASSIC: protected(True), RULES: NO_RULES})
+
     def seed(self, k):
         # The run log of k container merges, written as bytes: one JSON line each, as test_level_2_merge.py.
         seeded = container_merges(101, k)
@@ -105,6 +109,7 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
         spec.pop("review")
         path.write_bytes(json.dumps(spec).encode("utf-8"))
         rewrite(path, level=2)
+        self.holds()
         self.seed(15)
         same(self, self.refused(), (2, [LINE_REVIEW], 0, [], []))
 
@@ -115,6 +120,7 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
         self.secrets = self.folder / "secrets.env"
         self.reviewed()
         rewrite(self.folder / "driver.json", level=2)
+        self.holds()
         self.seed(15)
         same(self, self.refused(), (2, [LINE_CONTAINER], 0, [], []))
 
@@ -123,8 +129,17 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
         self.box("needs_count", run=[])
         self.reviewed()
         rewrite(self.folder / "driver.json", level=2)
+        self.holds()
         self.seed(14)
         same(self, self.refused(), (2, [LINE_COUNT], 0, [], []))
+
+    def test_no_run_log_counts_0(self):
+        # C13.7's In scope: a run log that is missing counts 0, so the start refuses with the count line.
+        self.box("no_run_log", run=[])
+        self.reviewed()
+        rewrite(self.folder / "driver.json", level=2)
+        self.holds()
+        same(self, self.refused(), (2, [LINE_COUNT.replace("counts 14", "counts 0")], 0, [], []))
 
     def test_needs_protection(self):
         # C13.7: main must require a pull request and its checks with no bypass. Admins may bypass the classic
