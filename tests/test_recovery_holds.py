@@ -1,4 +1,5 @@
-"""Day 07's holds (C07.1, C07.14, C07.21): what the table of "Recovery" does on today's code and must
+"""Day 07's holds (C07.1, C07.14, C07.21) and Day 13's merge rules (C13.5, and C13.18, which
+replaces C07.1's pull request list): what the table of "Recovery" does on today's code and must
 keep doing. RecoveryRulesTest reads the driver's files with ast: no command that can lose work, no
 pull request opened or closed, no shell. RecoveryHoldTest runs a driver copy with the fake gh and
 claude of tests/test_once.py and tests/test_github.py, and a run log the test writes."""
@@ -7,6 +8,7 @@ import ast
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,7 +28,7 @@ from tests.test_once_park_issues import build, dirty_tree, gh_calls
 OTHER_SESSION = "11111111-1111-4111-8111-111111111111"
 LOSE = {"reset", "stash", "clean", "restore", "checkout", "rebase", "push", "rm"}
 LOSE |= {"-D", "-d", "--delete"}
-PR_WRITES = {"create", "close", "merge", "edit", "review"}
+PR_WRITES = {"create", "close", "edit", "review"}
 PR7 = {"number": 7, "headRefName": "day-01/other", "url": "u", "author": "me"}
 WITH_7 = drift_of(START, open_prs=(7,))
 NEXT = "Day 02: read the spec against the code, then the spec-change PR"
@@ -54,6 +56,18 @@ def pr_write(node):
         for i, value in enumerate(values):
             if value == "pr" and any(later in PR_WRITES for later in values[i + 1 :]):
                 return "a pull request is opened or closed"
+    return None
+
+
+def pr_merge(node):
+    # A "pr" with "merge" after it in the same list or tuple, and whether that list names the head.
+    if isinstance(node, (ast.List, ast.Tuple)):
+        values = [elt.value if isinstance(elt, ast.Constant) else None for elt in node.elts]
+        for i, value in enumerate(values):
+            if value == "pr" and "merge" in values[i + 1 :]:
+                if "--match-head-commit" in values:
+                    return "a pull request merged on a head"
+                return "a pull request merged on no head"
     return None
 
 
@@ -157,6 +171,12 @@ class RecoveryRulesTest(unittest.TestCase):
 
     def test_no_pull_request_opened_or_closed(self):
         self.assertEqual(self.found(pr_write), [])
+
+    def test_one_merge_on_a_head(self):
+        # C13.5: exactly one merge, in driver/github.py, on the head it names. The line number is
+        # dropped, so that an edit above it does not fail the test.
+        hits = [re.sub(r":\d+ ", " ", hit) for hit in self.found(pr_merge)]
+        self.assertEqual(hits, ["driver/github.py a pull request merged on a head"])
 
     def test_no_shell(self):
         self.assertEqual(self.found(shell_true), [])

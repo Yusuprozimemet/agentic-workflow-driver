@@ -33,8 +33,10 @@ JOB = "https://github.com/me/project/actions/runs/11/job/22"
 # `issue comment` prints after `#issuecomment-` (1 when not given), and `comment_code` fails
 # every `issue comment` and `api` call when it is not 0. `pr comment` prints
 # `https://github.com/me/project/pull/<n>#issuecomment-<comment_id>`, and `comment_code` fails it
-# as it fails `issue comment`. An `api` call exits 0 once its stdin
-# is recorded, as a PATCH of a comment does.
+# as it fails `issue comment`. An `api` call with no `--input` answers from `api`, a map from
+# the path to `{"code": n, "out": ..., "err": ...}`, and exits 0 with no output for a path
+# it does not hold. An `api` call with `--input` exits 0 once its stdin is recorded, as a PATCH
+# of a comment does. `pr merge` exits `merge_code` (0 when not given).
 FAKE = """import json
 import sys
 import time
@@ -47,6 +49,14 @@ with (folder / "calls.jsonl").open("ab") as calls:
 spec = json.loads((folder / "fake.json").read_text(encoding="utf-8"))
 
 
+def reply(answer):
+    sys.stderr.buffer.write(answer.get("err", "").encode("utf-8"))
+    out = answer["out"]
+    text = out if isinstance(out, str) else json.dumps(out)
+    sys.stdout.buffer.write(text.encode("utf-8"))
+    sys.exit(answer["code"])
+
+
 def step(name):
     # One answer per call, the last repeated, so that a test can walk a state through its changes.
     answers = spec[name]
@@ -55,11 +65,7 @@ def step(name):
         if issue["number"] in answer.get("closes", ()):
             issue["state"] = "closed"
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))
-    sys.stderr.buffer.write(answer.get("err", "").encode("utf-8"))
-    out = answer["out"]
-    text = out if isinstance(out, str) else json.dumps(out)
-    sys.stdout.buffer.write(text.encode("utf-8"))
-    sys.exit(answer["code"])
+    reply(answer)
 
 
 if any(flag in args and args[args.index(flag) + 1] == "-" for flag in ("--body-file", "--input")):
@@ -140,11 +146,15 @@ if args[:2] == ["pr", "view"]:
     step("views")
 if args[:2] == ["run", "view"]:
     step("logs")
+if args[0] == "api" and "--input" not in args and args[1] in spec.get("api", {}):
+    reply(spec["api"][args[1]])
 if args[0] == "api":
     sys.exit(0)
 if args[:2] == ["pr", "comment"]:
     print(f"https://github.com/me/project/pull/{args[2]}#issuecomment-{spec.get('comment_id', 1)}")
     sys.exit(0)
+if args[:2] == ["pr", "merge"]:
+    sys.exit(spec.get("merge_code", 0))
 sys.exit(99)
 """
 
@@ -162,6 +172,8 @@ def fake_gh(
     run_steps=None,
     comment_id=1,
     comment_code=0,
+    api=None,
+    merge_code=0,
 ):
     spec = {
         "runs": runs or [],
@@ -175,6 +187,8 @@ def fake_gh(
         "run_steps": run_steps or [],
         "comment_id": comment_id,
         "comment_code": comment_code,
+        "api": api or {},
+        "merge_code": merge_code,
     }
     # Files are written as bytes: on Windows, text mode would add a carriage return to each line.
     (folder / "fake.json").write_bytes(json.dumps(spec).encode("utf-8"))

@@ -1,7 +1,8 @@
 """The driver reads the project's GitHub state through the gh CLI: the evidence run on
 `origin/main`'s head, the open pull requests of a step (H01.5; Phase 1 audit, finding 8), and the
-checks and state of a pull request. Each read is one gh call, and a call that fails is a reason to
-park, never a guess. Plain stdlib."""
+checks and state of a pull request. `protection` reads what main requires of a pull request and its
+checks, and `merge` merges one pull request on the head it names. Each read is one gh call, and a
+call that fails is a reason to park, never a guess. Plain stdlib."""
 
 import json
 import os
@@ -196,3 +197,98 @@ def pr_state(project, gh, number):
         None,
         view.get("headRefOid") or None,
     )
+
+
+def protection(project, gh):
+    # Returns None when main requires a pull request and its checks from a source with no
+    # bypass, and the reason otherwise. A bypass lets an actor merge past the rule, so a source
+    # that allows one does not count. The sources are main's classic protection and each ruleset
+    # a rule names.
+    code, classic, err = _gh(
+        project,
+        gh,
+        ["api", "repos/{owner}/{repo}/branches/main/protection"],
+        want=dict,
+        stderr=True,
+    )
+    if code == 1 and "(HTTP 404)" in err:
+        # Not protected classically: a source that requires nothing, not a failed read.
+        classic = {}
+    elif code != 0 or classic is None:
+        return f"gh api exited {code}"
+    code, rules = _gh(project, gh, ["api", "repos/{owner}/{repo}/rules/branches/main"], want=list)
+    if code != 0 or rules is None:
+        return f"gh api exited {code}"
+    # A ruleset named by two rules is read once.
+    ids = []
+    for rule in rules:
+        named = rule.get("type") in ("pull_request", "required_status_checks")
+        if named and rule.get("ruleset_id") not in ids:
+            ids.append(rule.get("ruleset_id"))
+    status = classic.get("required_status_checks") or {}
+    sources = [
+        {
+            "id": None,
+            "pr": classic.get("required_pull_request_reviews") is not None,
+            "checks": bool(status.get("contexts") or status.get("checks")),
+            "state": "free" if (classic.get("enforce_admins") or {}).get("enabled") else "bypass",
+        }
+    ]
+    for ruleset_id in ids:
+        code, body = _gh(
+            project,
+            gh,
+            ["api", f"repos/{{owner}}/{{repo}}/rulesets/{ruleset_id}"],
+            want=dict,
+        )
+        if code != 0 or body is None:
+            return f"gh api exited {code}"
+        # A body without bypass_actors is one the token cannot read the bypass list of: hidden.
+        if "bypass_actors" not in body:
+            state = "hidden"
+        elif body["bypass_actors"] == []:
+            state = "free"
+        else:
+            state = "bypass"
+        types = [rule.get("type") for rule in rules if rule.get("ruleset_id") == ruleset_id]
+        sources.append(
+            {
+                "id": ruleset_id,
+                "pr": "pull_request" in types,
+                "checks": "required_status_checks" in types,
+                "state": state,
+            }
+        )
+    pulls = [source for source in sources if source["pr"]]
+    checks = [source for source in sources if source["checks"]]
+    if not pulls:
+        return "main does not require a pull request"
+    if not checks:
+        return "main does not require its checks"
+    blocked = [
+        required
+        for required in (pulls, checks)
+        if not any(source["state"] == "free" for source in required)
+    ]
+    for required in blocked:
+        for source in required:
+            if source["state"] == "hidden":
+                return (
+                    f"cannot read main's ruleset {source['id']}: "
+                    "bypass_actors not shown (needs admin)"
+                )
+    if blocked:
+        return "main allows a bypass"
+    return None
+
+
+def merge(project, gh, number, sha):
+    # The head is named, so that gh refuses the merge when a push has moved the pull request since
+    # the caller read its checks.
+    code, _ = _gh(
+        project,
+        gh,
+        ["pr", "merge", str(number), "--merge", "--match-head-commit", sha],
+        want=str,
+    )
+    return None if code == 0 else f"gh pr merge exited {code}"
