@@ -14,7 +14,7 @@ import os
 import re
 from time import monotonic, sleep
 
-from driver import github, issues, livecheck, once, review, runlog, switchlog, tree
+from driver import github, issues, livecheck, once, review, runlog, status, switchlog, tree
 from driver import home as driver_home
 from driver.preflight import image_claude, kit_lines
 from driver.steps import Step
@@ -331,6 +331,36 @@ def run(args, home, read_facts):
     return once.run(args, home, read_facts, steps)
 
 
+def level_2_refusals(args, project, config):
+    # Level 2 starts only with review on, the sessions in the container, 15 merges in a row without a change
+    # and main protected with no bypass. One line per condition that fails, in this order; the protection
+    # is read only when the first three hold, so a start that is refused for them makes no api call.
+    path = args.config
+    lines = []
+    if config.get("review") is not True:
+        lines.append(f'cannot start: level 2 needs "review": true in {path}')
+    if "container_image" not in config:
+        lines.append(
+            f"cannot start: level 2 needs the sessions in the container: {path} has no container_image"
+        )
+    records, _ = runlog.read(args.state)
+    k = status.level_2_run(records) if records is not None else 0
+    if k < status.LEVEL_2_RUN:
+        lines.append(
+            f"cannot start: level 2 needs {status.LEVEL_2_RUN} of {status.LEVEL_2_RUN} pull requests "
+            f"in a row merged without a change asked; status counts {k}"
+        )
+    if lines:
+        return lines
+    reason = github.protection(project, args.gh)
+    if reason is not None:
+        lines.append(
+            "cannot start: level 2 needs main to require a pull request and its checks with no bypass: "
+            f"{reason}"
+        )
+    return lines
+
+
 def steps(args, home, project, read_facts, config):
     # Each step: the same start as --once's, then its pull request waited on, merged and pulled. A
     # resume does not count as a step, and a pull request found at a start starts no session.
@@ -348,6 +378,10 @@ def steps(args, home, project, read_facts, config):
     line = livecheck.refusal(args.state, args.claude, command)
     if line:
         return once.refuse([line])
+    if config.get("level") == 2:
+        lines = level_2_refusals(args, project, config)
+        if lines:
+            return once.refuse(lines)
     reason = once.settle(args, project)
     if reason:
         return once.refuse([f"cannot read the project: {reason}"])
