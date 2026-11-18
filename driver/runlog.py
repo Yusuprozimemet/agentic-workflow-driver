@@ -73,17 +73,25 @@ def park(state, step, line, pr=None, head=None):
     append(state, record)
 
 
-def merged(state, pr, head=None, changed=None):
-    # changed is True or False when both heads are known, else null; head goes only when known.
+def merged(state, pr, head=None, changed=None, by=None):
+    # changed is True or False when both heads are known, else null; head goes only when known; by is
+    # "driver" when the driver asked the merge (level 2), else absent.
     record = {"event": "merged", "at": stamp(), "pr": pr}
     if head is not None:
         record["head"] = head
     record["changed"] = changed
+    if by is not None:
+        record["by"] = by
     append(state, record)
 
 
 def closed(state, pr):
     append(state, {"event": "closed", "at": stamp(), "pr": pr})
+
+
+def level(state, pr, line):
+    # Level 2's wait for the maintainer, when the count has fallen below 15: the line printed.
+    append(state, {"event": "level", "at": stamp(), "pr": pr, "line": line})
 
 
 def fix(state, session, pr, n):
