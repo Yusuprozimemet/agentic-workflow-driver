@@ -30,6 +30,8 @@ catches fall.
       `Assumed` line.
 - [ ] **Tag or Red today wrong (7; D10.6, D11.9, D11.10, D12.5).** Run each `new` criterion's
       test against `main` as its track will start it, and paste what it reports as Red today.
+      Take each test apart: one whose results are all true there, a "no ..." half above all,
+      is a `hold` of its own (the spec-auditor's check 8), in a fix written after the audit too.
 - [ ] **A check that cannot fail (7; D11.7, D11.13, D12.4, D12.18).** For each criterion, say which
       test fails under its named break, and why it cannot pass with the break in. A criterion
       whose commitment is about behaviour is checked by running the behaviour, not by finding its
@@ -84,7 +86,8 @@ kind marked "none" needs its own gate if it comes back again.
 | Git Bash rewrote a `/path` argument | D05.5, D10.17, D11.22 | Day 11 | `break.py` refuses it (this rung's PR) |
 | A multi-line find on a CRLF tree | D08.68, D08.72 | Day 08 | `break.py` writes it in the file's endings |
 | A test fails on and off under load | D07.27, D08.76, D10.18, D11.25, D11.29, D11.32, D12.34–36, D12.39 | Day 12 | `pre-push.py`, "Tests": the test files a branch changes run 5 times inside the whole run; "Timing" above |
-| A Red today the code no longer gives | D03.14, D06.10, D06.16, D06.20, D06.21 | Day 06 | `seen-red.py --expect` at the track's start |
+| A Red today the code no longer gives, or a test of a `new` criterion that passes at its track's start | D03.14, D06.10, D06.16, D06.20, D06.21, D09.26, D10.12, D10.13, D11.19, D12.25 | Day 12 | the spec-auditor's check 8, one line for each test, and its recheck of what the spec change rewrote; `seen-red.py --expect` at the track's start |
+| A test the spec does not list reads what the Day changes | D07.25, D11.20 | Day 11 | the spec-auditor's check 14 |
 | Red by an error, not an assertion | D07.29, D07.32, D08.67, D10.14, D12.33 | Day 12 | `seen-red.py --expect`; "Red for another reason" above |
 | A PR over 400 changed lines | D06.5, D07.15, D07.17, D07.20, D07.33 | Day 07 | `pre-push.py`, "Diff stays reviewable" |
 | A brief names a name's wrong home or misses a caller | D07.24, D08.77, D09.28 | Day 09 | `brief-check.py`; the track-reviewer, on the brief |

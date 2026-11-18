@@ -71,7 +71,7 @@ flowchart TD
     Phase -- yes --> PA1["plan-auditor<br/>does this phase still add up<br/>to the plan's outcome?"]
     Phase -- no --> SA
     PA1 --> SA["spec-auditor<br/>run every check on today's code,<br/>try to break each 'hold'"]
-    SA --> Fix["Main session: spec-change PR<br/>(plan-change PR if the plan is wrong)"]
+    SA --> Fix["Main session: spec-change PR<br/>(plan-change PR if the plan is wrong);<br/>spec-auditor rechecks what the fixes rewrote"]
     Fix --> W1{{"wait: 'merged'"}}
     W1 --> Track["Main session: one track PR<br/>from fresh main"]
     Track --> W2{{"wait: 'merged'"}}
