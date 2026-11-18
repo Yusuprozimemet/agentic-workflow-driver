@@ -144,6 +144,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N15 "the level 2 merge is switched on in a run, and refuses otherwise"
       Evidence: `LevelConfigTest.test_level_values` passes on `main` at `dc837ec` (#250).
       seen red: python -m unittest tests.test_level_config.LevelConfigTest.test_level_values on main → AssertionError: differs: '2', 2.0, 3, True (#250)
+      broken: C13.1: a level of 2.0 or True taken → AssertionError: differs: 2.0, True
 - [x] C13.2 **new** — `--once` with `--project` the driver's folder, and `--once` on a scratch
       project whose `origin` URL the test sets to the one it gives the driver's folder, each print
       "cannot start: `<project>` is the driver's own repository" to stderr, exit 2, and leave the
@@ -155,6 +156,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Evidence: `OwnRepositoryTest.test_same_folder` and `OwnRepositoryTest.test_same_origin` pass on `main` at `dc837ec` (#250).
       seen red: python -m unittest tests.test_own_repository.OwnRepositoryTest.test_same_folder on main → AssertionError: differs: 2 (#250)
       seen red: python -m unittest tests.test_own_repository.OwnRepositoryTest.test_same_origin on main → AssertionError: differs: 0, 1, 2 (#250)
+      broken: C13.2: the driver's own folder not refused → AssertionError: differs: 2
+      broken: C13.2: a shared origin not refused → AssertionError: differs: 0, 1, 2
 - [x] C13.3 **new** — `github.protection` on a fake `gh` gives `None` for a classic protection with
       `required_pull_request_reviews` and `enforce_admins` `{"enabled": true}`; `None` for a classic
       404 (exit 1, "gh: Branch not protected (HTTP 404)" on stderr) with ruleset 7's
@@ -177,6 +180,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N15 "main requires a pull request with no bypass"
       Evidence: the eight `ProtectionTest` tests named pass on `main` at `dc837ec` (#252), with two more the track added beyond the list, `ProtectionTest.test_ruleset_bypass` and `ProtectionTest.test_classic_fails` (D13.38).
       seen red: python -m unittest tests.test_merge_gh on main → FAILED (errors=12) (#252)
+      broken: C13.3: a bypass read as protection → AssertionError: None != 'main allows a bypass'
 - [x] C13.4 **new** — `github.merge(<project>, <fake gh>, 12, <sha>)` returns `None`, and the fake
       `gh` records `["pr", "merge", "12", "--merge", "--match-head-commit", <sha>]`; with the fake's
       `merge_code` 1 it returns "gh pr merge exited 1". Red today: `github` has no `merge`, and the
@@ -185,6 +189,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: P64 "then `gh pr merge --match-head-commit <sha>` on the commit the checks and the reviewer saw"
       Evidence: `MergeCallTest.test_merge_call` and `MergeCallTest.test_merge_fails` pass on `main` at `dc837ec` (#252).
       seen red: python -m unittest tests.test_merge_gh on main → FAILED (errors=12) (#252)
+      broken: C13.4: a failed merge read as merged → AssertionError: None != 'gh pr merge exited 1'
 - [x] C13.5 **new** — Over `run-steps.py` and `driver/*.py`, parsed as C07.1 parses them, exactly
       one list or tuple holds `"pr"` with `"merge"` after it, in `driver/github.py`, and the same
       list holds `"--match-head-commit"`; a second such list, or one without
@@ -193,6 +198,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N24 "carries Replaces: C07.1"
       Evidence: `RecoveryRulesTest.test_one_merge_on_a_head` passes on `main` at `dc837ec` (#252).
       seen red: python -m unittest tests.test_recovery_holds.RecoveryRulesTest.test_one_merge_on_a_head on main → AssertionError: Lists differ: [] != ['driver/github.py a pull request merged on a head'] (#252)
+      broken: C13.5: the merge on no named head → AssertionError: Lists differ: ['driver/github.py a pull request merged on no head'] != ['driver/github.py a pull request merged on a head']
 - [x] C13.6 **new** — `status.level_2_run` over five container merges, a `park` "park: the reviewer
       still has a blocker on #9 after two fixes", then two container merges, gives 2. Red today: 7.
       Test: `LevelTwoBlockerTest.test_blocker_park_ends_the_count`.
@@ -463,9 +469,9 @@ level 2 test sets no `comment_code`, which fails every `api` call.
 - **Defect** D13.27 — found: auditor · cause: spec · made: Day 13 · second recheck: the fourth start line named only N15's condition while refusing on the checks (fixed in this PR: its own wording).
 - **Defect** D13.28 — found: auditor · cause: spec · made: Day 13 · third recheck: a ruleset holding only the checks' rule was never read; `test_no_pull_request` could expect either of two reasons; `test_bypass` and C13.7's protection case did not name what their fakes require (fixed in this PR).
 - **Defect** D13.24 — found: auditor · cause: spec · made: Day 13 · recheck: the 404 was probed on a missing branch, not an unprotected one (fixed in this PR).
-- **The close.** Every criterion is ticked: 17 `new` and 3 `hold`, each `new` seen red. C13.1 to
-  C13.5 carry seen red alone: Tracks A and B recorded only the holds' breaks. The manifest holds
-  26 breaks, all recorded by the tracks; `break-lines.py --spec` finds the spec's 26 `broken:`
+- **The close.** Every criterion is ticked: 17 `new` and 3 `hold`, each `new` seen red. The manifest holds
+  32 breaks: 26 recorded by the tracks, and six for C13.1 to C13.5 recorded at the close, whose
+  tracks recorded only the holds' (D13.68); `break-lines.py --spec` finds the spec's 32 `broken:`
   lines agree with it. C13.8 to C13.11's seen-red lines were re-run at the close on Track E1's
   base, `2607fa3`, one per test (D13.57). Three tests go beyond the criteria's lists:
   `ProtectionTest.test_ruleset_bypass`, `ProtectionTest.test_classic_fails` (D13.38) and
@@ -514,3 +520,4 @@ level 2 test sets no `comment_code`, which fails every `api` call.
 - **Defect** D13.65 — found: Track F · cause: process · made: Day 13 · same-as: D12.40 · the brief's `assertEqual` on two lists gave a "[331 chars]" failure line, which `seen-red.py` refused: the test compares the count and the differing indexes (#257).
 - **Defect** D13.66 — found: spec-change PR · cause: implementation · made: Day 05 · same-as: D08.81 · `OnceStopTest.test_stop_during_session` failed once under `pre-push.py`'s full run ("the driver did not end within 10 s") and passed alone straight after (#248).
 - **Defect** D13.67 — found: close · cause: process · made: Day 13 · the track PRs' bodies wrote Defect fields off the closed lists: `cause: brief` (#249 to #257), `found: implementer` (#250, #256, #257) and `found: CI` (#250). The close writes them as `process` and `Track <X>`, the stage each was found in.
+- **Defect** D13.68 — found: rehearsal · cause: process · made: Day 13 · Tracks A and B recorded breaks only for the holds they carried, so C13.1 to C13.5, all `new`, had seen red and no break the replay could run; the close's rehearsal failed the five, and the close recorded six breaks for them with `break.py --record`.
