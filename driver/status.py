@@ -395,8 +395,8 @@ def _container_opened(records, pr):
 
 def level_2_run(records):
     # Counts back from the newest line until a merge asked for a change, a merge whose pull request
-    # no container session opened, a close, or a park that says a check is still red; any other
-    # line is passed over.
+    # no container session opened, a close, or a park that says a check is still red or the
+    # reviewer still has a blocker after two fixes; any other line is passed over.
     k = 0
     for record in reversed(records):
         event = record.get("event")
@@ -407,9 +407,17 @@ def level_2_run(records):
             if not _container_opened(records, record.get("pr")):
                 break
             k += 1
-        elif event == "closed" or (event == "park" and "still red after two fixes" in line):
+        elif event == "closed" or (event == "park" and _ends_the_run(line)):
             break
     return k
+
+
+def _ends_the_run(line):
+    # A park ends the count when a check is still red after two fixes, or the reviewer still has a
+    # blocker after two fixes; the reviewer's first blocker park is passed over.
+    if "still red after two fixes" in line:
+        return True
+    return "the reviewer still has a blocker on" in line and "after two fixes" in line
 
 
 def _level_2(records):
