@@ -601,9 +601,7 @@ class PageTest(unittest.TestCase):
     def test_the_gene_splits_what_was_never_transcribed_and_draws_every_band_the_same_size(self):
         data = demo_data.demo()
         m = reconcile.model(data)["gene"]
-        self.assertEqual(
-            " ".join(f["cls"] for f in m["figs"][-3:]), "regulatory switched overdue"
-        )
+        self.assertEqual(" ".join(f["cls"] for f in m["figs"][-3:]), "regulatory switched overdue")
         self.assertEqual(
             [(f["cls"], f["n"], f["what"]) for f in m["figs"][-3:]],
             [
@@ -616,10 +614,14 @@ class PageTest(unittest.TestCase):
         self.assertEqual(
             (tip["P10"], tip["N03"]),
             (
-                "Regulatory: a rule for how people work. It steers the work and never becomes code, "
-                "so no criterion is expected.",
-                "Switched off until Day 7: a real gene with no criterion yet. "
-                "It turns on when that Day writes its checks.",
+                (
+                    "Regulatory: a rule for how people work. It steers the work and never becomes code, "
+                    "so no criterion is expected."
+                ),
+                (
+                    "Switched off until Day 7: a real gene with no criterion yet. "
+                    "It turns on when that Day writes its checks."
+                ),
             ),
         )
         self.assertEqual(
