@@ -1,6 +1,6 @@
-"""Day 13, C13.19 (and later C13.6): the level 2 count, status.level_2_run in driver/status.py, is ended
-by the reviewer's park "after two fixes" only; another blocker park is passed over. The records are the
-run log's lines, oldest first, as the driver writes them."""
+"""Day 13, C13.19 (and Track C's C13.6): the level 2 count, status.level_2_run in driver/status.py, passes
+over the reviewer's first blocker park; of the reviewer's parks, only "still has a blocker ... after two
+fixes" is to end it (C13.6). The records are the run log's lines, oldest first, as the driver writes them."""
 
 import sys
 import unittest
