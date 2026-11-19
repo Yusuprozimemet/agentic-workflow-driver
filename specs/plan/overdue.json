@@ -1,3 +1,3 @@
 [
-  {"id": "P54", "settled_by": 14, "why": "the maintainer chose on 2026-11-18 that Day 13 does not end the level 2 count on a failed evidence run; going back a level on an escape is for Day 14's stop to settle"}
+  {"id": "P54", "settled_by": 15, "why": "the maintainer chose on 2026-11-18 that Day 13 does not end the level 2 count on a failed evidence run; going back a level on an escape is for Day 14's stop to settle, which comes after Day 14's close (chosen 2026-11-19)"}
 ]
