@@ -102,7 +102,7 @@ class FileMapTest(unittest.TestCase):
             ("scripts/", "station 4, a test that fails first", "tool"),
         )
         test, row = home(m, "scripts/test_seen_red.py")
-        self.assertIs(test, script)
+        self.assertEqual((test["label"], test["at"]), (script["label"], script["at"]))
         self.assertEqual(kinds[row[2]], "tooltest")
         # a test named in the table hangs where the table says, whatever script its name starts like
         self.assertEqual(
@@ -214,7 +214,8 @@ class FileMapTest(unittest.TestCase):
         )
 
     def test_the_build_puts_it_in_the_data(self):
-        self.assertIn('real["file_map"] = build_file_map(', real("scripts", "spec-drift.py"))
+        wired = real("scripts", "spec-drift.py").count('real["file_map"] = build_file_map(')
+        self.assertEqual(wired, 1, "spec-drift.py puts the file map in the data once")
 
 
 # filDraw() from dashboard.js on the model from stdin, on a document that keeps what is made: the dots it drew,
