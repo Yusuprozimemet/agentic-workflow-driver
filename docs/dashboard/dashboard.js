@@ -3908,7 +3908,7 @@ function filDraw(F, get) {
       h("td", { class: "nm" }, g.dots.map(d => F.files[d[0]][0]).join(", "))))));
   $("stamp").replaceChildren(`Drawn from the file list at ${String(F.head || "this build").slice(0, 7)}: ${comma(F.files.length)} tracked files, ${comma(F.lines)} lines. `, "The table that places them is ", h("code", null, F.table), ".");
   const li = (b, ...rest) => h("li", null, h("b", null, b), " ", ...rest);
-  const folders = F.groups.filter(g => g.zone === "try" && /\/$/.test(g.label) && /^station/.test(g.at)).slice(0, 2);
+  const folders = F.groups.filter(g => g.folder && g.zone === "try" && /^station/.test(g.at)).slice(0, 2);
   $("how").replaceChildren(
     li("The path is one promise's way.", "Seven numbered stations, left to right, from the written goal to the re-check on later merged code. Between them a diamond is a check by an AI reviewer and a square is a check by a script; the doubled gate in the cell's wall is the maintainer's merge, and the two ovals are the implementer, who writes the code. The small square on station 7 says that station is itself a script's check."),
     li("A folder places itself.", "A file hangs where its folder belongs", ...folders.flatMap((g, i) => [i ? ", " : ": ", h("code", null, g.label), ` at ${g.at.split(",")[0]}`]), ". A new file there appears by itself."),

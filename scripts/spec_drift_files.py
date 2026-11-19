@@ -185,6 +185,7 @@ def file_map(counts, groups, head=None, why=None):
         bottoms[g["at"]] = bottom
         drawn[i] = dict(label=g["label"], what=g["what"], at=RING_AT if g.get("ring") else col["at"],
                         zone=col["zone"], ring=bool(g.get("ring")), x=col["x"], y=round(y, 1), files=len(mine),
+                        folder=g["label"] in g.get("paths", ()),  # a folder that places itself, under its own name
                         lines=sum(files[j][1] for j in mine),
                         dots=[[j, round(cx, 1), round(cy, 1), round(r, 1)] for j, (cx, cy, r) in zip(mine, dots)])
     index = {i: n for n, i in enumerate(sorted(drawn))}

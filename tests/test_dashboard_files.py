@@ -288,6 +288,10 @@ class FilePageTest(unittest.TestCase):
             "tests/ 3",
         ):
             self.assertIn(words, got["figure"])
+        # the folders named as placing themselves are folders the table places whole, never scripts/
+        self.assertIn("tests/ at station 4", got["words"])
+        self.assertIn("hooks/ at station 5", got["words"])
+        self.assertNotIn("scripts/ at station", got["words"])
 
     def test_the_graph_has_its_own_key_and_points_at_no_other_graph(self):
         got = page(drawn(FILES))
