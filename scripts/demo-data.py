@@ -423,7 +423,12 @@ def demo():
                    cost_past_150k=round((1.9 * n + 0.4) * (0.45, 0.5, 0.55, 0.3, 0.2, 0.15)[n - 1], 2) if agent == "main" else 0.0)
               for n in range(1, 7)
               for agent, model in (("main", "claude-sonnet-5-5"), ("implementer", "claude-haiku-5-5"))]
-    refusals = [dict(date=f"2026-10-{n + 2:02d}", guard=g, refused=k) for n, g, k in
+    # Where the dollars went (graph 8): each row above is its Day's, and three sessions worked between the Days, on
+    # the dashboard, on the tooling and one that never left main.
+    for t in tokens:
+        t.update(part="day", part_day=t["day"])
+    tokens += [dict(tokens[i], day=None, part=part, part_day=None) for i, part in ((2, "dashboard"), (6, "tooling"), (8, "main"))]
+    refusals =[dict(date=f"2026-10-{n + 2:02d}", guard=g, refused=k) for n, g, k in
                 ((3, "read-guard", 2), (4, "step-guard", 1), (5, "read-guard", 1), (5, "auditor-guard", 1))]
     items = [dict(name="web task", count=2, per_hour=0.0412), dict(name="database", count=1, per_hour=0.095)]
     summary = dict(criteria={"C1": "pass", "C2": "pass"}, steps={"build": "pass", "deploy": "pass", "smoke": "pass"},

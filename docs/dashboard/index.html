@@ -552,39 +552,45 @@
 
   <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
 
-  <section class="graph" id="atp" data-by="kind" data-grp="date">
+  <section class="graph" id="atp" data-grp="day">
     <span class="anchor" id="g8"></span>
     <div class="graph-head">
       <p class="graph-n">Graph 8 · drawn as an energy budget</p>
       <h2>What did it cost?</h2>
-      <p class="graph-say">One bead is $2 of tokens at list prices, stacked by date: round beads kept the conversation in mind, square ones made something new.</p>
+      <p class="graph-say">One bead is $2 of tokens at list prices. A session's dollars go to the Day whose branch it worked on most; the rest is the work between Days, by what it was.</p>
     </div>
-    <div class="figs" id="atp-figs"></div>
+    <div class="band">
+      <h3>Where it went</h3>
+      <div class="figs" id="atp-figs"></div>
+      <div class="share" id="atp-share" role="img"></div>
+    </div>
+    <div class="band quiet">
+      <h3>What it bought</h3>
+      <div class="figs" id="atp-bought"></div>
+    </div>
     <div class="ctl" id="atp-ctl">
-      <div role="group" aria-label="Colour the beads by"><span>Colour by</span><button type="button" data-set="by" data-val="kind" aria-pressed="true">What it bought</button><button type="button" data-set="by" data-val="who" aria-pressed="false">Who spent it</button></div>
-      <div role="group" aria-label="One column for each"><span>A column for each</span><button type="button" data-set="grp" data-val="date" aria-pressed="true">Date</button><button type="button" data-set="grp" data-val="day" aria-pressed="false">Day</button></div>
+      <div role="group" aria-label="One column for each"><span>A column for each</span><button type="button" data-set="grp" data-val="day" aria-pressed="true">Day</button><button type="button" data-set="grp" data-val="date" aria-pressed="false">Date</button></div>
     </div>
     <p class="key" id="atp-key"></p>
     <div class="scroll" id="atp-scroll"><svg class="fig" id="atp-fig" viewBox="0 0 1198 266" role="group"></svg></div>
-    <p class="hint">Point at a column, or Tab to one and use the arrow keys, for its dollars by kind and by who, its replies and the calls the hooks refused. The figure over a column is its exact dollars. A Day's button above dims every column not on that Day.</p>
+    <p class="hint">Point at a column or a block, or Tab to one and use the arrow keys, for its dollars, what they bought and who spent them. The figure over a column is its exact dollars. A Day's button above dims every column not on that Day.</p>
     <details class="exact"><summary>How to read it</summary>
-      <p>Each column is a date with a session, and a taller column is a dearer date. One bead is $2 of tokens at list prices. Read a column from the bottom: the round beads are upkeep, the dollars spent reading the conversation again on every reply. The square beads above them are growth: writing new context, then writing output. The hatched rail beside a column is as tall as the dollars spent in replies that read more than 150k tokens, the part a fresh session would mostly spare. The buttons colour the same beads by who spent them, or stack them by the Day whose branch the session worked on. The pills under the dates are the Days worked on each date.</p>
+      <p>One bead is $2 of tokens at list prices. By Day, each column is a Day and a taller column is a dearer Day; the dashed line is the average closed Day. The blocks beside the Days are the work between them, made of the same beads and as tall as the tallest Day, so a block twice as wide cost twice as much. By date, each column is a date with a session, its beads coloured from the bottom up by where the dollars went; the pills under the dates are the Days worked on each date.</p>
+      <p>A reply on a branch counts to that branch. A reply on main counts to the branch its session spent the most dollars on, so a Day's dollars are its own branch's and its sessions' replies on main: the audit before its spec, the steps after its merges. A session that never left main stays on main.</p>
       <dl class="lg">
         <dt>A bead <small>a unit of energy</small></dt>
-        <dd><span class="kt">$2 of tokens at the list prices of the pay-per-token API, rounded. <i class="n" id="atp-k-beads"></i> beads in all, the same beads in every view.</span></dd>
-        <dt>Upkeep <small>basal metabolism</small></dt>
-        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q kr" x="1" y="1" width="7" height="7"/></svg>round: re-reading. Every reply reads the whole conversation again from the cache. It is spent whether or not anything is built.</span></dd>
-        <dt>Growth <small>building new tissue</small></dt>
-        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q kw" x="1" y="1" width="7" height="7"/></svg>square: writing context. What a reply adds to the conversation is written to the cache, and fresh input is counted with it.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q ko" x="1" y="1" width="7" height="7"/></svg>square: writing output. The replies themselves: code, specs, commands and reports.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q ku" x="1" y="1" width="7" height="7"/></svg>hollow: a row whose cost could not be split.</span></dd>
-        <dt>Past 150k <small>a rate a fresh start lowers</small></dt>
-        <dd><span><svg width="6" height="14" viewBox="0 0 6 14" aria-hidden="true"><rect class="rail" x="1" y="0.5" width="4" height="13" rx="1"/></svg>the hatched rail: the dollars of the replies that read more than 150k tokens, on the same scale as the beads beside it. It counts whole replies, so it is not one of the colours. A row with no such figure is not known, and is left out of it.</span></dd>
-        <dt>Who spent it <small>the organs</small></dt>
-        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wm" x="1" y="1" width="7" height="7"/></svg>main session</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wa" x="1" y="1" width="7" height="7"/></svg>auditors</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wd" x="1" y="1" width="7" height="7"/></svg>defect-rater</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wi" x="1" y="1" width="7" height="7"/></svg>implementer</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q wx" x="1" y="1" width="7" height="7"/></svg>other agents</span><span>round is the main session, square an agent it started. The auditors are every agent with auditor in its name; other agents are those the other four names do not cover.</span></dd>
+        <dd><span class="kt">$2 of tokens at the list prices of the pay-per-token API, rounded. <i class="n" id="atp-k-beads"></i> beads in all, the same beads in both views.</span></dd>
+        <dt>The Days <small>what the plan asked for</small></dt>
+        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p0" x="1" y="1" width="7" height="7"/></svg>the spec, the tracks and the close of each Day, and the replies on main of the sessions that worked on it.</span></dd>
+        <dt>Between Days <small>what keeps it running</small></dt>
+        <dd><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p1" x="1" y="1" width="7" height="7"/></svg>dashboard: the branches that build this page.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p2" x="1" y="1" width="7" height="7"/></svg>tooling: the branches that build the checks and the scripts.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p3" x="1" y="1" width="7" height="7"/></svg>other branches: plan changes, spec changes, docs and the rest.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p4" x="1" y="1" width="7" height="7"/></svg>stayed on main: sessions that never opened a branch.</span><span><svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><rect class="q p5" x="1" y="1" width="7" height="7"/></svg>hollow, not placed: a row counted before the parts were, on no Day's branch.</span></dd>
+        <dt>What it bought <small>upkeep and growth</small></dt>
+        <dd><span class="kt">Upkeep is re-reading: every reply reads the whole conversation again from the cache, whether or not anything is built. Growth is writing: what a reply adds to the conversation, and the replies themselves. Past 150k is the dollars of the replies that read more than 150k tokens, the part a fresh session would mostly spare. They are figures here and in each column's box, not colours.</span></dd>
       </dl>
       <p id="atp-round"></p>
       <p id="atp-split"></p>
-      <div class="tbl" id="atp-tbl-date"></div>
       <div class="tbl" id="atp-tbl-day"></div>
+      <div class="tbl" id="atp-tbl-date"></div>
       <p class="stamp" id="atp-stamp"></p>
     </details>
     <details class="exact"><summary>What the picture shows, and where the model bends</summary>
@@ -596,7 +602,7 @@
     <div id="atp-tip" hidden></div>
   </section>
 
-  <section class="graph" id="rng">
+<section class="graph" id="rng">
     <span class="anchor" id="g9"></span>
     <div class="graph-head">
       <p class="graph-n">Graph 9 · drawn as growth rings</p>

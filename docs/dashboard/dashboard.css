@@ -1199,13 +1199,24 @@ footer { font-size: 12.5px; color: var(--muted); }
 #prf #prf-tip .l{margin-top:4px}
 @media (prefers-reduced-motion:reduce){#prf .fig .d{transition:none}}
 
-/* Graph 8 as an energy budget: one bead per fixed number of dollars. Every rule is under #atp; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
-#atp{--atp-read:var(--code);--atp-write:var(--l1);--atp-out:var(--l7);--atp-main:var(--bar);--atp-aud:var(--l5);--atp-rater:var(--l4);--atp-impl:var(--l6);--atp-other:var(--l2);--shadow:rgba(14,17,22,.16)}
+/* Graph 8 as an energy budget: one bead per fixed number of dollars, coloured by where they went. Every rule is under #atp; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
+#atp{--atp-day:var(--l5);--atp-dash:var(--code);--atp-tool:var(--l4);--atp-other:var(--l7);--atp-main:var(--bar);--shadow:rgba(14,17,22,.16)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #atp{--shadow:rgba(0,0,0,.5)}}
 :root[data-theme="dark"] #atp{--shadow:rgba(0,0,0,.5)}
 
-/* the line of figures */
-#atp .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 26px;border-block:1px solid var(--line);padding:12px 0}
+/* the two bands of figures: where the dollars went, with its bar of shares, then what they bought */
+#atp .band{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+#atp .band>h3{font:500 11px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+#atp .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px 26px}
+#atp .band.quiet .figs .num{font-size:21px;color:var(--ink-2)}
+#atp .share{display:flex;gap:2px;height:12px}
+#atp .share i{display:block;border-radius:3px;min-width:2px}
+#atp .share .p0{background:var(--atp-day)}
+#atp .share .p1{background:var(--atp-dash)}
+#atp .share .p2{background:var(--atp-tool)}
+#atp .share .p3{background:var(--atp-other)}
+#atp .share .p4{background:var(--atp-main)}
+#atp .share .p5{background:var(--card);box-shadow:inset 0 0 0 1px var(--s3)}
 #atp .figs>div{min-width:0}
 #atp .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
 #atp .figs .num small{font:500 13px/1 var(--sans);color:var(--muted);margin-left:6px}
@@ -1224,33 +1235,28 @@ footer { font-size: 12.5px; color: var(--muted); }
 /* the compact legend */
 #atp .key{display:flex;flex-wrap:wrap;align-items:center;gap:5px 18px;margin:0;font-size:12.5px;color:var(--ink-2)}
 #atp .key span{display:inline-flex;align-items:center;gap:6px}
-#atp .key .by-kind,#atp .key .by-who{gap:5px 16px;flex-wrap:wrap}
 #atp .key b,#atp .lg b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-#atp .key .fam{font:500 11px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:-6px}
+#atp .key .avg .ln{width:20px;height:0;border-top:1.5px dashed var(--ink-2)}
+#atp[data-grp="date"] .key .avg{display:none}
 #atp .key svg,#atp .lg svg{flex:none;overflow:visible}
 #atp .key .sep{width:1px;height:14px;background:var(--line)}
 /* words and a figure in one run of text: not flex items, which the gap would split ("$2 , rounded") */
 #atp .key span.kt,#atp .lg dd>span.kt{display:inline}
 @media (max-width:640px){#atp .key .sep{display:none}}
-#atp[data-by="kind"] .by-who,#atp[data-by="who"] .by-kind{display:none}
 
-/* the beads: round is upkeep (or the main session), square is growth (or an agent) */
+/* the beads, coloured by where the dollars went; a row counted before the parts is hollow */
 #atp .q{stroke:none}
-#atp[data-by="kind"] .fig .kr,#atp svg:not(.fig) .kr{fill:var(--atp-read);rx:3.5px}
-#atp[data-by="kind"] .fig .kw,#atp svg:not(.fig) .kw{fill:var(--atp-write)}
-#atp[data-by="kind"] .fig .ko,#atp svg:not(.fig) .ko{fill:var(--atp-out)}
-#atp[data-by="kind"] .fig .ku,#atp svg:not(.fig) .ku{fill:var(--card);stroke:var(--s3);stroke-width:1.1;rx:3.5px}
-#atp[data-by="who"] .fig .wm,#atp svg:not(.fig) .wm{fill:var(--atp-main);rx:3.5px}
-#atp[data-by="who"] .fig .wa,#atp svg:not(.fig) .wa{fill:var(--atp-aud)}
-#atp[data-by="who"] .fig .wd,#atp svg:not(.fig) .wd{fill:var(--atp-rater)}
-#atp[data-by="who"] .fig .wi,#atp svg:not(.fig) .wi{fill:var(--atp-impl)}
-#atp[data-by="who"] .fig .wx,#atp svg:not(.fig) .wx{fill:var(--atp-other)}
-#atp .qn{fill:var(--s3);rx:3.5px}
-#atp .t-note{font:400 12px var(--sans);fill:var(--ink-2)}
-#atp .t-note .em{font-weight:600;fill:var(--ink)}
-#atp .rail{fill:url(#atp-hatch);stroke:var(--s3);stroke-width:.8}
-#atp .h-a{fill:var(--ink-2)}
-#atp .h-b{fill:var(--wash)}
+#atp .p0{fill:var(--atp-day)}
+#atp .p1{fill:var(--atp-dash)}
+#atp .p2{fill:var(--atp-tool)}
+#atp .p3{fill:var(--atp-other)}
+#atp .p4{fill:var(--atp-main)}
+#atp .p5{fill:var(--card);stroke:var(--s3);stroke-width:1.1}
+#atp .qn{fill:var(--s3)}
+#atp .avgl{stroke:var(--ink-2);stroke-width:1.2;stroke-dasharray:5 3;fill:none}
+#atp .t-avg{font:500 10.5px var(--mono);fill:var(--ink)}
+#atp .tags text{pointer-events:none;paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round;transition:opacity .15s}
+#atp .tags .mk-dim{opacity:.25}
 
 /* the figure */
 #atp .scroll{overflow-x:auto;min-width:0}

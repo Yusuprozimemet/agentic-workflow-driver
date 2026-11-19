@@ -1694,8 +1694,38 @@ def budget_data(absent=(), commit="abc"):
     }
 
 
+def parts_data():
+    """budget_data()'s five rows as token-usage.py places them, and four more on 3 Jan. The
+    auditor's row on main is Day 1's (its session worked on Day 1's branch), the main session's
+    with no price is the dashboard's; the new ones stayed on main, or were on a plan branch, a
+    tooling branch and Day 3's. Days 1 and 2 are closed, Day 3 is open."""
+    data = budget_data()
+    rows = data["tokens"]
+    placed = (("day", 1), ("day", 1), ("day", 2), ("dashboard", None), ("day", 2))
+    for row, (part, day) in zip(rows, placed):
+        row.update(part=part, part_day=day)
+    more = (("main", None, 1.5), ("plan", None, 0.5), ("tooling", None, 0.25), ("day", 3, 1.0))
+    rows += [
+        {
+            "date": "2026-01-03",
+            "day": day,
+            "agent": "main",
+            "model": "claude-opus-5-5",
+            "cost": cost,
+            "replies": 1,
+            "part": part,
+            "part_day": day,
+        }
+        for part, day, cost in more
+    ]
+    data["days"][1]["status"] = "done"
+    data["days"].append({"day": 3, "status": "active", "worked": ["2026-01-03", "2026-01-03"]})
+    return data
+
+
 class BudgetTest(unittest.TestCase):
-    """budget(): graph 8's dollars as beads of $2, split by kind and by who, by date and by Day."""
+    """budget(): graph 8's dollars as beads of $2, placed on the Days and on the parts between
+    them, by Day and by date."""
 
     def budget(self, data):
         return load("spec_drift_views", "spec_drift_views.py").budget(data)
@@ -1709,15 +1739,16 @@ class BudgetTest(unittest.TestCase):
         self.assertEqual([round(x, 2) for x in b["who"]], [4.21, 1.02, 2.0, 4.0, 0.0])
 
     def test_largest_remainder_keeps_the_whole_beads_and_each_column_within_one(self):
-        b = self.budget(budget_data())
-        self.assertEqual(b["beads"], 6)
-        for view in ("date", "day"):
-            cols = b["cols"][view]
-            self.assertEqual(sum(c["b"] for c in cols), 6, view)
-            self.assertEqual([c["label"] for c in cols if abs(c["b"] - c["u"] / 2) >= 1], [])
-            self.assertEqual([c["label"] for c in cols if sum(c["kb"]) != c["b"]], [])
-            self.assertEqual([c["label"] for c in cols if sum(c["wb"]) != c["b"]], [])
-        self.assertEqual([c["b"] for c in b["cols"]["date"]], [1, 4, 1])
+        for data, beads in ((budget_data(), 6), (parts_data(), 7)):
+            b = self.budget(data)
+            self.assertEqual(b["beads"], beads)
+            by_date = b["cols"]["date"]
+            by_day = b["cols"]["day"] + b["cols"]["between"]
+            for view, cols in (("date", by_date), ("day", by_day)):
+                self.assertEqual(sum(c["b"] for c in cols), beads, view)
+                self.assertEqual([c["label"] for c in cols if abs(c["b"] - c["u"] / 2) >= 1], [])
+            self.assertEqual([c["label"] for c in by_date if sum(c["pb"]) != c["b"]], [])
+        self.assertEqual([c["b"] for c in self.budget(budget_data())["cols"]["date"]], [1, 4, 1])
 
     def test_each_date_counts_the_calls_the_hooks_refused_and_the_outputs_cut(self):
         data = budget_data()
@@ -1738,10 +1769,60 @@ class BudgetTest(unittest.TestCase):
             ],
         )
 
-    def test_the_day_view_has_a_column_for_work_on_no_day(self):
-        cols = self.budget(budget_data())["cols"]["day"]
-        self.assertEqual([(c["day"], c["b"]) for c in cols], [(1, 1), (2, 3), (None, 2)])
-        self.assertEqual(round(cols[-1]["u"], 2), 4.02)
+    def test_a_row_counted_before_the_parts_is_its_days_or_is_not_placed(self):
+        cols = self.budget(budget_data())["cols"]
+        self.assertEqual([(c["day"], c["b"]) for c in cols["day"]], [(1, 1), (2, 3)])
+        rest = [(c["label"], c["b"], round(c["u"], 2)) for c in cols["between"]]
+        self.assertEqual(rest, [("not placed", 2, 4.02)])
+
+    def test_a_reply_on_main_counts_to_the_day_its_session_worked_on(self):
+        b = self.budget(parts_data())
+        got = [
+            (c["day"], round(c["u"], 2), round(c["own"], 2), round(c["home"], 2))
+            for c in b["cols"]["day"]
+        ]
+        self.assertEqual(got, [(1, 2.23, 1.21, 1.02), (2, 6.0, 6.0, 0.0), (3, 1.0, 1.0, 0.0)])
+        self.assertEqual([round(b[k], 2) for k in ("on_days", "own", "home")], [9.23, 8.21, 1.02])
+        self.assertEqual((b["on_days_pct"], b["between_pct"]), (64, 36))
+
+    def test_the_work_between_days_is_a_block_for_each_part(self):
+        b = self.budget(parts_data())
+        rest = b["cols"]["between"]
+        # short lists, one figure each: a failure prints whole, with nothing unittest shortens
+        self.assertEqual([c["b"] for c in rest], [1, 0, 0, 1])
+        self.assertEqual([round(c["u"], 2) for c in rest], [3.0, 0.25, 0.5, 1.5])
+        self.assertEqual([c["part"] for c in rest], [1, 2, 3, 4])
+        self.assertEqual([c["label"] for c in rest[:2]], ["dashboard", "tooling"])
+        self.assertEqual([c["label"] for c in rest[2:]], ["other branches", "stayed on main"])
+        self.assertEqual([round(x, 2) for x in b["parts"]], [9.23, 3.0, 0.25, 0.5, 1.5, 0])
+        self.assertEqual(b["part_pct"], [64, 21, 2, 3, 10, 0])
+        self.assertEqual(round(b["between"], 2), 5.25)
+
+    def test_the_average_day_is_the_mean_of_the_closed_days(self):
+        b = self.budget(parts_data())
+        self.assertEqual(
+            (round(b["mean"], 3), round(b["median"], 3), b["mean_over"]), (4.115, 4.115, 2)
+        )
+        self.assertEqual((b["cheap_day"], b["dear_day"]), (0, 1))
+        over = [c["over"] if c["over"] is None else round(c["over"], 3) for c in b["cols"]["day"]]
+        self.assertEqual(over, [-1.885, 1.885, None])
+        self.assertEqual(round(b["per_closed"], 2), 7.24)  # every dollar over the 2 closed Days
+        # with no Day closed there is no average, and no Day is over or under it
+        data = parts_data()
+        for day in data["days"]:
+            day["status"] = "active"
+        b = self.budget(data)
+        self.assertEqual(
+            (b["mean"], b["median"], b["mean_over"], b["dear_day"]), (None, None, 0, None)
+        )
+        self.assertEqual([c["over"] for c in b["cols"]["day"]], [None, None, None])
+
+    def test_a_dates_beads_are_shared_out_over_its_parts(self):
+        cols = self.budget(parts_data())["cols"]["date"]
+        self.assertEqual([c["b"] for c in cols], [1, 3, 3])
+        beads = [c["pb"] for c in cols]
+        self.assertEqual(beads, [[1, 0, 0, 0, 0, 0], [2, 1, 0, 0, 0, 0], [2, 0, 0, 0, 1, 0]])
+        self.assertEqual([round(x, 2) for x in cols[2]["pt"]], [3.0, 0, 0.25, 0.5, 1.5, 0])
 
     def test_the_rail_is_unknown_on_a_date_with_no_past_150k_figure(self):
         cols = self.budget(budget_data())["cols"]["date"]

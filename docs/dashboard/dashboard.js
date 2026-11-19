@@ -2818,15 +2818,15 @@ function prfDraw(P, get, onDay) {
   return fig;
 }
 
-/* Graph 8 as an energy budget, as the mockup at #228 draws it: one bead for each $2 of tokens at list prices, in a
-   column for each date or each Day. Counted in scripts/spec_drift_views.py (budget): every bead, dollar and share;
-   this lays them out and words them, and counts nothing. `get` finds an element by its id; `onDay` is the page's Day
-   buttons. Colours are in dashboard.css, under #atp. */
-const ATP_KIND = ["kr", "kw", "ko", "ku"], ATP_WHO = ["wm", "wa", "wd", "wi", "wx"];
-// The layout, from the mockup's coordinates. A bead is 6.6 px on a pitch of 8.6. The columns share the width from
-// x0 to x1, a step each, and are 3 px apart; in a column, the rail (4 px) and 3 px after it the beads, `per` to a row
-// (5 by date; by Day as many as fit), are centred. The tallest column's top row sits at y 24, its dollars 6 px over.
-const ATP_GEO = { pitch: 8.6, bead: 6.6, top: 24, date: { x0: 104, x1: 1192, per: 5 }, day: { x0: 4, x1: 1194, per: Infinity } };
+/* Graph 8 as an energy budget: one bead for each $2 of tokens at list prices, in a column for each Day beside the
+   work between Days, or in a column for each date, coloured by where the dollars went. Counted in
+   scripts/spec_drift_views.py (budget): every bead, dollar and share; this lays them out and words them, and counts
+   nothing. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #atp. */
+// The layout. A bead is 6.6 px on a pitch of 8.6. By date the columns share the width from x0 to x1, a step each and
+// 3 px apart, `per` beads to a row. By Day a column is `step` wide at most, `per` beads to a row, and the Days end at
+// x1 at the latest; the work between Days starts at bx0, each part's beads filled column by column as tall as the
+// tallest Day, to bx1 at the widest. The tallest column's top row sits at y `top`, its dollars 6 px over.
+const ATP_GEO = { pitch: 8.6, bead: 6.6, top: 30, date: { x0: 104, x1: 1192, per: 5 }, day: { x0: 8, x1: 590, step: 44, per: 3, bx0: 700, bx1: 1190 } };
 const atpDates = (a, b) => a === b ? shortDate(a) : a.slice(0, 7) === b.slice(0, 7) ? `${+a.slice(8, 10)} to ${shortDate(b)}` : `${shortDate(a)} to ${shortDate(b)}`;
 function atpDraw(B, get, onDay) {
   if (!B || B.empty) return null;  // without the dollars there are no beads: the section says why
@@ -2834,105 +2834,142 @@ function atpDraw(B, get, onDay) {
   const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
   const f = v => (+v).toFixed(1).replace(/\.0$/, "");
   const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many}`;
-  const pct = x => B.total ? Math.round(100 * x / B.total) : 0;
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const P = B.parts_named, PT = B.parts, days = B.cols.day, rest = B.cols.between;
   fig.replaceChildren();
-  const pat = el("pattern", { id: "atp-hatch", width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, el("defs", {}));
-  el("rect", { class: "h-b", width: 4, height: 4 }, null, pat);
-  el("rect", { class: "h-a", width: 1.8, height: 4 }, null, pat);
   const sayDays = c => c.days.length ? daySpan(c.days) : "no Day worked";
-  const colName = (v, c) => v === "date" ? shortDate(c.date) : c.day != null ? `Day ${c.day}` : "No Day";
-  const colSub = (v, c) => v === "date" ? sayDays(c) : c.day != null ? atpDates(c.dates[0], c.dates[1]) : n(c.n_dates, "date", "dates");
+  // `count` beads from the `from`th of a column, `per` to a row from the bottom up; `down`, `per` to a column instead
+  const beads = (b, cls, from, count, per, x, bottom, down) => { for (let j = from; j < from + count; j++)
+    el("rect", { class: `q ${cls}`, x: f(x + (down ? Math.floor(j / per) : j % per) * G.pitch), y: f(bottom - (down ? j % per : Math.floor(j / per)) * G.pitch), width: G.bead, height: G.bead, rx: 1.2 }, null, b); };
   const vb = {}, colEls = { date: [], day: [] };
-  ["date", "day"].forEach(v => {
-    const V = G[v], cols = B.cols[v], step = (V.x1 - V.x0) / Math.max(1, cols.length), w = step - 3;
-    const per = Math.max(1, Math.min(V.per, Math.floor((w - 6 - 7 - G.bead) / G.pitch) + 1));
+
+  // by Day: a column for each Day with the average closed Day as a line, and apart from them the work between Days
+  { const V = G.day, step = Math.min(V.step, (V.x1 - V.x0) / Math.max(1, days.length)), narrow = step < 40;
+    const per = Math.max(1, Math.min(V.per, Math.floor((step - 4 - G.bead) / G.pitch) + 1));
+    const wide = Math.floor((V.bx1 - V.bx0 - G.bead) / G.pitch) + 1, bn = rest.reduce((s, c) => s + c.b, 0);
+    // as tall as the tallest Day, or taller when the blocks would not fit: each starts a new column, half a pitch apart
+    const rows = Math.max(1, ...days.map(c => Math.ceil(c.b / per)), Math.ceil(bn / (wide - 2 * rest.length)));
+    const bottom = G.top + (rows - 1) * G.pitch, base = bottom + G.bead + 3.5, end = V.x0 + days.length * step;
+    const g = el("g", { class: "v v-day" });
+    if (days.length) el("path", { class: "base", d: `M${V.x0} ${f(base)}H${f(end)}` }, null, g);
+    days.forEach((c, i) => {
+      const hx = V.x0 + i * step, cx = hx + step / 2, tall = Math.max(1, Math.ceil(c.b / per));
+      const b = el("g", { class: "b col", tabindex: i ? -1 : 0, role: "img", "data-v": "day", "data-i": i, "aria-label": `Day ${c.day}, ${atpDates(c.dates[0], c.dates[1])}, ${money(c.u)}${c.closed ? "" : ", still open"}` }, null, g);
+      el("rect", { class: "hit", x: f(hx + 1), y: 2, width: f(step - 2), height: f(base + 20), rx: 5 }, null, b);
+      beads(b, "p0", 0, c.b, per, cx - ((per - 1) * G.pitch + G.bead) / 2, bottom);
+      el("text", { class: "t-col", x: f(cx), y: f(base + 15.5), "text-anchor": "middle" }, narrow ? String(c.day) : `Day ${c.day}`, b);
+      colEls.day.push({ b, c });
+    });
+    // the average closed Day on the Days' scale: a row of `per` beads is per times the unit
+    if (B.mean != null) { const ay = bottom + G.bead - B.mean / B.unit / per * G.pitch;
+      el("path", { class: "avgl", d: `M${V.x0} ${f(ay)}H${f(end + 6)}` }, null, g);
+      el("text", { class: "t-avg", x: f(end + 10), y: f(ay + 3.5) }, `average ${money(B.mean)}`, g); }
+    // each Day's dollars, drawn after the line so that it runs under them
+    const tags = el("g", { class: "tags", "aria-hidden": "true" }, null, g);
+    days.forEach((c, i) => { const cx = V.x0 + i * step + step / 2, tall = Math.max(1, Math.ceil(c.b / per));
+      colEls.day[i].t = el("text", { class: "t-usd", x: f(cx), y: f(bottom - (tall - 1) * G.pitch - 6), "text-anchor": "middle" }, narrow ? `$${Math.round(c.u)}` : money(c.u), tags); });
+    if (bn) { let col = 0, right = V.bx0;
+      rest.forEach((c, i) => { if (!c.b) return;
+        const x = V.bx0 + col * G.pitch, across = Math.ceil(c.b / rows);
+        const b = el("g", { class: "b col", tabindex: colEls.day.length ? -1 : 0, role: "img", "data-v": "day", "data-i": days.length + i, "aria-label": `Between Days, ${c.label}, ${money(c.u)}` }, null, g);
+        right = x + (across - 1) * G.pitch + G.bead;
+        el("rect", { class: "hit", x: f(x - 2), y: 2, width: f(right - x + 4), height: f(base + 1), rx: 3 }, null, b);
+        beads(b, "p" + c.part, 0, c.b, rows, x, bottom, true);
+        col += across + 0.5; colEls.day.push({ b, c }); });
+      el("path", { class: "base", d: `M${V.bx0} ${f(base)}H${f(right)}` }, null, g);
+      el("text", { class: "t-usd", x: V.bx0, y: f(bottom - (Math.min(rows, rest.find(c => c.b).b) - 1) * G.pitch - 6) }, money(B.between), g);
+      el("text", { class: "t-col", x: V.bx0, y: f(base + 15.5) }, "Between Days", g);
+      el("text", { class: "t-ref", x: V.bx0, y: f(base + 29.5) }, andList(rest.map(c => c.label)), g); }
+    vb.day = [1198, f(base + 38)]; }
+
+  // by date: a column for each date with a session, its beads coloured by part from the bottom up
+  { const V = G.date, cols = B.cols.date, step = (V.x1 - V.x0) / Math.max(1, cols.length), w = step - 3;
+    const per = Math.max(1, Math.min(V.per, Math.floor((w - 6 - G.bead) / G.pitch) + 1));
     const rows = c => Math.ceil(c.b / per), bottom = G.top + (Math.max(1, ...cols.map(rows)) - 1) * G.pitch;
-    const base = bottom + G.bead + 3.5, block = 7 + (per - 1) * G.pitch + G.bead;
-    const g = el("g", { class: `v v-${v}` });
+    const base = bottom + G.bead + 3.5, block = (per - 1) * G.pitch + G.bead;
+    const g = el("g", { class: "v v-date" });
     el("path", { class: "base", d: `M${V.x0} ${f(base)}H${V.x1}` }, null, g);
-    if (v === "date") { el("text", { class: "t-row", x: 92, y: f(base + 15.5), "text-anchor": "end" }, "date", g);
-      el("text", { class: "t-row", x: 92, y: f(base + 31.5), "text-anchor": "end" }, "hooks refused", g); }
+    el("text", { class: "t-row", x: 92, y: f(base + 15.5), "text-anchor": "end" }, "date", g);
+    el("text", { class: "t-row", x: 92, y: f(base + 31.5), "text-anchor": "end" }, "hooks refused", g);
     cols.forEach((c, i) => {
       const hx = V.x0 + 1.5 + i * step, bx = hx + (w - block) / 2, cx = hx + w / 2;
-      const b = el("g", { class: "b col", tabindex: i ? -1 : 0, role: "img", "data-v": v, "data-i": i, "aria-label": `${colName(v, c)}, ${colSub(v, c)}, ${money(c.u)}` }, null, g);
+      const b = el("g", { class: "b col", tabindex: i ? -1 : 0, role: "img", "data-v": "date", "data-i": i, "aria-label": `${shortDate(c.date)}, ${sayDays(c)}, ${money(c.u)}` }, null, g);
       el("rect", { class: "hit", x: f(hx), y: 2, width: f(w), height: f(base + 36.5), rx: 5 }, null, b);
-      // the rail: the dollars past 150k on the bead scale, a row of `per` beads to 8.6 px
-      if (c.p) { const ht = c.p / B.unit / per * G.pitch; el("rect", { class: "rail", x: f(bx), y: f(bottom + G.bead - ht), width: 4, height: f(ht), rx: 1 }, null, b); }
-      const kinds = c.kb.flatMap((k, j) => Array(k).fill(ATP_KIND[j])), whos = c.wb.flatMap((k, j) => Array(k).fill(ATP_WHO[j]));
-      for (let j = 0; j < c.b; j++)
-        el("rect", { class: `q ${kinds[j]} ${whos[j]}`, x: f(bx + 7 + (j % per) * G.pitch), y: f(bottom - Math.floor(j / per) * G.pitch), width: G.bead, height: G.bead, rx: 1.2 }, null, b);
+      let at = 0;
+      c.pb.forEach((k, j) => { beads(b, "p" + j, at, k, per, bx, bottom); at += k; });
       el("text", { class: "t-usd", x: f(cx), y: f(bottom - (Math.max(1, rows(c)) - 1) * G.pitch - 6), "text-anchor": "middle" }, money(c.u), b);
-      el("text", { class: "t-col", x: f(cx), y: f(base + 15.5), "text-anchor": "middle" }, colName(v, c), b);
-      el("text", { class: "t-ref", x: f(cx), y: f(base + (v === "date" ? 31.5 : 30.5)), "text-anchor": "middle" }, v === "date" ? comma(c.refused) : colSub(v, c), b);
-      colEls[v].push({ b, c });
+      el("text", { class: "t-col", x: f(cx), y: f(base + 15.5), "text-anchor": "middle" }, shortDate(c.date), b);
+      el("text", { class: "t-ref", x: f(cx), y: f(base + 31.5), "text-anchor": "middle" }, comma(c.refused), b);
+      colEls.date.push({ b, c });
     });
-    if (v === "date") {
-      el("text", { class: "t-row", x: 92, y: f(base + 53.5), "text-anchor": "end" }, "Day worked on", g);
-      const pg = el("g", { "aria-hidden": "true" }, null, g);
-      B.pills.forEach(p => { const x = V.x0 + 1.5 + p.from * step + 3.5, y = base + 43.5 + 16 * p.lane, pw = (p.to - p.from + 1) * step - 10;
-        el("rect", { class: "pill", x: f(x), y: f(y), width: f(pw), height: 13, rx: 6.5 }, null, pg);
-        el("text", { class: "t-pill", x: f(x + pw / 2), y: f(y + 10), "text-anchor": "middle" }, `Day ${p.day}`, pg); });
-      vb.date = [1198, f(base + 43.5 + 16 * Math.max(1, B.lanes) + 2.8)];
-    } else {
-      vb.day = [1198, f(base + 41.3)];
-      if (cols.some(c => c.day == null)) {
-        const t = el("text", { class: "t-note", x: 12, y: 34 }, null, g);
-        el("tspan", { class: "em" }, `${money(B.no_day)} of ${money(B.total)} (${B.no_day_pct}%) was spent on no Day’s branch.`, t);
-        el("tspan", { x: 12, dy: 17 }, "A session belongs to a Day by the branch it worked on. A Day’s audits and the steps", t);
-        el("tspan", { x: 12, dy: 16 }, `after a merge run on main, so ${B.no_day_pct}% is the most the outside share can be, not its exact size.`, t);
-      }
-    }
-  });
-  const grp = () => root.getAttribute("data-grp") === "day" ? "day" : "date";
+    el("text", { class: "t-row", x: 92, y: f(base + 53.5), "text-anchor": "end" }, "Day worked on", g);
+    const pg = el("g", { "aria-hidden": "true" }, null, g);
+    B.pills.forEach(p => { const x = V.x0 + 1.5 + p.from * step + 3.5, y = base + 43.5 + 16 * p.lane, pw = (p.to - p.from + 1) * step - 10;
+      el("rect", { class: "pill", x: f(x), y: f(y), width: f(pw), height: 13, rx: 6.5 }, null, pg);
+      el("text", { class: "t-pill", x: f(x + pw / 2), y: f(y + 10), "text-anchor": "middle" }, `Day ${p.day}`, pg); });
+    vb.date = [1198, f(base + 43.5 + 16 * Math.max(1, B.lanes) + 2.8)]; }
+  const grp = () => root.getAttribute("data-grp") === "date" ? "date" : "day";
   const frame = v => { fig.setAttribute("viewBox", `0 0 ${vb[v][0]} ${vb[v][1]}`);
-    fig.setAttribute("aria-label", `One column of beads for each ${v === "day" ? "Day, and one for work on no Day" : "date with a session"}, one bead for each $${B.unit} of tokens at list prices`); };
+    fig.setAttribute("aria-label", (v === "day" ? "One column of beads for each Day with the average closed Day as a line, and beside them the work between Days, a block for each part"
+      : "One column of beads for each date with a session, coloured by where the dollars went") + `; one bead for each $${B.unit} of tokens at list prices`); };
   frame(grp());
 
-  // the line of figures and the short key
+  // the figures: where the dollars went, then what they bought
   const fig4 = (num, small, what, sub) => h("div", null, h("div", { class: "num" }, num, small && h("small", null, small)), h("div", { class: "what" }, what), h("p", { class: "sub" }, sub));
-  const K = B.kinds, W = B.who;
+  const K = B.kinds, W = B.who, low = days[B.cheap_day], high = days[B.dear_day];
   $("figs").replaceChildren(
-    fig4(money(B.total), null, "of tokens at list prices", `Not a bill: the maintainer pays a flat subscription. ${n(B.dates, "date", "dates")}, ${n(B.replies, "reply", "replies")}.`),
-    B.closed ? fig4(money(B.per_closed), null, "for each closed Day", `All sessions over ${n(B.closed, "closed Day", "closed Days")}` + (B.built ? `, or ${money(B.per_built)} for each of the ${n(B.built, "promise", "promises")} built.` : "."))
-      : fig4("–", null, "for each closed Day", "No Day is closed yet."),
+    B.mean != null ? fig4(money(B.mean), null, "for a Day, on average", `Over ${n(B.mean_over, "closed Day", "closed Days")}`
+      + (B.mean_over < B.closed ? `; ${n(B.closed - B.mean_over, "more has", "more have")} no token row` : "")
+      + `. Half of them cost ${money(B.median)} or less. Day ${low.day} cost the least (${money(low.u)}), Day ${high.day} the most (${money(high.u)}).`)
+      : fig4("–", null, "for a Day, on average", "No Day with a token row is closed yet."),
+    fig4(money(B.on_days), `${B.on_days_pct}%`, "on the Days", `The spec, the tracks and the close of each Day: ${money(B.own)} on the Days’ own branches and ${money(B.home)} in their sessions’ replies on main.`
+      + (B.built ? ` ${money(B.days_per_built)} for each of the ${n(B.built, "promise", "promises")} built.` : "")),
+    fig4(money(B.between), `${B.between_pct}%`, "between the Days", rest.length ? `${cap(andList(rest.map(c => `${c.label} ${money(c.u)}`)))}.` : "Nothing was spent between Days."),
+    fig4(money(B.total), null, "of tokens at list prices", `Not a bill: the maintainer pays a flat subscription. ${n(B.dates, "date", "dates")}, ${n(B.replies, "reply", "replies")}.`
+      + (B.closed ? ` Shared over the ${n(B.closed, "closed Day", "closed Days")}, it is ${money(B.per_closed)} each.` : "")));
+  const share = $("share");
+  share.replaceChildren(...PT.map((v, i) => v ? h("i", { class: "p" + i, style: `flex:${(100 * v / B.total).toFixed(2)} 0 0` }) : null).filter(Boolean));
+  share.setAttribute("aria-label", PT.map((v, i) => v ? `${B.part_pct[i]}% ${P[i]}` : null).filter(Boolean).join(", "));
+  $("bought").replaceChildren(
     fig4(`${B.kind_pct[0]}%`, "upkeep", "re-reading the conversation", `${money(K[0])}. Writing context took ${B.kind_pct[1]}%, writing output ${B.kind_pct[2]}%.` + (K[3] ? ` ${money(K[3])} could not be split.` : "")),
     B.past != null ? fig4(`${B.past_pct}%`, "past 150k", "spent in replies that read over 150k tokens", `${money(B.past)}, of which ${money(B.past_main || 0)} in the main session. A fresh session would spare most of it.`
       + (B.past_unknown ? ` ${n(B.past_unknown, "row has", "rows have")} no such figure, and ${B.past_unknown === 1 ? "is" : "are"} left out.` : ""))
       : fig4("–", "past 150k", "spent in replies that read over 150k tokens", "No row has that figure yet."));
+  // the short key: a bead, each part with its dollars, and the line at the average
   const sw = cls => { const s = document.createElementNS(SVG_NS, "svg"); [["width", 9], ["height", 9], ["viewBox", "0 0 9 9"], ["aria-hidden", "true"]].forEach(([k, v]) => s.setAttribute(k, v));
     const r = document.createElementNS(SVG_NS, "rect"); [["class", `q ${cls}`], ["x", 1], ["y", 1], ["width", 7], ["height", 7]].forEach(([k, v]) => r.setAttribute(k, v)); s.appendChild(r); return s; };
-  const railIcon = () => { const s = document.createElementNS(SVG_NS, "svg"); [["width", 6], ["height", 14], ["viewBox", "0 0 6 14"], ["aria-hidden", "true"]].forEach(([k, v]) => s.setAttribute(k, v));
-    const r = document.createElementNS(SVG_NS, "rect"); [["class", "rail"], ["x", 1], ["y", 0.5], ["width", 4], ["height", 13], ["rx", 1]].forEach(([k, v]) => r.setAttribute(k, v)); s.appendChild(r); return s; };
   const item = (cls, word, v) => h("span", null, sw(cls), `${word} `, h("b", null, money(v)));
-  $("key").replaceChildren(h("span", null, sw("qn"), h("span", { class: "kt" }, "one bead is ", h("b", null, `$${B.unit}`), ", rounded")), h("i", { class: "sep" }),
-    h("span", { class: "by-kind" }, h("span", { class: "fam" }, "Upkeep"), item("kr", B.kinds_named[0], K[0]), h("span", { class: "fam" }, "Growth"),
-      item("kw", B.kinds_named[1], K[1]), item("ko", B.kinds_named[2], K[2]), K[3] ? item("ku", B.kinds_named[3], K[3]) : null),
-    h("span", { class: "by-who" }, ...B.who_named.map((w, i) => W[i] ? item(ATP_WHO[i], w, W[i]) : null)), h("i", { class: "sep" }),
-    B.past != null ? h("span", null, railIcon(), "in replies past 150k tokens ", h("b", null, money(B.past))) : null);
+  $("key").replaceChildren(...[h("span", null, sw("qn"), h("span", { class: "kt" }, "one bead is ", h("b", null, `$${B.unit}`), ", rounded")), h("i", { class: "sep" }),
+    ...PT.map((v, i) => v ? item("p" + i, P[i], v) : null),
+    B.mean != null ? h("span", { class: "avg" }, h("i", { class: "ln" }), "the average closed Day ", h("b", null, money(B.mean))) : null].filter(Boolean));
 
   // the folded text: how the beads are rounded and the dollars split, the two tables and the stamp
   $("k-beads").textContent = comma(B.beads);
-  $("round").textContent = `${n(B.beads, "bead", "beads")} of ${money(B.unit)} make ${money(B.beads * B.unit)}; the data says ${money(B.total)}. The whole beads go to the columns by largest remainder, so the picture always holds ${comma(B.beads)} beads, by date and by Day; the furthest a date’s column is from its dollars is ${B.furthest} of a bead. The colours inside a column are shared out over its beads the same way, so a colour worth less than half a bead in a column may have none there. The figure over a column is its exact dollars.`;
+  $("round").textContent = `${n(B.beads, "bead", "beads")} of ${money(B.unit)} make ${money(B.beads * B.unit)}; the data says ${money(B.total)}. The whole beads go to the columns by largest remainder, so the picture always holds ${comma(B.beads)} beads, by Day and by date; the furthest a date’s column is from its dollars is ${B.furthest} of a bead. The colours inside a date’s column are shared out over its beads the same way, so a part worth less than half a bead on a date may have none there. The figure over a column is its exact dollars.`;
   const U = B.unsplit, S = B.split;
-  $("split").textContent = `The split by kind uses the list prices in scripts/token-usage.py, checked ${B.prices_checked}. A row is split only when its cost, worked out again from its tokens, is within 1% of the cost in the data: ${S.rows} of ${S.rows + U.rows} rows are (${money(S.dollars)}${S.off != null ? `; the furthest is ${S.off}% off` : ""}), with the main session’s cache writes at the one-hour price and an agent’s at the five-minute price.`
-    + (U.rows ? ` The other ${n(U.rows, "row", "rows")} (${money(U.dollars)}; ${U.models.join(", ")}) ${U.rows === 1 ? "is" : "are"} not: a price set reply by reply, as for a long prompt, or a model not in the list, cannot be worked out again from sums. They are the hollow beads.` : "");
+  $("split").textContent = `What the dollars bought is worked out from the list prices in scripts/token-usage.py, checked ${B.prices_checked}. A row is split only when its cost, worked out again from its tokens, is within 1% of the cost in the data: ${S.rows} of ${S.rows + U.rows} rows are (${money(S.dollars)}${S.off != null ? `; the furthest is ${S.off}% off` : ""}), with the main session’s cache writes at the one-hour price and an agent’s at the five-minute price.`
+    + (U.rows ? ` The other ${n(U.rows, "row", "rows")} (${money(U.dollars)}; ${U.models.join(", ")}) ${U.rows === 1 ? "is" : "are"} not: a price set reply by reply, as for a long prompt, or a model not in the list, cannot be worked out again from sums.` : "");
   const td = v => h("td", { class: "r" }, v), dollars = x => x == null ? "" : (+x).toFixed(2);
   const tableOf = (head, rows, all) => h("table", null, h("tr", null, head.map(x => h("th", null, x))), rows, all);
   const KH = ["Re-reading", "Writing context", "Writing output", "Not split"], WH = ["Main session", "Auditors", "Defect-rater", "Implementer", "Other agents"];
-  const DC = B.cols.date;
-  $("tbl-date").replaceChildren(tableOf(["Date", "Days", "Dollars", "Beads", ...KH, "Past 150k", "Past 150k, main", ...WH, "Replies", "Calls refused", "Outputs cut"],
-    DC.map(c => h("tr", null, h("td", null, shortDate(c.date)), h("td", null, c.days.join(", ")), td(dollars(c.u)), td(c.b), c.k.map(x => td(dollars(x))), td(dollars(c.p)), td(dollars(c.pm)),
+  const DC = B.cols.date, drawn = PT.map((v, i) => v ? i : null).filter(i => i != null);
+  $("tbl-date").replaceChildren(tableOf(["Date", "Days", "Dollars", "Beads", ...drawn.map(i => cap(P[i])), ...KH, "Past 150k", "Past 150k, main", ...WH, "Replies", "Calls refused", "Outputs cut"],
+    DC.map(c => h("tr", null, h("td", null, shortDate(c.date)), h("td", null, c.days.join(", ")), td(dollars(c.u)), td(c.b), drawn.map(i => td(dollars(c.pt[i]))), c.k.map(x => td(dollars(x))), td(dollars(c.p)), td(dollars(c.pm)),
       c.w.map(x => td(dollars(x))), td(comma(c.rp)), td(c.refused), td(c.cut))),
-    h("tr", null, h("th", null, "All"), h("td", null, ""), td(dollars(B.total)), td(B.beads), K.map(x => td(dollars(x))), td(dollars(B.past)), td(dollars(B.past_main)),
+    h("tr", null, h("th", null, "All"), h("td", null, ""), td(dollars(B.total)), td(B.beads), drawn.map(i => td(dollars(PT[i]))), K.map(x => td(dollars(x))), td(dollars(B.past)), td(dollars(B.past_main)),
       W.map(x => td(dollars(x))), td(comma(B.replies)), td(B.refused), td(B.cut))));
-  $("tbl-day").replaceChildren(tableOf(["Day", "Dates with a session on its branch", "Dollars", "Beads", ...KH, "Past 150k", ...WH, "Replies"],
-    B.cols.day.map(c => h("tr", null, h("td", null, colName("day", c)), h("td", null, colSub("day", c)), td(dollars(c.u)), td(c.b), c.k.map(x => td(dollars(x))), td(dollars(c.p)),
-      c.w.map(x => td(dollars(x))), td(comma(c.rp))))));
+  const row = (name, when, c, day) => h("tr", null, h("td", null, name), h("td", null, when), td(dollars(c.u)), td(day ? dollars(c.own) : ""), td(day ? dollars(c.home) : ""), td(c.b),
+    c.k.map(x => td(dollars(x))), td(dollars(c.p)), c.w.map(x => td(dollars(x))), td(comma(c.rp)));
+  $("tbl-day").replaceChildren(tableOf(["Day or part", "Dates with a session", "Dollars", "On its own branch", "On main", "Beads", ...KH, "Past 150k", ...WH, "Replies"],
+    [...days.map(c => row(`Day ${c.day}${c.closed ? "" : " (open)"}`, atpDates(c.dates[0], c.dates[1]), c, true)), ...rest.map(c => row(`Between Days: ${c.label}`, n(c.n_dates, "date", "dates"), c, false))]));
   $("stamp").textContent = `Drawn from the page’s data at ${B.head || "?"}${B.last_pr ? ` (#${B.last_pr})` : ""}, generated ${B.generated}`;
 
   // what the picture shows, and where the model bends
   const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
   const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
+  if (B.mean != null) li(finds, `A closed Day cost ${money(B.mean)} on average.`, ` Half of the ${n(B.mean_over, "closed Day", "closed Days")} cost ${money(B.median)} or less; Day ${low.day} cost the least (${money(low.u)}) and Day ${high.day} the most (${money(high.u)}).`);
+  li(finds, `The Days took ${B.on_days_pct}%`, `: ${money(B.on_days)} of ${money(B.total)}, ${money(B.own)} of it on the Days’ own branches and ${money(B.home)} in their sessions’ replies on main.`);
+  li(finds, `${B.between_pct}% went between the Days`, rest.length ? `: ${andList(rest.map(c => `${c.label} ${money(c.u)} (${B.part_pct[c.part]}%)`))}.` : ".");
   li(finds, `Upkeep is ${B.read_tokens_pct}% of the tokens and ${B.kind_pct[0]}% of the dollars.`, ` Re-reading cost ${money(K[0])} of ${money(B.total)}.`
     + (B.write_over_read ? ` At list prices a token written to the main session’s cache costs ${B.write_over_read} times a token read from it (${B.main_model}: $${B.write_price} against $${B.read_price.toFixed(2)} a million).` : ""));
   li(finds, `Growth is ${B.kind_pct[1] + B.kind_pct[2]}%.`, ` Writing new context cost ${money(K[1])} and writing output ${money(K[2])}.` + (U.rows ? ` ${n(U.rows, "row", "rows")} (${money(U.dollars)}) could not be split.` : ""));
@@ -2940,31 +2977,32 @@ function atpDraw(B, get, onDay) {
     li(finds, `${money(B.past)} was spent in replies past 150k tokens`, `, ${B.past_pct}% of everything: ${money(B.past_main || 0)} in the main session and ${money(B.past - (B.past_main || 0))} in agents.`
       + (top && top.p ? ` ${shortDate(top.date)} has the largest share, ${money(top.p)} of its ${money(top.u)}.` : "")); }
   const agents = ["the auditors", "the defect-rater", "the implementer", "other agents"].map((w, i) => [w, W[i + 1]]).filter(x => x[1]);
-  li(finds, `The main session spent ${B.who_pct[0]}%`, ` (${money(W[0])}).` + (agents.length ? ` ${agents.map(([w, v], i) => `${i ? w : `${w.charAt(0).toUpperCase()}${w.slice(1)} spent`} ${money(v)}`).join(", ")}.` : " No agent spent anything."));
+  li(finds, `The main session spent ${B.who_pct[0]}%`, ` (${money(W[0])}).` + (agents.length ? ` ${agents.map(([w, v], i) => `${i ? w : `${cap(w)} spent`} ${money(v)}`).join(", ")}.` : " No agent spent anything."));
   const dear = DC[B.dear], cheap = DC[B.cheap];
   li(finds, `${shortDate(dear.date)} was the dearest date`, ` (${money(dear.u)}${dear.days.length ? `, ${daySpan(dear.days)}` : ""}) and ${shortDate(cheap.date)} the cheapest (${money(cheap.u)}).`);
-  const own = B.cols.day.filter(c => c.day != null);
-  li(finds, `${B.no_day_pct}% was spent on no Day’s branch`, `: ${money(B.no_day)} of ${money(B.total)}. A Day’s audits and the steps after a merge run on main, so this is the most the share can be.`
-    + (own.length ? ` ${colName("day", own[B.dear_day])} cost the most on its own branch (${money(own[B.dear_day].u)}) and ${colName("day", own[B.cheap_day])} the least (${money(own[B.cheap_day].u)}).` : ""));
   const most = DC[B.most_refused];
   li(finds, `The hooks refused ${n(B.refused, "call", "calls")}`, (B.guards.length ? ` (${B.guards.map(([g, k]) => `${comma(k)} by the ${g}`).join(", ")})` : "") + ` and cut ${n(B.cut, "long output", "long outputs")}.`
     + (most && most.refused ? ` ${shortDate(most.date)} had the most refusals, ${comma(most.refused)}.` : ""));
   if (B.driver) li(finds, "The driver’s own runs are not in these beads.", ` Its run log counts ${n(B.driver.sessions, "session", "sessions")} over ${n(B.driver.steps, "step", "steps")}, ${money(B.driver.cost)}, on the project it drove.`);
-  [["An organism cannot choose its basal rate.", " Here a fresh session lowers it: the hatched rail is what the replies past 150k tokens cost, and one session for each step is meant to spare it."],
+  [["A session has one home.", " A reply on a branch counts to that branch. A reply on main counts to the branch its session spent the most on, so a session that audited a Day and then built the dashboard counts its audit as dashboard."],
+    ["Stayed on main is not idle.", " A session that never left main read, audited, answered or ran the steps after a merge. Which Day it served is not known, so it stands between the Days."],
+    ["An open Day is not in the average.", " Its dollars are still moving. It has a column, and the average waits for its close."],
     ["List prices are not the bill.", " The maintainer pays a flat subscription. The beads measure use on the pay-per-token price list, for this repository’s sessions only, counted on the maintainer’s computer."],
-    ["The rail is not a part of the upkeep.", ` The data gives the dollars past 150k for whole replies: reading, writing and output together.${B.rail_over ? ` In ${n(B.rail_over, "row", "rows")} it is larger than the row’s re-reading.` : ""} So it stands beside the beads and is not a colour among them.`],
     ["Upkeep is not waste.", " A cell that stops its upkeep dies. A reply that does not read the conversation does not know the work. Only the part a shorter conversation would not have read is avoidable."],
     ["Growth is not all tissue.", " Writing context and output includes the attempts that failed and the checks that passed. The beads count dollars, not what was built."],
-    ["A bead is not a molecule.", ` It is ${money(B.unit)}, rounded: a column or a colour can be up to about one bead from its exact dollars, and a colour worth less than half a bead in a column may have none there.`]].forEach(([b, t]) => li(bends, b, t));
+    ["A bead is not a molecule.", ` It is ${money(B.unit)}, rounded: a column or a part can be up to about one bead from its exact dollars, and a part worth less than half a bead on a date may have none there.`]].forEach(([b, t]) => li(bends, b, t));
 
   // what the pointer says
   const parts = (names, vals) => names.map((x, i) => vals[i] ? `${x} ${money(vals[i])}` : null).filter(Boolean).join(", ") || "nothing";
-  const say = (v, i) => { const c = (B.cols[v] || [])[+i]; if (!c) return null;
-    const l = [`What it bought: ${parts(B.kinds_named, c.k)}.`, `Who spent it: ${parts(B.who_named, c.w)}.`,
-      c.p == null ? "No row has a figure for the replies that read over 150k tokens." : c.p ? `${money(c.p)} of it in replies that read over 150k tokens` + (c.pm != null && c.pm >= c.p ? ", all in the main session." : c.pm ? `, ${money(c.pm)} of that in the main session.` : ", none of that in the main session.") : "Nothing in replies that read over 150k tokens."];
-    if (v === "date") l.push(`${n(c.rp, "reply", "replies")}. The hooks refused ${n(c.refused, "call", "calls")}${c.rf.length ? ` (${c.rf.map(([g, k]) => `${k} by the ${g}`).join(", ")})` : ""}.`, `${money(c.nd)} of it on no Day’s branch.`);
-    else l.push(`${n(c.rp, "reply", "replies")}. Refusals are counted by date, so a Day has none of its own.`);
-    return { t: `${colName(v, c)} · ${colSub(v, c)} · ${money(c.u)}`, l, q: `${n(c.b, "bead", "beads")} of ${money(B.unit)} make ${money(c.b * B.unit)}; the exact figure is ${money(c.u)}.` }; };
+  const past = c => c.p == null ? "No row has a figure for the replies that read over 150k tokens." : c.p ? `${money(c.p)} of it in replies that read over 150k tokens` + (c.pm != null && c.pm >= c.p ? ", all in the main session." : c.pm ? `, ${money(c.pm)} of that in the main session.` : ", none of that in the main session.") : "Nothing in replies that read over 150k tokens.";
+  const say = (v, i) => { const date = v === "date", c = date ? B.cols.date[+i] : days[+i] || rest[+i - days.length]; if (!c) return null;
+    const l = [`What it bought: ${parts(B.kinds_named, c.k)}.`, `Who spent it: ${parts(B.who_named, c.w)}.`, past(c)];
+    const q = `${n(c.b, "bead", "beads")} of ${money(B.unit)} make ${money(c.b * B.unit)}; the exact figure is ${money(c.u)}.`;
+    if (date) return { t: `${shortDate(c.date)} · ${sayDays(c)} · ${money(c.u)}`, q, l: [`Where it went: ${parts(P, c.pt)}.`, ...l,
+      `${n(c.rp, "reply", "replies")}. The hooks refused ${n(c.refused, "call", "calls")}${c.rf.length ? ` (${c.rf.map(([g, k]) => `${k} by the ${g}`).join(", ")})` : ""}.`] };
+    if (c.day != null) return { t: `Day ${c.day} · ${atpDates(c.dates[0], c.dates[1])} · ${money(c.u)}`, q, l: [`${money(c.own)} on its own branch, ${money(c.home)} in its sessions’ replies on main.`,
+      c.over == null ? "Still open: not in the average." : `${money(Math.abs(c.over))} ${c.over >= 0 ? "over" : "under"} the average closed Day.`, ...l, `${n(c.rp, "reply", "replies")}.`] };
+    return { t: `Between Days · ${c.label} · ${money(c.u)}`, q, l: [`${B.part_pct[c.part]}% of everything, on ${n(c.n_dates, "date", "dates")}.`, ...l, `${n(c.rp, "reply", "replies")}.`] }; };
   pointerBox(fig, tip, key => { const d = key && say(...key.split("|")); return d ? tipFill(tip, d) : false; }, b => `${b.getAttribute("data-v")}|${b.getAttribute("data-i")}`);
   // one Tab stop for the columns; the arrow keys walk along them
   fig.addEventListener("keydown", e => { const cur = e.target && e.target.closest ? e.target.closest(".col") : null; if (!cur) return;
@@ -2973,15 +3011,15 @@ function atpDraw(B, get, onDay) {
     if (j == null) return;
     e.preventDefault(); const k = Math.max(0, Math.min(all.length - 1, j));
     if (k !== i) { cur.setAttribute("tabindex", "-1"); all[k].setAttribute("tabindex", "0"); all[k].focus(); } });
-  // the two controls: the colour of the beads, and what a column is
+  // the control: what a column is
   $("ctl").addEventListener("click", e => { const b = e.target && e.target.closest ? e.target.closest("button[data-set]") : null; if (!b) return;
     b.parentNode.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
     root.setAttribute(`data-${b.getAttribute("data-set")}`, b.getAttribute("data-val"));
-    if (b.getAttribute("data-set") === "grp") frame(b.getAttribute("data-val"));
+    frame(grp());
     tip.hidden = true; });
-  // the page's Day buttons dim every column not on that Day
+  // the page's Day buttons dim every column not on that Day, and the work between Days with them
   onDay.push(day => { colEls.date.forEach(x => x.b.classList.toggle("mk-dim", day != null && !x.c.days.includes(day)));
-    colEls.day.forEach(x => x.b.classList.toggle("mk-dim", day != null && x.c.day !== day)); });
+    colEls.day.forEach(x => [x.b, x.t].forEach(e => e && e.classList.toggle("mk-dim", day != null && x.c.day !== day))); });
   return fig;
 }
 

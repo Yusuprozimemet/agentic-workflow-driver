@@ -1132,7 +1132,8 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   fold.tagName = "DETAILS"; inner.tagName = "DIV"; target.tagName = "DIV"; inner.parentNode = fold; target.parentNode = inner;
   openFolds(target);
   ({ atp: { drew: drew("atp"), error: M.atp.error || null, cols: is(a, ["b", "col"]), beads: is(a, ["q"]), rails: is(a, ["rail"]), pills: is(a, ["pill"]),
-            words: [a, $("atp-figs"), $("atp-key"), $("atp-finds"), $("atp-round"), $("atp-split")].map(words).join(" ").replace(/\\s+/g, " ") },
+            parts: [0, 1, 2, 3, 4, 5].map(i => is(a, ["q", "p" + i])), avg: is(a, ["avgl"]), share: $("atp-share").kids.map(k => k.attrs.class),
+            words: [a, $("atp-figs"), $("atp-bought"), $("atp-key"), $("atp-finds"), $("atp-round"), $("atp-split")].map(words).join(" ").replace(/\\s+/g, " ") },
      rng: { drew: drew("rng"), error: M.rng.error || null, days: keyed(r, /^d\\d+$/), outside: keyed(r, /^o\\d+$/), sides: keyed(r, /^(all|out)$/),
             hatched: is(r, ["b", "out"]), leads: is(r, ["lead"]), words: [r, $("rng-figs"), $("rng-finds")].map(words).join(" ").replace(/\\s+/g, " ") },
      missing: M.head.missing, onDay: days.length, fold: [fold.open, !!target.scrolled] })`, ctx)));
@@ -1180,17 +1181,38 @@ def demo_data():
 class CostAndRingsPageTest(unittest.TestCase):
     """Graph 8 as an energy budget and graph 9 as growth rings, drawn by the page."""
 
-    def test_the_budget_draws_a_column_for_each_date_and_each_day_and_every_bead_in_both(self):
+    def test_the_budget_draws_a_column_for_each_day_a_block_for_each_part_between_them_and_a_column_for_each_date(self):
         data = demo_data()
         B, out = data["budget"], node(ATP_RNG, data)
-        self.assertEqual((out["atp"]["drew"], out["atp"]["error"]), (True, None))
-        self.assertEqual(out["atp"]["cols"], len(B["cols"]["date"]) + len(B["cols"]["day"]))
-        self.assertEqual(out["atp"]["beads"], 2 * B["beads"])
-        self.assertEqual(out["atp"]["rails"], sum(1 for v in ("date", "day") for c in B["cols"][v] if c["p"]))
-        self.assertEqual(out["atp"]["pills"], len(B["pills"]))
-        self.assertIn("one bead is $2 , rounded", out["atp"]["words"])
-        self.assertIn("of tokens at list prices Not a bill", out["atp"]["words"])
+        cols, atp = B["cols"], out["atp"]
+        blocks = [c for c in cols["between"] if c["b"]]
+        self.assertEqual((atp["drew"], atp["error"]), (True, None))
+        self.assertEqual([c["label"] for c in blocks], ["dashboard", "tooling", "stayed on main"])
+        self.assertEqual(atp["cols"], len(cols["date"]) + len(cols["day"]) + len(blocks))
+        self.assertEqual(atp["beads"], 2 * B["beads"])
+        # each part's beads: a Day's column and a block by Day, and its share of each date's column
+        by_day = [sum(c["b"] for c in cols["day"])] + [sum(c["b"] for c in blocks if c["part"] == i) for i in range(1, 6)]
+        self.assertEqual(atp["parts"], [by_day[i] + sum(c["pb"][i] for c in cols["date"]) for i in range(6)])
+        self.assertEqual((atp["rails"], atp["avg"]), (0, 1))  # no rail past 150k any more; one line at the average Day
+        self.assertEqual(atp["share"], ["p0", "p1", "p2", "p4"])  # the bar of shares: a piece for each part with dollars
+        self.assertEqual(atp["pills"], len(B["pills"]))
+        self.assertIn("one bead is $2 , rounded", atp["words"])
+        self.assertIn("of tokens at list prices Not a bill", atp["words"])
+        self.assertIn(f"${B['mean']:.2f} for a Day, on average Over {B['mean_over']} closed Days.", atp["words"])
+        self.assertIn(f"${B['on_days']:.2f} {B['on_days_pct']}% on the Days", atp["words"])
+        self.assertIn(f"${B['between']:.2f} {B['between_pct']}% between the Days Dashboard $", atp["words"])
+        self.assertIn(f"Shared over the {B['closed']} closed Days, it is ${B['per_closed']:.2f} each.", atp["words"])
         self.assertEqual(out["onDay"], 2)  # each hooks into the page's Day buttons
+
+    def test_with_no_day_closed_the_budget_has_no_average_and_draws_no_line(self):
+        data = demo_data()
+        for day in data["days"]:
+            day["status"] = "active"
+        data["budget"] = views.budget(data)
+        atp = node(ATP_RNG, data)["atp"]
+        self.assertEqual((atp["drew"], atp["error"], atp["avg"]), (True, None, 0))
+        self.assertIn("– for a Day, on average No Day with a token row is closed yet.", atp["words"])
+        self.assertNotIn("the average closed Day", atp["words"])
 
     def test_the_rings_draw_a_ring_for_each_day_and_for_the_work_beside_it(self):
         data = demo_data()
