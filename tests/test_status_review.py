@@ -162,6 +162,5 @@ class StatusReviewTest(unittest.TestCase):
         self.assertTrue(costs[0].startswith("cost: $0.95,"), costs[0])
         following = after_cost(lines)
         self.assertIsNotNone(following, "no cost line")
-        self.assertGreaterEqual(len(following), 2)
         self.assertEqual(following[0], "reviewer: 2 sessions, $0.70, in the cost above")
         self.assertEqual(following[1].split(":")[0], "level 2")
