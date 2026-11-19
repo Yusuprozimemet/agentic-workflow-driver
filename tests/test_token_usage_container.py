@@ -70,7 +70,9 @@ class ContainerTest(unittest.TestCase):
                 os.path.relpath(p.replace("\\\\?\\", ""), d).replace(os.sep, "/")
                 for p in tu.transcripts(root, repo, container=d)
             ]
-            self.assertEqual(sorted(found), ["-work/s1.jsonl", "-work/s1/subagents/agent-a1.jsonl"])
+            # The whole list in the message: assertEqual's diff shortens it to "[N chars]".
+            want = ["-work/s1.jsonl", "-work/s1/subagents/agent-a1.jsonl"]
+            self.assertTrue(sorted(found) == want, "read: " + ", ".join(sorted(found)))
 
     def test_compare_counts_container_replies(self):
         with tempfile.TemporaryDirectory() as tmp:
