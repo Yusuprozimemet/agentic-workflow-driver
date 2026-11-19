@@ -19,6 +19,7 @@ the page gives as what the other four are counted up to.
     python scripts/token-usage.py --compare    # main sessions' context per reply before and after the hooks landed
     python scripts/token-usage.py --compare --split 2026-11-03   # a second split; each side's replies per merged PR
     python scripts/token-usage.py --compare --repo ../bearing   # another repository's transcripts and merged PRs
+    python scripts/token-usage.py --compare --repo ../bearing --container ../agentic-workflow-driver/state/claude/projects   # also the driver container's sessions
 
 A reply is counted once, from its last line: a transcript repeats a reply's usage on every content
 block it streamed, and the usage is complete only on the last of those lines, so replies are keyed
@@ -95,7 +96,7 @@ def long_path(path):
     return "\\\\?\\" + os.path.abspath(path)
 
 
-def transcripts(root, repo=None):
+def transcripts(root, repo=None, container=None):
     # Claude Code names a project's folder after its path, every character but letters and digits
     # turned into "-"; a worktree of the repository, under its .claude/worktrees/, gets the same name
     # and "--". A sibling folder whose name only starts with this one's is another project.
@@ -105,6 +106,9 @@ def transcripts(root, repo=None):
         base = os.path.basename(folder).lower()
         if base == name or base.startswith(name + "--"):
             yield from glob.glob(os.path.join(folder, "**", "*.jsonl"), recursive=True)
+    # container is the driver's <state>/claude/projects (--container); its Claude Code runs in /work, so its sessions are under -work.
+    if container:
+        yield from glob.glob(os.path.join(long_path(container), "-work", "**", "*.jsonl"), recursive=True)
 
 
 def agent(path):
@@ -827,6 +831,8 @@ def main():
                     help="with --compare: a second date to split the replies at, such as the day a change landed")
     ap.add_argument("--repo", metavar="PATH",
                     help="with --compare or --tools: read that repository's transcripts and merged pull requests, not this one's")
+    ap.add_argument("--container", metavar="DIR",
+                    help="with --compare or --tools: also read the driver container's transcripts, under DIR/-work (its <state>/claude/projects)")
     ap.add_argument("--since", type=moment, metavar="DATE",
                     help="with --simulate or --tools: count only the sessions started at or after this date or time")
     args = ap.parse_args()
@@ -836,14 +842,16 @@ def main():
         ap.error("--split needs --compare")
     if args.repo and not (args.compare or args.tools):
         ap.error("--repo needs --compare or --tools: token-usage.json counts this repository only")
+    if args.container and not (args.compare or args.tools):
+        ap.error("--container needs --compare or --tools: token-usage.json counts this repository only")
     if args.compare:
         splits = tuple(sorted({HOOKS_DAY, args.split or HOOKS_DAY}))
-        sides = compare([p for p in transcripts(args.transcripts, args.repo) if agent(p) == "main"], splits)
+        sides = compare([p for p in transcripts(args.transcripts, args.repo, args.container) if agent(p) == "main"], splits)
         per_pr(sides, merged_prs(args.repo))
         report_compare(sides, splits)
         return
     if args.tools:
-        report_tools(tools(transcripts(args.transcripts, args.repo), args.since))
+        report_tools(tools(transcripts(args.transcripts, args.repo, args.container), args.since))
         return
     if args.simulate:
         paths = [p for p in transcripts(args.transcripts) if agent(p) == "main" and after(p, args.since)]
