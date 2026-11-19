@@ -59,7 +59,7 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
   session is told from a subagent by `agent()`, as today. With neither flag, `--container` is
   refused with exit 2, "--container needs --compare or --tools: token-usage.json counts this
   repository only", and nothing is written. `ContainerTest` lives in a new file,
-  `scripts/test_token_usage_container.py`, so `scripts/test_token_usage.py` stays unedited
+  `tests/test_token_usage_container.py` (under `tests/`, where CI's "Track tests seen red" finds it), so `scripts/test_token_usage.py` stays unedited
   (C14.1). `scripts/publish-counts.py` is not changed: the dashboard counts this repository's
   sessions, and the driver's cost reaches it from the run log (`driver-runs.json`).
 - **The reviewer's session in `status` (Track B; H12.3, P55).** A `start` line whose `prefix` is
@@ -134,7 +134,7 @@ and the imports ruff then flags as unused), and its PR carries an `Oversized:` l
 Test files, new and edited:
 - 0 and B: `StatusReviewTest` in `tests/test_status_review.py` (new; `tests/test_status.py` and
   `tests/test_status_trial.py` stay unedited).
-- A: `ContainerTest` in `scripts/test_token_usage_container.py` (new).
+- A: `ContainerTest` in `tests/test_token_usage_container.py` (new).
 - C1: `tests/test_how_this_works_page.py` deleted. C2: `tests/test_how_this_works.py` deleted.
 - D: `tests/test_trial_fourteen.py` (`TrialFourteenTest`).
 
@@ -297,8 +297,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 
 ## Verify
 ```bash
-python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten -v
-python -m unittest scripts.test_token_usage scripts.test_token_usage_container scripts.test_dashboard_page -v
+python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten tests.test_token_usage_container -v
+python -m unittest scripts.test_token_usage scripts.test_dashboard_page -v
 git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules docker scripts/test_token_usage.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
 git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests
 git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests
@@ -352,4 +352,5 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.30 — found: auditor · cause: spec · made: Day 14 · the second recheck: C14.17 did not say which comment answers which `review` line or who keeps a failed comment's line; the Out of scope line gave an item `plan.md`'s Unverified list does not hold; the escapes count took cancelled runs and a "Day NN review" bearing never writes, and did not say its test cannot catch a Defect line left out (fixed in this PR).
 - **Defect** D14.26 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.1 was said proved in this PR with no `broken:` line, and C14.7 named no break Track B leaves applying (fixed in this PR: C14.1's break recorded, C14.7's find named).
 - **Defect** D14.27 — found: auditor · cause: spec · made: Day 14 · the recheck: the reviewer-transcript Assumed line named no one who checks it, and H10.2's "Unverified" items in `plan.md` were left with no owner (fixed in this PR: the main session before Track D; the plan-change PR after the close).
+- **Defect** D14.31 — found: track-reviewer · cause: spec · made: Day 14 · Track A's `ContainerTest` was put in `scripts/`, but CI's required "Track tests seen red" lists test ids from `tests/` only (`scripts/track-red.py`, `LIST_TESTS`) and `scripts/seen-red.py` reads only `tests/`, so C14.2's and C14.3's tests would match no test there and the track could not merge (fixed in a spec-change PR before Track A: the file is `tests/test_token_usage_container.py`).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
