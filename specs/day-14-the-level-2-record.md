@@ -170,7 +170,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       review session with no `review` line prints "review of an unknown pull request".
       Red today: the row prints the step's sentence where "review of #7" is expected.
       Test: `StatusReviewTest.test_review_row`, `StatusReviewTest.test_review_row_without_review_line`.
-      Plan: none — H12.3's display; the reviewer's cost is C14.6's.
+      Plan: P62 "The run log has one line per step and `status` prints it"
 - [ ] C14.6 **new** — On the same log with a second review session (`cost_usd` 0.3),
       `status._reviewer(records)` is `reviewer: 2 sessions, $0.70, in the cost above`, and it is
       the line right after `cost:` in the block, whose total still includes both.
