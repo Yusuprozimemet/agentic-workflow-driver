@@ -17,7 +17,7 @@ def grep_files(names, paths):
     for name in names:
         command += ["-e", name]
     command += ["--", *paths]
-    done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    done = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     return done.returncode, done.stdout.splitlines()
 
 
