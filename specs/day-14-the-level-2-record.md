@@ -125,8 +125,9 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
 
 C14.1, C14.4 and C14.9 hold today's code and are proved in the spec-change PR (their breaks in
 `specs/breaks/day-14.json`). Track 0 lands
-first. Tracks A to C2 do not depend on each other or on the count run, and are built while the
-count run goes. Track D uses Track A's `--container` and Track B's `_reviewer`, and waits for
+first. Tracks A to C2 do not depend on the count run, and are built while the count run goes;
+of them, only C2 depends on another: it adds to `tests/test_picker_gone.py`, which C1 creates, so
+C1 lands first. Track D uses Track A's `--container` and Track B's `_reviewer`, and waits for
 the level 2 day's close and its evidence run. Track C's two halves were split (about 530 lines
 together, most of it the two test files): C1 is about 110 lines; C2 is about 420, all deletions
 (`tests/test_how_this_works.py`'s 277 lines, `spec_drift_page.py`'s 136, `spec-drift.py`'s 4,
@@ -191,9 +192,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests` prints nothing.
       Red today: the grep finds lines in `scripts/spec_drift_page.py`, `scripts/spec-drift.py`
       and `tests/test_how_this_works.py`.
-      Test: `PickerGoneTest.test_build_half_gone`, which runs the grep with `-l` for `-n` and
-      asserts the list of files it prints is empty; the test spells the names in parts, so the
-      grep does not find the test.
+      Test: `PickerGoneTest.test_build_half_gone`, which runs the grep with `-l` for `-n` from
+      the repository's root (found from the test's `__file__`) and asserts its exit code is 1
+      and the list of files it prints is empty; the test spells the names in parts, so the grep
+      does not find the test. The track's break runs this test, not the bare grep.
       Replaces: S-how-follows-newest-day.1 — was: a promise whole at every other step is picked though the replay history holds no row for it.
       Replaces: S-how-follows-newest-day.3 — was: a replay history that has gone leaves the pick alone and shows as missing.
       Replaces: S-how-follows-newest-day.4 — was: a promise missing any other step of its record is still skipped.
@@ -279,7 +281,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `howBlob` is still defined in `docs/dashboard/dashboard.js` (C14.9).
       Red today: the grep finds lines in `docs/dashboard/dashboard.js` and
       `tests/test_how_this_works_page.py`.
-      Test: `PickerGoneTest.test_page_half_gone`, the same for this grep.
+      Test: `PickerGoneTest.test_page_half_gone`, built as C14.8's test is, for this grep: `-l`,
+      run from the root, exit code 1 and no files asserted, the names spelled in parts, and the
+      track's break run on this test.
       Replaces: S-how-follows-newest-day.2 — was: step 7 says "not re-checked yet" for an empty record.
       Plan: none — the same leftover as C14.8, on the page.
 - [ ] C14.17 **new** — The reviewer section names each `review` line of the copy: its pull
@@ -358,4 +362,5 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.27 — found: auditor · cause: spec · made: Day 14 · the recheck: the reviewer-transcript Assumed line named no one who checks it, and H10.2's "Unverified" items in `plan.md` were left with no owner (fixed in this PR: the main session before Track D; the plan-change PR after the close).
 - **Defect** D14.31 — found: track-reviewer · cause: spec · made: Day 14 · Track A's `ContainerTest` was put in `scripts/`, but CI's required "Track tests seen red" lists test ids from `tests/` only (`scripts/track-red.py`, `LIST_TESTS`) and `scripts/seen-red.py` reads only `tests/`, so C14.2's and C14.3's tests would match no test there and the track could not merge (fixed in a spec-change PR before Track A: the file is `tests/test_token_usage_container.py`).
 - **Defect** D14.32 — found: Track C1 · cause: spec · made: Day 14 · C14.8's and C14.16's `Test:` was Verify's `git grep`, but CI's required "Track tests seen red" fails a `new` criterion whose `Test:` names no test in backticks (`scripts/track-red.py`), so neither picker track could merge; the auditors' three runs and D14.31's fix, the same check's other half, did not catch it (fixed in a spec-change PR after Track C1's code: `PickerGoneTest` in `tests/test_picker_gone.py`).
+- **Defect** D14.33 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.32's fix: C2 now adds to a file C1 creates though the spec said the tracks do not depend on each other; a test asserting only an empty list passes when `git grep` fails outside a repository (exit 128, nothing printed); C14.16's "the same" did not carry the spelling in parts; and C1's break ran the bare grep, so it never showed the named test failing (fixed in this PR: C1 lands first, exit code 1 asserted, each test spelled out, each break on its test).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
