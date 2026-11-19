@@ -146,8 +146,8 @@ class PartsTest(unittest.TestCase):
 
     def test_a_session_that_never_left_main_is_main_and_a_branch_with_no_slash_names_no_part(self):
         got = self.parts({"a.jsonl": [line("m1", "r1", branch="main"), line("m2", "r2", branch="scratch")],
-                          "b.jsonl": [line("m3", "r3", branch="dashboard/x")]})
-        self.assertEqual(got, {(None, "main", None): 2, (None, "dashboard", None): 1})
+                          "b.jsonl": [line("m3", "r3", branch="docs/x")]})
+        self.assertEqual(got, {(None, "main", None): 2, (None, "docs", None): 1})  # short names: a failure prints under 80 characters
 
     def test_a_subagents_reply_goes_with_its_parents_session_by_its_id_or_its_folder(self):
         named = json.dumps(dict(json.loads(line("m3", "r3", branch="main")), sessionId="p"))
@@ -419,11 +419,11 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(second, {("tooling", None): (2, 113)})
 
     def test_rows_whose_transcripts_are_gone_keep_their_parts(self):
-        kept = [dict(self.OLD, part="dashboard", part_day=None, output=100, replies=4),
+        kept = [dict(self.OLD, part="docs", part_day=None, output=100, replies=4),
                 dict(self.OLD, part="tooling", part_day=None, output=40, replies=2)]
         with tempfile.TemporaryDirectory() as root:
             rows = self.counted(root, [line(output=30, branch="main")], kept=kept)
-        self.assertEqual(rows, {("dashboard", None): (4, 100), ("tooling", None): (2, 40), ("main", None): (1, 30)})
+        self.assertEqual(rows, {("docs", None): (4, 100), ("tooling", None): (2, 40), ("main", None): (1, 30)})
 
     def test_an_old_row_with_no_day_keeps_what_this_count_places_nowhere(self):
         with tempfile.TemporaryDirectory() as root:
