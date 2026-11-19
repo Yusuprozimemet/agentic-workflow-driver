@@ -395,8 +395,9 @@ def infra(workflow):
     return dict(runs=runs, latest=latest)
 
 
-# The "How this works" panel follows one real promise, picked by how_excerpts, through its day's
-# files and these.
+# One real promise, picked by how_excerpts, is followed through its day's files and these. No view
+# of the page draws it now ("the panel" below is where it was drawn): the pick stays in the build's
+# data for specs/changes/how-follows-newest-day.md, until a Day's spec replaces its criteria.
 HOW_TEMPLATE = "specs/_template.md"
 HOW_REPLAY = "docs/dashboard/replay-history.json"
 HOW_PLAN = "plan.md"
@@ -559,4 +560,5 @@ def page_data(real, spec_days):
     spec = importlib.util.spec_from_file_location("demo_data", os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo-data.py"))
     demo_data = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(demo_data)
-    return dict(demo_data.demo(), demo=True)
+    # the file map is read from git, so it is the project's own even while the rest is an example
+    return dict(demo_data.demo(), demo=True, file_map=real.get("file_map"))

@@ -5,10 +5,11 @@ same figure counted here from the data.
     python scripts/dashboard-reconcile.py [spec-drift.json]     # the data spec-drift.py --out wrote
     python scripts/dashboard-reconcile.py --demo                # scripts/demo-data.py's made-up data
 
-Graphs 1, 2, 6, 7, 10 and 11 and the how-this-works panel stay on the page, folded under their new drawings, so the two
-can be reconciled on every build. The ring, the proteins, the energy budget and the growth rings have no original on
-the page: each is checked against a recount of the data (days_finished, last_recheck, dollars, lines_placed). Prints
-one line per section and exits 1 when any disagrees. Needs node, as the page's model runs in it.
+Graphs 1, 2, 6, 7 and 10 stay on the page, folded under their new drawings, so the two can be reconciled on every
+build. The ring, the proteins, the energy budget and the growth rings have no original on the page: each is checked
+against a recount of the data (days_finished, last_recheck, dollars, lines_placed). The reflex arcs have none either,
+and are held to the proteins' count of the same steps. Prints one line per section and exits 1 when any disagrees.
+Needs node, as the page's model runs in it.
 """
 import argparse
 import importlib.util
@@ -343,38 +344,26 @@ def act_line(m):
 
 
 def rfx_line(m):
-    """The reflex arcs against the proteins' "In real runs" (graphs 3 to 5, from the same _runs()) and graph 11's table
-    (folded under it): the same steps, parks, crashes and open steps."""
-    r, p, g11 = m.get("rfx") or {}, m.get("prt") or {}, m.get("g11") or {}
-    for x, name in ((r, "reflex"), (p, "proteins"), (g11, "graph 11")):
+    """The reflex arcs against the proteins' "In real runs" (graphs 3 to 5, from the same _runs()): the same steps,
+    parks, crashed steps and open steps. With no arc drawn, the proteins count no step either."""
+    r, p = m.get("rfx") or {}, m.get("prt") or {}
+    for x, name in ((r, "reflex"), (p, "proteins")):
         if x.get("error"):
             return False, f"reflex: not drawn ({name}: {x['error']})"
-    rows = (g11.get("table") or {}).get("rows") or []
-    head = (g11.get("table") or {}).get("head") or []
-    col = lambda name: sum(row[head.index(name)] for row in rows) if name in head else 0  # noqa: E731
-    table = [sum(sum(row[1:6]) for row in rows), col("Parks"), col("Crashed sessions"), col("Still open")]
-    if r.get("empty"):
-        agree = not any(table)
-        return agree, f"reflex: not drawn ({r['empty']}) | graph 11: {table[0]} steps: " + ("agree" if agree else "DISAGREE")
-    c = r["counts"]
     run = next((ch["run"] for ch in p.get("chains") or [] if ch.get("run")), None)
-    ours = [c["steps"], c["parks"], c["crashed_sessions"], c["open"]]
     prt = [run["of"], len(run["parks"]), len(run["crashes"]), len(run["open"])] if run else None
-    agree = ours == table and (prt is None or prt == [c["steps"], c["parks"], c["crashed"], c["open"]])
-    return agree, (f"reflex: {ours[0]} steps, {ours[1]} parks, {c['crashed']} crashed ({ours[2]} {'session' if ours[2] == 1 else 'sessions'}), {ours[3]} open | "
-                   f"proteins' real runs: {', '.join(map(str, prt)) if prt else 'none'} | graph 11: {table[0]} steps, {table[1]} parks, "
-                   f"{table[2]} crashed sessions, {table[3]} open: " + ("agree" if agree else "DISAGREE"))
+    if r.get("empty"):
+        agree = not (prt and prt[0])
+        return agree, (f"reflex: not drawn ({r['empty']}) | proteins' real runs: {f'{prt[0]} steps' if prt else 'none'}: "
+                       + ("agree" if agree else "DISAGREE"))
+    c = r["counts"]
+    ours, n = [c["steps"], c["parks"], c["crashed"], c["open"]], c["crashed_sessions"]
+    agree = prt is None or prt == ours
+    return agree, (f"reflex: {ours[0]} steps, {ours[1]} parks, {ours[2]} crashed ({n} {'session' if n == 1 else 'sessions'}), {ours[3]} open | "
+                   f"proteins' real runs: {', '.join(map(str, prt)) if prt else 'none'}: " + ("agree" if agree else "DISAGREE"))
 
 
-def cel_line(m):
-    """The cell against the folded panel: a station for each of its steps, in its order, and a loop for each way back."""
-    cel, how = m.get("cel") or {}, m.get("how") or {}
-    agree = cel.get("stations") == how.get("steps") and cel.get("loops") == how.get("back")
-    return agree, (f"cell: {len(cel.get('stations') or [])} stations, {len(cel.get('loops') or [])} loops | panel: "
-                   f"{len(how.get('steps') or [])} steps, {len(how.get('back') or [])} ways back: " + ("agree" if agree else "DISAGREE"))
-
-
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line, cel_line]
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line]
 # The sections whose original has left the page: each takes the data too, and recounts its figure from it.
 RECOUNTED = (ring_line, prt_line, atp_line, rng_line)
 

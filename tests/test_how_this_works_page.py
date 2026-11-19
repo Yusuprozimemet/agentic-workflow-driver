@@ -1,5 +1,5 @@
-"""The dashboard's "How this works" panel on the page: where it sits, and that an excerpt the
-build could not read shows as missing."""
+"""What the page's script keeps for the promise the build follows: the words for its re-check,
+and that an excerpt the build could not read shows as missing."""
 
 import re
 import shutil
@@ -22,18 +22,6 @@ class PageTest(unittest.TestCase):
     def setUpClass(cls):
         cls.html = (PAGE / "index.html").read_text(encoding="utf-8")
         cls.script = (PAGE / "dashboard.js").read_text(encoding="utf-8")
-
-    def panel(self):
-        return re.search(
-            r'<section class="panel" id="how-this-works">.*?</section>', self.html, re.DOTALL
-        ).group(0)
-
-    def test_the_panel_sits_folded_under_the_graphs(self):
-        order = [
-            self.html.index(f'id="{name}"') for name in ("g1", "g10", "how-fold", "how-this-works")
-        ]
-        self.assertEqual(order, sorted(order))
-        self.assertRegex(self.html, r'<details class="fold" id="how-fold">\s*<summary>')
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's function")
     def test_step_seven_says_when_there_is_no_recheck(self):
@@ -72,23 +60,6 @@ console.log(html(howRecheck({source: "r", missing: "the file is missing or empty
 
     def test_the_panel_needs_no_diagram_library(self):
         self.assertNotIn("mermaid", (self.html + self.script).lower())
-
-    def test_who_does_what_is_collapsed(self):
-        self.assertRegex(
-            self.panel(), r"<details class=\"technical\">\s*<summary>Who does what</summary>"
-        )
-
-    def test_the_promise_board_links_to_the_steps_that_prove_a_promise(self):
-        board = re.search(
-            r'<section class="graph" id="prt">.*?</section>', self.html, re.DOTALL
-        ).group(0)
-        self.assertEqual(
-            re.findall(r'<a href="#how-step-(\w+)" data-how="(\w+)">', board),
-            [("red", "red"), ("bug", "bug"), ("close", "close"), ("recheck", "recheck")],
-        )
-        # Each link names a step the walk-through draws.
-        for step in ("red", "bug", "close", "recheck"):
-            self.assertIn(f'{{ id: "{step}", kind:', self.script)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's function")
     def test_a_missing_excerpt_shows_as_missing_on_the_page(self):

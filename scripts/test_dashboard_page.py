@@ -55,7 +55,7 @@ const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nDATA.map(c => flipTheme(c[0], c[1]))", ctx)));
 """
 
-# howBlob() on the data from stdin: where the page's "Read ..." links point.
+# howBlob() on the data from stdin: where the page's links to the repository's files point.
 HOW_BLOB = r"""
 const fs = require("fs"), vm = require("vm");
 const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
@@ -192,7 +192,7 @@ class ModelTest(unittest.TestCase):
 
     def test_the_promises_are_counted_in_the_state_each_criterion_has(self):
         # C1.1 broken, C1.2 proven, C1.3 replaced, C1.4 open, C1.5 unchecked, C2.1 unproven, C2.2 repair, C2.3 skipped,
-        # C3.1 building: one in each state. The how-this-works panel and the merge graph's reconcile line read this count.
+        # C3.1 building: one in each state. The merge graph's reconcile line reads this count.
         p = model(data(**PROMISES))["promises"]
         self.assertEqual(sorted(p["states"].values()), [1] * 9)
         self.assertEqual(p["states"], dict.fromkeys(("proven", "unproven", "repair", "broken", "skipped", "replaced", "building", "open", "unchecked"), 1))
@@ -711,47 +711,13 @@ class ModelTest(unittest.TestCase):
         self.assertEqual([got[g]["read"]["t"] for g in ("g6", "g7", "g2")], [
             "No gap is measured yet", "No defect is recorded yet", "No yardstick is counted yet"])
 
-    def test_graph_11_places_each_step_by_how_it_ended(self):
-        # Steps of every kind: a merge, a merge after two fix rounds, a park the maintainer closed after 70 minutes, a park
-        # by a fault whose issue is still open, a parked step whose session crashed, a step still open, and a step with no Day.
-        steps = [run_step("A", 1, "merged"), run_step("B", 1, "fixed", fixes=2),
-                 run_step("C", 2, "parked", parks=[park(21, "maintainer")]), run_step("D", 2, "parked", parks=[park(22, "fault")]),
-                 run_step("E", 2, "parked", crashes=1, parks=[park(23, "maintainer")]), run_step("F", 3, "open"), run_step("G", None, "merged")]
-        driver = dict(source="run log", counted=None, steps=steps, parks=[an_issue(21, "2026-01-02T09:00:00Z", "2026-01-02T10:10:00Z"),
-                      an_issue(22, "2026-01-02T09:00:00Z"), an_issue(23, "2026-01-02T11:00:00Z", "2026-01-02T11:30:00Z")])
-        g = model(data(driver_runs=driver)).get("g11", {})
-        rows = g.get("rows", [])
-        self.assertEqual([r.get("label") for r in rows], ["Project's Day 1", "Project's Day 2", "Project's Day 3", "No project Day"])
-        self.assertTrue(g.get("say", "").endswith(" Its Days are the Days of the project the driver ran on, not this repository's."))
-        self.assertEqual([[len(c) for c in r.get("cells", [])] for r in rows], [[1, 1, 0, 0], [0, 0, 2, 1], [0, 0, 0, 0], [1, 0, 0, 0]])
-        self.assertEqual([(r.get("alone"), r.get("n"), r.get("open")) for r in rows], [(2, 2, 0), (0, 3, 0), (0, 0, 1), (1, 1, 0)])
-        dots = [[[(o.get("col"), o.get("fixes"), o.get("crashed"), o.get("wait")) for o in c] for c in r.get("cells", [])] for r in rows]
-        self.assertEqual(dots[0], [[("merged", 0, False, None)], [("fixed", 2, False, None)], [], []])
-        self.assertEqual(dots[1], [[], [], [("maintainer", 0, False, 70), ("maintainer", 0, True, 30)], [("fault", 0, False, None)]])
-        self.assertEqual([c.get("sub") for c in g.get("cols", [])],
-                         ["2 steps", "1 step · 2 fix rounds", "2 steps · waited 1 h 40 min", "1 step · the waits are not known"])
-        self.assertEqual(g.get("read", {}).get("t"), "6 steps ended, 3 of them with no person; 1 more still open")
-        self.assertEqual(g.get("read", {}).get("b", [""])[0], "2 parks for the maintainer and 1 park by a fault. 1 crashed session in 1 step. "
-                         "1 step still open. A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; "
-                         "the fix rounds, the crashes and how a step ended come from the driver's run log.")
+    def test_a_run_log_not_counted_is_said_under_not_measured(self):
+        why = dict(model(data()).get("notMeasured", [])).get("Whether it runs without a person", "")
+        self.assertIn("`driver-runs.json` on the dashboard-data branch", why)
 
-    def test_graph_11_without_a_count_says_so_under_not_measured(self):
-        g = model(data()).get("g11", {})
-        self.assertIn("`driver-runs.json` on the dashboard-data branch", g.get("empty", ""))
-        self.assertEqual((g.get("rows"), g.get("read", {}).get("t")), ([], "No step of the driver is counted yet"))
-        self.assertIn(["Whether it runs without a person", g.get("empty")], model(data()).get("notMeasured", []))
-
-    def test_graph_11_with_no_step_started_says_so_and_is_not_an_empty_count(self):
+    def test_a_driver_that_started_no_step_is_counted_and_not_under_not_measured(self):
         got = model(data(driver_runs=dict(source="run log", counted=None, steps=[], parks=[])))
-        g = got.get("g11", {})
-        self.assertEqual((g.get("empty"), g.get("rows"), g.get("read", {}).get("t")), (None, [], "The driver has started no step yet"))
         self.assertNotIn("Whether it runs without a person", [n for n, _ in got.get("notMeasured", [])])
-
-    def test_graph_11_says_the_waits_could_not_be_read_when_the_parks_are_unknown(self):
-        steps = [run_step("C", 2, "parked", parks=[park(21, "maintainer")])]
-        g = model(data(driver_runs=dict(source="run log", counted=None, steps=steps, parks=None))).get("g11", {})
-        self.assertEqual([c.get("sub") for c in g.get("cols", [])],
-                         ["0 steps", "0 steps · 0 fix rounds", "1 step · the waits could not be read", "0 steps · the waits could not be read"])
 
     def test_graph_10_draws_the_driver_and_its_parks_on_the_sessions_clock(self):
         # The session is stamped +01:00 and the driver's times are UTC: 09:30Z is 10:30 on the clock. The open park runs to
@@ -999,10 +965,10 @@ class BootTest(unittest.TestCase):
         self.assertEqual((out["error"], out["logged"]), (None, []))
 
     def test_a_graph_that_cannot_be_drawn_is_logged_and_does_not_stop_the_page(self):
-        out = boot(data(criteria_index=[None]))
+        out = boot(data(plan=dict(commitments=[None])))
         self.assertIsNone(out["error"])
-        # The walk-through reads the list of promises, so it says it could not be drawn; every graph drew.
-        self.assertEqual([line.split(":")[0] for line in out["logged"]], ["how this works"])
+        # Graph 12 reads the plan's commitments, so it says it could not be drawn; every other graph drew.
+        self.assertEqual([line.split(":")[0] for line in out["logged"]], ["g12"])
 
     def test_the_page_draws_the_driver_runs_without_an_error(self):
         clock = dict(prs=[], sessions=[{"date": "2026-01-02", "day": 2, "agent": "main", "from": "2026-01-02T08:00:00+01:00",
@@ -1025,18 +991,20 @@ class ThemeTest(unittest.TestCase):
 
 
 # The cards with a plot of their own, each folded under the drawing that took its place: graph 6 under the merge graph,
-# graph 1 under its reading as a gene, graph 2 under its gel, graph 7 under its proofreading stream, graph 10 under its
-# actogram and graph 11 under its reflex arcs. Graphs 3 to 5, 8 and 9 and the "Where we are" tiles have left the page:
-# the proteins, the energy budget, the growth rings and the ring stand alone (GONE_IDS, GONE_KEYS).
-CARDS = (1, 2, 6, 7, 10, 11)
-FOLDED = (6, 1, 2, 7, 10, 11)
-FOLDS = ["g1-fold", "g2-fold", "g6-fold", "g7-fold", "g10-fold", "g11-fold", "how-fold"]
-GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist")
-GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9")
+# graph 1 under its reading as a gene, graph 2 under its gel, graph 7 under its proofreading stream and graph 10 under
+# its actogram. Graphs 3 to 5, 8, 9 and 11 and the "Where we are" tiles have left the page: the proteins, the energy
+# budget, the growth rings, the reflex arcs and the ring stand alone (GONE_IDS, GONE_KEYS, which list everything that left).
+CARDS = (1, 2, 6, 7, 10)
+FOLDED = (6, 1, 2, 7, 10)
+FOLDS = ["g1-fold", "g2-fold", "g6-fold", "g7-fold", "g10-fold"]
+GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist", "g11-fold", "g11", "g11-plot", "g11-table", "cel",
+            "cel-fig", "how-fold", "how-this-works")
+GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how")
 # Links to the graphs that left still land on the drawing in their place: an empty anchor in its section.
 ANCHORS = (("prt", ("g3", "g4", "g5")), ("atp", ("g8",)), ("rng", ("g9",)))
 EYEBROWS = {"whr": "Where we are · the plan as a ring", "prt": "Graphs 3–5 · drawn as proteins",
-            "atp": "Graph 8 · drawn as an energy budget", "rng": "Graph 9 · drawn as growth rings"}
+            "atp": "Graph 8 · drawn as an energy budget", "rng": "Graph 9 · drawn as growth rings",
+            "rfx": "Graph 11 · drawn as reflex arcs"}
 
 # gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
 # many marks of each kind they drew, and the words of the proteins' figures.
@@ -1507,7 +1475,7 @@ class PageFilesTest(unittest.TestCase):
             self.assertIn(f'id="g{n}-read" aria-live="polite"', section.group(0))
         self.assertNotIn("<details open", html)
 
-    def test_the_four_old_graphs_that_left_the_page_have_no_element_on_it(self):
+    def test_what_left_the_page_has_no_element_on_it(self):
         html = read("index.html")
         self.assertEqual([i for i in GONE_IDS if f'id="{i}"' in html], [])
         self.assertEqual(re.findall(r'id="([\w-]+-fold)"', html), FOLDS)
@@ -1527,13 +1495,13 @@ class PageFilesTest(unittest.TestCase):
         html = read("index.html")
         eyebrow = lambda i: re.search(rf'<section class="graph" id="{i}"[ >].*?<p class="graph-n">([^<]*)</p>', html, re.S).group(1)  # noqa: E731
         self.assertEqual({i: eyebrow(i) for i in EYEBROWS}, EYEBROWS)
-        self.assertEqual([i for i in ("rdg", "gel", "mrg", "prf", "act", "rfx", "cel") if "folded below" not in eyebrow(i)], [])
+        self.assertEqual([i for i in ("rdg", "gel", "mrg", "prf", "act") if "folded below" not in eyebrow(i)], [])
 
-    def test_the_four_sections_that_stand_alone_point_at_no_graph_folded_under_them(self):
-        # what the ring, the proteins, the budget and the rings print: their markup and the function that draws each
+    def test_the_sections_that_stand_alone_point_at_no_graph_folded_under_them(self):
+        # what the ring, the proteins, the budget, the rings and the reflex arcs print: their markup and the function that draws each
         html, script, gone = read("index.html"), read("dashboard.js"), r"folded (?:graph|below)|old (?:graphs?|tiles)|trust strip|graph \d+['’]s"
         said = []
-        for section, draw in (("whr", "ringDraw"), ("prt", "protDraw"), ("atp", "atpDraw"), ("rng", "rngDraw")):
+        for section, draw in (("whr", "ringDraw"), ("prt", "protDraw"), ("atp", "atpDraw"), ("rng", "rngDraw"), ("rfx", "rfxDraw")):
             body = script[script.index(f"function {draw}("):]
             body = body[:body.index("\n}\n") if "\n}\n" in body else body.index("\r\n}\r\n")]
             markup = re.search(rf'<section class="graph" id="{section}"[ >].*?</section>', html, re.S).group(0)
@@ -1546,8 +1514,7 @@ class PageFilesTest(unittest.TestCase):
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
         for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll",
-                                                                             "prf-scroll", "atp-scroll", "rng-scroll", "act-scroll", "rfx-scroll",
-                                                                             "cel-scroll"]:
+                                                                             "prf-scroll", "atp-scroll", "rng-scroll", "act-scroll", "rfx-scroll"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -1588,14 +1555,14 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng|act|rfx|cel)"[ >]', html),
-                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng", "act", "rfx", "cel"])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng|act|rfx)"[ >]', html),
+                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng", "act", "rfx"])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
         group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "act": 3, "g10": 3,
-                 "rfx": 4, "g11": 4, "cel": 4}
+                 "rfx": 4}
         for n, g in group.items():
             at = re.search(f'id="{n}"[ >]', html).start()
             self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
@@ -1606,9 +1573,6 @@ class PageFilesTest(unittest.TestCase):
         self.assertLess(html.index('id="atp" '), html.index('id="rng">'))
         self.assertLess(html.index('id="rng">'), html.index('id="act">'))
         self.assertLess(html.index('id="act">'), html.index('id="g10-fold">'))
-        self.assertLess(html.index('id="rfx">'), html.index('id="g11-fold">'))
-        self.assertLess(html.index('id="g11-fold">'), html.index('id="cel">'))
-        self.assertLess(html.index('id="cel">'), html.index('id="how-fold">'))
         self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
         self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
         self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))
@@ -1635,10 +1599,8 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_put_data_on_the_page_as_text_never_as_html(self):
         script = read("dashboard.js")
-        how, page = script.index("/* ---------- how this works"), script.index("/* ---------- the page")
-        self.assertLess(how, page)
-        # Nothing builds HTML from text, the walk-through included: its excerpts are text nodes too. (The failure
-        # names the lines, not the script: a break's report goes in a pull request whole.)
+        # Nothing builds HTML from text: an excerpt of a spec is a text node too. (The failure names the lines, not
+        # the script: a break's report goes in a pull request whole.)
         self.assertEqual([line.strip()[:60] for line in script.splitlines() if "innerHTML" in line], [])
 
     def test_every_colour_has_a_dark_value_and_both_dark_scopes_agree(self):
@@ -1664,7 +1626,7 @@ class PageFilesTest(unittest.TestCase):
         used = sorted(set(re.findall(r'(?<![\w-])sw ([a-z][\w-]*)["`]', read("dashboard.js"))))
         css = read("dashboard.css")
         self.assertEqual([k for k in used if not re.search(rf"\.sw\.{re.escape(k)}[ ,{{]", css)], [])
-        self.assertGreaterEqual(len(used), 15)
+        self.assertGreaterEqual(len(used), 14)
         # and no rule is kept for a fold that left
         self.assertEqual(re.findall(r"\.mock-top\b|--unproven-2\b|\.s(?:w|eg)\.past\b", css), [])
 
@@ -1674,268 +1636,6 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual([h for h in re.findall(r'<link rel="stylesheet" href="([^"]+)"', html) if not h.startswith("https://fonts.googleapis.com/")],
                          ["dashboard.css"])
 
-
-
-# drawHow() (and celDraw()) on the data from stdin, on a document that parses what it is given as HTML and keeps every
-# node it is built from: what the folded panel and the cell show, as short lists of texts.
-HOW_DRAW = r"""
-const fs = require("fs"), vm = require("vm"), els = {}, on = {};
-const VOID = new Set(["br", "img", "input", "hr", "meta", "link"]);
-const unent = s => s.replace(/&(amp|lt|gt|quot|#39|#x27);/g, (m, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'" })[e]);
-const cls = n => ((n.attrs && n.attrs.class) || "").split(" ").filter(Boolean);
-function node(tag) {
-  const n = { tag: String(tag).toLowerCase(), attrs: {}, kids: [], style: {}, hidden: false, open: false, parentNode: null, on: {}, dataset: {},
-    classList: { add(c) { if (!cls(n).includes(c)) n.attrs.class = [...cls(n), c].join(" "); }, remove(c) { n.attrs.class = cls(n).filter(x => x !== c).join(" "); },
-      toggle(c, v) { if (v === undefined) v = !cls(n).includes(c); if (v) n.classList.add(c); else n.classList.remove(c); }, contains: c => cls(n).includes(c) },
-    setAttribute(k, v) { n.attrs[k] = String(v); if (k.startsWith("data-")) n.dataset[k.slice(5).replace(/-(\w)/g, (m, c) => c.toUpperCase())] = String(v); if (k === "id") els[v] = n; },
-    getAttribute: k => k in n.attrs ? n.attrs[k] : null, removeAttribute(k) { delete n.attrs[k]; },
-    appendChild(c) { adopt(n, c); return c; }, append(...c) { c.forEach(x => adopt(n, x)); },
-    replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); n.kids = []; c.forEach(x => adopt(n, x)); },
-    after(x) { const p = n.parentNode; if (x.parentNode) x.parentNode.kids = x.parentNode.kids.filter(k => k !== x); p.kids.splice(p.kids.indexOf(n) + 1, 0, x); x.parentNode = p; },
-    addEventListener(t, fn) { n.on[t] = fn; }, scrollIntoView() { n.scrolled = true; }, focus() { n.focused = true; },
-    contains(x) { for (let e = x; e; e = e.parentNode) if (e === n) return true; return false; },
-    closest(sel) { for (let e = n; e && e.tag; e = e.parentNode) if (match(e, sel)) return e; return null; },
-    querySelectorAll: sel => all(n).slice(1).filter(e => match(e, sel)), querySelector: sel => all(n).slice(1).find(e => match(e, sel)) || null,
-    cloneNode(deep) { const c = node(n.tag); c.attrs = { ...n.attrs }; c.dataset = { ...n.dataset }; if (deep) n.kids.forEach(k => adopt(c, typeof k === "string" ? k : k.cloneNode(true))); return c; },
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }) };
-  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
-  Object.defineProperty(n, "tagName", { get() { return n.tag.toUpperCase(); } });
-  Object.defineProperty(n, "parentElement", { get() { return n.parentNode; } });
-  Object.defineProperty(n, "textContent", { set(v) { n.kids = [String(v)]; }, get() { return text(n); } });
-  Object.defineProperty(n, "innerHTML", { set(v) { n.html = true; n.kids = []; parse(String(v), n); }, get() { return ""; } });
-  return n;
-}
-function adopt(p, c) {
-  if (c == null || c === false) return;
-  if (typeof c !== "object") { p.kids.push(String(c)); return; }
-  if (c.parentNode) c.parentNode.kids = c.parentNode.kids.filter(k => k !== c);
-  c.parentNode = p; p.kids.push(c);
-}
-function match(e, sel) {
-  return sel.split(",").some(s => {
-    const m = s.trim().match(/^(\w*)((?:\.[\w-]+)*)(?:\[([\w-]+)\])?$/);
-    return Boolean(m) && (!m[1] || e.tag === m[1]) && m[2].split(".").filter(Boolean).every(c => cls(e).includes(c)) && (!m[3] || m[3] in e.attrs);
-  });
-}
-function parse(html, root) {
-  let at = root;
-  for (const t of html.match(/<[^>]*>|[^<]+/g) || []) {
-    if (t.startsWith("</")) { at = at.parentNode || root; continue; }
-    if (!t.startsWith("<")) { at.kids.push(unent(t)); continue; }
-    const e = node(t.match(/^<([\w-]+)/)[1]);
-    for (const [, k, v] of t.matchAll(/([\w-]+)="([^"]*)"/g)) e.setAttribute(k, unent(v));
-    adopt(at, e);
-    if (!VOID.has(e.tag)) at = e;
-  }
-}
-const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
-const text = n => typeof n === "string" ? n : (n.kids || []).map(text).join("");
-const say = n => n ? text(n).replace(/\s+/g, " ").trim() : null;
-const DATA = JSON.parse(fs.readFileSync(0, "utf8")), page = fs.readFileSync(process.argv[2], "utf8");
-const document = { createElementNS: (ns, tag) => node(tag), createElement: node, getElementById: id => els[id] || null,
-  addEventListener(t, fn) { (on[t] = on[t] || []).push(fn); } };
-["how-route", "how-path", "how-spine", "how-detail", "how-flow", "how-cast", "how-fold", "how-two"].forEach(id => node("div").setAttribute("id", id));
-els["how-flow"].appendChild(els["how-detail"]);
-// the panel's "goes back" block as index.html has it, for the script to fill when it holds the texts
-els["how-two"].innerHTML = (page.match(/<div class="how-two"[^>]*>([\s\S]*?)\s*<\/div>\s*<details class="technical">/) || ["", ""])[1];
-const ctx = vm.createContext({ DATA, document, matchMedia: () => ({ matches: false, addEventListener() {} }), location: { hash: "" }, console,
-  els, on, say, all, node, addEventListener() {}, innerWidth: 1200, innerHeight: 800 });
-console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
-  const M = model(DATA);
-  drawHow(DATA, M.promises);
-  const spine = els["how-spine"], steps = [];
-  spine.kids.forEach(k => {
-    if (k.classList && k.classList.contains("how-step")) steps.push([say(k.querySelector(".how-dot")), say(k.querySelector("strong")), say(k.querySelector("small")), null]);
-    else if (k.classList && k.classList.contains("how-gate")) steps[steps.length - 1][3] = say(k);
-  });
-  const details = spine.querySelectorAll(".how-step").map(b => {
-    (on.click || []).forEach(fn => fn({ target: b, preventDefault() {} }));
-    const d = els["how-detail"], at = d.kids.findIndex(k => k.tag === "h3");
-    const body = say({ kids: d.kids.slice(at + 1) });
-    return [b.dataset.how, body.slice(0, 60), body.slice(-60), body.length];
-  });
-  // the cell, drawn from the same steps: each pane's heading and text, and what each dashed loop's pointer box says
-  const get = id => els[id] || node("div").setAttribute("id", id) || els[id];
-  ["cel-fig", "cel-tip", "cel-panes", "cel-figs", "cel-finds"].forEach(get);
-  if (typeof celDraw === "function") celDraw(DATA, M.promises, get); // main before the move had none: the pin ran there
-  const fig = els["cel-fig"], tip = els["cel-tip"];
-  const panes = els["cel-panes"].kids.map(p => [say(p.querySelector("h3")), say({ kids: [p.querySelector(".say").kids[3], p.querySelector(".real")] }).slice(0, 60)]);
-  const tipOf = g => { fig.on.focusin({ target: g }); return tip.kids.map(say); };
-  const cel = { panes, loops: fig.querySelectorAll("g.lp").map(tipOf), stations: fig.querySelectorAll("g.st").map(g => [g.getAttribute("tabindex"), g.getAttribute("aria-pressed")]),
-    shown: els["cel-panes"].kids.map(p => !p.hidden), gates: fig.querySelectorAll("g.gt").map(g => tipOf(g)[1]),
-    // how each pane's left column ends, and how its real text does
-    ends: els["cel-panes"].kids.map(p => [say(p.querySelector(".say")).slice(-60), say(p.querySelector(".real")).slice(-60)]) };
-  ({ steps, details, cel, route: say(els["how-route"]), path: say(els["how-path"]), back: els["how-two"].querySelectorAll("b").map(say), back_text: els["how-two"].querySelectorAll("p").map(say),
-     cast: els["how-cast"].querySelectorAll("button").map(b => [say(b.querySelector("strong")), say(b.querySelector("em"))]),
-     html: ["how-route", "how-path", "how-spine", "how-detail", "how-cast", "how-two"].filter(id => all(els[id]).some(e => e.html)) })`, ctx)));
-"""
-
-
-def how_data():
-    """The example data with every excerpt the walk-through quotes, as spec-drift.py --build writes them."""
-    data = demo_data()
-    t = lambda text: dict(source="x.md", text=text)  # noqa: E731
-    data["meta"] = dict(data["meta"], repo_url="https://example.invalid/shop")
-    data["how_this_works"] = dict(
-        promise=t(dict(id="C1.1", spec="specs/day-01-x.md", day=1, breaks="specs/breaks/day-01.json")),
-        crumbs=t(["plan.md", "Phase 1", "Day 1", "Promise C1.1"]), plan_parts=t(["Short answer", "Phases"]),
-        template_parts=t(["Goal", "Acceptance criteria", "Notes"]), day_goal=t("Shoppers can browse."),
-        day_criteria=t("C1.1 to C1.3"), plan_phase=t("Phase 1: browse"), form=t("- [ ] **C?.?** `new` <claim>"),
-        claim=t("The list shows <10> products & a pager."), red_today=t("No list yet."), test=t("tests/test_list.py"),
-        seen_red=t("seen red: AssertionError"), tick=t("- [x] **C1.1**"), evidence=t("tests/test_list.py (#3)"),
-        bugs=t([dict(file="shop/list.py", what="the pager dropped", find="page()", replace="None", reported="FAILED")]),
-        recheck=t(dict(checks=[dict(check="python -m unittest tests.test_list", state="proven")], pr=7)))
-    return data
-
-
-def how(data):
-    out = subprocess.run(["node", "-e", HOW_DRAW, SCRIPT, os.path.join(PAGE, "index.html")], input=json.dumps(data),
-                         capture_output=True, encoding="utf-8", check=False)
-    if out.returncode:
-        raise AssertionError(out.stderr.strip().splitlines()[-1][:300])
-    return json.loads(out.stdout)
-
-
-def how_panel(data):
-    """The folded panel's steps, their texts, and its ways back as [title, text]."""
-    got = how(data)
-    return dict(steps=got["steps"], details=got["details"], back=[[t, x] for t, x in zip(got["back"], got["back_text"])])
-
-
-class HowThisWorksPageTest(unittest.TestCase):
-    """The folded walk-through: what it shows, pinned before its texts moved into howSteps(); it must not change."""
-
-    def test_the_folded_panel_shows_its_seven_steps_the_ways_back_and_who_does_what(self):
-        for data, expected in ((demo_data(), HOW_PIN_DEMO), (how_data(), HOW_PIN_FULL)):
-            got = how(data)
-            self.assertEqual(got["steps"], HOW_PIN_STEPS)
-            self.assertEqual([got["route"], got["path"]] + got["details"], expected)
-            self.assertEqual(got["back"], HOW_PIN_BACK)
-            self.assertEqual([x[-12:] for x in got["back_text"]], [" is written.", "t is opened.", "ps counting.", "s not guess."])
-            self.assertEqual(got["cast"], HOW_PIN_CAST)
-
-    def test_a_stations_closing_words_end_the_left_column_of_its_pane(self):
-        # the mockup's form: after a station's real text, the sentence that closes its step stands under its own words
-        ends = how(demo_data())["cel"]["ends"]
-        closing = ["The spec stays the source of truth. The bold sentence above is only a rewording.", "Compare it with the “Red today” line in step 3."]
-        self.assertEqual([e[0][-18:] for e in ends[2:4]], [x[-18:] for x in closing])  # short, so a failure prints whole
-        self.assertEqual([e[1] for e in ends[2:4] if "source of truth" in e[1] or "Compare it with" in e[1]], [])
-
-    def test_the_cell_shows_the_panels_steps_and_its_loops_say_the_ways_back(self):
-        for data in (demo_data(), how_data()):
-            got = how(data)
-            panel = how_panel(data)
-            self.assertEqual(got["cel"]["panes"], [[name, first] for (_, name, _, _), (_, first, _, _) in zip(panel["steps"], panel["details"])])
-            self.assertEqual([tip[:2] for tip in got["cel"]["loops"]], [[t, x] for t, x in panel["back"]])
-        # the promise is chosen first, and it alone is in the Tab order; each gate's box says what the panel's gate says
-        self.assertEqual(got["cel"]["shown"], [False, False, True, False, False, False, False])
-        self.assertEqual([s[0] for s in got["cel"]["stations"]], ["-1", "-1", "0", "-1", "-1", "-1", "-1"])
-        self.assertEqual(got["cel"]["gates"], ["plan-auditor, at a phase's start and end, asks: do the Days still add up to the goal?",
-                                               "spec-auditor runs every check on the code as it is and tries to prove each claim wrong.",
-                                               "implementer, a smaller AI model, usually writes the code and tests from a brief. It never commits.",
-                                               "Automated checks also run on the pull request: style, every test, and a limit of 400 changed lines so it stays reviewable.",
-                                               "The maintainer reviews and merges. Today nothing merges without a person.",
-                                               "defect-rater labels the Day's mistakes blind, to see if a second reader agrees."])
-
-
-# What the folded walk-through showed before its texts moved into howSteps(): each step's number, name, line and
-# gate; the route and the path, then each step's id, the first and last 60 characters of its text and its length,
-# on the example data (no excerpt in it) and with every excerpt; the four ways back; who does what.
-HOW_PIN_STEPS = [['1',
-  'The goal',
-  'What we want built, in phases',
-  "plan-auditor, at a phase's start and end, asks: do the Days still add up to the goal?"],
- ['2',
-  "A Day's spec",
-  "One Day's work, written down first",
-  'spec-auditor runs every check on the code as it is and tries to prove each claim wrong'],
- ['3', 'A promise', 'One sentence someone else can check', ''],
- ['4',
-  'A test that fails first',
-  "Proof the behaviour isn't there yet",
-  'implementer, a smaller AI model, usually writes the code and tests from a brief. It never commits'],
- ['5',
-  'The code, then a planted bug',
-  'Does the test actually notice?',
-  'The maintainer reviews and merges. Today nothing merges without a person'],
- ['6',
-  'The Day closes',
-  'Each tick cites its evidence',
-  "defect-rater labels the Day's mistakes blind, to see if a second reader agrees"],
- ['7', 'The re-check', 'Are the promises still true later?', None]]
-HOW_PIN_DEMO = ['Below is the route one real promise took: Missing from this build: this excerpt (not in this data) Select a step '
- 'to see what happened there.',
- 'Missing from this build: this excerpt (not in this data)',
- ['goal',
-  'One document says what the whole project is for, what stays ',
-  'n.mdMissing from this build: this excerpt (not in this data)',
-  354],
- ['spec',
-  'Each Day gets one file, filled in from the same template. Th',
-  ' up.Missing from this build: this excerpt (not in this data)',
-  201],
- ['promise',
-  'A promise is what the specs call an acceptance criterion. It',
-  'ource of truth. The bold sentence above is only a rewording.',
-  707],
- ['red',
-  'The tests are written to the promise and run against the cod',
-  'in this data)Compare it with the \u201cRed today\u201d line in step 3.',
-  338],
- ['bug',
-  'Once the tests pass, the finished code is sabotaged on purpo',
-  'st, and a limit of 400 changed lines so it stays reviewable.',
-  485],
- ['close',
-  'A last pull request ticks each promise and names what proves',
-  ' closing commit. If that fails, the next Day does not start.',
-  378],
- ['recheck',
-  'Code keeps changing after a Day closes. So finished promises',
-  'e-checked at each close and when its breaks are re-recorded.',
-  797]]
-HOW_PIN_FULL = ['Below is the route one real promise took: The list shows 20 products a page Select a step to see what happened '
- 'there.',
- 'plan.md\u203aPhase 1\u203aDay 1\u203aPromise C1.1',
- ['goal',
-  'One document says what the whole project is for, what stays ',
-  'l.Where it was scheduled: plan.mdPhase 1: browseRead plan.md',
-  381],
- ['spec',
-  'Each Day gets one file, filled in from the same template. Th',
-  " on, written at the close.Read the templateRead Day 1's spec",
-  388],
- ['promise',
-  'A promise is what the specs call an acceptance criterion. It',
-  'ource of truth. The bold sentence above is only a rewording.',
-  572],
- ['red',
-  'The tests are written to the promise and run against the cod',
-  'ssertionErrorCompare it with the \u201cRed today\u201d line in step 3.',
-  298],
- ['bug',
-  'Once the tests pass, the finished code is sabotaged on purpo',
-  "anged lines so it stays reviewable.Read Day 1's planted bugs",
-  525],
- ['close',
-  'A last pull request ticks each promise and names what proves',
-  'hat fails, the next Day does not start.Read the lab notebook',
-  383],
- ['recheck',
-  'Code keeps changing after a Day closes. So finished promises',
-  'nd when its breaks are re-recorded.Read the re-check results',
-  837]]
-HOW_PIN_BACK = ['An auditor finds the spec is wrong',
- 'A test never failed',
- 'A later Day changes the behaviour',
- 'A step needs a person']
-HOW_PIN_CAST = [['The maintainer', 'Step 5: The code, then a planted bug'],
- ['Main AI session', 'Step 5: The code, then a planted bug'],
- ['Implementer', 'Step 4: A test that fails first'],
- ['Plan-auditor', 'Step 1: The goal'],
- ['Spec-auditor', "Step 2: A Day's spec"],
- ['Defect-rater', 'Step 6: The Day closes'],
- ['Three end-of-phase auditors', 'Step 1: The goal']]
 
 if __name__ == "__main__":
     unittest.main()

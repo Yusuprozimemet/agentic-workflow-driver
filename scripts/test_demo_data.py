@@ -21,7 +21,7 @@ import test_dashboard_page  # noqa: E402  (its harnesses run the page's model an
 spec = importlib.util.spec_from_file_location("demo_data", os.path.join(HERE, "demo-data.py"))
 demo_data = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(demo_data)
-GRAPHS = ("g1", "g6", "g7", "g2", "g10", "g11", "g12")
+GRAPHS = ("g1", "g6", "g7", "g2", "g10", "rfx", "g12")
 REAL = dict(now=dict(current_day=None), rows=[], days=[])
 
 
@@ -64,7 +64,7 @@ class DemoData(unittest.TestCase):
         self.assertEqual([g for g in GRAPHS if "error" in m[g]], [])
         marks = dict(g1=len(m["g1"]["merges"]), g6=len(m["g6"]["merges"]), g7=sum(len(r["dots"]) for r in m["g7"]["rows"]), g2=len(m["g2"]["rows"]),
                      g10=sum(len(lane["bars"]) for d in m["g10"]["dates"] for lane in d["lanes"]),
-                     g11=sum(len(c) for r in m["g11"]["rows"] for c in r["cells"]),
+                     rfx=len(m["rfx"]["rows"]),
                      g12=sum(len(r["marks"]) for r in m["g12"]["rows"]))
         self.assertEqual([g for g in GRAPHS if not marks[g]], [], marks)
         # Every lane of the clock has a bar on the date shown first but the parks, which were answered on
@@ -82,9 +82,9 @@ class DemoData(unittest.TestCase):
         self.assertEqual(m["g2"]["waiting"], [])
         parks = next(r for r in m["g2"]["rows"] if r["key"] == "parks")
         self.assertEqual([c["day"] for c in parks["cells"] if c.get("value") is not None], [4, 5, 6])
-        # A step in every column of graph 11, one still open and one with a crashed session.
-        self.assertEqual([min(1, sum(len(r["cells"][i]) for r in m["g11"]["rows"])) for i in range(4)], [1] * 4)
-        self.assertTrue(any(r["open"] for r in m["g11"]["rows"]) and any(o["crashed"] for r in m["g11"]["rows"] for c in r["cells"] for o in c))
+        # A step that ended each way the reflex arcs draw, one still open and one with a crashed session.
+        self.assertEqual(sorted({r["fin"] for r in m["rfx"]["rows"]}), ["fault", "fixed", "maint", "merged", "still"])
+        self.assertGreaterEqual(m["rfx"]["counts"]["crashed"], 1)
         self.assertTrue(any(r["avg"] for r in m["g2"]["rows"]), "no yardstick on the demo has an average so far")
 
     @unittest.skipUnless(shutil.which("node"), "needs node")
@@ -108,7 +108,11 @@ class DemoData(unittest.TestCase):
     def test_no_day_specs_puts_the_demo_in_the_page(self):
         page = test_dashboard_page.sd.page_data(REAL, [])
         self.assertIs(page.get("demo"), True)
-        self.assertEqual({k: v for k, v in page.items() if k != "demo"}, demo_data.demo())
+        self.assertEqual({k: v for k, v in page.items() if k not in ("demo", "file_map")}, demo_data.demo())
+        # the file map is read from git, so the example page shows the project's own files
+        mapped = dict(REAL, file_map=dict(files=[["plan.md", 1, 0, 0, 0]]))
+        self.assertEqual(test_dashboard_page.sd.page_data(mapped, [])["file_map"], mapped["file_map"])
+        self.assertIsNone(page["file_map"])
 
     def test_day_specs_put_the_real_data_in_unchanged(self):
         page = test_dashboard_page.sd.page_data(REAL, ["01"])

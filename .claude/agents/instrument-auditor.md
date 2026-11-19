@@ -49,7 +49,7 @@ UNSCROLL = "e => { e.style.overflow = 'visible'; e.style.width = e.scrollWidth +
 NL = "String.fromCharCode(10)"  # no backslash anywhere in the JavaScript: nothing to lose
 TEXT = f"e => e.innerText.split({NL}).filter(l => l.trim()).join({NL}).slice(0, 3000)"
 CLOSE = "() => document.querySelectorAll('section.graph details').forEach(x => { x.open = false; })"
-GRAPHS = ["g1", "g2", "g3", "g12", "g6", "g7", "g8", "g9", "g10", "g11"]
+GRAPHS = ["g1", "g2", "g3", "g12", "g6", "g7", "g8", "g9", "g10"]
 
 out = sys.argv[1]
 views = []
@@ -204,8 +204,9 @@ a box that is cut off or overlaps is a finding.
 | 14 | Graph 8, By Day | `g8-byday` |
 | 15 | Graph 9: Where did the work go? | `g9`, `g9-exact` |
 | 16 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
-| 17 | Graph 11: Can it run without a person? | `g11`, `g11-exact` |
-| 18 | What these figures cannot see; Not measured yet; How this works | `page-NN` |
+| 17 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
+| 18 | What these figures cannot see; Not measured yet | `page-NN` |
+| 19 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 

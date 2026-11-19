@@ -308,7 +308,6 @@
     </details>
     <p class="say" id="prt-say" aria-live="polite"></p>
     <div class="scroll" id="prt-scroll"><svg class="fig" id="prt-fig" viewBox="0 0 1196 645" role="group" aria-label="One folded chain per ability, one cell per promise, marked by what its test and the replay say"></svg></div>
-    <p class="limit">How does a promise get proven? Follow one through <a href="#how-step-red" data-how="red">the test that fails first</a>, <a href="#how-step-bug" data-how="bug">the planted bug</a>, <a href="#how-step-close" data-how="close">the Day's close</a> and <a href="#how-step-recheck" data-how="recheck">the re-check</a>.</p>
     <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
       <div><div class="cols">
         <div><h3>What the picture shows</h3><ul class="finds" id="prt-finds"></ul><p class="hint">Point at a line to light up its cells above.</p></div>
@@ -706,7 +705,7 @@
 
   <section class="graph" id="rfx">
   <div class="graph-head">
-    <p class="graph-n">Graph 11 · drawn as reflex arcs; the old graph 11 is folded below</p>
+    <p class="graph-n">Graph 11 · drawn as reflex arcs</p>
     <h2>Can it run without a person?</h2>
     <p class="graph-say">Each row is one step the driver started, read left to right; a row that climbs to the band at the top needed a person.</p>
   </div>
@@ -718,7 +717,7 @@
     <p class="read">A reflex is what the body does without asking the brain. Here a step the driver finished without a park is a reflex: the signal runs from the step's start, through its sessions, to a pull request, and stays below the band. A step that parked leaves its row at the session where it parked and climbs to the band. It comes back down where the step took up again; if it never comes back, the step ended with the person.</p>
     <p class="read">The diamond near the end of a row is the maintainer's go-ahead to merge. The plan requires it at every pull request, so it is drawn the same on every row and is not a park: "without a person" here means without a park, no more. Rows run top to bottom in the order the driver started them, and the distance along a row is order, not time. The Days and the pull request numbers are those of the project the driver ran on, not this repository's.</p>
     <p class="read">Why a reflex: it answers the graph's own question, which steps needed the brain.</p>
-    <dl class="lg"><dt>The step started <small>the stimulus</small></dt><dd><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>one row for each step the driver started, with its Day in the project it ran on</span></dd><dt>A session <small>a signal along the nerve</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>one session the driver ran for the step</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>a session that fixed its own pull request, in that many rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>a session that crashed: the run log has no end for it</span></dd><dt>A park <small>the signal goes up to the brain</small></dt><dd><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for a decision that is the maintainer's</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked because the driver or the kit was at fault</span><span>The branch leaves the row at the session where the step parked and comes back where it took up again. The dotted stretch under it is the way it did not go.</span></dd><dt>The pull request <small>the response</small></dt><dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>the pull request the step opened, merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge, which the plan requires at every pull request: not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>go-ahead awaited</span></dd><dt>How the step ended <small>graph 11's four columns</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>merged with no park; graph 11 calls it "Merged, nobody touched it"</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin fixed" cx="5" cy="5" r="5"/></svg>merged after fixing itself</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin maint" cx="5" cy="5" r="5"/></svg>parked for the maintainer</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="x-fin fault" x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>parked by a fault</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></dd><dt>The trial for level 2 <small>no biology here</small></dt><dd><span><svg width="34" height="8" viewBox="0 0 34 8" aria-hidden="true"><rect class="x-l2 run" x="0" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="12" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="24" y=".5" width="9" height="7" rx="1.5"/></svg>one box for each pull request in a row with no change asked; 15 before the driver merges</span></dd></dl>
+    <dl class="lg"><dt>The step started <small>the stimulus</small></dt><dd><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>one row for each step the driver started, with its Day in the project it ran on</span></dd><dt>A session <small>a signal along the nerve</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>one session the driver ran for the step</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>a session that fixed its own pull request, in that many rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>a session that crashed: the run log has no end for it</span></dd><dt>A park <small>the signal goes up to the brain</small></dt><dd><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for a decision that is the maintainer's</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked because the driver or the kit was at fault</span><span>The branch leaves the row at the session where the step parked and comes back where it took up again. The dotted stretch under it is the way it did not go.</span></dd><dt>The pull request <small>the response</small></dt><dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>the pull request the step opened, merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge, which the plan requires at every pull request: not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>go-ahead awaited</span></dd><dt>How the step ended <small>the mark at the end of its row</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>merged with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin fixed" cx="5" cy="5" r="5"/></svg>merged after fixing itself</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin maint" cx="5" cy="5" r="5"/></svg>parked for the maintainer</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="x-fin fault" x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>parked by a fault</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></dd><dt>The trial for level 2 <small>no biology here</small></dt><dd><span><svg width="34" height="8" viewBox="0 0 34 8" aria-hidden="true"><rect class="x-l2 run" x="0" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="12" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="24" y=".5" width="9" height="7" rx="1.5"/></svg>one box for each pull request in a row with no change asked; 15 before the driver merges</span></dd></dl>
     <p class="stamp" id="rfx-stamp"></p>
   </details>
   <details class="exact"><summary>What the picture shows, and where the model bends</summary>
@@ -736,22 +735,6 @@
   <div id="rfx-tip" hidden></div>
 </section>
 
-  <section class="graph mock-fold" id="g11-fold">
-    <details class="exact"><summary>Graph 11 as it was, folded: the steps the driver started</summary>
-    <div id="g11">
-    <div class="graph-head">
-      <p class="graph-n">Graph 11</p>
-      <h2>Can it run without a person?</h2>
-      <p class="graph-say" id="g11-say"></p>
-    </div>
-    <div class="legend" id="g11-key"></div>
-    <div class="scroll-x" id="g11-plot"></div>
-    <div class="readout" id="g11-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g11-table"></table></div></details>
-    </div>
-    </details>
-  </section>
-
   <section class="graph foot" id="cannot-see">
     <h2>What these figures cannot see</h2>
     <ul id="caveats"></ul>
@@ -759,63 +742,34 @@
     <ul id="not-measured"></ul>
   </section>
 
-  <section class="graph" id="cel">
+  <section class="graph" id="fil">
   <div class="graph-head">
-    <p class="graph-n">How this works · drawn as a cell; the panel it was is folded below</p>
-    <h2>How this works: follow one promise</h2>
-    <p class="graph-say">One real promise, followed from the written spec through every check, drawn as a protein's way from its gene out of the cell.</p>
+    <p class="graph-n">How this works · every file, at the station it serves</p>
+    <h2>Where does each file belong?</h2>
+    <p class="graph-say">The way of working, drawn as a cell: a promise goes from the written goal on the left, through every check, to the re-check on the right. Every file of the repository hangs under the station it serves. One dot is one file, and a bigger dot is a longer file.</p>
   </div>
-  <div class="figs" id="cel-figs"></div>
-  <div class="key"><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-doc"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg>written down first</span><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-try"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg>tried on the code</span><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-after"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg>checked afterwards</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path class="chk" d="M7,0.5 l6.5,6.5 l-6.5,6.5 l-6.5,-6.5 z"/></svg>check by an AI reviewer</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect class="chk" width="12" height="12" rx="2"/></svg>check by a script</span><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><rect class="chk" width="10" height="8.5" rx="3"/><rect class="chk" y="11.5" width="10" height="8.5" rx="3"/></svg>check by a person</span><span><svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true"><ellipse class="ribo" cx="13" cy="6" rx="12" ry="5.4"/><ellipse class="ribo" cx="13" cy="14" rx="9" ry="3.4"/></svg>the writer</span><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><path class="back" d="M28,12 V7 Q28,3 24,3 H7 Q3,3 3,7 V9"/><polygon class="head" points="0,8 6,8 3,13"/></svg>the work goes back</span></div>
-  <div class="scroll" id="cel-scroll"><svg class="fig" id="cel-fig" viewBox="0 0 1236 332" role="group" aria-label="One promise followed left to right through a cell: 7 numbered stations, in the nucleus, in the cytoplasm and outside the cell, with the checks between them and the dashed loops by which the work goes back"></svg></div>
-  <p class="hint">Select a station to read its real text below: click it, or focus it and use the arrow keys. Point at a mark between two stations, or at a dashed loop, for what it is.</p>
-  <div class="panes" id="cel-panes" aria-live="polite"></div>
-  <details class="exact"><summary>How to read it</summary>
-    <div class="more">
-      <p>Every Day of work here is written down before it is built. The written version makes promises: single sentences saying what the software must do. Each promise then has to survive a series of checks, some by AI reviewers with no stake in it and some by a person.</p>
-      <p>The picture follows one real promise the way one protein is followed from its gene to the place it works. Read it left to right. Each numbered station holds the real text for that promise: select one and it shows under the picture. The marks between two stations are who acts there. A dashed loop is a way back.</p>
-      <dl class="lg"><dt>The path <small>one protein, from its gene to where it works</small></dt><dd><span><span class="tx">One promise, read left to right through seven numbered stations. They are the existing panel's seven steps, in its order, with its words.</span></span></dd><dt>Written down first <small>the nucleus</small></dt><dd><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-doc"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg><span class="tx"><code>plan.md</code> is the gene. A Day's spec is written from it, and one promise is the transcript. The spec-auditor proofreads before the promise leaves.</span></span></dd><dt>Tried on the code <small>the cytoplasm</small></dt><dd><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-try"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg><span class="tx">The test seen failing first and the planted bug are the folding check: together they prove the test can fail.</span></span><span><svg width="26" height="18" viewBox="0 0 26 18" aria-hidden="true"><ellipse class="ribo" cx="13" cy="6" rx="12" ry="5.4"/><ellipse class="ribo" cx="13" cy="14" rx="9" ry="3.4"/></svg><span class="tx">The implementer is the ribosome: it builds the code and its test from the promise.</span></span></dd><dt>Checked afterwards <small>the way out, and the place it works</small></dt><dd><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><g class="k-after"><rect class="pill" x="1.2" y="1.2" width="27.6" height="11.6" rx="5.8"/></g></svg><span class="tx">The tick with its evidence, then the re-check on later merged code. Before them, CI's checks are quality control and the maintainer's merge is the gate in the membrane.</span></span></dd><dt>A check by someone else <small>a checkpoint</small></dt><dd><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path class="chk" d="M7,0.5 l6.5,6.5 l-6.5,6.5 l-6.5,-6.5 z"/></svg><span class="tx">a separate AI reviewer (3)</span></span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect class="chk" width="12" height="12" rx="2"/></svg><span class="tx">a script (2). The small square on station 7 says that station is itself a script's check.</span></span><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><rect class="chk" width="10" height="8.5" rx="3"/><rect class="chk" y="11.5" width="10" height="8.5" rx="3"/></svg><span class="tx">a person (1)</span></span></dd><dt>The work goes back <small>a return loop</small></dt><dd><span><svg width="30" height="14" viewBox="0 0 30 14" aria-hidden="true"><path class="back" d="M28,12 V7 Q28,3 24,3 H7 Q3,3 3,7 V9"/><polygon class="head" points="0,8 6,8 3,13"/></svg><span class="tx">a dashed loop from where a fault is found to where it is repaired (4). One of them leaves the cell: the driver parks and waits for a person.</span></span></dd></dl>
-    </div>
+  <div class="figs" id="fil-figs"></div>
+  <div class="key" id="fil-key"></div>
+  <div class="scroll" id="fil-scroll"><svg class="fig" id="fil-fig" viewBox="0 100 1236 489" role="group"></svg></div>
+  <p class="hint" id="fil-hint"></p>
+  <details class="exact"><summary>Every file, by station</summary>
+    <div class="scroll-x"><table id="fil-table"></table></div>
+    <p class="stamp" id="fil-stamp"></p>
   </details>
-  <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+  <details class="exact"><summary>How it is drawn, and where the model bends</summary>
     <div class="cols">
       <div>
-        <h3>What the picture shows</h3>
-        <ul class="finds" id="cel-finds"></ul>
+        <h3>How it is drawn</h3>
+        <ul class="plain" id="fil-how"></ul>
       </div>
       <div>
         <h3>Where the model bends</h3>
-        <ul class="plain"><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each gate is a script, a separate AI reviewer or a person, and each can say no.</li><li><b>The names are the usual process.</b> The names on the path describe the usual process for any Day. They are not a record of who did what on this one pull request.</li><li><b>The check comes before the thing checked.</b> A cell can only test a protein it has made. Here the test must fail before the code exists.</li><li><b>A cell does not break its own protein to test its checks.</b> Here the code is broken on purpose once, and the break never merges.</li><li><b>A cell does not stop and wait.</b> The driver parks and waits for a person. Nothing in a cell asks.</li><li><b>Two reviewers have no biological name.</b> The plan-auditor and the defect-rater are on the path because the existing panel has them there.</li><li><b>One promise, one piece of code.</b> A transcript is read many times and makes many copies. A promise is built once.</li></ul>
+        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
       </div>
     </div>
   </details>
-  <div id="cel-tip" hidden></div>
+  <div id="fil-tip" hidden></div>
 </section>
-
-  <details class="fold" id="how-fold">
-    <summary><span>How this works as it was, folded</span><small>One real promise, followed from the written spec through every check.</small></summary>
-  <section class="panel" id="how-this-works">
-    <div class="graph-head">
-      <h2>How this works: follow one promise</h2>
-      <p>Every Day of work here is written down before it is built. The written version makes promises: single sentences saying what the software must do. Each promise then has to survive a series of checks, some by AI reviewers with no stake in it and some by a person.</p>
-      <p id="how-route"></p>
-      <p class="limit">The names on the arrows describe the usual process for any Day. They are not a record of who did what on this one pull request.</p>
-    </div>
-    <div class="how-path" id="how-path"></div>
-    <div class="how-legend"><span class="how-doc"><i></i>Written down first</span><span class="how-try"><i></i>Tried on the code</span><span class="how-after"><i></i>Checked afterwards</span></div>
-    <div class="how-flow" id="how-flow">
-      <div class="how-spine" id="how-spine"></div>
-      <div class="how-detail" id="how-detail" aria-live="polite"></div>
-    </div>
-    <h3>When something is wrong, the work goes back</h3>
-    <div class="how-two" id="how-two"></div>
-    <details class="technical">
-      <summary>Who does what</summary>
-      <p class="limit">Each reviewer is a separate AI agent that starts with no memory of the work, so the session that built something is never the only one checking it. Select one to see where it acts.</p>
-      <div class="how-rows" id="how-cast"></div>
-    </details>
-  </section>
-  </details>
 
   <footer>
     <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal, gate and session counts come from <code>scripts/token-usage.py</code>, which the session hooks run on the maintainer's computer when a session starts or ends (<code>scripts/publish-counts.py</code>); they are pushed to the <code>dashboard-data</code> branch, and the page reads them there. The page this one replaced, with its sixty panels, is the tag <a id="old-page"><code>dashboard-v1</code></a>.</p>
