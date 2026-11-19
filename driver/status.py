@@ -1,8 +1,9 @@
 """status prints where the driver is: its mode and halt, the run's issue and the open parks, the
 step in progress, one line per step, the parks by reason, the refusals and the cost per merged
-pull request, and the tools the driver refused and the Level 2 count. While a session is live it adds
-three progress lines, and with --watch it prints again at each poll until no session is live. It
-reads the state folder and the project's open issues, takes no lock and writes nothing."""
+pull request, and the tools the driver refused, the reviewer's sessions and the Level 2 count.
+While a session is live it adds three progress lines, and with --watch it prints again at each poll
+until no session is live. It reads the state folder and the project's open issues, takes no lock
+and writes nothing."""
 
 import collections
 import json
@@ -62,6 +63,9 @@ def _report(project, gh, state, seen=None) -> int:
         lines.append(f"refusals: {_refusals(records, late)}")
         lines += _refused(records, late)
         lines.append(_cost(records))
+        reviewer = _reviewer(records)
+        if reviewer:
+            lines.append(reviewer)
         lines.append(_level_2(records))
     for line in lines:
         print(line)
@@ -311,11 +315,42 @@ def _steps(records, late=()):
         cost = sum(_number(r.get("cost_usd")) for r in ends)
         refusals = sum(_number(r.get("denials")) for r in ends)
         refusals += sum(1 for item in late if item["session"] == session)
+        label = (
+            _review_of(records, session) if start.get("prefix") == "review" else start.get("step")
+        )
         lines.append(
-            f"  {start.get('at')} {start.get('step')}: {outcome}, ${cost:.2f}, "
+            f"  {start.get('at')} {label}: {outcome}, ${cost:.2f}, "
             f"refusals {refusals}, session `{session}`"
         )
     return lines
+
+
+def _review_of(records, session):
+    # The label of a review's row: the pull request its newest review line names, or no pull request
+    # when the reviewer ended before a verdict.
+    pulls = [
+        r.get("pr") for r in records if r.get("event") == "review" and r.get("session") == session
+    ]
+    if not pulls:
+        return "review of an unknown pull request"
+    return f"review of #{pulls[-1]}"
+
+
+def _reviewer(records):
+    # The reviewer's line for the review sessions, or None when the log has no review start line.
+    sessions = [
+        r.get("session")
+        for r in records
+        if r.get("event") == "start" and r.get("prefix") == "review"
+    ]
+    if not sessions:
+        return None
+    cost = sum(
+        _number(r.get("cost_usd"))
+        for r in records
+        if r.get("event") == "end" and r.get("session") in sessions
+    )
+    return f"reviewer: {len(sessions)} sessions, ${cost:.2f}, in the cost above"
 
 
 def _parks(records):
