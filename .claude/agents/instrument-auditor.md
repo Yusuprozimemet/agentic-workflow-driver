@@ -206,6 +206,7 @@ a box that is cut off or overlaps is a finding.
 | 16 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
 | 17 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
 | 18 | What these figures cannot see; Not measured yet | `page-NN` |
+| 19 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 
