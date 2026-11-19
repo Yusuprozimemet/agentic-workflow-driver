@@ -1163,13 +1163,19 @@ def proofreading(d):
     return out
 
 
-# Graph 8 as an energy budget (the mockup at #228's atp): one bead for each BUDGET_UNIT dollars, split by what the
-# dollars bought and by who spent them. A row is split by pricing its tokens again with token-usage.py's own list
-# prices; one that comes out more than BUDGET_OFF off its recorded cost is not split.
+# Graph 8 as an energy budget: one bead for each BUDGET_UNIT dollars, placed by where the dollars went (a Day, or
+# the work between Days by what it was), with what they bought and who spent them beside it. A row is split by kind
+# by pricing its tokens again with token-usage.py's own list prices; one that comes out more than BUDGET_OFF off its
+# recorded cost is not split.
 BUDGET_UNIT = 2
 BUDGET_OFF = 0.01
 BUDGET_KINDS = ("re-reading", "writing context", "writing output", "not split")
 BUDGET_WHO = ("main session", "auditors", "defect-rater", "implementer", "other agents")
+# Where a row's dollars went, as token-usage.py placed them (`part`, `part_day`): a reply on a branch goes to that
+# branch, a reply on main to the branch its session spent the most on. The first is the Days; the next four are the
+# work between Days; the last is a row counted before the parts, on no Day's branch.
+BUDGET_PARTS = ("the Days", "dashboard", "tooling", "other branches", "stayed on main", "not placed")
+_BUDGET_PART = {"dashboard": 1, "tooling": 2, "main": 4, None: 5}
 _TOKEN_USAGE = []
 
 
@@ -1191,6 +1197,15 @@ def _who(agent):
     """Who spent a row's dollars, as an index of BUDGET_WHO."""
     a = str(agent or "")
     return 0 if a == "main" else 1 if "auditor" in a else 2 if a == "defect-rater" else 3 if a == "implementer" else 4
+
+
+def _part(t):
+    """Where a token row's dollars went: an index of BUDGET_PARTS, and the Day when it is a Day's. A row counted before
+    the parts has no `part`: on a Day's branch it is that Day's, on none it is not placed."""
+    part, day = (t.get("part"), t.get("part_day")) if "part" in t else ("day", t.get("day"))
+    if part == "day":
+        return (0, day) if day is not None else (5, None)
+    return _BUDGET_PART.get(part, 3), None
 
 
 def _priced(t, tu):
@@ -1239,8 +1254,8 @@ def _budget_missing(d):
 
 
 def _budget_col(rows, split, beads):
-    """One column's figures: its dollars by kind and by who, the beads of each, and its rail (the dollars past 150k;
-    None when no row has the figure: a row without it is not known)."""
+    """One column's figures: its dollars, its beads, its dollars by kind and by who, its dollars past 150k (None when
+    no row has the figure: a row without it is not known) and its replies."""
     k, w = [0.0] * 4, [0.0] * 5
     for t in rows:
         parts = split[id(t)]
@@ -1252,11 +1267,10 @@ def _budget_col(rows, split, beads):
         w[_who(t.get("agent"))] += t.get("cost") or 0
     known = [t for t in rows if t.get("cost_past_150k") is not None]
     main = [t for t in known if t.get("agent") == "main"]
-    return dict(u=sum(t.get("cost") or 0 for t in rows), b=beads, k=k, kb=_lr(k, beads), w=w, wb=_lr(w, beads),
+    return dict(u=sum(t.get("cost") or 0 for t in rows), b=beads, k=k, w=w,
                 p=round(sum(t["cost_past_150k"] for t in known), 6) if known else None,
                 pm=round(sum(t["cost_past_150k"] for t in main), 6) if main else None,
-                rp=sum(t.get("replies") or 0 for t in rows),
-                nd=sum(t.get("cost") or 0 for t in rows if t.get("day") is None))
+                rp=sum(t.get("replies") or 0 for t in rows))
 
 
 def _guard_order(guards):
@@ -1264,27 +1278,33 @@ def _guard_order(guards):
 
 
 def budget(d):
-    """Graph 8's dollars as an energy budget: beads of BUDGET_UNIT dollars in a column for each date with token rows,
-    or for each Day and one for no Day. Every figure, bead and share is counted here; dashboard.js lays them out.
+    """Graph 8's dollars as an energy budget: beads of BUDGET_UNIT dollars, in a column for each date with token rows,
+    or in a column for each Day beside the work between Days, one block for each of its parts. Every figure, bead and
+    share is counted here; dashboard.js lays them out.
 
-    The whole beads are round(total / unit), shared out over the columns by largest remainder; inside a column the
-    kinds and the who are each shared out over its beads the same way. With the dashboard-data branch or its
-    token-usage.json missing, `empty` says why and nothing is drawn."""
+    The whole beads are round(total / unit). By date they are shared out over the dates by largest remainder, and
+    inside a date over the parts the same way; by Day they are shared out over the Days and the parts between them.
+    A Day's dollars are its own branch's and its sessions' replies on main (`own`, `home`); the average Day is the
+    mean of the closed Days that have a token row. With the dashboard-data branch or its token-usage.json missing,
+    `empty` says why and nothing is drawn."""
     missing = _budget_missing(d)
     tokens = [] if missing else list(d.get("tokens") or [])
-    out = dict(_stamp(d), unit=BUDGET_UNIT, kinds_named=list(BUDGET_KINDS), who_named=list(BUDGET_WHO))
+    out = dict(_stamp(d), unit=BUDGET_UNIT, kinds_named=list(BUDGET_KINDS), who_named=list(BUDGET_WHO),
+               parts_named=list(BUDGET_PARTS))
     if missing or not tokens:
         out["empty"] = missing or ("no token counts yet: they are counted on the maintainer's computer and pushed to "
                                    "the dashboard-data branch.")
         return out
     tu = _token_usage()
-    split, offs = {}, []
+    split, offs, placed = {}, [], {}
     for t in tokens:
         parts, off = _priced(t, tu)
         split[id(t)] = parts
+        placed[id(t)] = _part(t)
         if parts is not None:
             offs.append(off)
     cost = lambda rows: sum(t.get("cost") or 0 for t in rows)  # noqa: E731
+    by_part = lambda rows: [cost([t for t in rows if placed[id(t)][0] == i]) for i in range(len(BUDGET_PARTS))]  # noqa: E731
     total = cost(tokens)
     beads = _round(total / BUDGET_UNIT)
     days = sorted(d.get("days") or [], key=lambda x: x.get("day"))
@@ -1299,19 +1319,34 @@ def budget(d):
     date_cols = []
     for x, rows, b in zip(dates, by_date, _lr([cost(r) for r in by_date], beads)):
         on = [y.get("day") for y in days if y.get("worked") and y["worked"][0] <= x <= y["worked"][1]]
-        rf = refused.get(x, {})
-        date_cols.append(dict(_budget_col(rows, split, b), label=x, date=x, days=on,
+        rf, pt = refused.get(x, {}), by_part(rows)
+        date_cols.append(dict(_budget_col(rows, split, b), label=x, date=x, days=on, pt=pt, pb=_lr(pt, b),
                               rf=[[g, rf[g]] for g in _guard_order(rf)], refused=sum(rf.values()),
                               cut=sum(t.get("cut") or 0 for t in rows)))
-    # a column for each Day the token rows name (the branch the session worked on), and one for no Day
-    named = sorted({t.get("day") for t in tokens if t.get("day") is not None})
-    keys = named + ([None] if any(t.get("day") is None for t in tokens) else [])
-    by_day = [[t for t in tokens if t.get("day") == k] for k in keys]
+    # a column for each Day the rows are placed on, and the work between Days: a block for each part with a row
+    named = sorted({placed[id(t)][1] for t in tokens if placed[id(t)][0] == 0})
+    by_day = [[t for t in tokens if placed[id(t)] == (0, k)] for k in named]
+    rest = [i for i in range(1, len(BUDGET_PARTS)) if any(placed[id(t)][0] == i for t in tokens)]
+    by_rest = [[t for t in tokens if placed[id(t)][0] == i] for i in rest]
+    shares = _lr([cost(r) for r in by_day + by_rest], beads)
+    done = {y.get("day") for y in days if _finished(y)}
     day_cols = []
-    for k, rows, b in zip(keys, by_day, _lr([cost(r) for r in by_day], beads)):
+    for k, rows, b in zip(named, by_day, shares):
         seen = sorted({t.get("date") for t in rows})
-        day_cols.append(dict(_budget_col(rows, split, b), label=f"Day {k}" if k is not None else "No Day", day=k,
-                             dates=[seen[0], seen[-1]], n_dates=len(seen)))
+        own = cost([t for t in rows if t.get("day") is not None])
+        col = _budget_col(rows, split, b)
+        day_cols.append(dict(col, label=f"Day {k}", day=k, dates=[seen[0], seen[-1]], n_dates=len(seen), own=own,
+                             home=col["u"] - own, closed=k in done))
+    between = [dict(_budget_col(rows, split, b), part=i, label=BUDGET_PARTS[i],
+                    n_dates=len({t.get("date") for t in rows}))
+               for i, rows, b in zip(rest, by_rest, shares[len(named):])]
+    # the average Day: the closed Days with a token row, by what each cost
+    closed_cols = [i for i, c in enumerate(day_cols) if c["closed"]]
+    costs = sorted(day_cols[i]["u"] for i in closed_cols)
+    mean = sum(costs) / len(costs) if costs else None
+    median = (costs[(len(costs) - 1) // 2] + costs[len(costs) // 2]) / 2 if costs else None
+    for c in day_cols:
+        c["over"] = c["u"] - mean if c["closed"] else None
     # a pill for each Day over the date columns it was worked on, in the first lane free
     pills, lanes = [], []
     for y in days:
@@ -1325,6 +1360,7 @@ def budget(d):
     # the figures, the key's dollars and the lists
     kinds = [sum(c["k"][i] for c in date_cols) for i in range(4)]
     who = [sum(c["w"][i] for c in date_cols) for i in range(5)]
+    parts = by_part(tokens)
     known = [t for t in tokens if t.get("cost_past_150k") is not None]
     past = sum(t["cost_past_150k"] for t in known)
     pct = lambda x: _round(100 * x / total) if total else 0  # noqa: E731
@@ -1338,8 +1374,6 @@ def budget(d):
                      key=lambda m: cost([t for t in main_rows if model(t) == m]))
     price = tu.PRICES.get(main_model) if main_model else None
     all_tokens = sum(t.get(k) or 0 for t in tokens for k in ("input", "cache_write", "cache_read", "output"))
-    own = [c for c in day_cols if c["day"] is not None]
-    no_day = sum(c["nd"] for c in date_cols)
     guards = {}
     for c in date_cols:
         for g, n in c["rf"]:
@@ -1349,16 +1383,20 @@ def budget(d):
     first = lambda cols, f: max(range(len(cols)), key=lambda i: (f(cols[i]), -i)) if cols else None  # noqa: E731
     out.update(
         total=total, beads=beads, kinds=kinds, who=who, kind_pct=[pct(x) for x in kinds], who_pct=[pct(x) for x in who],
-        cols=dict(date=date_cols, day=day_cols), pills=pills, lanes=len(lanes),
+        parts=parts, part_pct=[pct(x) for x in parts],
+        cols=dict(date=date_cols, day=day_cols, between=between), pills=pills, lanes=len(lanes),
         replies=sum(t.get("replies") or 0 for t in tokens), dates=len(dates),
         closed=closed, per_closed=total / closed if closed else None, built=built,
-        per_built=total / built if built else None,
+        on_days=parts[0], on_days_pct=pct(parts[0]), days_per_built=parts[0] / built if built else None,
+        between=total - parts[0], between_pct=pct(total - parts[0]),
+        own=sum(c["own"] for c in day_cols), home=sum(c["home"] for c in day_cols),
+        mean=mean, median=median, mean_over=len(costs),
+        dear_day=max(closed_cols, key=lambda i: (day_cols[i]["u"], -i), default=None),
+        cheap_day=min(closed_cols, key=lambda i: (day_cols[i]["u"], i), default=None),
         past=past if known else None, past_pct=pct(past) if known else None,
         past_main=sum(t["cost_past_150k"] for t in known if t.get("agent") == "main") if known else None,
         past_unknown=len(tokens) - len(known),
         past_most=first(date_cols, lambda c: (c["p"] or 0) / (c["u"] or 1)) if known else None,
-        # split rows whose dollars past 150k are more than their re-reading: why the rail is not a part of the upkeep
-        rail_over=sum(1 for t in tokens if split[id(t)] is not None and (t.get("cost_past_150k") or 0) > split[id(t)][0]),
         split=dict(rows=len(tokens) - len(unsplit), dollars=sum(kinds[:3]), off=round(100 * max(offs), 2) if offs else None),
         unsplit=dict(rows=len(unsplit), dollars=kinds[3], models=sorted({model(t) or "no model" for t in unsplit})),
         furthest=round(max(abs(c["b"] - c["u"] / BUDGET_UNIT) for c in date_cols), 2),
@@ -1366,8 +1404,6 @@ def budget(d):
         main_model=main_model, write_price=price[2] if price else None, read_price=price[3] if price else None,
         write_over_read=_round(price[2] / price[3]) if price and price[3] else None,
         dear=first(date_cols, lambda c: c["u"]), cheap=first(date_cols, lambda c: -c["u"]),
-        no_day=no_day, no_day_pct=pct(no_day),
-        dear_day=first(own, lambda c: c["u"]), cheap_day=first(own, lambda c: -c["u"]),
         refused=sum(guards.values()), guards=[[g, guards[g]] for g in _guard_order(guards)],
         most_refused=first(date_cols, lambda c: c["refused"]), cut=sum(c["cut"] for c in date_cols),
         driver=dict(steps=len(steps), sessions=len(sessions), cost=sum(s.get("cost") or 0 for s in sessions)) if steps else None,

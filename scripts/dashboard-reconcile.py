@@ -257,10 +257,12 @@ def atp_line(m, data):
         return theirs == 0, f"budget: not drawn | counted from the data: ${theirs:.2f}: " + ("agree" if theirs == 0 else "DISAGREE")
     split, rest = round(sum(a["kinds"][:3]), 2), round(a["kinds"][3], 2)
     ours, unit, beads = round(sum(a["kinds"]), 2), a["unit"], a["beads"]
-    views = [sum(c["b"] for c in a["cols"][v]) for v in ("date", "day")]
-    agree = ours == theirs == round(a["total"], 2) and views == [beads, beads] and beads == int(a["total"] / unit + 0.5)
+    views = [sum(c["b"] for c in a["cols"]["date"]), sum(c["b"] for c in a["cols"]["day"] + a["cols"]["between"])]
+    placed = round(sum(a["parts"]), 2)
+    agree = (ours == theirs == round(a["total"], 2) == placed and views == [beads, beads]
+             and beads == int(a["total"] / unit + 0.5))
     return agree, (f"budget: split ${split:.2f} + not split ${rest:.2f} = ${ours:.2f} | counted from the data: ${theirs:.2f}: "
-                   + ("agree" if agree else f"DISAGREE (beads by date {views[0]}, by Day {views[1]})")
+                   + ("agree" if agree else f"DISAGREE (beads by date {views[0]}, by Day {views[1]}; placed ${placed:.2f})")
                    + f"; {beads} beads x ${unit} = ${beads * unit:.2f} against ${a['total']:.2f} exact")
 
 
