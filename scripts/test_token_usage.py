@@ -124,6 +124,39 @@ class CountTest(unittest.TestCase):
         self.assertEqual(rows[0][1]["cost_past_150k"], 0)
 
 
+class PartsTest(unittest.TestCase):
+    """Each row carries the part of the work its dollars belong to: its branch's, else its session's."""
+
+    def parts(self, sessions):
+        """Count `sessions`, {file name: lines}; the replies per (day, part, part's day)."""
+        with tempfile.TemporaryDirectory() as folder:
+            for name, lines in sessions.items():
+                os.makedirs(os.path.dirname(os.path.join(folder, name)), exist_ok=True)
+                with open(os.path.join(folder, name), "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines) + "\n")
+            got = collections.Counter()
+            for key, t in tu.count([os.path.join(folder, name) for name in sessions]).items():
+                got[(key[1],) + key[4:]] += t["replies"]
+        return dict(got)
+
+    def test_a_reply_on_main_goes_with_the_branch_its_session_spent_the_most_on(self):
+        got = self.parts({"a.jsonl": [line("m1", "r1", branch="main"), line("m2", "r2", output=50, branch="tooling/x"),
+                                      line("m3", "r3", output=3, branch="day-43/track-a")]})
+        self.assertEqual(got, {(None, "tooling", None): 2, (43, "day", 43): 1})
+
+    def test_a_session_that_never_left_main_is_main_and_a_branch_with_no_slash_names_no_part(self):
+        got = self.parts({"a.jsonl": [line("m1", "r1", branch="main"), line("m2", "r2", branch="scratch")],
+                          "b.jsonl": [line("m3", "r3", branch="docs/x")]})
+        self.assertEqual(got, {(None, "main", None): 2, (None, "docs", None): 1})  # short names: a failure prints under 80 characters
+
+    def test_a_subagents_reply_goes_with_its_parents_session_by_its_id_or_its_folder(self):
+        named = json.dumps(dict(json.loads(line("m3", "r3", branch="main")), sessionId="p"))
+        got = self.parts({"p.jsonl": [line("m1", "r1", branch="dashboard/x")],
+                          os.path.join("p", "subagents", "agent-1.jsonl"): [line("m2", "r2", branch="main")],
+                          os.path.join("q", "subagents", "agent-2.jsonl"): [named]})
+        self.assertEqual(got, {(None, "dashboard", None): 3})
+
+
 class TranscriptsTest(unittest.TestCase):
     """Only this repository's transcript folders are read: its own and its worktrees'."""
 
@@ -163,7 +196,7 @@ class LongPathTest(unittest.TestCase):
         self.write(os.path.join(folder, "agent-" + "a" * 100 + ".meta.json"), '{"agentType": "implementer"}')
         self.assertGreater(len(folder), 260)
         totals = tu.count(tu.transcripts(self.root))
-        self.assertEqual({who: t["output"] for (_, _, _, who), t in totals.items()},
+        self.assertEqual({who: t["output"] for (_, _, _, who, *_), t in totals.items()},
                          {"main": 3, "implementer": 7})
 
 
@@ -355,6 +388,49 @@ class MergeTest(unittest.TestCase):
             with open(out, encoding="utf-8") as f:
                 rows = {r["date"]: (r["cost"], r.get("cost_past_150k", "none")) for r in json.load(f)}
         self.assertEqual(rows, {"2026-10-10": (3.0, "none"), "2026-10-11": (3.0, 1.25), "2026-10-12": (10.0, 9.5)})
+
+    def counted(self, root, lines, kept=None):
+        """Count one transcript of `lines` beside the rows `kept`, or those the call before wrote:
+        each row's (replies, output) by its part."""
+        out = os.path.join(root, "token-usage.json")
+        if kept is not None:
+            with open(out, "w", encoding="utf-8") as f:
+                json.dump(kept, f)
+        project = os.path.join(root, "projects", re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(os.path.join(HERE, os.pardir))))
+        os.makedirs(project, exist_ok=True)
+        with open(os.path.join(project, "s.jsonl"), "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        run = subprocess.run([sys.executable, os.path.join(HERE, "token-usage.py"), "--transcripts",
+                              os.path.join(root, "projects"), "--out", out], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        with open(out, encoding="utf-8") as f:
+            return {(r.get("part"), r.get("part_day")): (r["replies"], r["output"]) for r in json.load(f)}
+
+    OLD = dict(date="2026-10-12", day=None, model="claude-haiku-5-5", agent="main", input=10, cache_write=0, cache_read=0)
+
+    def test_a_session_that_opens_a_branch_after_a_count_is_not_counted_twice(self):
+        # The first reply costs $0.000056 and is written as $0.0001: the second count holds less than
+        # the file by the rounding alone, and still stands.
+        on_main = line("m1", "r1", output=110, branch="main")
+        with tempfile.TemporaryDirectory() as root:
+            first = self.counted(root, [on_main], kept=[dict(self.OLD, output=110, replies=1)])
+            second = self.counted(root, [on_main, line("m2", "r2", output=3, branch="tooling/x")])
+        self.assertEqual(first, {("main", None): (1, 110)})
+        self.assertEqual(second, {("tooling", None): (2, 113)})
+
+    def test_rows_whose_transcripts_are_gone_keep_their_parts(self):
+        kept = [dict(self.OLD, part="docs", part_day=None, output=100, replies=4),
+                dict(self.OLD, part="tooling", part_day=None, output=40, replies=2)]
+        with tempfile.TemporaryDirectory() as root:
+            rows = self.counted(root, [line(output=30, branch="main")], kept=kept)
+        self.assertEqual(rows, {("docs", None): (4, 100), ("tooling", None): (2, 40), ("main", None): (1, 30)})
+
+    def test_an_old_row_with_no_day_keeps_what_this_count_places_nowhere(self):
+        with tempfile.TemporaryDirectory() as root:
+            rows = self.counted(root, [line(output=30, branch="tooling/x")], kept=[dict(self.OLD, output=100, replies=4)])
+            again = self.counted(root, [line(output=30, branch="tooling/x")])
+        self.assertEqual(rows, {("tooling", None): (1, 30), (None, None): (3, 70)})
+        self.assertEqual(again, rows)
 
 
 def reply(message_id, context, sidechain=False, model=None, when=None):
