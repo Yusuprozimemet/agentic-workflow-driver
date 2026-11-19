@@ -21,15 +21,15 @@ const covered = list => [...list].sort((a, b) => a[0] - b[0]).reduce((acc, [a, b
 const daySpan = ds => !ds.length ? "" : ds.length === 1 ? `Day ${ds[0]}`
   : ds[ds.length - 1] - ds[0] === ds.length - 1 ? `Days ${ds[0]} to ${ds[ds.length - 1]}` : `Days ${andList(ds.map(String))}`;
 
-// Every state a promise's tile can be in. The first five are what a re-check can find, and the only ones counted
-// as "re-checked"; each has its own colour and mark (dashboard.css), used for promise states and nothing else.
+// Every state a promise can be in. The first five are what a re-check can find, and the only ones counted as
+// "re-checked". The page says a state by its `word`; `means` is its definition, kept here for the reader of this file.
 const STATES = {
-  proven: { word: "Proven", glyph: "✓", means: "its test still passes, and still fails when the bug is put back" },
+  proven: { word: "Proven", means: "its test still passes, and still fails when the bug is put back" },
   unproven: { word: "Passes, not yet proven", means: "its test passes, and has not been seen to fail in the re-check" },
-  repair: { word: "Needs repair", glyph: "!", means: "its test cannot be trusted to catch a failure" },
-  broken: { word: "Broken", glyph: "✕", means: "the promise no longer holds" },
+  repair: { word: "Needs repair", means: "its test cannot be trusted to catch a failure" },
+  broken: { word: "Broken", means: "the promise no longer holds" },
   skipped: { word: "Not checked here", means: "it needs a real live run or a different computer" },
-  replaced: { word: "Replaced", glyph: "→", means: "a later promise took its place" },
+  replaced: { word: "Replaced", means: "a later promise took its place" },
   building: { word: "Not yet in force", means: "its Day is still being built" },
   open: { word: "Left unticked", means: "its Day closed without ticking it" },
   unchecked: { word: "Not re-checked yet", means: "no re-check has run on it" },
@@ -164,7 +164,7 @@ function model(DATA) {
   }
 
   /* The promises: each criterion with the state scripts/spec_drift_views.py (criterion_states) gave it; the page only
-     reads it. The model's promises key counts them by state, for the how-this-works panel and the cell. */
+     reads it. The model's promises key counts them by state, for the merge graph's line in scripts/dashboard-reconcile.py. */
   function promises() {
     const tiles = (DATA.criteria_index || []).map(c => ({ id: c.id, day: c.day, status: STATES[c.state] ? c.state : "unchecked" }));
     const n = (list, s) => list.filter(t => t.status === s).length, counted = list => list.filter(t => COUNTED.includes(t.status)).length;
@@ -595,61 +595,6 @@ function model(DATA) {
     return { dates: out, at, zone: zoneText, runs: RUNS.map(([k, text]) => [k, text]), hours: [6, 9, 12, 15, 18, 21, 0, 3].map(hh => ({ t: hm(hh * 60), x: ((hh * 60 - 300 + 1440) % 1440) / 14.4 })), read: out[at].read, table: out[at].table, driver: DSTEPS !== null };
   }
 
-  // Graph 11: each step the driver started, one dot, placed by how it ended. A park's wait is its issue's opened to closed;
-  // an issue still open, or one the count did not find, has no wait and is left out of the sums.
-  function runGraph() {
-    const DR = DATA.driver_runs || {}, steps = DR.steps || null, parks = DR.parks || null, counted = DR.counted || null;
-    const issues = new Map((parks || []).map(i => [i.number, i]));
-    const waitOf = p => { const i = issues.get(p.issue); return i && i.closed ? (Date.parse(i.closed) - Date.parse(i.opened)) / 60000 : null; };
-    const COLS = [["merged", "Merged, nobody touched it"], ["fixed", "Merged after fixing itself"], ["maintainer", "Parked: a decision that is the maintainer's"],
-      ["fault", "Parked: the driver or the kit was at fault"]];
-    const colOf = s => s.ended === "merged" ? "merged" : s.ended === "fixed" ? "fixed" : s.ended === "parked" ? ((s.parks || []).some(p => p.by === "fault") ? "fault" : "maintainer") : null;
-    const dayOf = s => s.day == null ? null : s.day;
-    const sentence = t => !t || /[.!?]$/.test(t) ? t : `${t}.`;
-    const dot = (s, col, day) => {
-      const fixes = s.fixes || 0, pk = s.parks || [], parked = col === "maintainer" || col === "fault", waits = pk.map(waitOf);
-      const wait = parked && pk.length && waits.every(w => w != null) ? sum(waits) : null;
-      const how = { merged: "merged, nobody touched it", fixed: `merged after ${plural(fixes, "fix round", "fix rounds")}`, maintainer: "parked for the maintainer", fault: "parked by a fault" }[col];
-      const crashed = (s.crashes || 0) > 0;
-      return { col, fixes, crashed, wait, t: `${day == null ? "No project Day" : `Project's Day ${day}`} · ${s.step} · ${how}`,
-        b: [parked && pk.length ? `${pk.map(p => sentence(p.line)).join(" ")} ${wait == null ? "The wait is not known." : `It waited ${span(wait)}.`}` : null,
-          crashed ? "A session of this step crashed: the run log has no end for it." : null].filter(Boolean) };
-    };
-    // A column's sub: its steps, the fix rounds of the merged-after-fixing column, and the waits of its parks.
-    const subOf = (key, list) => {
-      const n = plural(list.length, "step", "steps");
-      if (key === "fixed") return `${n} · ${plural(sum(list, s => s.fixes), "fix round", "fix rounds")}`;
-      if (key !== "maintainer" && key !== "fault") return n;
-      if (!parks) return `${n} · the waits could not be read`;
-      const known = list.flatMap(s => s.parks || []).map(waitOf).filter(w => w != null);
-      return !list.length ? n : known.length ? `${n} · waited ${span(sum(known))}` : `${n} · the waits are not known`;
-    };
-    const cols = COLS.map(([key, name]) => ({ key, name, sub: steps ? subOf(key, steps.filter(s => colOf(s) === key)) : "" }));
-    // One row per Day that has a step, then the steps with no Day.
-    const rowDays = steps ? [...new Set(steps.map(dayOf))].sort((a, b) => (a == null) - (b == null) || a - b) : [];
-    const rows = rowDays.map(day => {
-      const mine = steps.filter(s => dayOf(s) === day), cells = COLS.map(([col]) => mine.filter(s => colOf(s) === col).map(s => dot(s, col, day)));
-      const n = sum(cells, c => c.length), alone = cells[0].length + cells[1].length, open = mine.filter(s => s.ended === "open").length;
-      const ps = mine.flatMap(s => s.parks || []), known = ps.map(waitOf).filter(w => w != null);
-      return { day, label: day == null ? "No project Day" : `Project's Day ${day}`, cells, n, alone, open, share: n ? alone / n : null,
-        fixes: sum(mine, s => s.fixes), crashes: sum(mine, s => s.crashes), parks: ps.length, minutes: Math.round(sum(known)) };
-    });
-    const all = steps || [], ended = sum(rows, r => r.n), alone = sum(rows, r => r.alone), open = sum(rows, r => r.open);
-    const ps = all.flatMap(s => s.parks || []), maint = ps.filter(p => p.by !== "fault").length, fault = ps.length - maint;
-    const crashes = sum(all, s => s.crashes), crashed = all.filter(s => s.crashes > 0).length;
-    const read = { t: !steps ? "No step of the driver is counted yet" : !steps.length ? "The driver has started no step yet" : !ended ? "No step has ended yet"
-        : `${plural(ended, "step", "steps")} ended, ${alone} of them with no person${open ? `; ${open} more still open` : ""}`,
-      b: !steps || !steps.length ? [] : [[ps.length ? `${plural(maint, "park", "parks")} for the maintainer and ${plural(fault, "park", "parks")} by a fault.` : "No park yet.",
-        crashes ? `${plural(crashes, "crashed session", "crashed sessions")} in ${plural(crashed, "step", "steps")}.` : "No session crashed.",
-        open ? `${plural(open, "step", "steps")} still open.` : "",
-        counted ? `Counted on the maintainer's computer up to ${counted.slice(11, 16)} on ${shortDate(counted)}.` : "",
-        "A park is an issue the driver opens with the label \"parked\", so its reason and its wait come from GitHub; the fix rounds, the crashes and how a step ended come from the driver's run log."].filter(Boolean).join(" ")] };
-    return { empty: steps ? null : "the driver's run log is not counted for this project yet. The maintainer's sessions count the run log beside run-steps.py into `driver-runs.json` on the dashboard-data branch (`scripts/publish-counts.py`).",
-      say: `Each dot is one step the driver started${steps ? `, ${steps.length} in all,` : ""} placed by how the step ended. A step further right needed more of a person. Its Days are the Days of the project the driver ran on, not this repository's.`,
-      cols, rows, read, table: { head: ["Project's Day", ...COLS.map(c => c[1]), "Still open", "Fix rounds", "Crashed sessions", "Parks", "Minutes parked", "Needed no person"],
-        rows: rows.map(r => [r.label, ...r.cells.map(c => c.length), r.open, r.fixes, r.crashes, r.parks, r.minutes, `${r.alone} of ${r.n}`]) } };
-  }
-
   // The plan graph: one stripe per commitment of plan.md (specs/plan/promises.json), one row per Day, a mark where a
   // criterion of that Day names the commitment in its Plan: line (Days 1 to 10: the backfill). Nothing here is a reader's.
   function planGraph() {
@@ -893,12 +838,13 @@ function model(DATA) {
           c.written.map(q => q.id).join(", "), c.cells.map(q => `${q.id} ${q.state}${q.back ? ", came back" : ""}`).join("; ")]) } };
   }
 
-  function notMeasured(yard, clock, run, plan) {
-    const I = DATA.infra || {};
+  // The driver's steps are not measured until its run log is counted; a driver that has started no step is counted.
+  function notMeasured(yard, clock, plan) {
+    const I = DATA.infra || {}, steps = (DATA.driver_runs || {}).steps;
     return [!I.latest && !(I.runs || []).length && ["Infrastructure checks", "no run is recorded, so nothing is drawn."],
       !DATA.deployment && ["The live deployment", "no run is recorded, so nothing is drawn."],
       ...((yard.waiting || []).map(w => [w.name, `${w.why}.`])),
-      run.empty && ["Whether it runs without a person", run.empty],
+      !steps && ["Whether it runs without a person", "the driver's run log is not counted for this project yet. The maintainer's sessions count the run log beside run-steps.py into `driver-runs.json` on the dashboard-data branch (`scripts/publish-counts.py`)."],
       plan.empty && ["Whether the specs follow the plan", plan.empty],
       clock.empty && ["Where a date's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
@@ -916,311 +862,28 @@ function model(DATA) {
         .map(([k, x]) => [k, { n: Math.round(x.score), parts: x.parts.map(p => `${p.name.toLowerCase()} ${Math.round(p.pct)}`).join(" · ") }])) };
   }
 
-  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g11 = safe(runGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
+  const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g11, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph),
-    cel: { stations: CEL_STATIONS.map(s => s.id), loops: CEL_LOOPS.map(l => HOW_BACK[l.back][0]) }, how: { steps: HOW_IDS, back: HOW_BACK.map(b => b[0]) }, promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
+    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph),
+    promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
-    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g11, g12) };
+    caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
 }
 
-/* ---------- how this works: one promise, followed through its steps ---------- */
+/* ---------- one promise's excerpts, as the build read them ---------- */
 const howHas = x => Boolean(x && x.text && !x.missing);
 const howMissing = x => h("span", { class: "how-missing" }, `Missing from this build: ${(x && x.source) || "this excerpt"} (${(x && x.missing) || "not in this data"})`);
 const howExcerpt = (x, caption) => h("figure", { class: "how-ex" }, h("figcaption", null, caption), howHas(x) ? h("pre", null, x.text) : howMissing(x));
+// howRecheck is drawn nowhere on the page. It is kept, with the three helpers above that it calls, for
+// S-how-follows-newest-day.2 (specs/changes/how-follows-newest-day.md) until a Day's spec replaces that criterion.
 function howRecheck(x, id) {
   if (!howHas(x)) return howExcerpt(x, "The latest re-check");
   if (!x.text.checks.length) return h("figure", { class: "how-ex" }, h("figcaption", null, id), h("pre", null, "not re-checked yet"));
   return h("figure", { class: "how-ex" }, h("figcaption", null, `${id} at its latest re-check${x.text.pr ? `, the merge of PR #${x.text.pr}` : ""}`),
     h("pre", null, x.text.checks.map((c, i) => [i ? "\n" : null, `${c.check} → `, h("span", { class: "put" }, c.state)])));
 }
-// The repository's files on GitHub, from the URL the build read (meta.repo_url); with none, the excerpts carry no link.
+// The repository's files on GitHub, from the URL the build read (meta.repo_url); with none, the page links to none of them.
 const howBlob = DATA => { const u = ((DATA || {}).meta || {}).repo_url; return u ? `${u.replace(/\/+$/, "")}/blob/main/` : null; };
-const HOW_PLAN_GLOSS = {
-  "Short answer": "Can the human leave the loop, and what must stay with them.",
-  "Who does what": "The maintainer, the driver and the sessions.",
-  "When the driver parks": "The reasons the driver stops and waits for a person.",
-  Phases: "Groups of Days, each with one goal.",
-  "Stopping points": "Where work halts until the maintainer lifts the stop.",
-};
-const HOW_SPEC_GLOSS = {
-  Goal: "What is true at the end of the Day that was not at the start.",
-  "In scope": "What this Day builds.",
-  "Out of scope": "What it leaves, and which Day owns it.",
-  Tracks: "The work, split into pull requests that can each be reviewed alone.",
-  "Acceptance criteria": "The Day's promises: step 3.",
-  Verify: "Commands anyone can run from the repository alone.",
-  Notes: "What went wrong and what was handed on, written at the close.",
-};
-const HOW_CAST = [
-  ["The maintainer", "A person. Owns the plan and, today, merges every pull request.", "bug"],
-  ["Main AI session", "Usually writes the specs and briefs, reviews the code, plants the bugs and writes the pull requests.", "bug"],
-  ["Implementer", "A smaller AI model. Usually writes code and tests from a brief, and never commits.", "red"],
-  ["Plan-auditor", "At the start and end of a phase: is the plan still right for the code?", "goal"],
-  ["Spec-auditor", "Before every Day: is each claim true, and can each check fail?", "spec"],
-  ["Defect-rater", "At every close: labels the Day's mistakes without seeing the original labels.", "close"],
-  ["Three end-of-phase auditors", "Security, agentic engineering and architecture. Run once, after the last phase in the plan.", "goal"],
-];
-// When something is wrong, the work goes back: the folded panel's four blocks and the cell's four dashed loops.
-const HOW_BACK = [
-  ["An auditor finds the spec is wrong", "The spec is corrected in its own pull request before any code is written."],
-  ["A test never failed", "A test that has only ever passed proves nothing, so it has to be seen failing before its pull request is opened."],
-  ["A later Day changes the behaviour", "Its spec names the old promise on a `Replaces:` line, and the old one stops counting."],
-  ["A step needs a person", "The driver parks: it opens an issue saying why and stops until the maintainer closes that issue. It does not guess."],
-];
-const HOW_IDS = ["goal", "spec", "promise", "red", "bug", "close", "recheck"];
-const HOW_CI = "Automated checks also run on the pull request: style, every test, and a limit of 400 changed lines so it stays reviewable.";
-// The text of a node, or of a list of nodes and strings, as the page shows it.
-const howText = x => x == null ? "" : Array.isArray(x) ? x.map(howText).join("") : typeof x === "object" ? String(x.textContent || "") : String(x);
-
-/* The seven steps one promise takes, built once as nodes: the folded panel (drawHow) and the cell (celDraw) both take
-   their texts from here. The excerpts are the build's own reading of the plan, the newest finished day's spec and its
-   record, put in as text. `tally` is the model's count of the re-checked promises (its promises key), the proteins' own. */
-function howSteps(DATA, tally) {
-  const X = DATA.how_this_works || {};
-  const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
-  const value = x => howHas(x) ? x.text : howMissing(x);
-  const blob = howBlob(DATA), src = (path, label) => blob ? h("a", { class: "how-src", href: blob + path, target: "_blank", rel: "noopener" }, `Read ${label || path}`) : null;
-  const anat = rows => h("dl", { class: "how-anat" }, rows.map(([k, g, v]) => h("div", null, h("dt", null, k), h("dd", null, h("span", null, g), v ? h("span", { class: "mono" }, v) : null))));
-  const planParts = () => howHas(X.plan_parts) ? anat(X.plan_parts.text.map(p => [p, HOW_PLAN_GLOSS[p] || ""])) : howMissing(X.plan_parts);
-  const dayValues = { Goal: X.day_goal, "Out of scope": X.day_out_of_scope, Tracks: X.day_tracks, "Acceptance criteria": X.day_criteria };
-  const specParts = () => howHas(X.template_parts)
-    ? anat(X.template_parts.text.map(p => [p, HOW_SPEC_GLOSS[p] || "", dayValues[p] ? value(dayValues[p]) : ""])) : howMissing(X.template_parts);
-  const bugs = () => howHas(X.bugs) ? X.bugs.text.map((b, i) => h("figure", { class: "how-ex" }, h("figcaption", null, `Planted bug ${i + 1}, in ${b.file}: ${b.what}`),
-    h("pre", null, h("span", { class: "gone" }, b.find), "\n", h("span", { class: "put" }, b.replace), "\n", h("span", { class: "out" }, `The test reported → ${b.reported}`))))
-    : howExcerpt(X.bugs, "The planted bugs");
-  const tick = howHas(X.tick) && howHas(X.evidence) ? { source: X.tick.source, text: `${X.tick.text}\n      Evidence: ${X.evidence.text}` } : howHas(X.tick) ? X.evidence : X.tick;
-  const bad = sum(tally.counts.filter(c => c[0] === "broken" || c[0] === "repair"), c => c[1]);
-  const counted = () => !tally.counts.length ? h("p", null, "No re-check of the promises is on record.") : [
-    h("p", null, `All ${plural(tally.total, "promise", "promises")} at their latest re-check:`),
-    h("div", { class: "how-bar", role: "img", "aria-label": tally.counts.map(([s, n]) => `${n} ${lower(STATES[s].word)}`).join(", ") },
-      tally.counts.map(([s, n]) => h("i", { class: `tile ${s}`, style: `--n:${n}` }))),
-    h("div", { class: "how-barkey" }, tally.counts.map(([s, n]) => h("span", null, h("i", { class: `tile ${s}` }, STATES[s].glyph || ""),
-      h("div", null, h("b", null, String(n)), ` ${STATES[s].word}: ${STATES[s].means}`)))),
-    h("p", null, `${bad ? `${plural(bad, "promise needs", "promises need")} attention.` : "None is broken."} It runs after every merge to main, so it trails the newest merge while it runs; an older Day is re-checked at each close and when its breaks are re-recorded.`)];
-  const steps = [
-    { id: "goal", kind: "doc", name: "The goal", line: "What we want built, in phases",
-      gate: () => [h("b", null, "plan-auditor"), ", at a phase's start and end, asks: do the Days still add up to the goal?"],
-      body: () => [h("p", null, "One document says what the whole project is for, what stays with a person, and the order of the work. It rarely changes. There is only one plan, so it has no template. These are some of the sections it contains."),
-        planParts(), howExcerpt(X.plan_phase, "Where it was scheduled: plan.md"), src("plan.md")] },
-    { id: "spec", kind: "doc", name: "A Day's spec", line: "One Day's work, written down first",
-      gate: () => [h("b", null, "spec-auditor"), " runs every check on the code as it is and tries to prove each claim wrong"],
-      body: () => [h("p", null, "Each Day gets one file, filled in from the same template. The template forces the awkward questions early: what is left out, and who picks it up."),
-        specParts(), src("specs/_template.md", "the template"), chosen ? src(chosen.spec, `Day ${chosen.day}'s spec`) : null] },
-    { id: "promise", kind: "doc", name: "A promise", line: "One sentence someone else can check", gate: () => [],
-      body: () => [h("p", null, "A promise is what the specs call an ", h("em", null, "acceptance criterion"), ". It must be checkable by someone who did not write the code. It is tagged ",
-        h("strong", null, "new"), " if the behaviour does not exist yet, or ", h("strong", null, "hold"), " if it is true today and must stay true."),
-        howExcerpt(X.form, "The blank form, from the template"), h("p", null, "Filled in, for this promise:"),
-        anat([[id, "The promise, as the spec words it.", value(X.claim)], ["Red today", "How it must fail before the work.", value(X.red_today)], ["Test", "The named tests that decide it.", value(X.test)]]),
-        h("p", null, "The spec stays the source of truth. The bold sentence above is only a rewording.")] },
-    { id: "red", kind: "try", name: "A test that fails first", line: "Proof the behaviour isn't there yet",
-      gate: () => [h("b", null, "implementer"), ", a smaller AI model, usually writes the code and tests from a brief. It never commits"],
-      body: () => [h("p", null, "The tests are written to the promise and run against the code as it stands. They have to fail, and fail the way the spec predicted. A test that passes on code that lacks the feature is testing nothing."),
-        howExcerpt(X.seen_red, `What was recorded for ${id}`), h("p", null, "Compare it with the “Red today” line in step 3.")] },
-    { id: "bug", kind: "try", name: "The code, then a planted bug", line: "Does the test actually notice?",
-      gate: () => [h("b", null, "The maintainer"), " reviews and merges. Today nothing merges without a person"],
-      body: () => [h("p", null, "Once the tests pass, the finished code is sabotaged on purpose and they are run again. If they still pass, they would not have caught a real failure. The sabotage is undone and never merges."),
-        bugs(), h("p", null, `Each last line is what the test reported with the bug in place: the test failing is the good result. ${HOW_CI}`),
-        chosen ? src(chosen.breaks, `Day ${chosen.day}'s planted bugs`) : null] },
-    { id: "close", kind: "after", name: "The Day closes", line: "Each tick cites its evidence",
-      gate: () => [h("b", null, "defect-rater"), " labels the Day's mistakes blind, to see if a second reader agrees"],
-      body: () => [h("p", null, "A last pull request ticks each promise and names what proves it. A box with no evidence stays unticked, with the reason written under it."),
-        howExcerpt(tick, `The tick on ${id}`),
-        h("ul", null, h("li", null, "Mistakes go in the Notes, including the AI's own."), h("li", null, "Automation replays the recorded evidence against the closing commit. If that fails, the next Day does not start.")),
-        src("docs/lab-notebook.md", "the lab notebook")] },
-    { id: "recheck", kind: "after", name: "The re-check", line: "Are the promises still true later?", gate: () => null,
-      body: () => [h("p", null, "Code keeps changing after a Day closes. So finished promises are tested again on later merged code, and the planted bugs are put back to see if the tests still notice."),
-        howRecheck(X.recheck, id), counted(), src("docs/dashboard/replay-history.json", "the re-check results")] },
-  ];
-  // a node sits in one place only: each reader calls this for nodes of its own
-  return steps.map(s => ({ id: s.id, kind: s.kind, name: s.name, line: s.line, gate: s.gate(), body: s.body().flat().filter(x => x != null && x !== false) }));
-}
-
-function drawHow(DATA, tally) {
-  const X = DATA.how_this_works || {}, criteria = DATA.criteria_index || [], STEPS = howSteps(DATA, tally);
-  const chosen = howHas(X.promise) ? X.promise.text : null, id = chosen ? chosen.id : "this promise";
-  const promise = criteria.find(c => c.id === id), $ = id => document.getElementById(id);
-  $("how-route").replaceChildren("Below is the route one real promise took: ", h("strong", null, promise ? (promise.plain || promise.claim) : howMissing(X.promise)), " Select a step to see what happened there.");
-  $("how-path").replaceChildren(...(howHas(X.crumbs) ? X.crumbs.text.map((c, i) => [i ? "›" : null, h("b", null, c)]).flat().filter(Boolean) : [howMissing(X.crumbs)]));
-  if ($("how-two")) $("how-two").replaceChildren(...HOW_BACK.map(([t, x]) => h("div", null, h("b", null, t), h("p", null, rich(x)))));
-  const spine = $("how-spine"), detail = $("how-detail"), flow = $("how-flow");
-  const narrow = matchMedia("(max-width: 760px)"), stepOf = s => STEPS.find(x => x.id === s);
-  spine.replaceChildren(...STEPS.flatMap((s, i) => [h("button", { type: "button", class: `how-step how-${s.kind}`, id: `how-step-${s.id}`, "data-how": s.id, "aria-expanded": "false", "aria-controls": "how-detail" },
-    h("span", { class: "how-dot" }, String(i + 1)), h("span", null, h("strong", null, s.name), h("small", null, s.line))),
-    s.gate === null ? null : h("div", { class: "how-gate" }, s.gate)]).filter(Boolean));
-  $("how-cast").replaceChildren(...HOW_CAST.map(([who, what, s]) => h("button", { type: "button", class: "how-row", "data-how": s },
-    h("strong", null, who), h("span", null, what), h("em", null, `Step ${STEPS.indexOf(stepOf(s)) + 1}: ${stepOf(s).name}`))));
-  let current = "promise";
-  const place = () => {
-    if (narrow.matches) $("how-step-" + current).after(detail);
-    else if (detail.parentElement !== flow) flow.append(detail);
-  };
-  const show = (s, scroll) => {
-    current = s;
-    spine.querySelectorAll(".how-step").forEach(b => b.setAttribute("aria-expanded", b.dataset.how === s));
-    detail.replaceChildren(h("div", { class: "how-kicker" }, `Step ${STEPS.indexOf(stepOf(s)) + 1} of ${STEPS.length}`), h("h3", null, stepOf(s).name), ...stepOf(s).body);
-    place();
-    if (!scroll) return;
-    $("how-fold").open = true;
-    $("how-step-" + s).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-  };
-  // A step link anywhere on the page (the proteins have four) opens the walk-through at that step.
-  document.addEventListener("click", e => {
-    const b = e.target.closest && e.target.closest("[data-how]");
-    if (b) { e.preventDefault(); show(b.dataset.how, !spine.contains(b)); }
-  });
-  narrow.addEventListener("change", place);
-  const wanted = location.hash.startsWith("#how-step-") && location.hash.slice(10);
-  show(stepOf(wanted) ? wanted : current, Boolean(stepOf(wanted)));
-}
-
-/* "How this works" as one promise followed through a cell, as the mockup at #228 draws it: the seven steps are
-   howSteps()'s, in its order and with its words; the cell, its gates and its loops are where they sit. Colours are in
-   dashboard.css, under #cel. */
-const CEL_REGION = { doc: "Written down first", try: "Tried on the code", after: "Checked afterwards" };
-const CEL_STATIONS = [
-  { id: "goal", x: 26, wrap: 0, bio: "the gene", says: "The gene: the one text everything else is copied from." },
-  { id: "spec", x: 192, wrap: 0, bio: "transcription", says: "Transcription: one Day's part of the plan, written out as a working copy." },
-  { id: "promise", x: 364, wrap: 0, bio: "the transcript", says: "The transcript: one message that leaves the nucleus to be built." },
-  { id: "red", x: 502, wrap: 3, bio: "folding check", says: "The folding check, first half: the test must fail while the behaviour is missing." },
-  { id: "bug", x: 678, wrap: 3, bio: "the protein", says: "The protein, and the folding check's second half: the code is bent on purpose to see that the test notices." },
-  { id: "close", x: 966, wrap: 2, bio: "delivered, labelled", says: "Delivered and labelled: outside the cell, the tick names the evidence." },
-  { id: "recheck", x: 1132, wrap: 0, bio: "still working?", says: "Still working: the protein is tried again later, where it works.", script: true },
-];
-// The checks between two stations: who acts, after which station, the mark's place and kind, and its biology.
-const CEL_GATES = [
-  { name: "plan-auditor", who: "a separate AI reviewer", after: "goal", x: 159, mark: "ai", says: "It has no part in a cell's story: it is drawn with no biological name." },
-  { name: "spec-auditor", who: "a separate AI reviewer", after: "spec", x: 328, mark: "ai", bio: "proofreading", says: "Proofreading: the copy is checked before it leaves the nucleus." },
-  { name: "implementer", who: "the writer", after: "red", x: 640, mark: "writer", bio: "the ribosome", says: "The ribosome: it reads the promise and builds the code and its test. It writes; it does not check." },
-  { name: "CI's checks", who: "a script", after: "bug", x: 842, mark: "script", bio: "quality control", says: "Quality control: what fails here does not reach the gate.", text: () => HOW_CI },
-  { name: "the maintainer", who: "a person", after: "bug", x: 924, mark: "person", bio: "membrane gate", says: "The gate in the membrane: nothing leaves the cell for main without it." },
-  { name: "defect-rater", who: "a separate AI reviewer", after: "close", x: 1100, mark: "ai", says: "It has no part in a cell's story: it is drawn with no biological name." },
-];
-// The four ways back (HOW_BACK, in its order), as the dashed loops of the cell.
-const CEL_LOOPS = [
-  { back: 0, d: "M328,158 V122 Q328,112 318,112 H272 Q262,112 262,122 V143", heads: ["258,141 266,141 262,148"], at: [295, 106], word: "the spec is wrong: back to the spec",
-    drawn: "Drawn from the spec-auditor back to station 2, a Day's spec." },
-  { back: 1, d: "M716,149 V122 Q716,112 706,112 H574 Q564,112 564,122 V143", heads: ["560,141 568,141 564,148"], at: [640, 106], word: "a test never failed: back to the test",
-    drawn: "Drawn from station 5 back to station 4, a test that fails first." },
-  { back: 2, d: "M1182,149 V68 Q1182,58 1172,58 H440 Q430,58 430,68 V143", heads: ["426,141 434,141 430,148"], at: [700, 52], word: "a later Day replaces the promise",
-    drawn: "Drawn from station 7 back to station 3, a promise." },
-  { back: 3, d: "M784,177 V293", heads: ["780,178 788,178 784,171", "780,292 788,292 784,299"], at: [798, 318], word: "a step needs a person: the driver parks", person: true,
-    drawn: "Drawn once, between stations 5 and 6. It can happen at any station: the work stops, goes out to a person and comes back to the same place." },
-];
-function celDraw(DATA, tally, get) {
-  const $ = id => get("cel-" + id), fig = $("fig"), tip = $("tip"), panes = $("panes"), STEPS = howSteps(DATA, tally);
-  const X = DATA.how_this_works || {}, chosen = howHas(X.promise) ? X.promise.text : null;
-  const promise = chosen && (DATA.criteria_index || []).find(c => c.id === chosen.id);
-  const el = (n, a, txt, parent) => svgEl(fig, n, a, txt, parent), sentence = t => /[.!?]$/.test(t) ? t : `${t}.`;
-  const stepOf = id => STEPS.find(s => s.id === id), noOf = id => STEPS.findIndex(s => s.id === id) + 1;
-  fig.replaceChildren();
-  // the cell: its wall and membrane, the nucleus with two pores, and the gap the way leaves it by
-  el("rect", { class: "cellb", x: 6, y: 26, width: 918, height: 270, rx: 44 });
-  el("rect", { class: "mem-c", x: 10.5, y: 30.5, width: 909, height: 261, rx: 40 });
-  el("rect", { class: "nuc", x: 22, y: 80, width: 456, height: 182, rx: 40 });
-  el("rect", { class: "wipe", x: 912, y: 141, width: 24, height: 82 });
-  [157, 179].forEach(cy => el("circle", { class: "pore", cx: 478, cy, r: 3.6 }));
-  [["doc", 46, 245, "the nucleus"], ["try", 506, 279, "the cytoplasm"], ["after", 946, 279, "out of the cell, on main"]].forEach(([k, x, y, bio]) => {
-    const g = el("g", { class: `k-${k}` });
-    el("circle", { class: "sw", cx: x, cy: y, r: 4 }, null, g);
-    el("tspan", { class: "t-bio", dx: 8 }, bio, el("text", { class: "t-reg", x: x + 10, y: y + 4 }, CEL_REGION[k].toUpperCase(), g));
-  });
-  el("line", { class: "way", x1: 76, y1: 168, x2: 1182, y2: 168 });
-  [188, 360, 498, 674, 962, 1128].forEach(x => el("polygon", { class: "head", points: `${x}.0,164 ${x + 7}.0,168 ${x}.0,172` }));
-  const tips = [];
-  const mark = (cls, label, more) => { const g = el("g", Object.assign({ class: `b ${cls}`, tabindex: 0, "data-v": tips.length, "aria-label": label }, more || {})); return g; };
-  CEL_LOOPS.forEach(L => {
-    const [t, x] = HOW_BACK[L.back], g = mark("lp", `Way back: ${t}`);
-    tips.push({ t, l: [plain(x), L.drawn] });
-    el("path", { class: "hit", d: L.d }, null, g); el("path", { class: "back", d: L.d }, null, g);
-    L.heads.forEach(points => el("polygon", { class: "head", points }, null, g));
-    if (L.person) { el("circle", { class: "who", cx: 784, cy: 308, r: 3.4 }, null, g); el("path", { class: "who", d: "M777,321 a6.5,6.5 0 0 1 13,0 z" }, null, g); }
-    el("text", Object.assign({ class: "t-lp", x: L.at[0], y: L.at[1] }, L.person ? {} : { "text-anchor": "middle" }), L.word, g);
-  });
-  CEL_GATES.forEach(G => {
-    const g = mark("gt", `${G.name}, ${G.who}`), s = stepOf(G.after), x = G.x;
-    tips.push({ t: `${G.name} · ${G.who}`, l: [sentence(G.text ? G.text() : howText(s.gate)), `After station ${noOf(G.after)}, ${lower(s.name)}.`, G.says] });
-    el("rect", { class: "hit", x: x - 42, y: 140, width: 84, height: 80, rx: 6 }, null, g);
-    if (G.mark === "ai") el("path", { class: "chk", d: `M${x},158 l10,10 l-10,10 l-10,-10 z` }, null, g);
-    else if (G.mark === "script") el("rect", { class: "chk", x: x - 8, y: 160, width: 16, height: 16, rx: 2 }, null, g);
-    else if (G.mark === "person") [144, 175].forEach(y => el("rect", { class: "chk", x: x - 7, y, width: 14, height: 17, rx: 4 }, null, g));
-    else { el("ellipse", { class: "ribo", cx: x, cy: 157, rx: 27, ry: 14 }, null, g); el("ellipse", { class: "ribo", cx: x, cy: 179, rx: 20, ry: 8.5 }, null, g);
-      el("line", { class: "way", x1: x - 30, y1: 168, x2: x + 30, y2: 168 }, null, g); }
-    el("text", { class: "t-g", x, y: 204, "text-anchor": "middle" }, G.name, g);
-    if (G.bio) el("text", { class: "t-bio", x, y: 216, "text-anchor": "middle" }, G.bio, g);
-  });
-  // the stations: one is chosen at a time, its pane shows, and it alone is in the Tab order
-  const sts = CEL_STATIONS.map((S, i) => {
-    const s = stepOf(S.id), x = S.x, words = s.name.split(" "), lines = S.wrap ? [words.slice(0, S.wrap).join(" "), words.slice(S.wrap).join(" ")] : [s.name];
-    const g = mark(`st k-${s.kind}`, `Station ${i + 1}: ${s.name}. ${s.line}`, { role: "button", "aria-pressed": "false", "aria-controls": `cel-pane-${i + 1}`, "data-st": i });
-    tips.push({ t: `Station ${i + 1} of ${CEL_STATIONS.length} · ${s.name}`,
-      l: [sentence(s.line), `${CEL_REGION[s.kind]}. ${S.says}`, S.script ? "It is also a check by a script, after every merge to main." : null, "Select it to read its text under the picture."].filter(Boolean) });
-    el("rect", { class: "fr", x, y: 145, width: 100, height: 46, rx: 23 }, null, g);
-    el("rect", { class: "pill", x: x + 4, y: 149, width: 92, height: 38, rx: 19 }, null, g);
-    lines.forEach((t, k) => el("text", { class: "t-nm", x: x + 53, y: lines.length > 1 ? 166 + 12 * k : 172, "text-anchor": "middle" }, t, g));
-    el("line", { class: "here", x1: x + 32, y1: 192, x2: x + 68, y2: 192 }, null, g);
-    el("circle", { class: "no", cx: x + 9, cy: 150, r: 9.5 }, null, g);
-    el("text", { class: "t-no", x: x + 9, y: 153.6, "text-anchor": "middle" }, String(i + 1), g);
-    if (S.script) el("rect", { class: "chk", x: x + 82, y: 143, width: 11, height: 11, rx: 1.5 }, null, g);
-    el("text", { class: "t-bio", x: x + 50, y: 204, "text-anchor": "middle" }, S.bio, g);
-    return g;
-  });
-  // each station's pane: its words, the real text, and who acts after it
-  const pane = (S, i) => {
-    const s = stepOf(S.id), body = s.body, isP = n => n && n.tagName && String(n.tagName).toUpperCase() === "P" && !n.className;
-    const intro = isP(body[0]) ? body[0] : null;
-    // a plain paragraph that ends the step, after its real text, closes the left column, as in the mockup
-    const last = body.filter(Boolean).slice(-1)[0], coda = body.length > 1 && last !== intro && isP(last) ? last : null;
-    const links = body.filter(n => n && n.className === "how-src"), real = body.filter(n => n !== intro && n !== coda && !links.includes(n));
-    const gate = s.gate && s.gate.length ? s.gate : null;
-    return h("div", { class: `pane k-${s.kind}`, id: `cel-pane-${i + 1}`, role: "region", "aria-label": `Station ${i + 1}: ${s.name}`, hidden: true },
-      h("div", { class: "say" }, h("p", { class: "kicker" }, `Station ${i + 1} of ${CEL_STATIONS.length} · ${CEL_REGION[s.kind]}`), h("h3", null, s.name), h("p", { class: "line" }, s.line), intro, coda),
-      h("div", { class: "real", tabindex: 0, role: "group", "aria-label": `The real text for station ${i + 1}` }, real),
-      gate || links.length ? h("div", { class: "foot" }, gate ? h("p", { class: "next" }, h("span", null, "After this station"), " ", gate) : null,
-        links.length ? h("p", { class: "links" }, links) : null) : null);
-  };
-  const ps = CEL_STATIONS.map(pane);
-  panes.replaceChildren(...ps);
-  const choose = (i, focus) => {
-    if (i < 0 || i >= sts.length) return;
-    sts.forEach((s, j) => { s.setAttribute("aria-pressed", j === i ? "true" : "false"); s.setAttribute("tabindex", j === i ? "0" : "-1"); });
-    ps.forEach((p, j) => { p.hidden = j !== i; });
-    if (focus && sts[i].focus) sts[i].focus();
-  };
-  fig.addEventListener("click", e => { const s = e.target.closest && e.target.closest(".st"); if (s) choose(+s.getAttribute("data-st"), false); });
-  fig.addEventListener("keydown", e => {
-    const s = e.target.closest && e.target.closest(".st"); if (!s) return;
-    const i = +s.getAttribute("data-st"), to = { Enter: i, " ": i, ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: sts.length - 1 }[e.key];
-    if (e.key === "Escape") { tip.hidden = true; return; }
-    if (to == null) return;
-    e.preventDefault(); choose(Math.max(0, Math.min(sts.length - 1, to)), true);
-  });
-  pointerBox(fig, tip, key => key != null && tips[+key] ? tipFill(tip, tips[+key]) : false, b => b.getAttribute("data-v"));
-  choose(CEL_STATIONS.findIndex(S => S.id === "promise"), false);  // the promise first, as the panel shows it first
-  // the line of figures: the promise followed, its stations, the checks by someone else, the ways back
-  const kinds = Object.keys(CEL_REGION).map(k => [k, STEPS.filter(s => s.kind === k).length]);
-  const whos = ["a separate AI reviewer", "a script", "a person"].map(w => [w, CEL_GATES.filter(G => G.who === w).length + (w === "a script" ? CEL_STATIONS.filter(S => S.script).length : 0)]);
-  const checks = sum(whos, w => w[1]), WORD = ["no", "one", "two", "three", "four", "five", "six", "seven"];
-  const claim = promise ? plain(promise.plain || promise.claim) : null;
-  $("figs").replaceChildren(
-    h("div", { class: "wide" }, h("div", { class: "num" }, chosen ? chosen.id : "–"),
-      h("div", { class: "what" }, claim ? (claim.length > 150 ? claim.slice(0, 149) + "…" : claim) : howMissing(X.promise)),
-      h("p", { class: "sub" }, howHas(X.crumbs) ? X.crumbs.text.join(" › ") : "")),
-    h("div", null, h("div", { class: "num" }, String(STEPS.length)), h("div", { class: "what" }, "stations on its path"),
-      h("p", { class: "sub" }, kinds.map(([k, n]) => `${n} ${lower(CEL_REGION[k])}`).join(", "))),
-    h("div", null, h("div", { class: "num" }, String(checks)), h("div", { class: "what" }, "checks by someone other than the writer"),
-      h("p", { class: "sub" }, whos.map(([w, n]) => `${n} by ${w}`).join(", "))),
-    h("div", null, h("div", { class: "num" }, String(CEL_LOOPS.length)), h("div", { class: "what" }, "ways back"), h("p", { class: "sub" }, "each a dashed loop on the picture")));
-  $("finds").replaceChildren(...[
-    chosen ? [`The promise followed is ${chosen.id}.`, `It is a promise of Day ${chosen.day}.${claim ? ` It says: ${claim}` : ""}`] : ["No promise is followed in this build.", "The build that writes the page found none to follow."],
-    [`${STEPS.length} stations, ${checks} checks by someone else.`, whos.map(([w, n]) => `${WORD[n] || n} by ${w}`).join(", ") + ". The writer's own two checks are station 4 and station 5."],
-    tally.counts.length ? [`All ${plural(tally.total, "promise", "promises")} at their latest re-check.`, `${tally.counts.map(([s, n]) => `${n} ${lower(STATES[s].word)}`).join(", ")}. This is the proteins' count, shown under station 7.`]
-      : ["No re-check is on record.", "Station 7 has nothing to show yet."],
-    [`${String(WORD[CEL_LOOPS.length] || CEL_LOOPS.length).replace(/^./, c => c.toUpperCase())} ways back, one of them out of the cell.`, "Three return to an earlier station. The fourth stops the work until a person answers."],
-    ["One check in the text is not drawn.", "Station 6 says automation replays the recorded evidence against the closing commit. It has no mark of its own on the path."],
-  ].map(([b, t]) => h("li", null, h("b", null, b), " ", t)));
-  return { fig, choose };
-}
 
 /* ---------- the page: the model, drawn ---------- */
 // Every string from the data reaches the page as a text node: a PR title or a spec's words are never parsed as HTML.
@@ -3761,7 +3424,7 @@ function rfxDraw(R, get) {
   return fig;
 }
 
-/* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10, #g11) opens every fold around it, and
+/* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10) opens every fold around it, and
    scrolls to it. A link to a graph that has left the page (#g3, #g4, #g5, #g8, #g9) lands on the empty anchor in the
    section drawn in its place, which is in no fold. */
 function openFolds(target) {
@@ -4071,23 +3734,6 @@ function draw(M, DATA) {
     show(m.at);
   });
 
-  /* Graph 11 */
-  graph("g11", (m, mark) => {
-    $("g11-say").textContent = m.say;
-    key("g11-key", [["dot run-merged", "Ended with no person"], ["dot run-fixed", "Fixed its own pull request, in that many rounds"], ["dot run-maintainer", "Parked for the maintainer"],
-      ["dot run-fault square", "Parked by a fault"], ["sw wait", "The tail is how long the park waited, 10 pixels for 10 minutes"], ["dot ring", "Ringed: a session of the step crashed"]]);
-    if (m.empty) { put("g11-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }
-    put("g11-plot", h("div", { class: "run-plot" },
-      h("div", { class: "run-row head" }, h("div", { class: "run-day" }), h("div", { class: "run-cols" }, m.cols.map(c => h("div", { class: "run-col" }, h("strong", null, c.name), h("span", null, c.sub)))),
-        h("div", { class: "run-share" }, "Steps that needed no person")),
-      // A row is the project's Day, not this repository's: the Day buttons above do not light it.
-      m.rows.map(r => h("div", { class: "run-row" }, h("div", { class: "run-day" }, r.label),
-        h("div", { class: "run-cols" }, r.cells.map(list => h("div", { class: "run-cell" }, list.map(o => mark(h("button", { type: "button", class: `dot run-${o.col}${o.col === "fault" ? " square" : ""}${o.crashed ? " ring" : ""}`, style: o.wait != null ? `margin-left:${Math.min(160, o.wait).toFixed(1)}px` : "" },
-          o.col === "fixed" ? String(o.fixes) : null, o.wait != null ? h("i", { class: "run-tail", style: `width:${Math.min(160, o.wait).toFixed(1)}px` }) : null), o))))),
-        h("div", { class: "run-share" }, h("span", { class: "run-bar" }, h("i", { style: `width:${r.share == null ? 0 : (100 * r.share).toFixed(1)}%` })),
-          h("span", { class: "mono" }, `${r.alone} of ${r.n}`), r.open ? h("span", { class: "run-open" }, `${r.open} still open`) : null)))));
-  });
-
   /* Graph 12, drawn beside graph 6: the plan against the specs, as the by-script mockup draws it (SVG) */
   /* The gene, first in its chapter: the plan read down to proved code */
   graph("gene", m => {
@@ -4129,10 +3775,9 @@ function draw(M, DATA) {
   /* the foot of the page */
   put("caveats", M.caveats.map(c => h("li", null, rich(c))));
   put("not-measured", M.notMeasured.map(([name, why]) => h("li", null, h("b", null, name), ": ", rich(why))));
-  try { drawHow(DATA, M.promises); } catch (e) { console.error(`how this works: ${(e && e.message) || e}`); }
-  // how this works as a cell: its stations take their texts from howSteps(), as the folded panel does
-  try { celDraw(DATA, M.promises, $); } catch (e) {
-    put("cel-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${(e && e.message) || e}`)); console.error(`cel: ${(e && e.message) || e}`);
+  // the file map: placed and laid out in Python (spec_drift_files), so it takes no Day button
+  try { filDraw(DATA.file_map, $); } catch (e) {
+    put("fil-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${(e && e.message) || e}`)); console.error(`fil: ${(e && e.message) || e}`);
   }
   document.addEventListener("keydown", e => { if (e.key === "Escape") resets.forEach(r => r()); });
   foldLinks();
@@ -4166,6 +3811,110 @@ function themeToggle() {
   });
   system.addEventListener("change", show);
   show();
+}
+
+/* The file map, "Where does each file belong?": every tracked file as one dot under the station of the workflow it
+   serves. Placed and laid out in Python (spec_drift_files.file_map) from git's file list and
+   docs/dashboard/file-stations.json on every build; this draws the cell, its seven stations and the checks between
+   them, then the dots where the model put them. `get` finds an element by its id. Colours are in dashboard.css, under #fil. */
+const FIL_STATIONS = [ // the pill's x, its zone, its name in one or two lines, and what it is in the cell
+  [30, "doc", ["The goal"], "the gene"], [196, "doc", ["A Day's spec"], "transcription"], [368, "doc", ["A promise"], "the transcript"],
+  [506, "try", ["A test that", "fails first"], "folding check"], [682, "try", ["The code, then", "a planted bug"], "the protein"],
+  [970, "after", ["The Day", "closes"], "delivered, labelled"], [1136, "after", ["The re-check"], "still working?"]];
+const FIL_REGION = { doc: "the nucleus", try: "the cytoplasm", after: "out of the cell, on main" };
+function filDraw(F, get) {
+  const $ = id => get("fil-" + id), fig = $("fig"), tip = $("tip");
+  if (!F || F.empty) {
+    $("scroll").replaceChildren(h("p", { class: "load-error" }, "Not measured yet: ", rich((F && F.empty) || "this build has no file list, so there is no file to draw.")));
+    return;
+  }
+  const el = (n, a, txt, parent) => svgEl(fig, n, a, txt, parent), G = F.geo, kinds = F.kinds.map(k => k.key);
+  const cnt = (n, one, many) => `${comma(n)} ${n === 1 ? one : many}`, cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  fig.replaceChildren();
+  fig.setAttribute("viewBox", `0 ${G.top} 1236 ${G.height}`);
+  fig.setAttribute("aria-label", `A cell with seven numbered stations, and every file of the repository hung under the station it serves: ${F.zones.map(z => `${cnt(z.files, "file", "files")} ${z.where}`).join(", ")}; one dot is one file and its area is its line count`);
+  // the cell: its wall and membrane, the nucleus with two pores, and the gap the way leaves it by; each as deep as its tallest column
+  el("rect", { class: "cellb", x: 6, y: 112, width: 918, height: G.cell_h, rx: 44 });
+  el("rect", { class: "mem-c", x: 10.5, y: 116.5, width: 909, height: G.cell_h - 9, rx: 40 });
+  el("rect", { class: "nuc", x: 22, y: 130, width: 456, height: G.nuc_h, rx: 40 });
+  el("rect", { class: "wipe", x: 912, y: 141, width: 24, height: 82 });
+  [157, 179].forEach(cy => el("circle", { class: "pore", cx: 478, cy, r: 3.6 }));
+  [["doc", 46, G.nuc_label], ["try", 506, G.cyto_label], ["after", 946, G.after_label]].forEach(([k, x, y]) => {
+    const g = el("g", { class: `k-${k}` }), zone = F.zones.find(z => z.key === k);
+    el("circle", { class: "sw", cx: x, cy: y, r: 4 }, null, g);
+    el("tspan", { class: "t-bio", dx: 8 }, FIL_REGION[k], el("text", { class: "t-reg", x: x + 10, y: y + 4 }, (zone ? zone.name : k).toUpperCase(), g));
+  });
+  // the way, left to right, and on it the checks by someone else: a diamond an AI reviewer, a square a script, the gate a person
+  el("line", { class: "way", x1: 76, y1: 168, x2: 1182, y2: 168 });
+  [188, 360, 498, 674, 962, 1128].forEach(x => el("polygon", { class: "head", points: `${x},164 ${x + 7},168 ${x},172` }));
+  const name = (x, t, bio) => { el("text", { class: "t-g", x, y: 204, "text-anchor": "middle" }, t); if (bio) el("text", { class: "t-bio", x, y: 216, "text-anchor": "middle" }, bio); };
+  const diamond = x => el("path", { class: "chk", d: `M${x},158 l10,10 l-10,10 l-10,-10 z` });
+  diamond(159); name(159, "plan-auditor");
+  diamond(328); name(328, "spec-auditor", "proofreading");
+  el("ellipse", { class: "ribo", cx: 640, cy: 157, rx: 27, ry: 14 }); el("ellipse", { class: "ribo", cx: 640, cy: 179, rx: 20, ry: 8.5 });
+  el("line", { class: "way", x1: 610, y1: 168, x2: 670, y2: 168 }); name(640, "implementer", "the ribosome");
+  el("rect", { class: "chk", x: 834, y: 160, width: 16, height: 16, rx: 2 }); name(842, "CI's checks", "quality control");
+  [144, 175].forEach(y => el("rect", { class: "chk", x: 917, y, width: 14, height: 17, rx: 4 })); name(924, "the maintainer", "membrane gate");
+  diamond(1100); name(1100, "defect-rater");
+  FIL_STATIONS.forEach(([x, zone, words, bio], i) => {
+    const g = el("g", { class: `k-${zone}` });
+    el("rect", { class: "pill", x, y: 149, width: 92, height: 38, rx: 19 }, null, g);
+    words.forEach((t, j) => el("text", { class: "t-nm", x: x + 49, y: words.length > 1 ? 166 + 12 * j : 172, "text-anchor": "middle" }, t, g));
+    el("circle", { class: "no", cx: x + 5, cy: 150, r: 9.5 }, null, g);
+    el("text", { class: "t-no", x: x + 5, y: 153.6, "text-anchor": "middle" }, i + 1, g);
+    if (i === 6) el("rect", { class: "chk", x: x + 78, y: 143, width: 11, height: 11, rx: 1.5 }, null, g); // the re-check is itself a script's check
+    el("text", { class: "t-bio", x: x + 46, y: 204, "text-anchor": "middle" }, bio, g);
+  });
+  // the files: a label and a count over each group, then its dots; the ring holds what hangs on no station
+  if (G.plasmid) {
+    el("circle", { class: "plasmid", cx: G.plasmid.x, cy: G.plasmid.cy, r: G.plasmid.r });
+    el("text", { class: "t-bio", x: G.plasmid.x, y: G.plasmid.cy + G.plasmid.r + 14, "text-anchor": "middle" }, "on no station");
+  }
+  F.groups.forEach(g => {
+    el("tspan", { class: "n" }, g.files, el("text", { class: "t-sub", x: g.x, y: g.y, "text-anchor": "middle" }, `${g.label} `));
+    const box = el("g", { class: "grp", role: "img", "aria-label": `${g.label}: ${cnt(g.files, "file", "files")}, ${cnt(g.lines, "line", "lines")}, ${g.ring ? "" : "at "}${g.at}` });
+    g.dots.forEach(([i, cx, cy, r]) => el("circle", { class: `b f ${kinds[F.files[i][2]]}`, "data-i": i, cx, cy, r }, null, box));
+  });
+  let on = null;
+  pointerBox(fig, tip, (key, b) => {
+    if (on) on.classList.remove("on");
+    on = null;
+    const d = key != null && F.files[+key];
+    if (!d) return false;
+    const g = F.groups[d[3]];
+    on = b; b.classList.add("on");
+    return tipFill(tip, { t: d[0], l: [`${cnt(d[1], "line", "lines")} · ${F.kinds[d[2]].name}`, d[4] ? F.unplaced_what : g.what, `Hung ${g.ring ? "" : "at "}${g.at}.`] });
+  }, b => b.getAttribute("data-i"));
+
+  // the figures, the key (the graph's own: no other graph explains its marks), the hint, the table and how it is drawn
+  const fg = (num, what, sub, cls) => h("div", cls ? { class: cls } : null, h("div", { class: "num" }, comma(num)), h("div", { class: "what" }, what), h("p", { class: "sub" }, sub));
+  $("figs").replaceChildren(fg(F.files.length, "files in the repository, each drawn once", `${comma(F.lines)} lines in all · one dot is one file, and its area is its line count`, "wide"),
+    ...F.zones.map(z => fg(z.files, z.name, `${cnt(z.lines, "line", "lines")}, ${z.where}`)));
+  const ico = (w, ht, parts) => { const s = document.createElementNS(SVG_NS, "svg"); for (const [k, v] of [["width", w], ["height", ht], ["viewBox", `0 0 ${w} ${ht}`], ["aria-hidden", "true"]]) s.setAttribute(k, v); parts.forEach(([n, a]) => svgEl(s, n, a)); return s; };
+  const entry = (mark, text) => h("span", null, mark, text);
+  $("key").replaceChildren(
+    ...F.kinds.map(k => entry(ico(12, 12, [["circle", { class: `f ${k.key}`, cx: 6, cy: 6, r: 5 }]]), `${k.name} (${comma(k.n)})`)),
+    entry(ico(34, 16, [[3, 1.8], [12, 3.6], [26, 7.2]].map(([cx, r]) => ["circle", { class: "f tool", cx, cy: 8, r }])), "25, 100 and 400 lines"),
+    entry(ico(14, 14, [["path", { class: "chk", d: "M7,0.5 l6.5,6.5 l-6.5,6.5 l-6.5,-6.5 z" }]]), "check by an AI reviewer"),
+    entry(ico(12, 12, [["rect", { class: "chk", width: 12, height: 12, rx: 2 }]]), "check by a script"),
+    entry(ico(10, 20, [["rect", { class: "chk", width: 10, height: 8.5, rx: 3 }], ["rect", { class: "chk", y: 11.5, width: 10, height: 8.5, rx: 3 }]]), "check by a person"),
+    entry(ico(26, 18, [["ellipse", { class: "ribo", cx: 13, cy: 6, rx: 12, ry: 5.4 }], ["ellipse", { class: "ribo", cx: 13, cy: 14, rx: 9, ry: 3.4 }]]), "the writer"));
+  const U = F.unplaced || [], them = U.length === 1 ? "it" : "them";
+  $("hint").replaceChildren("Point at a dot for the file's name, its length and what it is for.",
+    ...(U.length ? [` ${cnt(U.length, "file is", "files are")} in the ring because the table does not place ${them}: ${U.slice(0, 6).join(", ")}${U.length > 6 ? ` and ${U.length - 6} more` : ""}. Add ${them} to `, h("code", null, F.table), "."] : []));
+  $("table").replaceChildren(h("thead", null, h("tr", null, ...["Zone", "Hung at", "What it is", "Files", "Lines", "Names, longest first"].map(t => h("th", null, t)))),
+    h("tbody", null, ...F.groups.map(g => h("tr", null, h("td", null, cap((F.zones.find(z => z.key === g.zone) || {}).name || "")), h("td", null, g.ring ? "No station" : cap(g.at)),
+      h("td", null, g.what + (g.ring && U.length ? ` Also ${cnt(U.length, "file", "files")} the table does not place.` : "")), h("td", { class: "r" }, comma(g.files)), h("td", { class: "r" }, comma(g.lines)),
+      h("td", { class: "nm" }, g.dots.map(d => F.files[d[0]][0]).join(", "))))));
+  $("stamp").replaceChildren(`Drawn from the file list at ${String(F.head || "this build").slice(0, 7)}: ${comma(F.files.length)} tracked files, ${comma(F.lines)} lines. `, "The table that places them is ", h("code", null, F.table), ".");
+  const li = (b, ...rest) => h("li", null, h("b", null, b), " ", ...rest);
+  const folders = F.groups.filter(g => g.zone === "try" && /\/$/.test(g.label) && /^station/.test(g.at)).slice(0, 2);
+  $("how").replaceChildren(
+    li("The path is one promise's way.", "Seven numbered stations, left to right, from the written goal to the re-check on later merged code. Between them a diamond is a check by an AI reviewer and a square is a check by a script; the doubled gate in the cell's wall is the maintainer's merge, and the two ovals are the implementer, who writes the code. The small square on station 7 says that station is itself a script's check."),
+    li("A folder places itself.", "A file hangs where its folder belongs", ...folders.flatMap((g, i) => [i ? ", " : ": ", h("code", null, g.label), ` at ${g.at.split(",")[0]}`]), ". A new file there appears by itself."),
+    li("A script is placed by a short table.", `The ${cnt(F.scripts, "script sits", "scripts sit")} in one folder, so a table says which station each one checks. A script's own test hangs beside it, hollow. A script the table does not name is drawn in the ring, on no station.`),
+    li("A dot's area is the file's line count.", "Within a group the longest file comes first."),
+    li("Colour is the kind of file.", "They are the page's colours: blue for written text, orange for the app's code, magenta for its tests, grey for tooling and docs."));
 }
 
 function boot(DATA) {

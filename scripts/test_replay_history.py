@@ -235,8 +235,8 @@ class Sampling(unittest.TestCase):
         with open(os.path.join(root, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
             page = f.read()
         self.assertEqual(page.count("run by hand"), 0)
-        # once, in the how-this-works panel's re-check step; the other was old graph 4's readout, which left the page
-        self.assertEqual(page.count("It runs after every merge to main"), 1)
+        # once, where graph 7 says what the gate does; the readouts that also said it have left the page
+        self.assertEqual(page.count("recheck.yml: after every merge, re-checks"), 1)
 
 
 class Order(unittest.TestCase):

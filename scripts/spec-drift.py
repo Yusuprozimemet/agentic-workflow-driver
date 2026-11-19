@@ -78,6 +78,7 @@ from spec_drift_plan import plan_graph
 from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, proofreading, protein, reading, reflex,
                                rings, where_ring)
 from spec_drift_score import quality_score
+from spec_drift_files import build_file_map
 
 
 # What every figure built on the backticked names cannot see; the dashboard lists these as written.
@@ -110,7 +111,7 @@ CAVEATS = [
 # edited (provenance).
 SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
            "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
-           "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_views.py")
+           "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_files.py", "spec_drift_views.py")
 # The files that make each part of the cache: a part starts over when one of its files changes
 # (load_cache), and an edit to any other file keeps it. "git" is git's own output for commits named
 # by SHA, as spec_drift_git.py reads it. "code" and "flags" are what spec_drift_metrics.py counts in
@@ -276,6 +277,7 @@ def main():
         real["where_ring"], real["reading"] = where_ring(real), reading(real)
         real["gel"], real["protein"], real["proofreading"] = gel(real), protein(real), proofreading(real)
         real["budget"], real["rings"], real["actogram"], real["reflex"] = budget(real), rings(real), actogram(real), reflex(real)
+        real["file_map"] = build_file_map(head, run)  # every tracked file at its station: read from git, not from the specs
         if args.build:
             # The re-check rows are on the data branch, every other file the panel quotes on main.
             how_read = lambda path: (data_text("replay-history.json") or "") if path == HOW_REPLAY else blobs.read(head, path)  # noqa: E731

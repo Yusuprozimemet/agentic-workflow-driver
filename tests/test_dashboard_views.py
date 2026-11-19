@@ -2736,7 +2736,7 @@ class ReflexPageTest(unittest.TestCase):
             ],
         )
 
-    def test_the_reflex_and_the_cell_reconcile_with_graph_11_the_proteins_and_the_panel(self):
+    def test_the_reflex_reconciles_with_the_proteins(self):
         reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
         v = load("spec_drift_views", "spec_drift_views.py")
         data = runs_data()
@@ -2748,19 +2748,21 @@ class ReflexPageTest(unittest.TestCase):
                 True,
                 (
                     "reflex: 5 steps, 2 parks, 1 crashed (1 session), 1 open | proteins' real runs: "
-                    "5, 2, 1, 1 | graph 11: 5 steps, 2 parks, 1 crashed sessions, 1 open: agree"
+                    "5, 2, 1, 1: agree"
                 ),
             ),
         )
+        line = reconcile.rfx_line(reconcile.model(demo_data.demo()))
+        self.assertTrue(line[0], line[1])
+        # with no arc drawn, a count of steps by the proteins disagrees
+        gone = {**m, "rfx": {"empty": "no step is drawn."}}
         self.assertEqual(
-            reconcile.cel_line(m),
-            (True, "cell: 7 stations, 4 loops | panel: 7 steps, 4 ways back: agree"),
+            reconcile.rfx_line(gone),
+            (
+                False,
+                "reflex: not drawn (no step is drawn.) | proteins' real runs: 5 steps: DISAGREE",
+            ),
         )
-        for line in (
-            reconcile.rfx_line(reconcile.model(demo_data.demo())),
-            reconcile.cel_line(reconcile.model(demo_data.demo())),
-        ):
-            self.assertTrue(line[0], line[1])
 
 
 if __name__ == "__main__":
