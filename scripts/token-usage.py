@@ -23,9 +23,11 @@ the page gives as what the other four are counted up to.
 A reply is counted once, from its last line: a transcript repeats a reply's usage on every content
 block it streamed, and the usage is complete only on the last of those lines, so replies are keyed
 by message and request id and the last line per key wins. The day is the branch the session was on
-(day-17/track-d-... is Day 17); anything else (main, tooling/, docs/) has no day. Claude Code
-deletes transcripts after cleanupPeriodDays (30 by default), so an entry already in the file is
-never lowered: each count keeps the larger of the file's and the transcripts'.
+(day-17/track-d-... is Day 17); anything else (main, tooling/, docs/) has no day. Beside it, each row
+carries the part of the work its dollars belong to (family(), homes()): a reply on a branch goes with
+that branch's family, and a reply on main with the family its session spent the most dollars on. Claude
+Code deletes transcripts after cleanupPeriodDays (30 by default), so what the file holds is never
+lowered (merge()): a date's rows are replaced only by a count that holds at least as much.
 """
 import argparse
 import collections
@@ -125,11 +127,41 @@ def reply(entry):
     return msg
 
 
-def row_key(entry, who):
-    # The row a reply or a tool call counts toward: its local date, the day of its branch, its model and its agent.
+def family(branch):
+    # The part of the work a branch belongs to: ("day", N) for day-NN/..., (its first word, None) for any
+    # other branch with a "/", and None for main or a branch with no "/", which says nothing of the work.
+    day = DAY_BRANCH.match(branch or "")
+    if day:
+        return ("day", int(day.group(1)))
+    return (branch.split("/")[0], None) if "/" in (branch or "") else None
+
+
+def session(entry, path):
+    # The session a line belongs to. A subagent's lines carry its parent's id; a line with none takes
+    # it from the path: <id>.jsonl, or the folder above subagents/.
+    folder = os.path.dirname(path)
+    sub = os.path.basename(folder) == "subagents"
+    return entry.get("sessionId") or (os.path.basename(os.path.dirname(folder)) if sub else os.path.basename(path)[:-len(".jsonl")])
+
+
+def homes(replies):
+    # Each session's home, from its (session, entry) replies: the family it spent the most dollars on.
+    # A session that never left main has none. Sorted first, so two families with equal dollars give the same home each count.
+    spent = collections.defaultdict(lambda: collections.defaultdict(float))
+    for sid, entry in replies:
+        part = family(entry.get("gitBranch"))
+        if part:
+            spent[sid][part] += cost(entry["message"].get("model"), entry["message"].get("usage") or {})
+    return {sid: max(sorted(by), key=by.get) for sid, by in spent.items()}
+
+
+def row_key(entry, who, home=None):
+    # The row a reply or a tool call counts toward: its local date, the day of its branch, its model and its
+    # agent, then the part its dollars belong to: its branch's family, else its session's home, else main.
     when = datetime.datetime.fromisoformat(entry["timestamp"].replace("Z", "+00:00"))
     day = DAY_BRANCH.match(entry.get("gitBranch") or "")
-    return (when.astimezone().date().isoformat(), int(day.group(1)) if day else None, DATED.sub("", entry["message"].get("model") or ""), who)
+    return (when.astimezone().date().isoformat(), int(day.group(1)) if day else None, DATED.sub("", entry["message"].get("model") or ""),
+            who) + (family(entry.get("gitBranch")) or home or ("main", None))
 
 
 def tool_blocks(entry, calls, cut):
@@ -172,7 +204,9 @@ def cost(model, usage):
 
 def count(files):
     # The usage is complete only on a reply's last line, so the last line per key overwrites the others.
-    replies, totals = {}, collections.defaultdict(lambda: dict.fromkeys(FIELDS + TOOL_FIELDS + ("cost",), 0))
+    # A row needs its session's home, known only once every file is read: the tool calls wait for it,
+    # each kept as the three things row_key() reads and its four counts, not its whole line.
+    replies, called, totals = {}, [], collections.defaultdict(lambda: dict.fromkeys(FIELDS + TOOL_FIELDS + ("cost",), 0))
     for path in files:
         who = agent(path)
         calls, cut = {}, {}
@@ -185,20 +219,20 @@ def count(files):
                 tool_blocks(entry, calls, cut)
                 msg = reply(entry)
                 if msg is not None:
-                    replies[(msg.get("id"), entry.get("requestId"))] = (who, entry)
+                    replies[(msg.get("id"), entry.get("requestId"))] = (who, session(entry, path), entry)
         for tid, (name, args, entry) in calls.items():
             if reply(entry) is None:
                 continue
-            t = totals[row_key(entry, who)]
-            if tid in cut:
-                t["bash"] += 1
-                t["cut"] += int(cut[tid])
-            reads, whole = read_size(name, args)
-            t["reads"] += reads
-            t["whole"] += whole
-    for who, entry in replies.values():
+            slim = dict(timestamp=entry["timestamp"], gitBranch=entry.get("gitBranch"), message=dict(model=entry["message"].get("model")))
+            called.append((who, session(entry, path), slim, (int(tid in cut), int(cut.get(tid, False))) + read_size(name, args)))
+    home = homes((sid, entry) for _, sid, entry in replies.values())
+    for who, sid, entry, counts in called:
+        t = totals[row_key(entry, who, home.get(sid))]
+        for k, n in zip(TOOL_FIELDS, counts):
+            t[k] += n
+    for who, sid, entry in replies.values():
         usage = entry["message"]["usage"]
-        t = totals[row_key(entry, who)]
+        t = totals[row_key(entry, who, home.get(sid))]
         t["input"] += usage.get("input_tokens", 0)
         t["cache_write"] += usage.get("cache_creation_input_tokens", 0)
         t["cache_read"] += usage.get("cache_read_input_tokens", 0)
@@ -746,6 +780,38 @@ def report_route(s):
           " work over or reads a summary back, and the reply after a mechanical one keeps the same output")
 
 
+def written_part(r):
+    # The part of a row already in the file. One written before parts were counted: a Day's row is that
+    # Day's, since its day came from its own branch; one with no day is placed nowhere (None, None).
+    return (r["part"], r["part_day"]) if "part" in r else ("day", r["day"]) if r["day"] is not None else (None, None)
+
+
+def merge(totals, kept):
+    """Put the rows already written into this count's, never lowering what the file holds. A session's
+    replies on main change part when it later opens a branch, so the larger of each row would count
+    them twice: the rows are merged by date, day, model and agent instead. Where this count's rows
+    of such a group hold at least the written ones' tokens, replies and dollars (0.001 for the four
+    decimals a row is written with), every transcript is still here and this count's rows stand.
+    Otherwise transcripts are gone and each part keeps the larger of each count, as before parts; a
+    written row with no part and no day keeps what it has beyond this count's rows of its group."""
+    every = FIELDS + TOOL_FIELDS + ("cost", PAST)
+    gained, written = collections.defaultdict(lambda: dict.fromkeys(every, 0)), collections.defaultdict(list)
+    for key, t in totals.items():
+        for k in every:
+            gained[key[:4]][k] += t.get(k, 0)
+    for r in kept:
+        written[(r["date"], r["day"], r["model"], r["agent"])].append(r)
+    for group, rows in written.items():
+        got = gained[group]
+        if all(got[k] + 0.001 >= sum(r.get(k, 0) for r in rows) for k in FIELDS + ("cost",)):
+            continue
+        for r in rows:
+            part = written_part(r)
+            t = totals[group + part]
+            for k in (k for k in every if k != PAST or PAST in t or PAST in r):
+                t[k] = max(t.get(k, 0), r.get(k, 0)) if "part" in r or part[0] else max(0, r.get(k, 0) - got[k])
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--transcripts", default=os.path.join(os.path.expanduser("~"), ".claude", "projects"))
@@ -789,24 +855,17 @@ def main():
     if os.path.exists(args.out):
         with open(args.out, encoding="utf-8") as f:
             kept = json.load(f)
-        for r in (r for r in kept if "agent" in r):
-            t = totals[(r["date"], r["day"], r["model"], r["agent"])]
-            for k in FIELDS:
-                t[k] = max(t[k], r[k])
-            for k in TOOL_FIELDS + ("cost",):
-                t[k] = max(t[k], r.get(k, 0))
-            if PAST in t or PAST in r:
-                t[PAST] = max(t.get(PAST, 0), r.get(PAST, 0))
+        merge(totals, [r for r in kept if "agent" in r])
         # A row written before agents were counted holds every agent's tokens: what it has beyond
         # the agents counted for its date, day and model is kept as unknown, not given to one of them.
         for r in (r for r in kept if "agent" not in r):
             counted = [t for key, t in totals.items() if key[:3] == (r["date"], r["day"], r["model"])]
-            t = totals[(r["date"], r["day"], r["model"], "unknown")]
+            t = totals[(r["date"], r["day"], r["model"], "unknown") + written_part(r)]
             for k in FIELDS:
                 t[k] += max(0, r[k] - sum(c[k] for c in counted))
-    rows = [dict(date=d, day=n, model=m, agent=a, **{k: round(v, 4) if k in ("cost", PAST) else v for k, v in t.items()})
-            for (d, n, m, a), t in totals.items()]
-    rows.sort(key=lambda r: (r["date"], r["day"] or 0, r["model"], r["agent"]))
+    rows = [dict(date=d, day=n, model=m, agent=a, part=p, part_day=pn, **{k: round(v, 4) if k in ("cost", PAST) else v for k, v in t.items()})
+            for (d, n, m, a, p, pn), t in totals.items()]
+    rows.sort(key=lambda r: (r["date"], r["day"] or 0, r["model"], r["agent"], r["part"] or "", r["part_day"] or 0))
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
         f.write("[\n" + ",\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n]\n")
     out = sum(r["output"] for r in rows)
