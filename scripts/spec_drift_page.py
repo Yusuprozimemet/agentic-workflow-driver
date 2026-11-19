@@ -1,7 +1,6 @@
 """spec-drift.py's page: the data the dashboard draws, and the one-file page it builds."""
 
 import ast
-import functools
 import importlib.util
 import json
 import os
@@ -32,9 +31,6 @@ from spec_drift_specs import (
     section,
     test_state,
     track_criteria,
-)
-from spec_drift_data import (
-    replay_row_state,
 )
 
 
@@ -395,136 +391,6 @@ def infra(workflow):
     return dict(runs=runs, latest=latest)
 
 
-# One real promise, picked by how_excerpts, is followed through its day's files and these. No view
-# of the page draws it now ("the panel" below is where it was drawn): the pick stays in the build's
-# data for specs/changes/how-follows-newest-day.md, until a Day's spec replaces its criteria.
-HOW_TEMPLATE = "specs/_template.md"
-HOW_REPLAY = "docs/dashboard/replay-history.json"
-HOW_PLAN = "plan.md"
-HOW_PLAN_PARTS = ("Short answer", "Who does what", "When the driver parks", "Phases", "Stopping points")
-# A promise is followed only if every one of these is on record: its track, PR, seen-red line and
-# planted bugs among them. Its re-check is not: the newest day has none until the replay reaches it.
-HOW_NEEDED = ("crumbs", "day_goal", "day_out_of_scope", "day_tracks", "day_criteria", "claim", "red_today", "test",
-              "evidence", "seen_red", "tick", "bugs", "plan_phase")
-HOW_NO_PROMISE = "every finished promise is missing a step of its record"
-
-
-def how_specs(days):
-    """The finished days' spec files, newest day first: what the panel may pick a promise from."""
-    return [d["file"] for d in sorted(days, key=lambda d: d["day"], reverse=True) if d["status"] in FINISHED]
-
-
-def how_excerpts(read, specs):
-    """The panel's excerpts for the first promise in `specs` (newest day first) tagged new, ticked and
-    on record at every step, under "promise" {id, day, spec, breaks}. Each is {source, text} from the
-    real files through `read(path)` ("" for no file), or {source, missing: why}: a file or passage that
-    has gone shows as gone, never filled in. A file every promise shares going does not end the pick."""
-    read = functools.cache(read)
-    for path in specs:
-        day = int(re.search(r"day-(\d+)", path).group(1))
-        for cid in re.findall(r"^- \[x\] (C\d+\.\d+) \*\*new\*\*", read(path), re.M):
-            promise = dict(id=cid, day=day, spec=path, breaks=f"specs/breaks/day-{day:02d}.json")
-            got = how_excerpts_of(read, promise)
-            if all("text" in got[k] for k in HOW_NEEDED if k != "plan_phase" or read(HOW_PLAN)):
-                return dict(got, promise=dict(source=path, text=promise))
-    return dict(how_excerpts_of(read, None), promise=dict(source="specs/", missing=HOW_NO_PROMISE))
-
-
-def how_excerpts_of(read, promise):
-    """The excerpts for one promise, or with None only those every promise shares."""
-    cid = promise["id"] if promise else ""
-    spec_path, breaks_path = (promise["spec"], promise["breaks"]) if promise else ("specs/", "specs/breaks/")
-    files = {p: read(p) for p in (HOW_TEMPLATE, HOW_REPLAY, HOW_PLAN) + ((spec_path, breaks_path) if promise else ())}
-    spec, template, plan = files.get(spec_path, ""), files[HOW_TEMPLATE], files[HOW_PLAN]
-
-    def flat(text):
-        return re.sub(r"\s+", " ", text).strip()
-
-    def passage(text, pattern):
-        m = re.search(pattern, text, re.M | re.S)
-        return m.group(1).rstrip() if m else None
-
-    def section(heading):
-        return passage(spec, rf"^## {heading}\n(.*?)(?=^## |\Z)")
-
-    block = passage(spec, rf"^(- \[[ x]\] {re.escape(cid)} .*?)(?=^- \[|^## |\Z)")
-
-    def field(pattern):
-        return flat(passage(block, pattern))
-
-    def evidence():
-        return field(r"^\s*Evidence: (.*?)(?=^\s*seen red|^\s*broken:|\Z)")
-
-    def crumbs():
-        track = passage(section("Tracks"), rf"^\| (\w\d?) \|[^\n]*{re.escape(cid)}\b")
-        pr = passage(evidence(), r"\(#(\d+)\)")
-        phase = passage(spec, r"\*\*Phase:\*\* (\d+)")
-        return track and pr and phase and [HOW_PLAN, f"Phase {phase}", f"Day {promise['day']}", f"Track {track} (PR #{pr})", f"Promise {cid}"]
-
-    def criteria_count():
-        day = cid.split(".")[0]
-        count = len(re.findall(rf"^- \[[ x]\] {day}\.\d+ ", spec, re.M))
-        return f"{count} on this day" if count else None
-
-    def tracks():
-        letters = re.findall(r"^\| (\w\d?) \|", section("Tracks"), re.M)
-        return "Tracks " + ", ".join(letters) if letters else None
-
-    def bugs():
-        manifest = json.loads(files[breaks_path])
-        out = []
-        for what, said in re.findall(r"broken: (.+?) → (.+?) \(#\d+\)", block):
-            entry = next(b for b in manifest if b["what"] == what)
-            out.append(dict(what=what, file=entry["file"], find=entry["find"], replace=entry["replace"], reported=said))
-        return out
-
-    def recheck():
-        rows = [r for r in json.loads(files[HOW_REPLAY])["rows"] if r["criterion"] == cid]
-        if promise and not rows:
-            return dict(pr=None, checks=[])  # read, and none on record: not the same as a file gone
-        newest = max(r["n"] for r in rows)
-        rows = [r for r in rows if r["n"] == newest]
-        return dict(pr=rows[0].get("pr"), checks=[dict(check=r["check"], state=replay_row_state(r)) for r in rows])
-
-    def plan_parts():
-        headings = re.findall(r"^## (.+)$", plan, re.M)
-        return list(HOW_PLAN_PARTS) if all(p in headings for p in HOW_PLAN_PARTS) else None
-
-    def plan_phase():
-        phase = passage(spec, r"\*\*Phase:\*\* (\d+)")
-        heading = passage(plan, rf"^(### Phase {phase}\b.*?)(?=^- Day )")
-        scheduled = passage(plan, rf"^(- Day {promise['day']}:.*?)(?=^\S|\Z)")
-        return heading and scheduled and f"{heading}\n{scheduled}"
-
-    wanted = dict(
-        crumbs=(spec_path, crumbs),
-        day_goal=(spec_path, lambda: flat(section("Goal"))),
-        day_out_of_scope=(spec_path, lambda: flat(passage(section("Out of scope"), r"^- (.*?)(?=^- |\Z)"))),
-        day_tracks=(spec_path, tracks),
-        day_criteria=(spec_path, criteria_count),
-        claim=(spec_path, lambda: field(r"\*\*(?:new|hold)\*\* — (.*?)^\s*Red today:")),
-        red_today=(spec_path, lambda: field(r"^\s*Red today: (.*?)^\s*Test:")),
-        test=(spec_path, lambda: field(r"^\s*Test: (.*?)^\s*(?:Plan:|Evidence:)")),
-        evidence=(spec_path, evidence),
-        seen_red=(spec_path, lambda: field(r"^\s*(seen red\b.*?)$")),
-        tick=(spec_path, lambda: passage(block, r"^(- \[[ x]\] \S+ \*\*\w+\*\*)")),
-        form=(HOW_TEMPLATE, lambda: passage(template, r"^(- \[ \] CNN\.1 .*?)(?=^- \[ \] CNN\.2)")),
-        template_parts=(HOW_TEMPLATE, lambda: re.findall(r"^## (.+)$", template, re.M)),
-        bugs=(breaks_path, bugs),
-        recheck=(HOW_REPLAY, recheck),
-        plan_phase=(HOW_PLAN, plan_phase),
-        plan_parts=(HOW_PLAN, plan_parts),
-    )
-    out = {}
-    for key, (source, get) in wanted.items():
-        try:
-            value = get()
-        except (ValueError, KeyError, TypeError, IndexError, AttributeError, StopIteration):
-            value = None
-        why = (HOW_NO_PROMISE if not promise and key in HOW_NEEDED + ("recheck",) else
-               "the file is missing or empty" if not files[source] else "the passage is no longer there")
-        out[key] = dict(source=source, text=value) if value else dict(source=source, missing=why)
-    return out
 
 
 def fill(page, data, name):

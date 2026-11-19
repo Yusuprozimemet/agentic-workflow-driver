@@ -278,10 +278,6 @@ def main():
         real["gel"], real["protein"], real["proofreading"] = gel(real), protein(real), proofreading(real)
         real["budget"], real["rings"], real["actogram"], real["reflex"] = budget(real), rings(real), actogram(real), reflex(real)
         real["file_map"] = build_file_map(head, run)  # every tracked file at its station: read from git, not from the specs
-        if args.build:
-            # The re-check rows are on the data branch, every other file the panel quotes on main.
-            how_read = lambda path: (data_text("replay-history.json") or "") if path == HOW_REPLAY else blobs.read(head, path)  # noqa: E731
-            real["how_this_works"] = how_excerpts(how_read, how_specs(days))
     payload = page_data(real, spec_days) if args.build else real
     data = json.dumps(payload, separators=(",", ":"))
     target = args.build or args.out
