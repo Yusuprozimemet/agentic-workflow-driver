@@ -108,9 +108,9 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
 - The plan-auditor's reading at the stop: step 6 of `CLAUDE.md`'s day order, in a new session
   after the close, never inside it.
 - Pipeline step 6, whether the post-merge evidence replay stays (#212, S12): the maintainer's.
-- `plan.md`'s "Unverified" items the record answers (H10.2: `token-usage.py` counting the
-  container's transcripts; "No merge has used the token"): the plan-change PR after the close
-  edits them, not this Day.
+- `plan.md`'s "Unverified" items the record answers ("No merge has used the token", the usage
+  limit of H09.2, and the reviewer started with `--agents` and `--agent` in the container): the
+  plan-change PR after the close edits them, not this Day (H10.2).
 
 ## Tracks
 
@@ -238,8 +238,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: P55 "34.4 replies per merged pull request"; N25 "with cost beside the baseline and level 1"
 - [ ] C14.13 **new** — The Set-up names the project `bearing`, `budget_usd` 10, `steps_per_night`
       6, the ten `human_only` paths, the level of each run, the image, the driver's `main` commit,
-      and the commit of bearing's copy of the kit's `scripts/spec-drift.py` (40 hex characters
-      each).
+      the commit of bearing's copy of the kit's `scripts/spec-drift.py`, "bearing at the level 2
+      day: <commit>" (40 hex characters each), and "level 2 from: <time>" in the run log's UTC
+      form, which C14.15 reads.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_set_up`.
       Plan: N27 "with budget_usd 10 per step, steps_per_night 6 and a ten-path human-only list"; N11 "trial's record names the commit of its project's copy"
@@ -247,9 +248,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       names bearing's closing PR, its merge commit (40 hex characters), an evidence run id and
       "conclusion: success". The copy holds a `merged` line for that pull request. It also gives
       "escapes: <n>" for the level 2 day (`plan.md`, "Back one level"): each Defect line of
-      bearing's spec for that day found at `close`, by the `dashboard` or in a `Day NN review`,
-      and each evidence run after one of its merges whose conclusion is not success, quoted one
-      per line, and <n> their count.
+      bearing's spec for that day found at `close`, by the `dashboard` or in a review of the day
+      (bearing writes `found: review`), and each evidence run after one of its merges whose
+      conclusion is `failure`, quoted one per line, and <n> their count. The test checks only
+      that <n> is the number of lines quoted: bearing's spec is not copied, so a Defect line
+      left out is not caught here, and the record says so.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_evidence_section`, `TrialFourteenTest.test_escapes_counted`.
       Plan: N25 "closed with its evidence replay green"; P55 "escapes per day"
@@ -257,9 +260,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       section says "met", with the transcript record and the `result` quoted, when any line of
       `run-14.jsonl` holds "usage limit", and "not met" only when none does. The install (H13.1):
       `docs/trial/install-14.jsonl` holds a session id that starts a level 2 step in the copy,
-      then an install command holding bearing's CI install, `pip install -e ".[dev]"`
+      then an install command that installs as bearing's CI does, `pip install -e ".[dev]"`
       (`.github/workflows/evidence.yml`, line 30 at 714412f; The install quotes that line at the
-      commit the Set-up names), then a test command, in that order, and The install quotes both.
+      Set-up's "bearing at the level 2 day: <40 hex>"), matched by the regex
+      `pip install -e ['"]?\.\[dev\]['"]?` so the quoting the session chose does not matter, then
+      a test command, in that order, and The install quotes both.
       A level 2 step is a `start` line of the copy at or after the Set-up's "level 2 from: <time>"
       (the first `on` of the level 2 day in `switches-14.jsonl`): the run log writes no level.
       Red today: `docs/trial/day-14.md` does not exist.
@@ -276,17 +281,19 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 - [ ] C14.17 **new** — The reviewer section names each `review` line of the copy: its pull
       request, its head and its blocker count, and the reviewer's PR comment's URL, taken from
       `gh pr view <n> --repo Yusuprozimemet/bearing --json comments` (the run log writes none):
-      `https://github.com/Yusuprozimemet/bearing/pull/<n>#issuecomment-<digits>`, or "no comment"
-      with the reason, since a failed comment shows only on `on`'s output ("review: no comment
-      on #<n>").
+      `https://github.com/Yusuprozimemet/bearing/pull/<n>#issuecomment-<digits>`, the comment whose
+      body starts "review of `<head>` (session `<session>`)" with that line's head and session
+      (`driver/review.py`), or "no comment" with the reason. A failed comment shows only on
+      `on`'s output ("review: no comment on #<n>: <why>"): the maintainer saves that output on
+      the level 2 day, and the record quotes the line.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_every_review_named`.
-      Plan: none — "what the reviewer found" is `plan.md`'s Day 14 line, held by no commitment.
+      Plan: N35 "The reviewer's findings go in one comment on the pull request"
 - [ ] C14.18 **new** — The first merge (H13.2) names the first `"by": "driver"` line's pull
       request and head, and quotes the red-check probe's command, output and exit code.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_first_merge`.
-      Plan: N25 "and the record names every merge the driver made, every park and every refusal"
+      Plan: P64 "on the commit the checks and the reviewer saw"
 
 ## Verify
 ```bash
@@ -339,7 +346,10 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.22 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.15's "a level 2 step" could not be told from the copies, which write no level, and "pip install" took any install, not the one bearing's CI runs (fixed in this PR: the Set-up's "level 2 from:" time, bearing's `pip install -e ".[dev]"`).
 - **Defect** D14.23 — found: auditor · cause: spec · made: Day 14 · the recheck: P55's "escapes per day" had no criterion (fixed in this PR: C14.14's escapes count).
 - **Defect** D14.24 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.12's `--split` by local date could put a level 1 session on the "after" side, `merged_prs` reads `../bearing`'s local `main`, and the hand-merged PRs were counted unsaid (fixed in this PR).
-- **Defect** D14.25 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.17's comment URL had no source in the copies and no result for a failed comment, and its review half's `Plan:` N25 does not hold "what the reviewer found" (fixed in this PR: the URL from `gh pr view`, C14.17 split into C14.17, `Plan: none`, and C14.18).
+- **Defect** D14.25 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.17's comment URL had no source in the copies and no result for a failed comment, and its review half's `Plan:` N25 does not hold "what the reviewer found" (fixed in this PR: the URL from `gh pr view`, C14.17 split into C14.17 and C14.18).
+- **Defect** D14.28 — found: auditor · cause: spec · made: Day 14 · the second recheck: D14.25's fix gave C14.17 `Plan: none`, though N35 is that comment, and C14.18 N25, though its one merge on the checked commit is P64's (fixed in this PR).
+- **Defect** D14.29 — found: auditor · cause: spec · made: Day 14 · the second recheck: D14.22's fix read "level 2 from:" and a bearing commit from a Set-up whose test checks neither, and matched the install as one literal string the session's quoting could miss (fixed in this PR: both in C14.13, a regex).
+- **Defect** D14.30 — found: auditor · cause: spec · made: Day 14 · the second recheck: C14.17 did not say which comment answers which `review` line or who keeps a failed comment's line; the Out of scope line gave an item `plan.md`'s Unverified list does not hold; the escapes count took cancelled runs and a "Day NN review" bearing never writes, and did not say its test cannot catch a Defect line left out (fixed in this PR).
 - **Defect** D14.26 — found: auditor · cause: spec · made: Day 14 · the recheck: C14.1 was said proved in this PR with no `broken:` line, and C14.7 named no break Track B leaves applying (fixed in this PR: C14.1's break recorded, C14.7's find named).
 - **Defect** D14.27 — found: auditor · cause: spec · made: Day 14 · the recheck: the reviewer-transcript Assumed line named no one who checks it, and H10.2's "Unverified" items in `plan.md` were left with no owner (fixed in this PR: the main session before Track D; the plan-change PR after the close).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
