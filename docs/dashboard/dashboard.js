@@ -870,18 +870,6 @@ function model(DATA) {
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
 }
 
-/* ---------- one promise's excerpts, as the build read them ---------- */
-const howHas = x => Boolean(x && x.text && !x.missing);
-const howMissing = x => h("span", { class: "how-missing" }, `Missing from this build: ${(x && x.source) || "this excerpt"} (${(x && x.missing) || "not in this data"})`);
-const howExcerpt = (x, caption) => h("figure", { class: "how-ex" }, h("figcaption", null, caption), howHas(x) ? h("pre", null, x.text) : howMissing(x));
-// howRecheck is drawn nowhere on the page. It is kept, with the three helpers above that it calls, for
-// S-how-follows-newest-day.2 (specs/changes/how-follows-newest-day.md) until a Day's spec replaces that criterion.
-function howRecheck(x, id) {
-  if (!howHas(x)) return howExcerpt(x, "The latest re-check");
-  if (!x.text.checks.length) return h("figure", { class: "how-ex" }, h("figcaption", null, id), h("pre", null, "not re-checked yet"));
-  return h("figure", { class: "how-ex" }, h("figcaption", null, `${id} at its latest re-check${x.text.pr ? `, the merge of PR #${x.text.pr}` : ""}`),
-    h("pre", null, x.text.checks.map((c, i) => [i ? "\n" : null, `${c.check} → `, h("span", { class: "put" }, c.state)])));
-}
 // The repository's files on GitHub, from the URL the build read (meta.repo_url); with none, the page links to none of them.
 const howBlob = DATA => { const u = ((DATA || {}).meta || {}).repo_url; return u ? `${u.replace(/\/+$/, "")}/blob/main/` : null; };
 
