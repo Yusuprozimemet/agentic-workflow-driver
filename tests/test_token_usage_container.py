@@ -117,7 +117,16 @@ class ContainerTest(unittest.TestCase):
                 text=True,
             )
             self.assertEqual(run.returncode, 2)
-            self.assertIn("--container needs --compare or --tools", run.stderr)
+            # A short, fixed report: argparse's usage text and the temp path differ by option and OS.
+            said = (
+                "unrecognized arguments"
+                if "unrecognized arguments" in run.stderr
+                else "another error"
+            )
+            self.assertTrue(
+                "--container needs --compare or --tools" in run.stderr,
+                "stderr lacks the sentence: " + said,
+            )
             self.assertFalse(os.path.exists(out))
 
 
