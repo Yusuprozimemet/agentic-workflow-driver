@@ -1,6 +1,6 @@
 # Day 14 — The level 2 trial's record: the count run at level 1, one day at level 2, what the driver merged, what parked, what it cost
 
-**Phase:** 2 · **Depends on:** Day 13 · **Expected PRs:** 8 (the spec change, Tracks 0, A, B, C1, C2, D, the close)
+**Phase:** 2 · **Depends on:** Day 13 · **Expected PRs:** 9 (the spec change, Tracks 0, A, B, C1, C2, E, D, the close)
 
 ## Goal
 The driver merges pull requests in another project without the maintainer, and this repository
@@ -23,7 +23,10 @@ Track D cannot start until these are done. Each goes in the record's Set-up (C14
   container has run one step (bearing #101, still open). Before the count run, add days to
   bearing's plan, since it ends at its Day 14, and write their specs: the driver parks on "write
   its day spec". Then run bearing with `"level": 1` (or no `level`) and the container keys until
-  `status` reads 15 of 15. That is about four bearing days.
+  `status` reads 15 of 15. That is about four bearing days. The count run started on
+  2026-11-21 and stopped at 1 of 15: two step sessions opened their pull request and then
+  ended with a `PARK:` line (#108, #116), so the driver never counted them (D14.34). It resumes
+  after Track E merges.
 - **What sets the count back to 0** (C13.6, C08.10, `status.level_2_run`): a merge where the
   maintainer asked for a change, a close, a "still red" or "still has a blocker" park after two
   fixes, and a merge of a pull request no container session opened. The driver waits on any
@@ -81,6 +84,12 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
   (C14.8, C14.16). Their recorded breaks in `specs/breaks/how-follows-newest-day.json` are left
   as they are: breaks under a replaced criterion need neither replay nor retirement
   (`specs/README.md`, "Evidence at the close"), and `track-breaks.py` reads only `day-NN.json`.
+- **A step that opened its pull request ends without `PARK:` (Track E; P29, D14.34).** bearing's
+  `CLAUDE.md` says to stop after opening any pull request and wait for "merged", and the step
+  sessions of #108 and #116 wrote that as a `PARK:` line, which wins over a pull request in
+  `driver/once.py`'s `outcome()`. `rules/session.md` gains one line saying the driver waits for
+  the merge itself (C14.19). `outcome()` is not changed: a `PARK:` after a pull request still
+  parks, as P29 and the Day 4 rule say.
 - **The record (Track D; N25, P55, N11, N27, N28, H09.2, H13.1, H13.2).** `docs/trial/day-14.md`
   and four copies, lines as written, from the start line above: `docs/trial/run-14.jsonl`
   (`state/run.jsonl`), `docs/trial/switches-14.jsonl` (`state/switches.jsonl`, S-switch-log),
@@ -121,13 +130,15 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
 | B | | The reviewer's row and `_reviewer` in `driver/status.py`: C14.5, C14.6 |
 | C1 | | The page's half of the picker removed: C14.16 |
 | C2 | | The build's half of the picker removed: C14.8 |
+| E | | The session rules' line for a step that opened its pull request: C14.19 |
 | D | | After the maintainer's runs, and after A and B merge: the record, its copies and its test: C14.10–C14.15, C14.17, C14.18 |
 
 C14.1, C14.4 and C14.9 hold today's code and are proved in the spec-change PR (their breaks in
 `specs/breaks/day-14.json`). Track 0 lands
 first. Tracks A to C2 do not depend on the count run, and are built while the count run goes;
 of them, only C2 depends on another: it adds to `tests/test_picker_gone.py`, which C1 creates, so
-C1 lands first. Track D uses Track A's `--container` and Track B's `_reviewer`, and waits for
+C1 lands first. Track E depends on no other track; the count run resumes only after it merges,
+since the record's sessions must run with its line. Track D uses Track A's `--container` and Track B's `_reviewer`, and waits for
 the level 2 day's close and its evidence run. Track C's two halves were split (about 530 lines
 together, most of it the two test files): C1 is about 110 lines; C2 is about 420, all deletions
 (`tests/test_how_this_works.py`'s 277 lines, `spec_drift_page.py`'s 136, `spec-drift.py`'s 4,
@@ -139,14 +150,18 @@ Test files, new and edited:
 - C1: `tests/test_how_this_works_page.py` deleted; `PickerGoneTest` in `tests/test_picker_gone.py`
   (new, `test_page_half_gone`). C2: `tests/test_how_this_works.py` deleted; `test_build_half_gone`
   added to `PickerGoneTest`.
+- E: `SessionRulesTest.test_after_pr_line` in `tests/test_session_rules.py`, in place of
+  `test_install_line` (C13.14, replaced).
 - D: `tests/test_trial_fourteen.py` (`TrialFourteenTest`).
 
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, rules and
-      image, `scripts/test_token_usage.py`, the earlier trial records and their tests are
-      unchanged since `3f31818`: Verify's `git diff` prints nothing.
+- [ ] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, the
+      reviewer's rules (`rules/reviewer.md`; `rules/session.md` is C14.19's) and image,
+      `scripts/test_token_usage.py`, `tests/test_once.py`, `tests/test_box_session.py`, the
+      earlier trial records and their tests are unchanged since `3f31818`: Verify's `git diff`
+      prints nothing.
       Plan: none — keeps the Day to the record and its two tools; no commitment is about it.
       broken: a driver file other than status.py edited → +"""The driver: reads a project's state and decides its step (plan.md)."""
 - [ ] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
@@ -302,12 +317,30 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_first_merge`.
       Plan: P64 "on the commit the checks and the reviewer saw"
+- [ ] C14.19 **new** — `rules/session.md` is its text at `5d4f1b5` with C13.14's install line
+      after the line that begins "- You never merge", and one more line right after the line
+      that holds "PARK: <": "- After you open the step's pull request, end the last reply
+      without a `PARK:` line, even where the project's CLAUDE.md says to stop and wait for
+      "merged": the driver waits for the merge itself." (line endings aside). Nothing else in
+      the file changes, and `OnceTest.test_rules_file` still passes unedited (C14.1). Track E
+      retires Day 13's recorded break on `test_install_line` ("the session rules without the
+      install line", `specs/breaks/day-13.json`) with `break.py --retire`, since CI's "A track's
+      breaks replay" runs it on any PR that edits `rules/session.md`, and records C14.19's own.
+      The retire edits `specs/breaks/day-13.json`, so Track E's CI replays every Day 13 break
+      still in force; one that no longer replays is re-recorded or pinned in that PR.
+      Red today: the file has 7 lines and not the new one.
+      Test: `SessionRulesTest.test_after_pr_line` (it takes `test_install_line`'s place).
+      Replaces: C13.14 — was: `rules/session.md` is its text at `5d4f1b5` with the install line only.
+      broken: the session rules without the after-PR line → (Track E records it: `break.py
+      --record --file rules/session.md --find "the driver waits for the merge itself"` on
+      `python -m unittest tests.test_session_rules.SessionRulesTest.test_after_pr_line`)
+      Plan: P29 "how a session hands over a step it could not finish or would not decide"
 
 ## Verify
 ```bash
-python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten tests.test_token_usage_container tests.test_picker_gone -v
+python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten tests.test_token_usage_container tests.test_picker_gone tests.test_session_rules tests.test_once -v
 python -m unittest scripts.test_token_usage scripts.test_dashboard_page -v
-git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules docker scripts/test_token_usage.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
+git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker scripts/test_token_usage.py tests/test_once.py tests/test_box_session.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
 git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests
 git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests
 ```
@@ -363,4 +396,15 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.31 — found: track-reviewer · cause: spec · made: Day 14 · Track A's `ContainerTest` was put in `scripts/`, but CI's required "Track tests seen red" lists test ids from `tests/` only (`scripts/track-red.py`, `LIST_TESTS`) and `scripts/seen-red.py` reads only `tests/`, so C14.2's and C14.3's tests would match no test there and the track could not merge (fixed in a spec-change PR before Track A: the file is `tests/test_token_usage_container.py`).
 - **Defect** D14.32 — found: Track C1 · cause: spec · made: Day 14 · C14.8's and C14.16's `Test:` was Verify's `git grep`, but CI's required "Track tests seen red" fails a `new` criterion whose `Test:` names no test in backticks (`scripts/track-red.py`), so neither picker track could merge; the auditors' three runs and D14.31's fix, the same check's other half, did not catch it (fixed in a spec-change PR after Track C1's code: `PickerGoneTest` in `tests/test_picker_gone.py`).
 - **Defect** D14.33 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.32's fix: C2 now adds to a file C1 creates though the spec said the tracks do not depend on each other; a test asserting only an empty list passes when `git grep` fails outside a repository (exit 128, nothing printed); C14.16's "the same" did not carry the spelling in parts; and C1's break ran the bare grep, so it never showed the named test failing (fixed in this PR: C1 lands first, exit code 1 asserted, each test spelled out, each break on its test).
+- **Defect** D14.34 — found: self · cause: spec · made: Day 4 · the count run's first two step sessions on bearing (Day 14's close, #108; Day 15 Track A, #116) opened their pull request and then ended with a `PARK:` line, as bearing's `CLAUDE.md` says after any pull request, and `outcome()` lets a `PARK:` win over a pull request; `rules/session.md` said when to park but not to end without one after a pull request, so the driver counted neither and the count stayed at 1 of 15 (fixed in this PR and Track E: C14.19).
+- C13.15, still in force, says `rules/session.md` "changes only by C13.14's line": from Track E
+  it reads "by C13.14's and C14.19's lines". No `Replaces: C13.15`, since `invariants.py` lifts a
+  replaced hold's freeze when the spec merges, and C13.15's diffs name no `rules/` path.
+- Assumed: a step session follows `rules/session.md`'s new line over the project's `CLAUDE.md`
+  (the `claude` CLI appends the rules to the system prompt; no test can show the model obeys).
+  The count run after Track E checks it: the `outcome` of its first step's `end` line in
+  `state/run.jsonl` (`python run-steps.py status` shows it) starts "opened: #" (`driver/once.py`),
+  not "park: the session parked: " followed by the session's own words, which for #108 and #116
+  named the open pull request; the record's Parks section says which.
+- **Defect** D14.35 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.34's fix: Track E would delete the test Day 13's recorded break for C13.14 runs, so CI's breaks replay would fail it; C13.15's wording would go false unsaid; whether a session obeys the line was not marked Assumed; and "unedited" for `tests/test_once.py` had no check (fixed in this PR: the retire, the two Notes lines, both test files in C14.1's diff).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
