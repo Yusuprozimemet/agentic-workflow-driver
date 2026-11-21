@@ -326,9 +326,14 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       retires Day 13's recorded break on `test_install_line` ("the session rules without the
       install line", `specs/breaks/day-13.json`) with `break.py --retire`, since CI's "A track's
       breaks replay" runs it on any PR that edits `rules/session.md`, and records C14.19's own.
+      The retire edits `specs/breaks/day-13.json`, so Track E's CI replays every Day 13 break
+      still in force; one that no longer replays is re-recorded or pinned in that PR.
       Red today: the file has 7 lines and not the new one.
       Test: `SessionRulesTest.test_after_pr_line` (it takes `test_install_line`'s place).
       Replaces: C13.14 — was: `rules/session.md` is its text at `5d4f1b5` with the install line only.
+      broken: the session rules without the after-PR line → (Track E records it: `break.py
+      --record --file rules/session.md --find "the driver waits for the merge itself"` on
+      `python -m unittest tests.test_session_rules.SessionRulesTest.test_after_pr_line`)
       Plan: P29 "how a session hands over a step it could not finish or would not decide"
 
 ## Verify
@@ -397,7 +402,9 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
   replaced hold's freeze when the spec merges, and C13.15's diffs name no `rules/` path.
 - Assumed: a step session follows `rules/session.md`'s new line over the project's `CLAUDE.md`
   (the `claude` CLI appends the rules to the system prompt; no test can show the model obeys).
-  The count run after Track E checks it: its first step ends "opened: #<n>", not "park: the
-  session parked: PR #", and the record's Parks section says which.
+  The count run after Track E checks it: the `outcome` of its first step's `end` line in
+  `state/run.jsonl` (`python run-steps.py status` shows it) starts "opened: #" (`driver/once.py`),
+  not "park: the session parked: " followed by the session's own words, which for #108 and #116
+  named the open pull request; the record's Parks section says which.
 - **Defect** D14.35 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.34's fix: Track E would delete the test Day 13's recorded break for C13.14 runs, so CI's breaks replay would fail it; C13.15's wording would go false unsaid; whether a session obeys the line was not marked Assumed; and "unedited" for `tests/test_once.py` had no check (fixed in this PR: the retire, the two Notes lines, both test files in C14.1's diff).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
