@@ -159,8 +159,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 - [ ] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, the
       reviewer's rules (`rules/reviewer.md`; `rules/session.md` is C14.19's) and image,
-      `scripts/test_token_usage.py`, the earlier trial records and their tests are
-      unchanged since `3f31818`: Verify's `git diff` prints nothing.
+      `scripts/test_token_usage.py`, `tests/test_once.py`, `tests/test_box_session.py`, the
+      earlier trial records and their tests are unchanged since `3f31818`: Verify's `git diff`
+      prints nothing.
       Plan: none — keeps the Day to the record and its two tools; no commitment is about it.
       broken: a driver file other than status.py edited → +"""The driver: reads a project's state and decides its step (plan.md)."""
 - [ ] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
@@ -321,7 +322,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       that holds "PARK: <": "- After you open the step's pull request, end the last reply
       without a `PARK:` line, even where the project's CLAUDE.md says to stop and wait for
       "merged": the driver waits for the merge itself." (line endings aside). Nothing else in
-      the file changes, and `OnceTest.test_rules_file` still passes unedited.
+      the file changes, and `OnceTest.test_rules_file` still passes unedited (C14.1). Track E
+      retires Day 13's recorded break on `test_install_line` ("the session rules without the
+      install line", `specs/breaks/day-13.json`) with `break.py --retire`, since CI's "A track's
+      breaks replay" runs it on any PR that edits `rules/session.md`, and records C14.19's own.
       Red today: the file has 7 lines and not the new one.
       Test: `SessionRulesTest.test_after_pr_line` (it takes `test_install_line`'s place).
       Replaces: C13.14 — was: `rules/session.md` is its text at `5d4f1b5` with the install line only.
@@ -331,7 +335,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 ```bash
 python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten tests.test_token_usage_container tests.test_picker_gone tests.test_session_rules tests.test_once -v
 python -m unittest scripts.test_token_usage scripts.test_dashboard_page -v
-git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker scripts/test_token_usage.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
+git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker scripts/test_token_usage.py tests/test_once.py tests/test_box_session.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
 git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests
 git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests
 ```
@@ -388,4 +392,12 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.32 — found: Track C1 · cause: spec · made: Day 14 · C14.8's and C14.16's `Test:` was Verify's `git grep`, but CI's required "Track tests seen red" fails a `new` criterion whose `Test:` names no test in backticks (`scripts/track-red.py`), so neither picker track could merge; the auditors' three runs and D14.31's fix, the same check's other half, did not catch it (fixed in a spec-change PR after Track C1's code: `PickerGoneTest` in `tests/test_picker_gone.py`).
 - **Defect** D14.33 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.32's fix: C2 now adds to a file C1 creates though the spec said the tracks do not depend on each other; a test asserting only an empty list passes when `git grep` fails outside a repository (exit 128, nothing printed); C14.16's "the same" did not carry the spelling in parts; and C1's break ran the bare grep, so it never showed the named test failing (fixed in this PR: C1 lands first, exit code 1 asserted, each test spelled out, each break on its test).
 - **Defect** D14.34 — found: self · cause: spec · made: Day 4 · the count run's first two step sessions on bearing (Day 14's close, #108; Day 15 Track A, #116) opened their pull request and then ended with a `PARK:` line, as bearing's `CLAUDE.md` says after any pull request, and `outcome()` lets a `PARK:` win over a pull request; `rules/session.md` said when to park but not to end without one after a pull request, so the driver counted neither and the count stayed at 1 of 15 (fixed in this PR and Track E: C14.19).
+- C13.15, still in force, says `rules/session.md` "changes only by C13.14's line": from Track E
+  it reads "by C13.14's and C14.19's lines". No `Replaces: C13.15`, since `invariants.py` lifts a
+  replaced hold's freeze when the spec merges, and C13.15's diffs name no `rules/` path.
+- Assumed: a step session follows `rules/session.md`'s new line over the project's `CLAUDE.md`
+  (the `claude` CLI appends the rules to the system prompt; no test can show the model obeys).
+  The count run after Track E checks it: its first step ends "opened: #<n>", not "park: the
+  session parked: PR #", and the record's Parks section says which.
+- **Defect** D14.35 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.34's fix: Track E would delete the test Day 13's recorded break for C13.14 runs, so CI's breaks replay would fail it; C13.15's wording would go false unsaid; whether a session obeys the line was not marked Assumed; and "unedited" for `tests/test_once.py` had no check (fixed in this PR: the retire, the two Notes lines, both test files in C14.1's diff).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
