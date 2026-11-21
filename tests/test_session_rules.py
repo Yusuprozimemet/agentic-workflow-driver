@@ -1,5 +1,5 @@
 """The rules the driver gives its sessions (rules/session.md): C13.14, the install line that sits before
-the project's tests."""
+the project's tests, and C14.19, the after-PR line that lets the driver wait for the merge itself."""
 
 import sys
 import unittest
@@ -20,16 +20,25 @@ AT_5D4F1B5 = """# Rules for a session the driver started
 
 INSTALL = "- Before running the project's tests, install the project as its CI does (its workflows in `.github/workflows/`)."
 
+AFTER_PR = "- After you open the step's pull request, end the last reply without a `PARK:` line, even where the project's CLAUDE.md says to stop and wait for \"merged\": the driver waits for the merge itself."
+
 
 class SessionRulesTest(unittest.TestCase):
-    def test_install_line(self):
-        # C13.14: the session rules tell the session to install the project as its CI does, before the
-        # tests run: the line goes right after the one that forbids merging, and nothing else changes.
+    def test_after_pr_line(self):
+        # C13.14 and C14.19: the session rules tell the session to install the project as its CI does,
+        # before the tests run, and not to end on PARK once its pull request is open: the install line
+        # goes right after the one that forbids merging, the after-PR line right after the PARK line,
+        # and nothing else changes.
         found_lines = (ROOT / "rules" / "session.md").read_bytes().decode("utf-8").splitlines()
         held = AT_5D4F1B5.splitlines()
         anchors = [i for i, line in enumerate(held) if line.startswith("- You never merge")]
         self.assertEqual(len(anchors), 1)
         expected_lines = held[: anchors[0] + 1] + [INSTALL] + held[anchors[0] + 1 :]
+        parks = [i for i, line in enumerate(expected_lines) if "PARK: <" in line]
+        self.assertEqual(len(parks), 1)
+        expected_lines = (
+            expected_lines[: parks[0] + 1] + [AFTER_PR] + expected_lines[parks[0] + 1 :]
+        )
         # The line count and the places that differ, not the two lists: unittest shortens a list's repr
         # in its failure ("[N chars]"), and a break's report must replay the same on every machine.
         differing = [
