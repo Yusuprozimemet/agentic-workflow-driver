@@ -1,0 +1,3 @@
+{"session": "76bd4a7f-98fc-4049-800f-4c791d2adc90"}
+{"command": "python -m pip install -q -e \".[dev]\" 2>&1 | tail -2; python -m pytest -q 2>&1 | tail -1; git checkout -q -b day-22/track-a-ingest-not-a-repo && echo ok", "description": "Install, run tests, create branch"}
+{"command": "python -m pip install -q -e \".[dev]\" 2>&1 | tail -2; python -m pytest -q 2>&1 | tail -1; git checkout -q -b day-22/track-a-ingest-not-a-repo && echo ok", "description": "Install, run tests, create branch"}
