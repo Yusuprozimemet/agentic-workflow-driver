@@ -91,10 +91,13 @@ class ReviewProgressTest(unittest.TestCase):
 
     def live_log(self, records):
         # The records, then a pid line that keeps session r1 live: its process is this test's child.
+        # The child starts before the stamp, as in test_status: lock.lives allows a process begun no
+        # later than its started time plus two seconds.
+        pid = self.live_pid()
         now = lock.now().strftime(lock.STAMP)
         records = [
             *records,
-            {"event": "pid", "at": now, "session": "r1", "pid": self.live_pid(), "started": now},
+            {"event": "pid", "at": now, "session": "r1", "pid": pid, "started": now},
         ]
         os.makedirs(self.state, exist_ok=True)
         Path(self.state, "run.jsonl").write_bytes(b"".join(encode(record) for record in records))
