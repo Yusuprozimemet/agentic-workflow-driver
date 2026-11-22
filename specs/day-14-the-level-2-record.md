@@ -179,7 +179,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       tests are unchanged since `3f31818`: Verify's `git diff` prints nothing.
       (`scripts/test_token_usage.py` is C14.4's.)
       Plan: none — keeps the Day to the record and its two tools; no commitment is about it.
-      Evidence: Verify's `git diff` from `3f31818` prints nothing on `main` at `66782b6`, after every Day 14 PR; its break recorded in #262.
+      Evidence: Verify's `git diff` from `3f31818` prints nothing on `main` at `c7d4377`, after every Day 14 PR; its break recorded in #262, and again in #275 without `scripts/test_token_usage.py`.
       broken: a driver file other than status.py edited → +"""The driver: reads a project's state and decides its step (plan.md)."""
 - [x] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
       `<d>/-work/`, a main session and one under `-work/<id>/subagents/`, and not a main session
@@ -208,7 +208,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       wherever the checkout is (D14.70): Verify's `git diff -U0` of the file counts 6 lines
       that start `-` or `+`, the two file headers and the four.
       Plan: N12 "token-usage.py is pointed there"
-      Evidence: `scripts/test_token_usage.py` passes on `main` at `66782b6`, unedited since `3f31818` (C14.1's diff); its break recorded in #262.
+      Evidence: `scripts/test_token_usage.py` passes on `main` at `c7d4377`, and Verify's `git diff -U0` count from `3f31818` prints 6 there, the max-path test's four lines and the two file headers (#275); its breaks recorded in #262 and #275.
       broken: the split day put on the earlier side → AssertionError: Lists differ: [50000, 60000] != [50000]
       broken: a line added outside the max-path test → 9
 - [x] C14.5 **new** — On a log with a step session `s1` and a review session `r1` (`start` with
