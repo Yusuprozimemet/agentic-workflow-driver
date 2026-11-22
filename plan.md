@@ -726,8 +726,9 @@ and the container's correction above it).
   names every merge the driver made, every park and every refusal.
 
 ### Phase 3 — Level 3: phases chain
-**Goal:** the next phase starts when the plan-auditor names no plan change. Its days are built
-while the trial's project runs on at level 2, with the maintainer answering every phase end.
+**Goal:** the next phase starts when the plan-auditor names no plan change. Its first three
+days are built here; the trial's project runs again for Day 18's record, after Day 17 has
+merged, so no level 2 run stands on the old gate.
 - Day 15: the level 2 gate by name (Levels, "The kit's checks"): `on` at level 2 refuses unless
   `main` requires a pull request, allows no bypass and requires each of the kit's checks by name,
   less those `waived_checks` names; `on` and the switch log print the waived ones; `status`
@@ -743,8 +744,9 @@ while the trial's project runs on at level 2, with the maintainer answering ever
   phase if its specs have merged (P53). The verdict line comes first, in the kit (H12.4).
 - Day 18: the trial's record at level 3: two phases of the trial's project at level 2, then a
   phase end the driver chained; what it started, merged, parked and refused, what it cost beside
-  the baseline and beside level 2. Before it, the maintainer extends the project's plan past its
-  Day 24 and stops one real session with `STOP` (the session and its container both gone).
+  the baseline and beside level 2. Before its first level 2 run, the maintainer extends the
+  project's plan past its Day 24 and stops one real session with `STOP` (the session and its
+  container both gone).
 - **Done when:** the level 3 trial's day closed with its evidence replay green, and the record
   names every phase the driver started, every merge it made, every park and every refusal.
 
