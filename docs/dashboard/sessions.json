@@ -1194,5 +1194,5 @@
 {"date":"2026-11-22","day":15,"agent":"track-reviewer","from":"2026-11-22T19:40:23+01:00","to":"2026-11-22T19:43:17+01:00","replies":16,"ran":{"other":38,"tests":4},"runs":[]},
 {"date":"2026-11-22","day":null,"agent":"main","from":"2026-11-22T20:15:58+01:00","to":"2026-11-22T20:20:50+01:00","replies":7,"ran":{"other":2},"runs":[]},
 {"date":"2026-11-22","day":null,"agent":"claude-code-guide","from":"2026-11-22T20:16:05+01:00","to":"2026-11-22T20:16:54+01:00","replies":3},
-{"date":"2026-11-22","day":null,"agent":"main","from":"2026-11-22T20:19:15+01:00","to":"2026-11-22T20:21:05+01:00","replies":13,"ran":{"other":5,"tests":10},"runs":[]}
+{"date":"2026-11-22","day":null,"agent":"main","from":"2026-11-22T20:19:15+01:00","to":"2026-11-22T20:21:59+01:00","replies":17,"ran":{"other":5,"tests":11},"runs":[]}
 ]
