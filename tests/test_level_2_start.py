@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 from tests import test_box_preflight as preflight
 from tests import test_box_session as box_session
 from tests.test_level_2_blocker import container_merges
+from tests.test_merge_gh import KIT
 from tests.test_merge_wait import view
 from tests.test_review_loop import HEAD, R, ReviewCase, rewrite, same
 
@@ -35,17 +36,22 @@ LINE_PROTECTION = (
     "cannot start: level 2 needs main to require a pull request and its checks with no bypass: "
     "main allows a bypass"
 )
+LINE_KIT_CHECKS = (
+    "cannot start: level 2 needs main to require a pull request and its checks with no bypass: "
+    "main does not require " + ", ".join(f'"{name}"' for name in KIT)
+)
 
 
-def protected(admins):
-    # Classic protection that requires the pull request and the checks; admins bypass it when admins is true.
+def protected(admins, names=(*KIT, "tests")):
+    # Classic protection that requires the pull request and the checks named in names: the kit's nine
+    # and the project's tests by default. Admins bypass it when admins is false.
     return {
         "code": 0,
         "out": {
             "required_pull_request_reviews": {"required_approving_review_count": 0},
             "required_status_checks": {
-                "contexts": ["tests"],
-                "checks": [{"context": "tests", "app_id": 1}],
+                "contexts": list(names),
+                "checks": [{"context": name, "app_id": 1} for name in names],
             },
             "enforce_admins": {"enabled": admins},
         },
@@ -79,17 +85,22 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
         # The start records of the run log: a session begins with one.
         return [record for record in self.run_log() if record.get("event") == "start"]
 
-    def refused(self):
-        # One run of `on`: its exit code, its stderr lines with the config held as <path>, the start records
-        # it added, and its issue creations and api calls.
+    def held(self, err):
+        # The stderr lines with the config's path held as <path>, in each spelling it may take.
         path = self.folder / "driver.json"
-        before = len(self.starts())
-        code, _, err = self.run_steps("on")
         lines = []
         for line in err.splitlines():
             for form in sorted({str(path), os.path.realpath(path)}, key=len, reverse=True):
                 line = line.replace(form, "<path>")
             lines.append(line)
+        return lines
+
+    def refused(self):
+        # One run of `on`: its exit code, its stderr lines with the config held as <path>, the start records
+        # it added, and its issue creations and api calls.
+        before = len(self.starts())
+        code, _, err = self.run_steps("on")
+        lines = self.held(err)
         calls = self.gh_of()
         return (
             code,
@@ -205,3 +216,56 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
             len(self.starts()) - before > 0,
         )
         same(self, found, ([["api", CLASSIC], ["api", RULES]], True))
+
+    def test_needs_the_kits_checks(self):
+        # C15.7: main must require the kit's nine checks by name, as well as the project's tests. Protection
+        # that names only the tests refuses with the one line, before any session starts or issue is created.
+        reviewer_answer = json.dumps(
+            {"type": "result", "is_error": False, "result": "REVIEW: none", "session_id": R}
+        )
+        self.box(
+            "needs_kit_checks",
+            run=[
+                {
+                    "tail": ["--session-id", box_session.U],
+                    "stdout": box_session.result(box_session.U),
+                },
+                {"tail": ["--session-id", R], "stdout": reviewer_answer},
+            ],
+            steps=1,
+        )
+        self.reviewed(
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        )
+        rewrite(self.folder / "driver.json", level=2)
+        rewrite(
+            self.folder / "gh" / "fake.json",
+            api={CLASSIC: protected(True, names=("tests",)), RULES: NO_RULES},
+        )
+        self.seed(15)
+        before = len(self.starts())
+
+        def uuids():
+            # The step's uuid first, then the reviewer's for every later call.
+            yield uuid.UUID(box_session.U)
+            while True:
+                yield uuid.UUID(R)
+
+        with mock.patch("uuid.uuid4", side_effect=uuids().__next__):
+            code, _, err = self.run_steps("on")
+        calls = self.gh_of()
+        first = next(
+            (n for n, call in enumerate(calls) if call[:2] == ["issue", "create"]), len(calls)
+        )
+        found = (
+            code,
+            self.held(err),
+            len(self.starts()) - before,
+            [call for call in calls if call[:2] == ["issue", "create"]],
+            [call for call in calls[:first] if call[0] == "api"],
+        )
+        same(
+            self,
+            found,
+            (2, [LINE_KIT_CHECKS], 0, [], [["api", CLASSIC], ["api", RULES]]),
+        )

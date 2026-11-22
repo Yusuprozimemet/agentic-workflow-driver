@@ -1,6 +1,6 @@
-"""C13.3 and C13.4: protection() says whether main requires a pull request and its checks from a
-source with no bypass, and merge() runs one `gh pr merge` on the head it names and says when gh
-refuses. Each test runs the fake gh of tests/test_github.py beside a scratch project, and reads
+"""C13.3, C13.4 and C15.4: protection() says whether main requires a pull request and the kit's
+nine checks, by name, from a source with no bypass, and merge() runs one `gh pr merge` on the
+head it names and says when gh refuses. Each test runs the fake gh of tests/test_github.py beside a scratch project, and reads
 back the arguments it was called with."""
 
 import importlib
@@ -17,18 +17,34 @@ if str(ROOT) not in sys.path:
 from tests.test_github import fake_gh, read_calls
 
 SHA = "1dc0f03" + "a" * 33
+# The kit's nine checks by job name, a literal: this file must import on main, where driver.github
+# has no KIT_CHECKS yet.
+KIT = (
+    "Description uses the template",
+    "Diff stays reviewable",
+    "Branch, title, commits and Jira keys agree",
+    "Frozen files stay unedited",
+    "Dashboard metric tests gate",
+    "Criteria keep their wording",
+    "A closed day's evidence replays",
+    "Track tests seen red",
+    "A track's breaks replay",
+)
 CLASSIC = "repos/{owner}/{repo}/branches/main/protection"
 RULES = "repos/{owner}/{repo}/rules/branches/main"
 RULESET_7 = "repos/{owner}/{repo}/rulesets/7"
 NOT_PROTECTED = {"code": 1, "out": "", "err": "gh: Branch not protected (HTTP 404)\n"}
 REVIEWS = {"required_approving_review_count": 0}
-CHECKS = {"contexts": ["tests"], "checks": [{"context": "tests", "app_id": 1}]}
+CHECKS = {
+    "contexts": [*KIT, "tests"],
+    "checks": [{"context": name, "app_id": 1} for name in (*KIT, "tests")],
+}
 RULES_7 = [
     {"type": "pull_request", "ruleset_id": 7, "parameters": {}},
     {
         "type": "required_status_checks",
         "ruleset_id": 7,
-        "parameters": {"required_status_checks": [{"context": "tests"}]},
+        "parameters": {"required_status_checks": [{"context": name} for name in (*KIT, "tests")]},
     },
 ]
 
@@ -99,7 +115,11 @@ class ProtectionTest(GhCase):
                 RULES: NO_RULES,
             },
         )
-        self.assertEqual(self.github.protection(str(folder), gh), "main allows a bypass")
+        reason = self.github.protection(str(folder), gh)
+        # Compared up to the first name: a break that skips the bypass line reports the names it
+        # misses instead, and its words differ at once.
+        self.assertIsNotNone(reason)
+        self.assertEqual(reason.split(' "')[0], "main allows a bypass")
 
     def test_checks_bypassable(self):
         folder = self.scratch()
