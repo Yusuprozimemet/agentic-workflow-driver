@@ -405,7 +405,8 @@ def level_2_refusals(args, project, config):
         )
     if lines:
         return lines
-    reason = github.protection(project, args.gh)
+    waived = tuple(config.get("waived_checks", []))
+    reason = github.protection(project, args.gh, waived)
     if reason is not None:
         lines.append(
             "cannot start: level 2 needs main to require a pull request and its checks with no bypass: "
@@ -431,6 +432,7 @@ def steps(args, home, project, read_facts, config):
     line = livecheck.refusal(args.state, args.claude, command)
     if line:
         return once.refuse([line])
+    waived = config.get("waived_checks", []) if config.get("level") == 2 else []
     if config.get("level") == 2:
         lines = level_2_refusals(args, project, config)
         if lines:
@@ -438,7 +440,11 @@ def steps(args, home, project, read_facts, config):
     reason = once.settle(args, project)
     if reason:
         return once.refuse([f"cannot read the project: {reason}"])
-    switchlog.append(args.state, "on")
+    # Each waived check is named before the session, in the config's order.
+    for name in waived:
+        once.say(f'level 2: waived check "{name}"', 0)
+    # None, not [], when nothing is waived: append leaves None out, so the line stays {"event": "on"}.
+    switchlog.append(args.state, "on", waived_checks=waived or None)
     record, count, open_list, shown = None, 0, [], None
 
     def end(line, code, **keys):

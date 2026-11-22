@@ -20,7 +20,7 @@ from tests import test_box_session as box_session
 from tests.test_level_2_blocker import container_merges
 from tests.test_merge_gh import KIT
 from tests.test_merge_wait import view
-from tests.test_review_loop import HEAD, R, ReviewCase, rewrite, same
+from tests.test_review_loop import HEAD, R, ReviewCase, rewrite, same, without_at
 
 CLASSIC = "repos/{owner}/{repo}/branches/main/protection"
 RULES = "repos/{owner}/{repo}/rules/branches/main"
@@ -59,6 +59,7 @@ def protected(admins, names=(*KIT, "tests")):
 
 
 NO_RULES = {"code": 0, "out": []}
+WAIVED = ["A track's breaks replay", "A closed day's evidence replays"]
 
 
 class LevelStartTest(ReviewCase, unittest.TestCase):
@@ -269,3 +270,151 @@ class LevelStartTest(ReviewCase, unittest.TestCase):
             found,
             (2, [LINE_KIT_CHECKS], 0, [], [["api", CLASSIC], ["api", RULES]]),
         )
+
+    def first_switch(self):
+        # The switch log's first line, its "at" left out; None when `on` wrote none.
+        path = self.state / "switches.jsonl"
+        if not path.exists():
+            return None
+        first = path.read_bytes().decode("utf-8").splitlines()[0]
+        return without_at(json.loads(first))
+
+    def test_waived_printed_and_logged(self):
+        # C15.8: a waived check is named before the session, in the config's order, and the switch log's `on`
+        # line names the waived checks. The protection the fake gh answers lacks them, and the start goes on.
+        reviewer_answer = json.dumps(
+            {"type": "result", "is_error": False, "result": "REVIEW: none", "session_id": R}
+        )
+        self.box(
+            "waived_printed",
+            run=[
+                {
+                    "tail": ["--session-id", box_session.U],
+                    "stdout": box_session.result(box_session.U),
+                },
+                {"tail": ["--session-id", R], "stdout": reviewer_answer},
+            ],
+            steps=1,
+        )
+        self.reviewed(
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        )
+        rewrite(self.folder / "driver.json", level=2, waived_checks=WAIVED)
+        rewrite(
+            self.folder / "gh" / "fake.json",
+            api={
+                CLASSIC: protected(
+                    True, names=[name for name in KIT if name not in WAIVED] + ["tests"]
+                ),
+                RULES: NO_RULES,
+            },
+        )
+        self.seed(15)
+
+        def uuids():
+            # The step's uuid first, then the reviewer's for every later call.
+            yield uuid.UUID(box_session.U)
+            while True:
+                yield uuid.UUID(R)
+
+        with mock.patch("uuid.uuid4", side_effect=uuids().__next__):
+            code, out, err = self.run_steps("on")
+        found = (code, self.held(err), out.splitlines()[:3], self.first_switch())
+        same(
+            self,
+            found,
+            (
+                0,
+                [],
+                [
+                    'level 2: waived check "A track\'s breaks replay"',
+                    'level 2: waived check "A closed day\'s evidence replays"',
+                    "opened: #12 from `day-01/track-a-x`",
+                ],
+                {"event": "on", "waived_checks": WAIVED},
+            ),
+        )
+
+    def test_level_1_ignores_waived(self):
+        # C15.9: at level 1 the protection is not read, and no waived line is printed or logged, whatever the
+        # config waives.
+        reviewer_answer = json.dumps(
+            {"type": "result", "is_error": False, "result": "REVIEW: none", "session_id": R}
+        )
+        self.box(
+            "level_1_waived",
+            run=[
+                {
+                    "tail": ["--session-id", box_session.U],
+                    "stdout": box_session.result(box_session.U),
+                },
+                {"tail": ["--session-id", R], "stdout": reviewer_answer},
+            ],
+            steps=1,
+        )
+        self.reviewed(
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        )
+        rewrite(self.folder / "driver.json", waived_checks=["A track's breaks replay"])
+        rewrite(
+            self.folder / "gh" / "fake.json",
+            api={CLASSIC: protected(True), RULES: NO_RULES},
+        )
+        self.seed(15)
+
+        def uuids():
+            # The step's uuid first, then the reviewer's for every later call.
+            yield uuid.UUID(box_session.U)
+            while True:
+                yield uuid.UUID(R)
+
+        with mock.patch("uuid.uuid4", side_effect=uuids().__next__):
+            _, out, _ = self.run_steps("on")
+        found = (
+            [call for call in self.gh_of() if call[:1] == ["api"] and "--method" not in call],
+            [line for line in out.splitlines() if line.startswith("level 2: waived")],
+            self.first_switch(),
+        )
+        same(self, found, ([], [], {"event": "on"}))
+
+    def test_none_waived(self):
+        # C15.17: an empty list waives nothing: no waived line is printed, and the switch log's `on` line is the
+        # one it was before the key existed.
+        reviewer_answer = json.dumps(
+            {"type": "result", "is_error": False, "result": "REVIEW: none", "session_id": R}
+        )
+        self.box(
+            "none_waived",
+            run=[
+                {
+                    "tail": ["--session-id", box_session.U],
+                    "stdout": box_session.result(box_session.U),
+                },
+                {"tail": ["--session-id", R], "stdout": reviewer_answer},
+            ],
+            steps=1,
+        )
+        self.reviewed(
+            views=[view("OPEN", head=HEAD), view("OPEN", head=HEAD), view("MERGED", head=HEAD)]
+        )
+        rewrite(self.folder / "driver.json", level=2, waived_checks=[])
+        rewrite(
+            self.folder / "gh" / "fake.json",
+            api={CLASSIC: protected(True), RULES: NO_RULES},
+        )
+        self.seed(15)
+
+        def uuids():
+            # The step's uuid first, then the reviewer's for every later call.
+            yield uuid.UUID(box_session.U)
+            while True:
+                yield uuid.UUID(R)
+
+        with mock.patch("uuid.uuid4", side_effect=uuids().__next__):
+            code, out, _ = self.run_steps("on")
+        same(
+            self,
+            (code, [line for line in out.splitlines() if line.startswith("level 2: waived")]),
+            (0, []),
+        )
+        same(self, self.first_switch(), {"event": "on"})
