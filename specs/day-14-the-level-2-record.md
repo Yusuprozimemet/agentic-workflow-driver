@@ -444,8 +444,8 @@ python -m unittest tests.test_status_review tests.test_status tests.test_status_
 python -m unittest scripts.test_token_usage scripts.test_dashboard_page -v
 git -c core.safecrlf=false diff -U0 3f31818 -- scripts/test_token_usage.py | grep -c '^[-+]'  # 6
 git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker tests/test_once.py tests/test_box_session.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
-git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests
-git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests
+git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests  # nothing, exit 1
+git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests  # nothing, exit 1
 ```
 
 ## Notes
@@ -566,5 +566,6 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.66 — found: track-reviewer · cause: process · made: Day 14 · Track D's seen-red lines showed no red for C14.10 (fixed in #273: its line added).
 - **Defect** D14.67 — found: track-reviewer · cause: implementation · made: Day 14 · Track D's test gave two read failures one message (fixed in #273).
 - **Defect** D14.68 — found: Day 14 review · cause: spec · made: Day 13 · `status` prints "level: 1" whatever `driver.json`'s level (`driver/status.py`, `_report`, a line from Day 7): on the level 2 day it read "level: 1"; Day 13 added level 2 and no criterion named the line (not fixed: H14.2).
+- **Defect** D14.69 — found: rehearsal · cause: spec · made: Day 14 · Verify's two `git grep` lines exit 1 when they find nothing, which is their pass, and the replay reads a bare line by its exit code, so `close-evidence.py --rehearse` failed both (fixed in the close: each ends `  # nothing, exit 1`, which `scripts/evidence.py` reads as what the line must print and exit).
 - **Hand-off** H14.2 → the maintainer: `status` names the level `driver.json` gives, not "level: 1" (D14.68).
 - **Hand-off** H14.3 → the maintainer: `on` at level 2 reads `main`'s protection only, so `setup-check.py`'s two failed checks on bearing ("A closed day's evidence replays", "A track's breaks replay", which bearing does not have) did not stop it; whether level 2 should need them is not asked by any criterion.
