@@ -61,10 +61,65 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 /* the words the page uses, said once: a Day is the plan's step, a date is the calendar's */
 .words { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 6px 24px; font-size: 12px; line-height: 1.4; color: var(--ink-2); }
 .words dt { display: inline; font-weight: 600; color: var(--ink); } .words dt::after { content: ": "; } .words dd { display: inline; margin: 0; }
-.now, .attention, .demo-banner { padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+.now, .demo-banner { padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
 .demo-banner { border: 2px solid var(--repair); font-weight: 500; }
-.attention summary { cursor: pointer; font-weight: 600; }
-.attention ul { margin-top: 8px; padding-left: 20px; display: grid; gap: 4px; color: var(--ink-2); overflow-wrap: anywhere; }
+/* needs attention: one list of what is open, drawn open. Its marks are the same in the list, under a Day and beside a
+   graph's title, and no two differ by colour alone: a diamond, a square, a hatched square, a dashed one, a hollow
+   square, a ring and a short bar. */
+.o { display: inline-block; flex: none; box-sizing: border-box; width: 12px; height: 12px; border-radius: 2.5px; }
+.o.bad { background: var(--broken); transform: rotate(45deg) scale(.84); }
+.o.rep { background: var(--repair); }
+.o.due { background: repeating-linear-gradient(45deg, var(--repair) 0 2.5px, var(--card) 2.5px 5px); border: 1px solid var(--repair); }
+.o.stl { background: var(--card); border: 1.5px dashed var(--repair); }
+.o.unp { background: var(--card); border: 2px solid var(--proven); }
+.o.hnd { background: var(--card); border: 2px solid var(--ink); border-radius: 50%; }
+.o.exp { height: 4px; border-radius: 2px; background: var(--pending); }
+.attention { padding: 18px 20px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; gap: 16px; }
+.attention[hidden], .attention [hidden], .chips[hidden] { display: none; }
+.attention h2 { font: 700 22px/1.2 var(--display); text-wrap: balance; }
+.at-head { display: flex; flex-direction: column; gap: 4px; }
+.at-sum { display: flex; flex-direction: column; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.at-n { color: var(--ink-2); } .at-n b { color: var(--ink); }
+.at-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 26px; }
+.at-big { display: flex; align-items: center; gap: 9px; font: 700 30px/1 var(--display); font-variant-numeric: tabular-nums; }
+.at-name { margin-top: 6px; font-weight: 600; }
+.at-sub { font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+.at-below { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: 12.5px; color: var(--muted); }
+.at-below span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+/* the strand of Days: a band for each Day and one for what belongs to no Day, the marks hanging under it */
+.at-cap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+.at-cap b { font-size: 12.5px; color: var(--ink); }
+.at-strand { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); min-width: calc(var(--n, 1) * 56px); padding-bottom: 2px; }
+.at-col { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding: 0 1px; }
+.at-col.pe { padding-right: 7px; }
+.at-band { align-self: stretch; background: var(--s1); color: var(--on-s12); font: 500 11px/24px var(--mono); text-align: center; white-space: nowrap; }
+.at-col:first-child .at-band { border-radius: 999px 0 0 999px; }
+.at-col:nth-last-child(2) .at-band { border-radius: 0 999px 999px 0; }
+.at-band.none { margin-left: 6px; background: none; color: var(--ink-2); border: 1px dashed var(--pending); border-radius: 999px; font-size: 10px; line-height: 22px; }
+.at-band.hot { background: var(--s3); color: var(--on-s34); font-weight: 600; border-color: var(--s3); border-style: solid; }
+.at-stack { display: grid; grid-template-columns: repeat(3, 12px); gap: 4px; align-content: start; align-items: center; min-height: 12px; }
+/* the list: a mark, the ids, what is wrong, and the graphs that draw it */
+.at-list:not(:empty) { border-bottom: 1px solid var(--line); }
+.at-grp { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; font: 500 11px/1.3 var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--ink); }
+.at-grp:first-child { margin-top: 0; }
+.at-ln { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 14px; padding: 9px 0; border-top: 1px solid var(--line); }
+.at-ln > .mk { flex: 0 0 14px; display: flex; padding-top: 4px; }
+.at-ln > .id { flex: 0 0 170px; font: 600 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+.at-ln > .tx { flex: 1 1 320px; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.at-ln > .at { flex: 0 1 260px; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--muted); }
+.at-more summary { cursor: pointer; font-weight: 400; color: var(--muted); }
+.at-fold > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.at-fold .at-list { margin-top: 8px; }
+@media (max-width: 560px) {
+  .attention { padding: 14px 14px 16px; }
+  .at-ln > .id { flex-basis: calc(100% - 28px); }
+  .at-ln > .tx, .at-ln > .at { flex-basis: 100%; padding-left: 28px; }
+}
+/* the same marks beside a graph's title: a chip for each kind of thing open inside it, and none when nothing is */
+.chips { display: inline-flex; flex-wrap: wrap; gap: 6px; margin: 0 0 4px; vertical-align: middle; }
+.graph-head h2:has(+ .chips:not([hidden])) { display: inline-block; margin-right: 10px; vertical-align: middle; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 7px; border: 1px solid var(--s2); border-radius: 999px; font: 400 12px/1.5 var(--sans); color: var(--ink); white-space: nowrap; text-decoration: none; }
+.chip:hover, .chip:focus-visible { border-color: var(--ink); }
 .limit { font-size: 12.5px; color: var(--muted); }
 .load-error { color: var(--muted); }
 

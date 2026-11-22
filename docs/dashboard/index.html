@@ -71,15 +71,31 @@
         <div class="scroll-x"><table id="q-table"></table></div>
       </details>
     </section>
-    <details class="attention" id="attention" hidden>
-      <summary id="attention-n">Needs attention</summary>
-      <p class="limit">What the build could not confirm, in the order it found it. An item names the promise or the Day it is about.</p>
-      <ul id="attention-list"></ul>
-      <details id="attention-known" hidden>
-        <summary id="attention-known-n">Expected, not counted</summary>
-        <ul id="attention-known-list"></ul>
+    <section class="attention" id="attention" aria-labelledby="attention-h" hidden>
+      <div class="at-head">
+        <h2 id="attention-h">What needs attention today?</h2>
+        <p class="graph-say">Everything open on the page in one list, worst first. A line ends with the graphs that draw it, and each of those graphs carries the same mark beside its title.</p>
+      </div>
+      <div class="at-sum">
+        <p class="at-n" id="attention-n"></p>
+        <div class="at-groups" id="attention-groups"></div>
+        <p class="at-below" id="attention-below" hidden></p>
+      </div>
+      <div class="at-where">
+        <p class="at-cap"><b>Where they sit</b><span id="attention-days-say"></span></p>
+        <div class="scroll-x"><div class="at-strand" id="attention-days"></div></div>
+      </div>
+      <div class="at-list" id="attention-list"></div>
+      <details class="at-fold" id="attention-never" hidden>
+        <summary id="attention-never-n">Hold, never proved</summary>
+        <div class="at-list" id="attention-never-list"></div>
       </details>
-    </details>
+      <details class="at-fold" id="attention-known" hidden>
+        <summary id="attention-known-n">Expected, not counted</summary>
+        <div class="at-list" id="attention-known-list"></div>
+      </details>
+      <p class="limit" id="attention-unread" hidden></p>
+    </section>
   </header>
 
   <div class="days" id="days" role="group" aria-label="Highlight one Day in every graph"></div>
@@ -90,6 +106,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 1 · the merges read as a gene; the old graph 1 is folded below</p>
       <h2>How far to the next stop?</h2>
+      <p class="chips" id="rdg-chips" hidden></p>
       <p class="graph-say">Every merge in order, left to right: a block is a Day's work, a thin line the work between Days, the oval is today.</p>
     </div>
     <div class="ladder" id="g1-ladder"></div>
@@ -237,6 +254,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 2 · drawn as a gel; the old graph 2 is folded below</p>
       <h2>Is it meeting what the plan judges it on?</h2>
+      <p class="chips" id="gel-chips" hidden></p>
       <p class="graph-say">One small gel per yardstick: each Day runs in its own lane, and the first lane holds the kit's figure and the average.</p>
     </div>
     <div class="figs" id="gel-figs"></div>
@@ -287,6 +305,7 @@
     <div class="graph-head">
       <p class="graph-n">Graphs 3–5 · drawn as proteins</p>
       <h2>What can the driver do, and can I rely on it?</h2>
+      <p class="chips" id="prt-chips" hidden></p>
       <p class="graph-say">One chain per ability, one cell per promise in the order built, marked by what its test and the replay say.</p>
     </div>
     <div class="figs" id="prt-figs"></div>
@@ -323,6 +342,7 @@
     <div class="graph-head">
       <p class="graph-n">The gene · first in its chapter, above graph 12</p>
       <h2>Does the plan reach proved code?</h2>
+      <p class="chips" id="gene-chips" hidden></p>
       <p class="graph-say">Read from the top: the plan, the criteria that copy it, their tests and replay, and the code that is proved.</p>
     </div>
     <svg class="gene-defs" width="0" height="0" aria-hidden="true"><defs>
@@ -383,6 +403,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 12 · placed before graph 6: plan against spec, as 6 is spec against code</p>
       <h2>Do the specs follow the plan?</h2>
+      <p class="chips" id="g12-chips" hidden></p>
       <p class="graph-say" id="g12-say">One stripe per commitment of the plan, and one row per Day.</p>
     </div>
     <details class="exact"><summary>How to read it</summary>
@@ -423,6 +444,7 @@
     <div class="graph-head">
       <p class="graph-n">Graph 6 · the merges against the spec; the old graph 6 is folded below</p>
       <h2>Does the code still pass the spec?</h2>
+      <p class="chips" id="mrg-chips" hidden></p>
       <p class="graph-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
     </div>
     <div class="bar-top">
