@@ -45,7 +45,8 @@ try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);"
 const shown = el => el ? { hidden: el.hidden, text: el.textContent } : null;
 console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.textContent : null,
   banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]), quality: shown(els.quality),
-  now: shown(els.now), whr: shown(els.whr) }));
+  now: shown(els.now), whr: shown(els.whr), attention: shown(els.attention),
+  chips: { prt: shown(els["prt-chips"]), g12: shown(els["g12-chips"]) } }));
 """
 
 # flipTheme() on each [saved, systemDark] pair of the list from stdin.
@@ -159,6 +160,22 @@ PROMISES = dict(
         cell("C2.2", 2, "break no longer applies"), cell("C2.3", 2, "live only")]))
 
 
+# "Needs attention" as spec_drift_views.needs_attention() gives it: one broken on Day 1, one hand-off on Day 2 that no
+# graph draws, eight never proved that share a sentence, nothing to repair and nothing expected.
+NEEDS = dict(
+    head="abcdef1", last_pr=9, count=2,
+    groups=[dict(key="broken", name="broken", sub="a check that fails today", n=1), dict(key="repair", name="to repair", sub="a missing test", n=0),
+            dict(key="waiting", name="waiting for you", sub="hand-offs nobody has picked up", n=1)],
+    folded=[dict(key="never", name="hold, never proved", n=8), dict(key="expected", name="expected, not counted", n=0)],
+    lines=[dict(group="broken", mark="bad", why="replay_failed", text="The replay fails: `x`.", graphs=["prt", "mrg"], ids=[dict(id="C1.1", day=1)]),
+           dict(group="waiting", mark="hnd", why="handoff_unpicked", text="Hand-off H2.1.", graphs=[], ids=[dict(id="H2.1", day=2)]),
+           dict(group="never", mark="unp", why="unproven", text="Holds.", graphs=["prt"], ids=[dict(id=f"C1.{n}", day=1) for n in range(2, 10)])],
+    chips=dict(prt=[dict(mark="bad", name="broken", n=1), dict(mark="unp", name="never proved", n=8)], mrg=[dict(mark="bad", name="broken", n=1)]),
+    days=[dict(day=1, n=1, marks=[dict(mark="bad", id="C1.1")] + [dict(mark="unp", id=f"C1.{n}") for n in range(2, 10)]),
+          dict(day=2, n=1, marks=[dict(mark="hnd", id="H2.1")]), dict(day=3, n=0, marks=[]), dict(day=None, n=0, marks=[])],
+    unread=[dict(text="Replay report: absent", n=3)])
+
+
 @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
 class ModelTest(unittest.TestCase):
     def test_the_header_says_when_the_data_was_read_and_what_is_next(self):
@@ -179,16 +196,53 @@ class ModelTest(unittest.TestCase):
         rows = [dict(pr=4, date="2026-01-05", day=2)]
         self.assertEqual(model(data(days=days, rows=rows))["head"]["took"], "Days 1 to 2 took 2 dates")
 
-    def test_what_needs_attention_is_grouped_by_reason_and_detail(self):
-        got = model(data(attention=[dict(id="C1.1", reason="evidence_missing", detail="Replay report: absent"),
-                                    dict(id="C1.2", reason="evidence_missing", detail="Replay report: absent"),
-                                    dict(id="Day 2", reason="a_new_reason", detail="x"),
-                                    dict(id="C1.3", reason="test_skippable", detail="LiveTest", expected=True)]))["attention"]
-        self.assertEqual(got["total"], 3)  # the expected item is listed apart and not counted (#213, B20)
-        self.assertEqual(got, dict(total=3, groups=[
-            dict(label="Evidence missing", detail="Replay report: absent", ids=["C1.1", "C1.2"]),
-            dict(label="a_new_reason", detail="x", ids=["Day 2"])], expected=1, known=[
-            dict(label="Can be skipped in CI (expected)", detail="LiveTest", ids=["C1.3"])]))
+    def test_what_needs_attention_is_the_counted_rule_put_into_words(self):
+        got = model(data(needs_attention=NEEDS))["attention"]
+        self.assertEqual((got["count"], got["head"], got["at"]), (2, "2 need a decision or a fix", ", at pull request #9"))
+        self.assertEqual([(g["key"], g["mark"], g["n"], g["title"], len(g["lines"])) for g in got["groups"]],
+                         [("broken", "bad", 1, "Broken · 1", 1), ("repair", "rep", 0, "To repair · 0", 0),
+                          ("waiting", "hnd", 1, "Waiting for you · 1", 1)])
+        # what is folded is said under the headline and left out of it; a fold with nothing in it is not drawn
+        self.assertEqual(got["below"], [dict(mark="unp", text="8 hold, never proved")])
+        self.assertEqual([(f["key"], f["title"]) for f in got["folded"]], [("never", "Hold, never proved · 8")])
+        self.assertEqual(got["unread"], ["Replay report: absent (3)"])
+
+    def test_a_line_names_its_ids_its_day_and_the_graphs_that_draw_it(self):
+        got = model(data(needs_attention=NEEDS))["attention"]
+        broken, waiting, never = got["groups"][0]["lines"][0], got["groups"][2]["lines"][0], got["folded"][0]["lines"][0]
+        self.assertEqual(broken, dict(mark="bad", ids="C1.1 · Day 1", more=[], text="The replay fails: `x`.", at=[
+            dict(id="prt", title="What can the driver do, and can I rely on it?"), dict(id="mrg", title="Does the code still pass the spec?")]))
+        self.assertEqual((waiting["ids"], waiting["at"]), ("H2.1 · Day 2", []))
+        # eight ids: the first six, and the rest folded; seven would fold one id alone, so they are all printed
+        self.assertEqual((never["ids"], never["more"]), ("C1.2 C1.3 C1.4 C1.5 C1.6 C1.7", ["C1.8", "C1.9"]))
+        seven = dict(NEEDS, lines=[dict(NEEDS["lines"][2], ids=NEEDS["lines"][2]["ids"][:7])])
+        line = model(data(needs_attention=seven))["attention"]["folded"][0]["lines"][0]
+        self.assertEqual((line["ids"], line["more"]), ("C1.2 C1.3 C1.4 C1.5 C1.6 C1.7 C1.8", []))
+
+    def test_the_marks_hang_under_the_day_each_belongs_to(self):
+        rows = [dict(phase=0, days=[1, 2], stop=None), dict(phase=1, days=[3], stop=None)]
+        got = model(data(needs_attention=NEEDS, meta=dict(project="toy", where=dict(rows=rows, names={}))))["attention"]
+        self.assertEqual([(d["label"], d["n"], d["end"], len(d["marks"])) for d in got["days"]],
+                         [("1", 1, False, 9), ("2", 1, True, 1), ("3", 0, True, 0), ("no Day", 0, False, 0)])
+        self.assertEqual([m["tip"] for m in got["days"][0]["marks"][:2]], ["C1.1: broken", "C1.2: holds, never proved"])
+        self.assertEqual(got["daysSay"], "The marks under the Day each belongs to. Of the 2 that need a decision or a fix: "
+                         "1 on Day 1 and 1 on Day 2. 8 marks are of what is folded below.")
+
+    def test_a_chip_is_the_figure_the_rule_counted_for_its_graph(self):
+        got = model(data(needs_attention=NEEDS))["attention"]["chips"]
+        self.assertEqual(got, dict(prt=[dict(mark="bad", n=1, name="broken", text="1 broken"),
+                                        dict(mark="unp", n=8, name="never proved", text="8 never proved")],
+                                   mrg=[dict(mark="bad", n=1, name="broken", text="1 broken")]))
+
+    def test_the_headline_says_one_and_none_in_words(self):
+        head = lambda n: model(data(needs_attention=dict(NEEDS, count=n, last_pr=None)))["attention"]  # noqa: E731
+        self.assertEqual((head(1)["head"], head(1)["at"]), ("1 needs a decision or a fix", ""))
+        self.assertEqual(head(0)["head"], "Nothing needs a decision or a fix")
+
+    def test_data_without_the_rule_draws_no_panel(self):
+        # the old list alone (a page built before the rule) is not grouped by the page any more
+        self.assertIsNone(model(data())["attention"])
+        self.assertIsNone(model(data(attention=[dict(id="C1.1", reason="replay_failed", detail="x")]))["attention"])
 
     def test_the_promises_are_counted_in_the_state_each_criterion_has(self):
         # C1.1 broken, C1.2 proven, C1.3 replaced, C1.4 open, C1.5 unchecked, C2.1 unproven, C2.2 repair, C2.3 skipped,
@@ -960,6 +1014,15 @@ class BootTest(unittest.TestCase):
                          "the re-checks of finished promises.")
         self.assertTrue(boot(data())["missing"]["hidden"])  # example data, or a page built before the branch: no claim
 
+    def test_needs_attention_is_drawn_open_with_the_rule_and_hidden_without_it(self):
+        self.assertEqual(boot(data())["attention"]["hidden"], True)
+        out = boot(data(needs_attention=NEEDS))
+        self.assertEqual((out["error"], out["logged"], out["attention"]["hidden"]), (None, [], False))
+        # a graph with something open shows its chips beside its title; one with nothing open shows none
+        self.assertEqual((out["chips"]["prt"]["hidden"], out["chips"]["g12"]["hidden"]), (False, True))
+        whole = boot(demo_data())
+        self.assertEqual((whole["error"], whole["logged"], whole["attention"]["hidden"]), (None, [], False))
+
     def test_the_page_draws_without_an_error_on_data_with_nothing_in_it(self):
         out = boot({})
         self.assertEqual((out["error"], out["logged"]), (None, []))
@@ -1638,6 +1701,35 @@ class PageFilesTest(unittest.TestCase):
     def test_graph_10_says_in_one_sentence_that_a_date_runs_from_05_00_to_05_00(self):
         section = re.search(r'<section class="graph mock-fold" id="g10-fold">.*?</section>', read("index.html"), re.S).group(0)
         self.assertIn("A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.", section)
+
+    def test_needs_attention_is_a_section_drawn_open_in_the_header(self):
+        html = read("index.html")
+        header = html[html.index("<header"):html.index("</header>")]
+        self.assertIn('<section class="attention" id="attention" aria-labelledby="attention-h" hidden>', header)
+        self.assertNotIn('<details class="attention"', html)
+        # only what is not counted is folded: never proved, and expected
+        panel = header[header.index('id="attention"'):]
+        self.assertEqual(re.findall(r'<details class="at-fold" id="([\w-]+)" hidden>', panel), ["attention-never", "attention-known"])
+
+    def test_each_graph_a_line_can_name_has_a_chip_slot_beside_its_title(self):
+        html, js = read("index.html"), read("dashboard.js")
+        titles = dict(re.findall(r'(\w+): "([^"]+)"', re.search(r"const NEEDS_TITLES = \{(.*?)\};", js, re.S).group(1)))
+        self.assertEqual(tuple(titles), views.NEEDS_GRAPHS)
+        for g, title in titles.items():
+            section = html[html.index(f'<section class="graph" id="{g}"'):]
+            first = section[:section.index("</h2>") + 200]
+            self.assertRegex(first, rf'<h2>{re.escape(title)}</h2>\s*<p class="chips" id="{g}-chips" hidden></p>', g)
+        self.assertEqual(len(re.findall(r'class="chips"', html)), len(titles))
+
+    def test_every_mark_the_rule_can_give_is_drawn_and_named(self):
+        css, js = read("dashboard.css"), read("dashboard.js")
+        marks = sorted({why[1] for why in views.NEEDS_WHY.values()})
+        self.assertEqual(marks, ["bad", "due", "exp", "hnd", "rep", "stl", "unp"])
+        self.assertEqual([m for m in marks if not re.search(rf"\.o\.{m} \{{", css)], [])
+        named = re.search(r"const NEEDS_MARKS = \{(.*?)\};", js, re.S).group(1)
+        self.assertEqual(sorted(re.findall(r"(\w+): \"", named)), marks)
+        of_group = dict(re.findall(r'(\w+): "(\w+)"', re.search(r"const NEEDS_GROUP_MARK = \{(.*?)\};", js, re.S).group(1)))
+        self.assertEqual(sorted(of_group), sorted(g[0] for g in views.NEEDS_GROUPS))
 
     def test_graph_12_has_a_swatch_for_a_commitment_owned_by_a_later_day(self):
         self.assertRegex(read("dashboard.css"), r"\.pc-sw\.later \{[^}]*border")

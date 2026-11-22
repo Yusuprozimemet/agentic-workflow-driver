@@ -116,6 +116,8 @@ with sync_playwright() as p:
     # Each closed section on its own.
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
+    shot(page, "#attention-never", "attention-never", "(Hold, never proved)")
+    shot(page, "#attention-known", "attention-known", "(Expected, not counted)")
     shot(page, "#g7-days", "g7-byday", "(By Day: each Day's catches)")
     shot(page, "details:has(#g12-ladder)", "g12-ladder", "(the ladder)")
     for g in GRAPHS:
@@ -190,7 +192,7 @@ a box that is cut off or overlaps is a finding.
 |---|---|---|
 | 1 | Where we are: the Day in progress, the next step | `where` |
 | 2 | Quality of the work, all Days and each Day lit | `quality`, `quality-dayN` |
-| 3 | Needs attention | `attention` |
+| 3 | Needs attention: the headline, the strand of Days and the list; its two folds, opened | `attention`, `attention-never`, `attention-known` |
 | 4 | Graph 1: How far to the next stop? | `g1`, `g1-exact` |
 | 5 | Graph 2: Is it meeting what the plan judges it on? | `g2`, `g2-exact` |
 | 6 | Graphs 3 to 5: What can the driver do, and can I rely on it? | `g3`, `g3-exact` |
@@ -228,7 +230,7 @@ For each view, read its picture and its text in `views.txt`, then write four lin
 
 Also, across views: the header's commit is `main`'s head (`git rev-parse origin/main`); a figure
 stated in two places agrees (graph 7's totals with By Day and graph 2; the ladder with graph 1;
-"Needs attention" with the statuses it lists); no banner says data is missing; no text overlaps
+"Needs attention" with the lines it lists, and each chip beside a graph's title with that graph's own figure); no banner says data is missing; no text overlaps
 or is cut off. And data older than what it claims to cover, without a banner: a `dashboard-data`
 file older than the last merge it should count, `.claude/state/publish-counts.log`.
 

@@ -366,11 +366,11 @@ def rfx_line(m):
 
 
 def attention_line(m, data):
-    """Each chip "Needs attention" puts beside a graph's title against that graph's own figure, as the page's model has
-    it: what the merge graph's tile counts as not holding and still in force, the gel's yardsticks judged worse, the
+    """Each chip "Needs attention" puts beside a graph's title, as the page's model draws it, against that graph's own
+    figure in the same model: what the merge graph's tile counts as not holding and still in force, the gel's yardsticks judged worse, the
     proteins' cells by state, and the gene's commitments unproved, unreplayable and due. A chip with no figure here (the
     hand-offs on graph 1, the merge graph's unticked and unproved, graph 12) is not held to one."""
-    chips = {g: {c["mark"]: c["n"] for c in cs} for g, cs in ((data.get("needs_attention") or {}).get("chips") or {}).items()}
+    chips = {g: {c["mark"]: c["n"] for c in cs} for g, cs in ((m.get("attention") or {}).get("chips") or {}).items()}
     for key in ("mrg", "gel", "prt", "gene"):
         if (m.get(key) or {}).get("error"):
             return False, f"attention: not drawn ({key}: {m[key]['error']})"

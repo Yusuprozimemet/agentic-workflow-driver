@@ -98,10 +98,15 @@ const PHASE_END = { name: "End of a phase", gates: [
     does: "Once, after the closing pull request of the last phase plan.md names: can the workflow take more autonomy safely, what does it show about agents, do its gates hold? Each from a fresh context." }] };
 const CAUSES = ["spec", "process", "implementation", "environment", "other"];
 const KINDS = { origin: "the first commit", spec: "spec", code: "code", close: "a Day's close", other: "other" };
-const REASONS = { replay_failed: "Replay failed", replay_error: "Replay error", replay_stale: "Replay stale",
-  evidence_missing: "Evidence missing", not_seen_red: "Not seen red", test_not_found: "Test not found", handoff_unclaimed: "Hand-off unclaimed",
-  not_breakable: "No break possible from the repository", test_skippable: "Can be skipped in CI (expected)",
-  handoff_next: "Hand-off for the next Day", handoff_unpicked: "Hand-off no later Day picks up" };
+// "Needs attention": the graphs a line can name, by the title each carries on the page; the mark of each group and
+// what a mark says under a Day; and how many ids a line prints before it folds the rest.
+const NEEDS_TITLES = { rdg: "How far to the next stop?", gel: "Is it meeting what the plan judges it on?",
+  prt: "What can the driver do, and can I rely on it?", gene: "Does the plan reach proved code?",
+  g12: "Do the specs follow the plan?", mrg: "Does the code still pass the spec?" };
+const NEEDS_GROUP_MARK = { broken: "bad", repair: "rep", waiting: "hnd", never: "unp", expected: "exp" };
+const NEEDS_MARKS = { bad: "broken", rep: "to repair", due: "due, and no criterion names it", hnd: "waiting for you", unp: "holds, never proved",
+  stl: "replaced, and its old check stopped holding", exp: "expected, not counted" };
+const NEEDS_FEW = 6;
 const YARD_HINT = { escapes: "fewer is better", refusals: "many of one kind mean a rule is in the way", reread: "re-reading is most of the cost",
   gates: "a gate run in the main session is also inside the pull requests' cost above" };
 
@@ -445,20 +450,36 @@ function model(DATA) {
           ...aheadOut.map(a => [a.close ? "close" : `track ${a.label}`, "not merged", a.day, a.built, written, ""])] } };
   }
 
-  // What is known and accepted (a test CI may skip, a check no break can reach) is listed apart, folded, and
-  // left out of the count, so the number means "look at this" (#213, B20).
+  // "Needs attention": what is open is counted once, in Python (spec_drift_views.needs_attention), and this only puts
+  // it into words. A line of many ids shows the first few and folds the rest; a line names the graphs that draw it by
+  // their titles; a chip is its graph's own figure. Data without the key (a page built before the rule) draws no panel.
   function attention() {
-    const group = list => {
-      const groups = [];
-      list.forEach(a => {
-        const label = REASONS[a.reason] || a.reason, detail = a.detail || "";
-        const g = groups.find(x => x.label === label && x.detail === detail) || groups[groups.push({ label, detail, ids: [] }) - 1];
-        g.ids.push(a.id);
-      });
-      return groups;
+    const N = DATA.needs_attention;
+    if (!N || !Array.isArray(N.lines)) return null;
+    const count = N.count || 0, cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+    const line = l => {
+      const ids = (l.ids || []).map(x => String(x.id)), few = ids.length > NEEDS_FEW + 1 ? NEEDS_FEW : ids.length;
+      const day = ids.length === 1 && l.ids[0].day != null ? ` · Day ${l.ids[0].day}` : "";
+      return { mark: l.mark, ids: ids.slice(0, few).join(" ") + day, more: ids.slice(few), text: l.text || "",
+        at: (l.graphs || []).map(g => ({ id: g, title: NEEDS_TITLES[g] || g })) };
     };
-    const all = DATA.attention || [], open = all.filter(a => !a.expected), known = all.filter(a => a.expected);
-    return { total: open.length, groups: group(open), expected: known.length, known: group(known) };
+    const section = g => ({ key: g.key, mark: NEEDS_GROUP_MARK[g.key], n: g.n, name: g.name, sub: g.sub || "", title: `${cap(g.name)} · ${g.n}`,
+      lines: N.lines.filter(l => l.group === g.key).map(line) });
+    const ends = new Set((((DATA.meta || {}).where || {}).rows || []).map(r => (r.days || [])[(r.days || []).length - 1]));
+    const name = d => d.day == null ? "no Day" : `Day ${d.day}`;
+    const days = (N.days || []).map(d => ({ day: d.day, label: d.day == null ? "no Day" : String(d.day), n: d.n, end: d.day != null && ends.has(d.day),
+      marks: (d.marks || []).map(k => ({ mark: k.mark, tip: `${k.id}: ${NEEDS_MARKS[k.mark] || k.mark}` })) }));
+    const on = days.filter(d => d.n).map(d => `${d.n} on ${name(d)}`), rest = days.reduce((s, d) => s + d.marks.length, 0) - count;
+    const folded = (N.folded || []).filter(f => f.n).map(section);
+    return { count,
+      head: (count ? `${count} ${count === 1 ? "needs" : "need"} a decision or a fix` : "Nothing needs a decision or a fix"),
+      at: N.last_pr ? `, at pull request #${N.last_pr}` : "",
+      below: folded.map(f => ({ mark: f.mark, text: `${f.n} ${f.name}` })),
+      days, daysSay: "The marks under the Day each belongs to." + (on.length ? ` Of the ${count} that ${count === 1 ? "needs" : "need"} a decision or a fix: ${andList(on)}.` : "")
+        + (rest > 0 ? ` ${cap(plural(rest, "mark is", "marks are"))} of what is folded below.` : ""),
+      groups: (N.groups || []).map(section), folded,
+      unread: (N.unread || []).map(u => `${u.text} (${u.n})`),
+      chips: Object.fromEntries(Object.entries(N.chips || {}).map(([g, cs]) => [g, cs.map(c => ({ mark: c.mark, n: c.n, name: c.name, text: `${c.n} ${c.name}` }))])) };
   }
 
   // Graph 10: one date on the clock. The sessions (sessions.json on the dashboard-data branch) are stamped with the offset of the
@@ -3508,14 +3529,41 @@ function draw(M, DATA) {
   missing.hidden = !H.missing;
   put("now", h("strong", null, "Now: "), H.now, " ", h("strong", null, "Next step: "), rich(H.next));
   if (H.took) $("words-took").textContent = H.took;
+  /* needs attention: the headline, the strand of Days, the list worst first, the two folds, and a chip beside each graph's title */
   const A = M.attention;
-  const items = groups => groups.map(g => h("li", null, h("b", null, `${g.label} (${g.ids.length})`), " ", g.detail ? [rich(g.detail), ": "] : null, g.ids.join(", ")));
-  $("attention").hidden = !A.total && !A.expected;
-  put("attention-n", `Needs attention: ${plural(A.total, "item", "items")}` + (A.expected ? ` · ${A.expected} expected` : ""));
-  put("attention-list", items(A.groups));
-  $("attention-known").hidden = !A.expected;
-  put("attention-known-n", `Expected, not counted: ${plural(A.expected, "item", "items")}`);
-  put("attention-known-list", items(A.known));
+  $("attention").hidden = !A;
+  if (A) {
+    const mark = (m, tip) => h("i", { class: `o ${m}`, title: tip || null, "aria-hidden": tip ? null : "true" });
+    const lines = list => list.map(l => h("div", { class: "at-ln" }, h("span", { class: "mk" }, mark(l.mark)),
+      h("b", { class: "id" }, l.ids, l.more.length ? h("details", { class: "at-more" }, h("summary", null, `and ${l.more.length} more`), l.more.join(" ")) : null),
+      h("span", { class: "tx" }, rich(l.text)),
+      h("span", { class: "at" }, l.at.length ? l.at.map(g => h("a", { href: `#${g.id}` }, g.title)) : "drawn in no graph")));
+    put("attention-n", h("b", null, A.head), A.at, A.count ? ":" : ".");
+    put("attention-groups", A.groups.map(g => h("div", { class: "at-g" }, h("div", { class: "at-big" }, mark(g.mark), String(g.n)),
+      h("div", { class: "at-name" }, g.name), h("div", { class: "at-sub" }, g.sub))));
+    $("attention-below").hidden = !A.below.length;
+    put("attention-below", `Folded below, not in the ${A.count}:`, A.below.map(b => h("span", null, mark(b.mark), b.text)));
+    put("attention-days-say", A.count ? `a highlighted band has something in the ${A.count}` : "");
+    const strand = put("attention-days", A.days.map(d => h("div", { class: "at-col" + (d.end ? " pe" : "") },
+      h("div", { class: "at-band" + (d.n ? " hot" : "") + (d.day == null ? " none" : "") }, d.label),
+      h("div", { class: "at-stack" }, d.marks.map(k => mark(k.mark, k.tip))))));
+    strand.style.setProperty("--n", String(A.days.length));
+    strand.setAttribute("role", "img");
+    strand.setAttribute("aria-label", A.daysSay);
+    put("attention-list", A.groups.filter(g => g.lines.length).map(g => [h("h3", { class: "at-grp" }, mark(g.mark), g.title), lines(g.lines)]));
+    [["never", "attention-never"], ["expected", "attention-known"]].forEach(([key, id]) => {
+      const f = A.folded.find(x => x.key === key);
+      $(id).hidden = !f;
+      if (f) { put(`${id}-n`, f.title); put(`${id}-list`, lines(f.lines)); }
+    });
+    $("attention-unread").hidden = !A.unread.length;
+    put("attention-unread", `Could not be read on this build, and not counted: ${A.unread.join("; ")}.`);
+    Object.keys(NEEDS_TITLES).forEach(g => {
+      const cs = A.chips[g] || [];
+      $(`${g}-chips`).hidden = !cs.length;
+      put(`${g}-chips`, cs.map(c => h("a", { class: "chip", href: "#attention", title: "In the list at the top of the page: What needs attention today?" }, mark(c.mark), c.text)));
+    });
+  }
 
   /* the quality score: the finished Days', or the chosen Day's */
   const Q = M.quality && !M.quality.error ? M.quality : null;

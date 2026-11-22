@@ -3045,8 +3045,9 @@ class NeedsAttentionTest(unittest.TestCase):
         m = reconcile.model(data)
         agree, said = reconcile.attention_line(m, data)
         self.assertEqual((agree, said.endswith(": agree")), (True, True), said)
-        data["needs_attention"]["chips"].setdefault("mrg", []).append(
-            {"mark": "bad", "name": "broken", "n": 99}
+        # the chips are read where the page draws them, in its model, not in the data beside it
+        m["attention"]["chips"].setdefault("mrg", []).append(
+            {"mark": "bad", "name": "broken", "n": 99, "text": "99 broken"}
         )
         agree, said = reconcile.attention_line(m, data)
         self.assertEqual((agree, "DISAGREE (mrg bad)" in said), (False, True), said)
