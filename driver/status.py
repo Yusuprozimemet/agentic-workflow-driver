@@ -20,15 +20,15 @@ BASELINE = 1.86
 LEVEL_2_RUN = 15
 
 
-def run(project, gh, state, watch=None) -> int:
+def run(project, gh, state, watch=None, level=1) -> int:
     # With watch (seconds), the report is printed again at each poll until a report finds no live
     # session; that report's code is the run's. The report's own reading decides, so the last
     # block printed is the one that showed no session live.
     if watch is None:
-        return _report(project, gh, state)
+        return _report(project, gh, state, level=level)
     while True:
         seen = []
-        code = _report(project, gh, state, seen)
+        code = _report(project, gh, state, seen, level)
         sys.stdout.flush()
         if seen[0] is None:
             return code
@@ -36,11 +36,12 @@ def run(project, gh, state, watch=None) -> int:
         print()
 
 
-def _report(project, gh, state, seen=None) -> int:
-    # seen, when given, receives the live session this report read, or None.
+def _report(project, gh, state, seen=None, level=1) -> int:
+    # seen, when given, receives the live session this report read, or None. level is the config's,
+    # 1 when the config has none or none was read.
     listed, gh_reason = issues.open_issues(project, gh)
     mode, live = _mode(state)
-    lines = [mode, "level: 1", _halt(state)]
+    lines = [mode, f"level: {level}", _halt(state)]
     if gh_reason:
         lines += ["run's issue: unknown", "open parks: unknown"]
     else:
@@ -128,10 +129,16 @@ def _in_progress(state, live, records, session):
 
 
 def _step(records, session):
-    # The step of the newest start line for the session; a pid line with no start line has none.
+    # The step of the newest start line for the session; a pid line with no start line has none. A
+    # review has no step of its own: its label is the pull request, from the start line when it names
+    # one, else from the review line the reviewer wrote.
     for record in reversed(records):
         if record.get("event") == "start" and record.get("session") == session:
-            return record.get("step")
+            if record.get("prefix") != "review":
+                return record.get("step")
+            if record.get("pr") is not None:
+                return f"review of #{record['pr']}"
+            return _review_of(records, session)
     return "no start line"
 
 
@@ -228,9 +235,11 @@ def _time(value):
 
 
 def _kind(prefix):
-    # The kind of a step by its prefix; a prefix that is none of the three has none.
+    # The kind of a step by its prefix; a prefix that is none of the four has none.
     if not isinstance(prefix, str):
         return None
+    if prefix == "review":
+        return "review"
     if prefix.endswith("/spec"):
         return "spec"
     if "/track-" in prefix:

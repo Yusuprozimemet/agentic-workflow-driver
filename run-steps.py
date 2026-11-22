@@ -149,6 +149,8 @@ def main(argv=None) -> int:
         return livecheck.run(args, Path(__file__).resolve().parent)
     # The config is opened only when --project is not given: a project named on the command line
     # must not depend on a file the person may not have.
+    # status takes the config's level when it reads a config; with --project it prints level 1.
+    status_extra = {}
     if args.project is None:
         config, lines = load_config(args.config)
         if lines:
@@ -156,11 +158,16 @@ def main(argv=None) -> int:
                 print(line, file=sys.stderr)
             return 2
         args.project = config["project"]
+        status_extra["level"] = config.get("level", 1)
     if args.command == "off":
         return switches.off(args.project, args.gh)
     if args.command == "status":
         return status.run(
-            args.project, args.gh, args.state, watch=args.poll if args.watch else None
+            args.project,
+            args.gh,
+            args.state,
+            watch=args.poll if args.watch else None,
+            **status_extra,
         )
     if args.command == "preflight":
         lines, _ = kit_lines(args.project)
