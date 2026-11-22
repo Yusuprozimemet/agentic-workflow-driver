@@ -11,8 +11,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, proofreading, protein,  # noqa: E402
-                              reading, reflex, rings, where_ring)
+from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, needs_attention,  # noqa: E402
+                              proofreading, protein, reading, reflex, rings, where_ring)
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -394,6 +394,9 @@ def demo():
     by_id = {c["id"]: c for c in index}
     by_id["C5.2"]["replaces"], by_id["C1.2"]["replaced_by"] = ["C1.2"], ["C5.2"]
     merged = [r for r in rows if r["pr"]]
+    # The promises whose newest re-check fails, flagged as criterion_index flags them: the list and the graphs agree.
+    attention[:0] = [dict(id=cid, reason="replay_failed", detail=f"{st} at #{merged[-1]['pr']}: tests: {st}")
+                     for cid, st in RECHECKED.items() if st in ("code broken", "test weakened", "break no longer applies")]
     files = ["plan.md"] + [f"specs/day-{d:02d}-{slug(d)}.md" for d in DAYS]
     # Hours open: a spec change waits on review, a close on its replay; one tooling PR beside them.
     hours = dict(spec=5.5, code=3.25, close=20.0, other=0.75)
@@ -522,6 +525,7 @@ def demo():
     out["where_ring"], out["reading"] = where_ring(out), reading(out)
     out["gel"], out["protein"], out["proofreading"] = gel(out), protein(out), proofreading(out)
     out["budget"], out["rings"], out["actogram"], out["reflex"] = budget(out), rings(out), actogram(out), reflex(out)
+    out["needs_attention"] = needs_attention(out)
     return out
 
 
