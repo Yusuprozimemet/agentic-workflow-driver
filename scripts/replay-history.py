@@ -206,6 +206,27 @@ def test_module(sha, cls):
     return hit[0].split(":", 1)[1][:-3].replace("/", ".") if hit else None
 
 
+@functools.lru_cache(maxsize=None)
+def text_at(sha, path):
+    return git("show", f"{sha}:{path}", check=False)
+
+
+def pinned_away(sha, entry):
+    """Whether a recorded break is pinned to a commit (`at`) and its line is gone at sha: the close's
+    replay runs it at its pin (evidence.py), and no later code can say more of it (C10.29, #201)."""
+    return "at" in entry and text_at(sha, entry["file"]).count(entry["find"]) != 1
+
+
+def pinned(specs):
+    """(day, what) of each recorded break pinned to a commit."""
+    folder, out = os.path.join(specs, "breaks"), set()
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if m := re.fullmatch(r"day-(\d{2})\.json", name):
+            with open(os.path.join(folder, name), encoding="utf-8") as f:
+                out |= {(m.group(1), e["what"]) for e in json.load(f) if "at" in e}
+    return out
+
+
 def classify(entry, tests, report, worktree, sha, pre, env):
     """(state, detail) of one check at the worktree of sha; pre: the merge comes before the day's close.
     A check that holds has a detail only when it reported other than the spec's `broken:` line."""
@@ -291,6 +312,8 @@ def sample(n, sha, subject, mode, items, known, pre_of, jobs=1):
     rows, todo, env = [], {}, dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     for day, cid, what, entry, tests, report, live in items:
         pre = n < pre_of[day]
+        if entry and not pre and pinned_away(sha, entry):
+            continue
         row = {"n": n, "merge": sha[:12], "pr": int(m.group(1)) if (m := PR.search(subject)) else None,
                "sample": mode, "day": day, "criterion": cid, "check": what, "platform": PLATFORM}
         rows.append(row)
@@ -341,7 +364,9 @@ def main(argv=None):
     if not since:
         p.error("--since is needed until --out exists")
     since = git("rev-parse", since).strip()[:12]
-    rows = [upgrade(r) for r in old["rows"]]
+    pins = pinned(a.specs)  # a row an older run wrote of a pinned break's missing line goes: it was no failure
+    rows = [upgrade(r) for r in old["rows"]
+            if not (r.get("state") == "break no longer applies" and (r["day"], r["check"]) in pins)]
     known = {r["key"]: r for r in rows if "key" in r and "reused_from" not in r}
     done = {}
     for r in rows:

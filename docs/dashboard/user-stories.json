@@ -88,5 +88,8 @@
   "86": {"ability": "see"},
   "87": {"ability": "see"},
   "88": {"ability": "recover"},
-  "89": {"ability": "recover"}
+  "89": {"ability": "recover"},
+  "220": {"ability": "record"},
+  "268": {"ability": "see"},
+  "269": {"ability": "see"}
 }

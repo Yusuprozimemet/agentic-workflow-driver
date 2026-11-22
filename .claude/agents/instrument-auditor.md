@@ -116,6 +116,7 @@ with sync_playwright() as p:
     # Each closed section on its own.
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
+    shot(page, "#attention-all", "attention-all", "(What needs attention today?, opened)")
     shot(page, "#attention-never", "attention-never", "(Hold, never proved)")
     shot(page, "#attention-known", "attention-known", "(Expected, not counted)")
     shot(page, "#g7-days", "g7-byday", "(By Day: each Day's catches)")
@@ -192,7 +193,7 @@ a box that is cut off or overlaps is a finding.
 |---|---|---|
 | 1 | Where we are: the Day in progress, the next step | `where` |
 | 2 | Quality of the work, all Days and each Day lit | `quality`, `quality-dayN` |
-| 3 | Needs attention: the headline, the strand of Days and the list; its two folds, opened | `attention`, `attention-never`, `attention-known` |
+| 3 | Needs attention: folded, its title and count; opened, the headline, the strand of Days and the list; its two folds, opened | `attention`, `attention-all`, `attention-never`, `attention-known` |
 | 4 | Graph 1: How far to the next stop? | `g1`, `g1-exact` |
 | 5 | Graph 2: Is it meeting what the plan judges it on? | `g2`, `g2-exact` |
 | 6 | Graphs 3 to 5: What can the driver do, and can I rely on it? | `g3`, `g3-exact` |

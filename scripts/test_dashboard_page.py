@@ -1014,7 +1014,7 @@ class BootTest(unittest.TestCase):
                          "the re-checks of finished promises.")
         self.assertTrue(boot(data())["missing"]["hidden"])  # example data, or a page built before the branch: no claim
 
-    def test_needs_attention_is_drawn_open_with_the_rule_and_hidden_without_it(self):
+    def test_needs_attention_is_drawn_with_the_rule_and_hidden_without_it(self):
         self.assertEqual(boot(data())["attention"]["hidden"], True)
         out = boot(data(needs_attention=NEEDS))
         self.assertEqual((out["error"], out["logged"], out["attention"]["hidden"]), (None, [], False))
@@ -1702,13 +1702,21 @@ class PageFilesTest(unittest.TestCase):
         section = re.search(r'<section class="graph mock-fold" id="g10-fold">.*?</section>', read("index.html"), re.S).group(0)
         self.assertIn("A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.", section)
 
-    def test_needs_attention_is_a_section_drawn_open_in_the_header(self):
-        html = read("index.html")
+    def test_needs_attention_is_a_section_in_the_header_folded_until_it_is_opened(self):
+        html, js = read("index.html"), read("dashboard.js")
         header = html[html.index("<header"):html.index("</header>")]
         self.assertIn('<section class="attention" id="attention" aria-labelledby="attention-h" hidden>', header)
-        self.assertNotIn('<details class="attention"', html)
-        # only what is not counted is folded: never proved, and expected
         panel = header[header.index('id="attention"'):]
+        # one fold, closed (no `open`), around everything but the title and the count beside it
+        fold = re.findall(r'<details class="at-all" id="attention-all"( open)?>\s*<summary><h2 id="attention-h">([^<]+)</h2>'
+                          r'<span class="at-peek" id="attention-peek"></span></summary>', panel)
+        self.assertEqual(fold, [("", "What needs attention today?")])
+        self.assertLess(panel.index('id="attention-all"'), panel.index('id="attention-n"'))
+        self.assertEqual(panel.count("</details>"), 3)
+        # the count beside the title is the rule's headline, and a chip's link is the fold, which openFolds() opens
+        self.assertIn('put("attention-peek", A.head);', js)
+        self.assertEqual(re.findall(r'class: "chip", href: "#([\w-]+)"', js), ["attention-all"])
+        # inside it, what is not counted is folded again: never proved, and expected
         self.assertEqual(re.findall(r'<details class="at-fold" id="([\w-]+)" hidden>', panel), ["attention-never", "attention-known"])
 
     def test_each_graph_a_line_can_name_has_a_chip_slot_beside_its_title(self):

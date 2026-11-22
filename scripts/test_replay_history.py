@@ -112,6 +112,34 @@ class Classify(unittest.TestCase):
                           ("C01.1", 6, "holds, never broken", "teeth unchecked: no broken: line")])
         self.assertIn("holds, never broken", got["states"])
 
+    def test_a_pinned_break_whose_line_is_gone_is_left_to_the_close_s_replay(self):
+        sha = rh.git("rev-parse", "HEAD").strip()
+        items = lambda **pin: [  # noqa: E731
+            ("01", "C01.1", "gone", dict(BREAK, what="gone", find="absent", **pin), [], None, False),
+            ("01", "C01.1", "keep broken", dict(BREAK, **pin), [], "AssertionError: broken", False)]
+        rows = lambda **pin: [(r["check"], r["state"]) for r in rh.sample(  # noqa: E731
+            5, sha, "Merge pull request #9 from me/x", "day", items(**pin), {}, {"01": 1})]
+        # a pinned break that still applies is re-checked as any other; one with no pin still says its line is gone
+        self.assertEqual(rows(at="abc1234"), [("keep broken", "holds")])
+        self.assertEqual(rows(), [("gone", "break no longer applies"), ("keep broken", "holds")])
+
+    def test_an_old_no_longer_applies_row_of_a_break_since_pinned_is_dropped_from_out(self):
+        os.makedirs(os.path.join("specs", "breaks"))
+        with open(os.path.join("specs", "breaks", "day-01.json"), "w", encoding="utf-8") as f:
+            json.dump([dict(BREAK, what="p", at="abc1234"), dict(BREAK, what="q")], f)
+        base = {"n": 5, "platform": "linux", "day": "01", "merge": "aaa", "sample": "all", "criterion": "C01.1"}
+        gone = "break no longer applies"
+        old = [dict(base, check="p", state=gone, key="k1"), dict(base, check="q", state=gone, key="k2"),
+               dict(base, n=4, check="p", state="holds", key="k3")]
+        out = os.path.join(self.repo, "replay.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump({"schema": 1, "since": "aaa", "rows": old}, f)
+        with mock.patch.object(rh, "merges", return_value=[]), mock.patch.object(rh, "closes", return_value={}):
+            self.assertEqual(rh.main(["--out", out, "--since", "HEAD"]), 0)
+        with open(out, encoding="utf-8") as f:
+            got = [(r["n"], r["check"]) for r in json.load(f)["rows"]]  # p's row that held stays, and q has no pin
+        self.assertEqual(got, [(4, "p"), (5, "q")])
+
     def test_a_key_already_measured_is_copied_and_a_change_under_driver_measures_again(self):
         sha = rh.git("rev-parse", "HEAD").strip()
         item = ("01", "C01.1", "keep broken", BREAK, [], None, False)

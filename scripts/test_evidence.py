@@ -162,6 +162,18 @@ class EvidenceTest(Repo):
         run = self.run_evidence(spec(verify=f"true && git rev-parse main | cat    # {self.base}"))
         self.assertEqual(run.returncode, 0, run.stdout)
 
+    def test_a_git_verify_line_about_a_commit_made_after_the_close_is_not_applicable(self):
+        self.write("app.txt", "later\n")
+        self.git("add", "app.txt")
+        self.git("commit", "-q", "-m", "after the close")
+        later = self.git("rev-parse", "--short", "HEAD").strip()
+        run, report = self.report(spec(verify=f"git diff --exit-code {later} -- app.txt"))
+        self.assertEqual((self.statuses(report)["verify/1"], run.returncode), ("not_applicable", 0))
+        self.assertIn(f"{later} is not in this close's history", run.stdout)
+        # a commit the close has is still asked: close.txt came after the base
+        run, report = self.report(spec(verify=f"git diff --exit-code {self.base} -- close.txt"))
+        self.assertEqual((self.statuses(report)["verify/1"], run.returncode), ("failed", 1))
+
     def test_main_given_to_another_command_or_repository_is_left_as_written(self):
         # Day 05's Verify ran `bearing snapshot <fixture repo> main`: the fixture's own branch.
         for verify in ("echo main    # main", "git -C . rev-parse --abbrev-ref main    # main"):

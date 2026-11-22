@@ -63,7 +63,7 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .words dt { display: inline; font-weight: 600; color: var(--ink); } .words dt::after { content: ": "; } .words dd { display: inline; margin: 0; }
 .now, .demo-banner { padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
 .demo-banner { border: 2px solid var(--repair); font-weight: 500; }
-/* needs attention: one list of what is open, drawn open. Its marks are the same in the list, under a Day and beside a
+/* needs attention: one list of what is open, folded under its title and count until opened. Its marks are the same in the list, under a Day and beside a
    graph's title, and no two differ by colour alone: a diamond, a square, a hatched square, a dashed one, a hollow
    square, a ring and a short bar. */
 .o { display: inline-block; flex: none; box-sizing: border-box; width: 12px; height: 12px; border-radius: 2.5px; }
@@ -74,10 +74,12 @@ h1 { font: 700 30px/1.15 var(--display); letter-spacing: -0.01em; }
 .o.unp { background: var(--card); border: 2px solid var(--proven); }
 .o.hnd { background: var(--card); border: 2px solid var(--ink); border-radius: 50%; }
 .o.exp { height: 4px; border-radius: 2px; background: var(--pending); }
-.attention { padding: 18px 20px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; gap: 16px; }
+.attention { padding: 18px 20px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
 .attention[hidden], .attention [hidden], .chips[hidden] { display: none; }
-.attention h2 { font: 700 22px/1.2 var(--display); text-wrap: balance; }
-.at-head { display: flex; flex-direction: column; gap: 4px; }
+.attention h2 { display: inline; margin-right: 12px; font: 700 22px/1.2 var(--display); }
+.at-all > summary { cursor: pointer; }
+.at-peek { font-size: 14px; color: var(--ink-2); }
+.at-body { display: flex; flex-direction: column; gap: 16px; margin-top: 14px; }
 .at-sum { display: flex; flex-direction: column; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .at-n { color: var(--ink-2); } .at-n b { color: var(--ink); }
 .at-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 26px; }
