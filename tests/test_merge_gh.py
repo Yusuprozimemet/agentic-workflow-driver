@@ -118,6 +118,7 @@ class ProtectionTest(GhCase):
         reason = self.github.protection(str(folder), gh)
         # Compared up to the first name: a break that skips the bypass line reports the names it
         # misses instead, and its words differ at once.
+        self.assertIsNotNone(reason)
         self.assertEqual(reason.split(' "')[0], "main allows a bypass")
 
     def test_checks_bypassable(self):

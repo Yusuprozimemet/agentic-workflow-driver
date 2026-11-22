@@ -44,7 +44,7 @@ LINE_KIT_CHECKS = (
 
 def protected(admins, names=(*KIT, "tests")):
     # Classic protection that requires the pull request and the checks named in names: the kit's nine
-    # and the project's tests by default. Admins bypass it when admins is true.
+    # and the project's tests by default. Admins bypass it when admins is false.
     return {
         "code": 0,
         "out": {

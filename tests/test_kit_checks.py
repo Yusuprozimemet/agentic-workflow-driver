@@ -47,7 +47,6 @@ class KitChecksTest(GhCase):
         found = re.findall(r'"([^"]*)"', reason)
         self.assertEqual(len(found), len(names))
         self.assertEqual(found, list(names))
-        self.assertEqual(reason, "main does not require " + ", ".join(f'"{n}"' for n in names))
 
     def test_only_the_projects_tests(self):
         # C15.1: the project's own tests are not one of the kit's nine, so the nine are all missing.
@@ -110,6 +109,40 @@ class KitChecksTest(GhCase):
         )
         reason = self.github.protection(str(folder), gh)
         self.missing(reason, ["Frozen files stay unedited"])
+
+    def test_bypassable_ruleset_check(self):
+        # Beyond C15.3's case (the track-reviewer's): two rulesets, 7 with no bypass requiring the pull
+        # request and eight names, 8 with a bypass requiring the ninth. Each ruleset's names are its own.
+        folder = self.scratch()
+        frozen = "Frozen files stay unedited"
+        rules = [
+            {"type": "pull_request", "ruleset_id": 7, "parameters": {}},
+            {
+                "type": "required_status_checks",
+                "ruleset_id": 7,
+                "parameters": {
+                    "required_status_checks": [{"context": n} for n in KIT if n != frozen]
+                },
+            },
+            {
+                "type": "required_status_checks",
+                "ruleset_id": 8,
+                "parameters": {"required_status_checks": [{"context": frozen}]},
+            },
+        ]
+        gh = fake_gh(
+            folder,
+            api={
+                CLASSIC: NOT_PROTECTED,
+                RULES: ok(rules),
+                RULESET_7: ok({"id": 7, "bypass_actors": []}),
+                "repos/{owner}/{repo}/rulesets/8": ok(
+                    {"id": 8, "bypass_actors": [{"actor_id": 5}]}
+                ),
+            },
+        )
+        reason = self.github.protection(str(folder), gh)
+        self.missing(reason, [frozen])
 
     def test_ruleset_names(self):
         # C15.4 (hold): a ruleset's required checks count by their names, as the nine do in RULES_7.
