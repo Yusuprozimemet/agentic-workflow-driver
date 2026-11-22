@@ -191,7 +191,9 @@ class LongPathTest(unittest.TestCase):
     def test_transcript_past_max_path_is_counted(self):
         # A subagent's transcript in a folder past 260 characters, beside a session at a short path.
         self.write(os.path.join(self.project, "short.jsonl"), line(output=3, branch="main") + "\n")
-        folder = os.path.join(self.project, "s" * 200, "subagents")
+        # Padded past 260 wherever the checkout is: a short temporary root on Linux gave 250.
+        pad = max(200, 262 - len(os.path.join(self.project, "", "subagents")))
+        folder = os.path.join(self.project, "s" * pad, "subagents")
         self.write(os.path.join(folder, "agent-" + "a" * 100 + ".jsonl"), line(message_id="msg_2", output=7, branch="main") + "\n")
         self.write(os.path.join(folder, "agent-" + "a" * 100 + ".meta.json"), '{"agentType": "implementer"}')
         self.assertGreater(len(folder), 260)
