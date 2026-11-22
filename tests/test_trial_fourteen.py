@@ -77,7 +77,7 @@ class TrialFourteenTest(unittest.TestCase):
                 f.write(text.encode("utf-8"))
         records, reason = runlog.read(state)
         self.assertIsNone(reason, msg="the run log copy cannot be read")
-        self.assertIsInstance(records, list, msg="the run log copy cannot be read")
+        self.assertIsInstance(records, list, msg="the run log copy is not a list of lines")
         return state, records
 
     def _section(self, text, title):
@@ -342,6 +342,15 @@ class TrialFourteenTest(unittest.TestCase):
             any(r.get("event") == "merged" and r.get("pr") == number for r in records),
             msg="the closing PR has no merged line",
         )
+        # The level 2 day's close is its last merge: the last merged line at or after level 2.
+        level_2 = self._level_2_from()
+        day = [
+            r.get("pr")
+            for r in records
+            if r.get("event") == "merged" and _at(r) and _at(r) >= level_2
+        ]
+        self.assertTrue(day, msg="no merged line at or after level 2 from")
+        self.assertEqual(number, day[-1], msg="the closing PR is not the level 2 day's last merge")
         self.assertTrue(
             re.fullmatch(HEX40, self._label(lines, "merge commit")),
             msg="merge commit is not 40 hex characters",
