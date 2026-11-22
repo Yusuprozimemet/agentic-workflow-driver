@@ -537,11 +537,22 @@ Autonomy is earned one level at a time, and lost the same way.
 |---|---|---|---|
 | 0, today | starts each step, merges, says "merged", opens the session | | |
 | 1, you merge | merges each PR from the phone; answers parks | starts each step in a new session, watches the checks, checks evidence, finds the next step | the driver exists and its `--dry-run` names the step `spec-drift.py` prints, and a phase's end where the days' phases show one; sessions in `auto` mode; a token scoped to the trial's repository |
-| 2, the driver merges | answers parks; reads the morning report; samples PRs at each phase end | also merges a PR that passes every gate and touches no human-only file | 15 PRs in a row merged at level 1 without the maintainer asking for a change; the sessions in the driver's container; `main` requires a pull request and allows no bypass |
-| 3, phases chain | answers parks; acts at the plan's stopping points | also starts the next phase when the plan-auditor names no plan change | one whole phase at level 2 with no escape |
+| 2, the driver merges | answers parks; reads the morning report; samples PRs at each phase end | also merges a PR that passes every gate and touches no human-only file | 15 PRs in a row merged at level 1 without the maintainer asking for a change; the sessions in the driver's container; `main` requires a pull request and allows no bypass, and requires each of the kit's checks by name unless `waived_checks` in `driver.json` names it |
+| 3, phases chain | answers parks; acts at the plan's stopping points | also starts the next phase when the plan-auditor names no plan change in its report's verdict line, and that phase's specs have merged | two phases in a row at level 2 with no escape, no merge by hand and no step at level 1, counted by `status` |
 
 **Back one level** on an escape: a Defect line found at `close`, by the `dashboard` or in a
 `Day NN review`, or a failed evidence replay after a merge. These are counts the kit already keeps.
+The escapes are the project's, read from its `spec-drift.py --out` JSON as the next step is; the
+driver's own repository's do not move the project's level.
+
+**The kit's checks**, for level 2, are the nine `setup-check.py` requires by name: "Description
+uses the template", "Diff stays reviewable", "Branch, title, commits and Jira keys agree", "Frozen
+files stay unedited", "Dashboard metric tests gate", "Criteria keep their wording", "A closed
+day's evidence replays", "Track tests seen red" and "A track's breaks replay". The driver reads
+them itself, as its `protection` reads the bypass today; it does not run the script (nothing in
+the kit is made for the driver alone). A check the project does not have is waived by name in
+`waived_checks`, the maintainer's config beside `human_only`; `on` prints each waived check and
+the switch log's `on` line names them, so the record shows what the merge stood without.
 
 Level 1 runs one PR per tap, so it is a trial, not the goal. Level 2 is "write the plan, the
 agents work, stop only for the plan".
@@ -621,15 +632,25 @@ repository.
    (decided 2026-11-15); a comment that fails does not stop the run.
 8. **The level 2 merge**: the path check against the human-only list, then
    `gh pr merge --match-head-commit <sha>`, the commit the checks and the reviewer saw.
-9. **Level 3**: the next phase starts when the plan-auditor names no plan change.
+9. **Level 3**: the next phase starts when the plan-auditor names no plan change. At a phase's
+   end the driver runs the plan-auditor in the container, on the phase that ended and the next,
+   and parks with its report on the `parked` issue; at level 3 a report whose verdict line says
+   no plan change starts the next phase instead, if its specs have merged. A phase whose specs
+   are not written parks as today: writing specs stays with the maintainer.
+10. **The Telegram remote** (Phase 4): commands from the maintainer's own bot, each mirrored to
+   the run's issue, so GitHub stays the record.
 
 **In the kit**, as ordinary `tooling/` pull requests. Each serves manual mode, and the driver
 runs without them:
 
 - A check that the dashboard has data after a merge, for the two failures only a person looking
   at the page caught (#78, #84).
-- `setup-check.py` reports "a pull request before merging" and "do not allow bypassing". The
-  maintainer changes the settings; a script only reads them.
+- `setup-check.py` reports "do not allow bypassing" and each of the kit's checks required by
+  name (Day 10). It does not report "a pull request before merging": the driver's own
+  `protection` reads that one. The maintainer changes the settings; a script only reads them.
+- The plan-auditor's report ends with one verdict line, `verdict: no plan change` or
+  `verdict: plan change`, which a person reads at a phase's end in manual mode and the driver
+  reads at level 3 (Day 17).
 - Later, if the trial says the driver stays: the next step as fields in the `--out` JSON, so
   that the driver stops reading a sentence, and an "Unattended runs" table on the dashboard.
   Both reach into `scripts/spec-drift.py`, so they wait. This repository's dashboard already
@@ -637,7 +658,7 @@ runs without them:
 
 ## Phases
 
-Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 12 have specs in
+Each phase is a series of <400-line PRs, so CI stays green. Days 1 to 14 have specs in
 [`specs/`](specs/). The days after them are titles: each gets its spec when its turn comes.
 
 ### Phase 0 — The dry run
@@ -705,7 +726,38 @@ and the container's correction above it).
   names every merge the driver made, every park and every refusal.
 
 ### Phase 3 — Level 3: phases chain
-**Goal:** the next phase starts when the plan-auditor names no plan change.
+**Goal:** the next phase starts when the plan-auditor names no plan change. Its days are built
+while the trial's project runs on at level 2, with the maintainer answering every phase end.
+- Day 15: the level 2 gate by name (Levels, "The kit's checks"): `on` at level 2 refuses unless
+  `main` requires a pull request, allows no bypass and requires each of the kit's checks by name,
+  less those `waived_checks` names; `on` and the switch log print the waived ones; `status`
+  prints the level `driver.json` names (H14.2) and a running reviewer's own line (H14.1). Its
+  spec carries `Replaces:` for C13.3 and C13.7.
+- Day 16: back one level on an escape (P54): after each close the driver reads the project's
+  escapes and runs one level lower from the next step, writing the change in the switch log,
+  until the maintainer raises it again; `status` counts level 3's entry, two phases in a row at
+  level 2 with no escape, no merge by hand and no step at level 1.
+- Day 17: the phase-end audit (item 9): at a phase's end the driver runs the plan-auditor in
+  the container and parks with its report (P25); an audit with no findings parks too, and the
+  run log counts how often (P37); at level 3, a verdict line of no plan change starts the next
+  phase if its specs have merged (P53). The verdict line comes first, in the kit (H12.4).
+- Day 18: the trial's record at level 3: two phases of the trial's project at level 2, then a
+  phase end the driver chained; what it started, merged, parked and refused, what it cost beside
+  the baseline and beside level 2. Before it, the maintainer extends the project's plan past its
+  Day 24 and stops one real session with `STOP` (the session and its container both gone).
+- **Done when:** the level 3 trial's day closed with its evidence replay green, and the record
+  names every phase the driver started, every merge it made, every park and every refusal.
+
+### Phase 4 — The Telegram remote
+**Goal:** the maintainer steers the driver from the phone, not only stops it, and GitHub stays
+the record. "The switches" says what the phone does today; each Day's spec brings its "From the
+phone" column up to the command it adds.
+- Day 19: watch and stop: the maintainer's own bot, its token on the host only; `/status` and
+  `/stop`; each command mirrored to the run's issue and answered once acted on.
+- Day 20: start and steer: `/on`, the park's answers as buttons, `/merge`, `/note`. Whether a
+  `/merge` counts as the maintainer's merge in a level's count is settled at Day 18's stop.
+- **Done when:** a day of the trial's project runs with every command sent from Telegram and
+  each one on the run's issue.
 
 ## Stopping points
 
@@ -713,14 +765,16 @@ and the container's correction above it).
   plan against the code, and Phase 2 is specified only once the maintainer lifts the stop.
   Lifted by "Course correction after Phase 1".
 - **Day 14 (the level 2 trial's record) is a stopping point.** The same reading, before Phase 3.
+  Lifted by "Course correction after Phase 2".
+- **Day 18 (the level 3 trial's record) is a stopping point.** The same reading, before Phase 4.
 
 **When `plan.md` may change** (decided 2026-11-16). A plan-change PR that adds or moves work
 opens only at a phase's end or a stopping point named here, beside the plan-auditor's reading.
 Between them, a plan-change PR only makes `plan.md` say what the merged code and specs already
 do: a stale line, a contradiction settled toward the tested behaviour, a decision already taken.
 It adds no Day and moves none. A decision that becomes lasting behaviour becomes a commitment in
-the next plan-change PR; detail may stay `Plan: none` with its reason. Waiting for Day 14's stop:
-the Telegram remote (#212, S8).
+the next plan-change PR; detail may stay `Plan: none` with its reason. Waiting for Day 18's stop:
+whether a Telegram `/merge` counts in a level's count.
 
 ## Course corrections
 
@@ -785,6 +839,43 @@ Day 8 trial's 3 do not count (Fable's audit of this PR, the maintainer's choice)
 merged, a spike ran real `claude -p` sessions in the container ("Where the driver lives", "Shown
 on 2026-11-11"); the push with the fine-grained token is still to be shown ("Unverified").
 
+## Course correction after Phase 2
+
+Three plan-auditor runs on 2026-11-22 (`main` at `a2d2677`: Phase 2 as it ended, Phase 3, the
+whole plan) found Phase 2's Done-when met, but thinly: the driver made one merge on its own
+(bearing #154), and #153, on the same level 2 day, was merged by hand. Phase 3 had a goal and no
+Days. The maintainer chose the audits' recommendations:
+
+- **Phase 3 is Days 15 to 18, the gates before the chaining.** The level 2 gate by name, back
+  one level, the phase-end audit, then the level 3 trial's record, a stopping point. The
+  Telegram remote follows as Phase 4 (Days 19 and 20), after that stop.
+- **Level 3 is entered after two phases in a row at level 2** with no escape, no merge by hand
+  and no step at level 1. On bearing a phase is one Day, so "one whole phase" was one clean Day.
+  The escapes that count are the project's. Level 3 starts a phase only if its specs have
+  merged; otherwise it parks as today, and writing specs stays with the maintainer.
+- **Level 2 refuses a missing merge gate, narrowly.** `on` asked only whether `main` requires
+  some check (H14.3): a project that required only its tests would pass, and the driver could
+  merge a pull request whose "Frozen files stay unedited" is red. Refusing on every failing line
+  of `setup-check.py` would refuse bearing for good (it has no breaks replay) and refuse on Pages
+  and placeholders, which have nothing to do with a merge. So the driver reads the kit's checks
+  by name, with `waived_checks` for the exceptions (Levels).
+- **The post-merge evidence replay stays.** From Day 12 to Day 14 the rehearsal before a merge
+  caught 3 defects and the replay after it none (`phase-table.py`). Three Days are few; on
+  bearing the driver waits for that run, P54 counts a failed one as an escape, and bearing has
+  no rehearsal check. Day 18's stop counts again.
+- **The open-work issues stay closed.** The maintainer closed #211, #212 and #213 (2026-11-16,
+  2026-11-19) with 33 boxes unticked. What Phase 3 needs from them is in its Days: the gate
+  (H14.3), `status`'s level and reviewer lines (H14.1, H14.2), back one level (P54), the
+  phase-end audit (H12.4), the `STOP` test before the level 3 trial, and Telegram (Phase 4). The
+  rest is dropped; a new leftover goes into its Day's Notes as a hand-off (`CLAUDE.md`). Day
+  14's spec still sends bearing's breaks replay and `GH_TOKEN` to #213, and closed specs are not
+  edited: the first is now a case for `waived_checks`, the second stays the maintainer's.
+- **The maintainer's, with no Day:** H09.3, a resumed fix that meets the usage limit and a
+  `STOP` during the wait; the usage limit's wait, which no session has met live; `GH_TOKEN`,
+  loaded by hand before each `on`.
+- **Stale lines corrected:** Days 1 to 14 with specs; what `setup-check.py` reports;
+  "Unverified" from Day 14's record (`docs/trial/day-14.md`); the README's Findings gain Day 14.
+
 ## Course correction after Phase 1
 
 Three plan-auditor runs on 2026-11-11 (`main` at `5355b29`: Phase 1, Phase 2, the whole plan)
@@ -823,7 +914,8 @@ The phases are broken into day specs in [`specs/`](specs/). Read
 1. Phase 0: Days 1-2.
 2. Phase 1: Days 3-8. **Stop and evaluate.**
 3. Phase 2: Days 9-14. **Stop and evaluate.**
-4. Phase 3: numbered from 15.
+4. Phase 3: Days 15-18. **Stop and evaluate.**
+5. Phase 4: Days 19-20.
 
 ## Removing it
 
@@ -891,6 +983,10 @@ Windows account's `gh` login is a token of the maintainer's GitHub account.
 Decided 2026-11-11, "Course corrections": the sessions run in a container, not as a second
 Windows account; the container holds the token of the maintainer's GitHub account.
 
+Decided 2026-11-22, "Course correction after Phase 2": Phase 3 is Days 15 to 18 and Telegram is
+Phase 4; level 3 needs two phases at level 2; level 2 reads the kit's checks by name, with
+`waived_checks`; the post-merge evidence replay stays; the open-work issues stay closed.
+
 ## What this does not stop
 
 The step session, the driver and the maintainer share one GitHub account; from Day 10 the
@@ -923,7 +1019,8 @@ PR; `--session-id` works with `claude -p`; `--settings` hooks still merge after 
 Still not shown:
 
 - How a headless session reports the usage limit, and what state a `--max-budget-usd` stop
-  leaves the branch in. Neither happened in the trial. Day 9 builds the wait on it.
+  leaves the branch in. Neither happened in the trial, nor in Day 14's count run and level 2 day
+  ("usage limit: not met"). Day 9 builds the wait on it.
 - That resuming is cheaper than a new session for a fix, that `--resume` takes the
   `--session-id`, that `--settings` hooks merge on a resumed session, and whether a resumed
   session's transcript is counted twice. No step in the trial needed a fix.
@@ -933,17 +1030,18 @@ Still not shown:
 - What `auto` mode refuses over a whole step: nothing in the three sessions that ended; the
   killed session's refusals are not known (Day 9 logs them).
 - Which credential `git push` used: the git config sends it through `gh auth git-credential`.
-  No merge has used the token; at level 1 the maintainer merges.
+  On Day 14 the driver made its first merge (bearing #154) with `gh` on the host; the run log
+  does not record which credential that `gh` used.
 - That a session follows rules passed with `--append-system-prompt-file` as it follows
   `CLAUDE.md` (the trial's sessions followed them; nothing compared). That `--agents` with
   `--agent` starts the reviewer from a brief outside the project is checked on 2.1.322 by
-  C12.21, a live test run by hand, not in CI.
+  C12.21, a live test run by hand, not in CI; in the container it started the reviewer of
+  bearing #153 and #154 on Day 14, each with its comment on the pull request.
 - Whether Remote Control on the phone shows a headless session. The plan relies on GitHub's
   app only.
-- The container (the rest is shown in "Where the driver lives"): that the fine-grained token as
-  `GH_TOKEN`, with the image's credential helper and commit identity, lets a session commit, push
-  and open a pull request; that `token-usage.py` counts the transcripts of the container's Claude
-  Code folder; and a whole step there, not a one-word reply. Day 10's first live run shows them.
-- That the image's Claude Code takes `--output-format stream-json --verbose` with `-p` and ends
-  the stream with the same `result` the JSON output gives: seen on the PC's 2.1.322 only, and
-  only its refusal without `--verbose`. Day 11 checks it in the image.
+
+Shown by Day 14's record (`docs/trial/day-14.md`): the container's sessions committed, pushed
+and opened their pull requests with the fine-grained token, whole steps, not one-word replies;
+`token-usage.py` counts the container's transcripts (C14.2); and the image's Claude Code ran every
+session with `--output-format stream-json --verbose`, each ending in the `result` whose cost the
+run log holds.
