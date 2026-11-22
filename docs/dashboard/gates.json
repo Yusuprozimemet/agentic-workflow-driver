@@ -151,5 +151,5 @@
 {"date":"2026-11-22","day":14,"gate":"evidence replay","runs":7,"replies":13,"context":2014258,"output":8771,"cost":0.7704},
 {"date":"2026-11-22","day":14,"gate":"hooks","runs":3,"replies":6,"context":191719,"output":846,"cost":0.1698},
 {"date":"2026-11-22","day":14,"gate":"seen red","runs":10,"replies":18,"context":1874151,"output":16339,"cost":0.8422},
-{"date":"2026-11-22","day":15,"gate":"auditors","runs":1,"replies":20,"context":1052762,"output":5811,"cost":0.6533}
+{"date":"2026-11-22","day":15,"gate":"auditors","runs":1,"replies":35,"context":2240439,"output":11782,"cost":1.1124}
 ]
