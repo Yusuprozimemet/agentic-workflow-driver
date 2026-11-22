@@ -5,7 +5,8 @@
 ## Goal
 The driver merges pull requests in another project without the maintainer, and this repository
 holds the record. The trial's project runs at level 1, in the container, until `status` reads
-15 of 15. Then it runs one whole day at level 2, and that day closes with its evidence replay
+15 of 15. Then it runs one whole day at level 2 (as it ran, from that day's Track A on:
+"Before this day"), and that day closes with its evidence replay
 green. The record names every merge the driver made, every park and every refusal, and what the
 reviewer found. It gives the cost beside the baseline ($1.86, 34.4) and beside the level 1 count
 run (`plan.md`, Phase 2's Day 14 and its Done when). The step sessions' transcripts are counted
@@ -45,7 +46,8 @@ Track D cannot start until these are done. Each goes in the record's Set-up (C14
   As it ran (the maintainer chose on 2026-11-22 to record it so): the count's 15th merge was
   the spec PR of bearing's Day 22 (#151), at level 1, so level 2 covers that day's Track A
   (#153) and its close (#154), not its spec step. The maintainer merged #153 by hand, a second
-  after its review; #154 is the driver's one merge. The record's The level 2 day says so.
+  after its review; #154 is the driver's one merge. The record's The level 2 day says so
+  (C14.11).
 - **The run log is kept.** The count reads `state/run.jsonl` as a whole. The record's copies
   start at the first line after `2026-11-12T23:21:05Z` (the Day 10 step's `end`, line 22 of
   `state/run.jsonl` at 3f31818). So #101's `wait` and `merged` lines, which the next `on` writes,
@@ -101,8 +103,9 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
   refusals) and `docs/trial/install-14.jsonl`. The last holds, from one level 2 step session's
   transcript, that session's id, then the `input` of its first `Bash` tool_use that installs
   the project and of its first that runs the tests, in that order, each as its `assistant`
-  record gives it (these transcripts hold every tool_use a second time, in an
-  `api-request-blob` record whose command starts `cd /work && `); one tool_use may be both
+  record gives it (these transcripts hold most tool_use blocks a second time, the install's
+  among them, in an `api-request-blob` record whose command starts `cd /work && `); one
+  tool_use may be both
   (C14.15). The record has these
   sections, in this order: Set-up, The count run, The level 2 day, Merges, Parks, Refusals, The
   reviewer, Cost, The usage limit, The install, The first merge, Unverified, Evidence. Its test
@@ -244,7 +247,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `status`'s "parks by reason" lines on the copy), and every refusal (Refusals: each `refused`
       entry's tool and input, each line of `docs/trial/refusals-14.jsonl`, and the
       `refusals.json` rows on the `dashboard-data` branch for the trial's dates, quoted). The
-      sections come in the order In scope gives.
+      sections come in the order In scope gives. The level 2 day names each merge the driver
+      did not make: for each `merged` line of the copy at or after the Set-up's "level 2 from:"
+      with no `by`, a line `merged by hand: #<n>` (#153), which
+      `test_every_driver_merge_named` checks too.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_every_driver_merge_named`, `TrialFourteenTest.test_every_park_named`,
       `TrialFourteenTest.test_every_refusal_named`, `TrialFourteenTest.test_sections_in_order`.
@@ -267,8 +273,15 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       out too: `count run alone: ` and `level 2 alone: `, each followed by what `status._cost`
       returns, after its "cost: ", on the copy's lines before the Set-up's "level 2 from:" time
       and on those at or after it (`level 2 alone: $<x>, merged pull requests <k>, $<y> each
-      (baseline $1.86)`). The first counts the sessions whose pull request was merged by hand
-      and has no `merged` line (#108, #116); the record says so.
+      (baseline $1.86)`). The first counts four sessions whose pull request has no `merged`
+      line: #108 and #116, whose sessions ended with a `PARK:` line, and #123 and #139
+      (sessions 57665251 and 1efd23a0), merged by hand before their session ended, so the
+      driver wrote "the session ended with no pull request and no PARK line". Its 15 merges
+      include #101, whose opener's cost is before the copy. The record says all of this; no
+      test can catch a name left out. It also says that the run log's dollars (the sessions'
+      own `cost_usd`, the CLI's total) and `--compare`'s (list prices of the main sessions'
+      replies) are two measures and are not subtracted, and that session 43f05fb7 (#148's
+      opener) runs over local midnight, so its replies are on both sides.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_cost_lines_are_status`, `TrialFourteenTest.test_cost_beside_level_1_and_baseline`.
       Plan: P55 "34.4 replies per merged pull request"; N25 "with cost beside the baseline and level 1"
@@ -276,7 +289,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       6, the ten `human_only` paths, the level of each run, the image, the driver's `main` commit,
       the commit of bearing's copy of the kit's `scripts/spec-drift.py`, "bearing at the level 2
       day: <commit>" (40 hex characters each), and "level 2 from: <time>" in the run log's UTC
-      form, which C14.12 and C14.15 read: the `at` of an `on` line of `switches-14.jsonl`.
+      form, which C14.11, C14.12 and C14.15 read: the `at` of the last `on` line of
+      `switches-14.jsonl`, which the test asserts.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_set_up`.
       Plan: N27 "with budget_usd 10 per step, steps_per_night 6 and a ten-path human-only list"; N11 "trial's record names the commit of its project's copy"
@@ -296,7 +310,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       section says "met", with the transcript record and the `result` quoted, when any line of
       `run-14.jsonl` holds "usage limit", and "not met" only when none does. The install (H13.1):
       `docs/trial/install-14.jsonl` holds three lines: a session id that starts a level 2 step
-      in the copy, then the `input` of that session's first `Bash` tool_use that installs as
+      in the copy (Day 22 Track A's, `76bd4a7f-98fc-4049-800f-4c791d2adc90`, which the test
+      asserts), then the `input` of that session's first `Bash` tool_use that installs as
       bearing's CI does, `pip install -e ".[dev]"`
       (`.github/workflows/evidence.yml`, line 30 at 714412f; The install quotes that line at the
       Set-up's "bearing at the level 2 day: <40 hex>"), matched by the regex
@@ -305,11 +320,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `command` holds the word "pytest" (bearing's CI runs `pytest -q`,
       `.github/workflows/tests.yml`). One tool_use may be both, as Day 22 Track A's was: lines 2
       and 3 are then the same `input`, and the regex's match starts before the first "pytest" in
-      its `command`. When they differ, their order in the file is the transcript's, which the
-      test cannot see. The install quotes both commands.
-      A level 2 step is a `start` line of the copy at or after the Set-up's "level 2 from: <time>":
-      the run log writes no level. That time is the `on` line of `switches-14.jsonl` at
-      2026-11-21T23:42:48Z, the first after `driver.json`'s last write (23:37:15Z). The `on` at
+      its `command`, which the test asserts. The install quotes the command.
+      A level 2 step is a `start` line of the copy at or after the Set-up's "level 2 from: <time>"
+      whose `prefix` is not "review": the run log writes no level. That time is the last `on`
+      line of `switches-14.jsonl`, at 2026-11-21T23:42:48Z, the first after `driver.json`'s
+      last write (23:37:15Z). The `on` at
       23:36:32Z started no session, and whether it ran at level 2 is not known (the maintainer,
       2026-11-22).
       Red today: `docs/trial/day-14.md` does not exist.
@@ -384,8 +399,9 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
   `2d6771a4-…/subagents/agent-aa71599a54a3f2719.jsonl` with its `.meta.json` (2.1.322).
 - **Assumed** — a reviewer started with `--agents <file> --agent reviewer` in the container leaves
   its transcript as a main session under `-work`, not under `subagents/`, so C14.12 counts it |
-  not run: no review has run in the container; the main session checks it with `find
-  state/claude/projects/-work` after the level 2 day, before Track D.
+  run on 2026-11-22, before Track D: `find state/claude/projects/-work` lists the two
+  reviewer sessions (d26d9fcb, 3a64c23d) as files beside the step sessions', with no folder
+  of their own, and `--compare`'s "after" side counts them among its 6 sessions.
 - C14.8's and C14.16's greps find comments too: no comment names the removed names.
 - **Defect** D14.1 — found: auditor · cause: spec · made: Day 14 · Verify and C14.9 named `tests.test_dashboard_page`; the file is `scripts/test_dashboard_page.py` (fixed in this PR).
 - **Defect** D14.2 — found: auditor · cause: spec · made: Day 14 · C14.8 named a test class that does not exist, and its "no `how_this_works` key in `spec-drift.json`" half was true today: the key is put only in the `--build` page (fixed in this PR).
@@ -432,5 +448,6 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
   named the open pull request; the record's Parks section says which.
 - **Defect** D14.35 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.34's fix: Track E would delete the test Day 13's recorded break for C13.14 runs, so CI's breaks replay would fail it; C13.15's wording would go false unsaid; whether a session obeys the line was not marked Assumed; and "unedited" for `tests/test_once.py` had no check (fixed in this PR: the retire, the two Notes lines, both test files in C14.1's diff).
 - **Defect** D14.36 — found: Track D · cause: spec · made: Day 14 · C14.15's regex took `pip install -e` with nothing between, but both level 2 step sessions ran `python -m pip install -q -e ".[dev]"`, and Day 22 Track A's ran it and `python -m pytest -q` in one Bash command, so "an install command, then a test command" named two commands where the transcript holds one; the transcript also holds each tool_use twice, which the copy's rule did not say (fixed in a spec-change PR before Track D: the `-q`, the order inside one command, the `assistant` record).
-- **Defect** D14.37 — found: Track D · cause: spec · made: Day 14 · C14.12 took the level 2 day to start on a later local date than the count run's last session; it started 16 minutes after the count's 15th merge, on the same local date, so the "after" side mixes two level 1 pull requests with the two of level 2 and gives no level 2 figure of its own; and "the first `on` of the level 2 day" did not say which of two `on` lines it is (fixed in a spec-change PR before Track D: two lines from the copy by `status._cost`, the `on` named).
+- **Defect** D14.37 — found: Track D · cause: spec · made: Day 14 · C14.12 took the level 2 day to start on a later local date than the count run's last session; it started 15 minutes after the count's 15th merge, on the same local date, so the "after" side mixes two level 1 pull requests with the two of level 2 and gives no level 2 figure of its own; and "the first `on` of the level 2 day" did not say which of two `on` lines it is (fixed in a spec-change PR before Track D: two lines from the copy by `status._cost`, the `on` named).
+- **Defect** D14.38 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.36's and D14.37's fixes: `count run alone:` named two of the four sessions whose pull request has no `merged` line (#123 and #139 were left out) and not #101's opener; "level 2 from:" took any `on` line; "The level 2 day says so" had no check and the Goal still read "one whole day"; the Cost section set two measures side by side unsaid; the install's order was checked only for the session it did not name; a level 2 step took the reviewer's `start` lines; "every tool_use" was most; "16 minutes" was 15; and the reviewer-transcript Assumed line still read "not run" (fixed in this PR).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
