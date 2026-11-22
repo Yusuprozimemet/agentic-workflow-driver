@@ -13,6 +13,18 @@ import subprocess
 from driver.decide import _is_branch_of
 from driver.steps import classify
 
+# The checks a copy of the kit requires on main, by job name (plan.md, Levels).
+KIT_CHECKS = (
+    "Description uses the template",
+    "Diff stays reviewable",
+    "Branch, title, commits and Jira keys agree",
+    "Frozen files stay unedited",
+    "Dashboard metric tests gate",
+    "Criteria keep their wording",
+    "A closed day's evidence replays",
+    "Track tests seen red",
+    "A track's breaks replay",
+)
 # A check's link to its GitHub Actions job, and how much of a failed job's log a prompt gets.
 _ACTIONS_JOB = re.compile(r"/actions/runs/\d+/job/(\d+)")
 # gh's stderr for a pull request with no checks, or none required: exit 1, nothing on stdout.
@@ -199,11 +211,12 @@ def pr_state(project, gh, number):
     )
 
 
-def protection(project, gh):
+def protection(project, gh, waived=()):
     # Returns None when main requires a pull request and its checks from a source with no
     # bypass, and the reason otherwise. A bypass lets an actor merge past the rule, so a source
     # that allows one does not count. The sources are main's classic protection and each ruleset
-    # a rule names.
+    # a rule names. Names count only from a source with no bypass; the kit's checks not required
+    # and not waived are the last reason.
     code, classic, err = _gh(
         project,
         gh,
@@ -226,12 +239,15 @@ def protection(project, gh):
         if named and rule.get("ruleset_id") not in ids:
             ids.append(rule.get("ruleset_id"))
     status = classic.get("required_status_checks") or {}
+    classic_names = set(status.get("contexts") or [])
+    classic_names |= {check.get("context") for check in status.get("checks") or []}
     sources = [
         {
             "id": None,
             "pr": classic.get("required_pull_request_reviews") is not None,
             "checks": bool(status.get("contexts") or status.get("checks")),
             "state": "free" if (classic.get("enforce_admins") or {}).get("enabled") else "bypass",
+            "names": classic_names,
         }
     ]
     for ruleset_id in ids:
@@ -251,12 +267,19 @@ def protection(project, gh):
         else:
             state = "bypass"
         types = [rule.get("type") for rule in rules if rule.get("ruleset_id") == ruleset_id]
+        names = {
+            check.get("context")
+            for rule in rules
+            if rule.get("ruleset_id") == ruleset_id and rule.get("type") == "required_status_checks"
+            for check in (rule.get("parameters") or {}).get("required_status_checks") or []
+        }
         sources.append(
             {
                 "id": ruleset_id,
                 "pr": "pull_request" in types,
                 "checks": "required_status_checks" in types,
                 "state": state,
+                "names": names,
             }
         )
     pulls = [source for source in sources if source["pr"]]
@@ -279,6 +302,10 @@ def protection(project, gh):
                 )
     if blocked:
         return "main allows a bypass"
+    required = {name for source in sources if source["state"] == "free" for name in source["names"]}
+    missing = [name for name in KIT_CHECKS if name not in required and name not in waived]
+    if missing:
+        return "main does not require " + ", ".join(f'"{name}"' for name in missing)
     return None
 
 
