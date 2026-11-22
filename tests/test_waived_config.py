@@ -25,8 +25,10 @@ class WaivedConfigTest(unittest.TestCase):
         found = (
             config.problems(PATH, {**BASE, "waived_checks": "A track's breaks replay"}),
             config.problems(PATH, BASE),
+            # An empty object has no names to refuse: only the list test refuses it.
+            config.problems(PATH, {**BASE, "waived_checks": {}}),
         )
-        same(self, found, ([LINE], []))
+        same(self, found, ([LINE], [], [LINE]))
 
     def test_unknown_name(self):
         found = (
