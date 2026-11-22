@@ -150,5 +150,6 @@
 {"date":"2026-11-22","day":14,"gate":"break on purpose","runs":15,"replies":26,"context":3642513,"output":21668,"cost":1.4735},
 {"date":"2026-11-22","day":14,"gate":"evidence replay","runs":7,"replies":13,"context":2014258,"output":8771,"cost":0.7704},
 {"date":"2026-11-22","day":14,"gate":"hooks","runs":3,"replies":6,"context":191719,"output":846,"cost":0.1698},
-{"date":"2026-11-22","day":14,"gate":"seen red","runs":10,"replies":18,"context":1874151,"output":16339,"cost":0.8422}
+{"date":"2026-11-22","day":14,"gate":"seen red","runs":10,"replies":18,"context":1874151,"output":16339,"cost":0.8422},
+{"date":"2026-11-22","day":15,"gate":"auditors","runs":1,"replies":11,"context":486779,"output":2238,"cost":0.4}
 ]
