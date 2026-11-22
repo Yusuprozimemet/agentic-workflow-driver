@@ -9,7 +9,7 @@ the spec), its breaks in specs/breaks/<slug>.json:
 - every test a ticked criterion names (`CliTest.test_name`) is defined there, in a class of that
   name under tests/ or in a tests.py at the root;
 - every line of the Verify block runs, with bash, in a scratch worktree at that commit, and gives
-  what its comment says. A comment is a list split at ", ", a trailing "(...)" dropped: "nothing"
+  what its comment says (a git line naming a commit made after the close is not applicable). A comment is a list split at ", ", a trailing "(...)" dropped: "nothing"
   wants no output, "exit N" that exit status, and anything else a line of output that is it or
   starts with it and a space. A line with no comment wants exit 0. `main` given to git on this
   repository means the close's first parent, so a line written as `git diff main` reads the day's
@@ -260,6 +260,24 @@ def at_base(command, base):
     )
 
 
+HEX = re.compile(r"(?<![\w./-])[0-9a-f]{7,40}(?![\w./-])")
+
+
+def later_pin(line, commit):
+    """The first commit a git Verify line names that `commit` does not have in its history, or None:
+    a spec change wrote the line after this close, about a commit made after it (Day 12's `83cf2f2`)."""
+    m = COMMENT.match(line)
+    command = m.group(1) if m else line
+    if not re.match(r"\s*git\s", command):
+        return None
+    for word in HEX.findall(command):
+        sha = git("rev-parse", "--verify", "-q", f"{word}^{{commit}}", check=False).strip()
+        if sha and subprocess.run(["git", "merge-base", "--is-ancestor", sha, commit],
+                                  capture_output=True).returncode == 1:
+            return word
+    return None
+
+
 def run_verify(line, worktree, base, env):
     m = COMMENT.match(line)
     command, comment = (m.group(1), m.group(2)) if m else (line, None)
@@ -459,6 +477,11 @@ def check_spec(path, ref, only=None, new_needs_break=False, no_breaks=False):
         if not commands and not only:
             add("verify", "verify", "failed", "Verify", "no Verify block, or an empty one")
         for i, line in enumerate(commands, 1):
+            pin = later_pin(line, commit)
+            if pin:  # the day whose close has that commit asks it; this close cannot
+                add(f"verify/{i}", "verify", "not_applicable", f"Verify: {line.strip()}",
+                    f"{pin} is not in this close's history: the line was written after it", sha=commit)
+                continue
             why = run_verify(line, worktree, base, env)
             add(f"verify/{i}", "verify", "failed" if why else "passed", f"Verify: {line.strip()}", why, sha=commit)
         for cid, lines in ticked.items():

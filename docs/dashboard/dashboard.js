@@ -3529,7 +3529,7 @@ function draw(M, DATA) {
   missing.hidden = !H.missing;
   put("now", h("strong", null, "Now: "), H.now, " ", h("strong", null, "Next step: "), rich(H.next));
   if (H.took) $("words-took").textContent = H.took;
-  /* needs attention: the headline, the strand of Days, the list worst first, the two folds, and a chip beside each graph's title */
+  /* needs attention, folded until opened or a chip is followed (openFolds): the headline, the strand of Days, the list worst first, the two folds, and a chip beside each graph's title */
   const A = M.attention;
   $("attention").hidden = !A;
   if (A) {
@@ -3538,6 +3538,7 @@ function draw(M, DATA) {
       h("b", { class: "id" }, l.ids, l.more.length ? h("details", { class: "at-more" }, h("summary", null, `and ${l.more.length} more`), l.more.join(" ")) : null),
       h("span", { class: "tx" }, rich(l.text)),
       h("span", { class: "at" }, l.at.length ? l.at.map(g => h("a", { href: `#${g.id}` }, g.title)) : "drawn in no graph")));
+    put("attention-peek", A.head);
     put("attention-n", h("b", null, A.head), A.at, A.count ? ":" : ".");
     put("attention-groups", A.groups.map(g => h("div", { class: "at-g" }, h("div", { class: "at-big" }, mark(g.mark), String(g.n)),
       h("div", { class: "at-name" }, g.name), h("div", { class: "at-sub" }, g.sub))));
@@ -3561,7 +3562,7 @@ function draw(M, DATA) {
     Object.keys(NEEDS_TITLES).forEach(g => {
       const cs = A.chips[g] || [];
       $(`${g}-chips`).hidden = !cs.length;
-      put(`${g}-chips`, cs.map(c => h("a", { class: "chip", href: "#attention", title: "In the list at the top of the page: What needs attention today?" }, mark(c.mark), c.text)));
+      put(`${g}-chips`, cs.map(c => h("a", { class: "chip", href: "#attention-all", title: "Opens the list at the top of the page: What needs attention today?" }, mark(c.mark), c.text)));
     });
   }
 

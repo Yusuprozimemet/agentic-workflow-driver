@@ -72,10 +72,10 @@
       </details>
     </section>
     <section class="attention" id="attention" aria-labelledby="attention-h" hidden>
-      <div class="at-head">
-        <h2 id="attention-h">What needs attention today?</h2>
-        <p class="graph-say">Everything open on the page in one list, worst first. A line ends with the graphs that draw it, and each of those graphs carries the same mark beside its title.</p>
-      </div>
+      <details class="at-all" id="attention-all">
+      <summary><h2 id="attention-h">What needs attention today?</h2><span class="at-peek" id="attention-peek"></span></summary>
+      <div class="at-body">
+      <p class="graph-say">Everything open on the page in one list, worst first. A line ends with the graphs that draw it, and each of those graphs carries the same mark beside its title.</p>
       <div class="at-sum">
         <p class="at-n" id="attention-n"></p>
         <div class="at-groups" id="attention-groups"></div>
@@ -95,6 +95,8 @@
         <div class="at-list" id="attention-known-list"></div>
       </details>
       <p class="limit" id="attention-unread" hidden></p>
+      </div>
+      </details>
     </section>
   </header>
 
