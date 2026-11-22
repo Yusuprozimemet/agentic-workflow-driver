@@ -22,7 +22,7 @@ def stamp():
     return datetime.datetime.now(datetime.UTC).strftime(STAMP)
 
 
-def start(state, step, prefix, session, claude, issue=None, container=None):
+def start(state, step, prefix, session, claude, issue=None, container=None, pr=None):
     record = {
         "event": "start",
         "at": stamp(),
@@ -31,6 +31,10 @@ def start(state, step, prefix, session, claude, issue=None, container=None):
         "session": session,
         "claude": claude,
     }
+    # The pull request a review is of goes after claude, and only when there is one: status names the
+    # review's row and its progress line by it before the reviewer's verdict is written.
+    if pr is not None:
+        record["pr"] = pr
     # The run's issue goes last, and only when there is one, so that a start line without it keeps
     # its keys; issue_cost reads it to show the run's issue what the run has cost.
     if issue is not None:

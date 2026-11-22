@@ -139,6 +139,7 @@ def run(args, home, project, number, record, config, head):
         version,
         issue=record["issue"],
         container=reviewer.get("container"),
+        pr=number,
     )
     argv = once.command(
         args,
