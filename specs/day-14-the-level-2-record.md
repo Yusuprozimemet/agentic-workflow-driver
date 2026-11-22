@@ -69,8 +69,8 @@ Decided by the maintainer on 2026-11-19, where `plan.md` and the hand-offs leave
   session is told from a subagent by `agent()`, as today. With neither flag, `--container` is
   refused with exit 2, "--container needs --compare or --tools: token-usage.json counts this
   repository only", and nothing is written. `ContainerTest` lives in a new file,
-  `tests/test_token_usage_container.py` (under `tests/`, where CI's "Track tests seen red" finds it), so `scripts/test_token_usage.py` stays unedited
-  (C14.1). `scripts/publish-counts.py` is not changed: the dashboard counts this repository's
+  `tests/test_token_usage_container.py` (under `tests/`, where CI's "Track tests seen red" finds it), so `scripts/test_token_usage.py` changes only in
+  C14.4's four lines (D14.70). `scripts/publish-counts.py` is not changed: the dashboard counts this repository's
   sessions, and the driver's cost reaches it from the run log (`driver-runs.json`).
 - **The reviewer's session in `status` (Track B; H12.3, P55).** A `start` line whose `prefix` is
   `"review"` prints, in the `steps:` block, `review of #<n>` where today the step's sentence
@@ -161,6 +161,8 @@ Test files, new and edited:
 - 0 and B: `StatusReviewTest` in `tests/test_status_review.py` (new; `tests/test_status.py` and
   `tests/test_status_trial.py` stay unedited).
 - A: `ContainerTest` in `tests/test_token_usage_container.py` (new).
+- The close's spec change (D14.70): `LongPathTest.test_transcript_past_max_path_is_counted` in
+  `scripts/test_token_usage.py`, its folder padded past 260 characters.
 - C1: `tests/test_how_this_works_page.py` deleted; `PickerGoneTest` in `tests/test_picker_gone.py`
   (new, `test_page_half_gone`). C2: `tests/test_how_this_works.py` deleted; `test_build_half_gone`
   added to `PickerGoneTest`.
@@ -173,9 +175,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 - [ ] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, the
       reviewer's rules (`rules/reviewer.md`; `rules/session.md` is C14.19's) and image,
-      `scripts/test_token_usage.py`, `tests/test_once.py`, `tests/test_box_session.py`, the
-      earlier trial records and their tests are unchanged since `3f31818`: Verify's `git diff`
-      prints nothing.
+      `tests/test_once.py`, `tests/test_box_session.py`, the earlier trial records and their
+      tests are unchanged since `3f31818`: Verify's `git diff` prints nothing.
+      (`scripts/test_token_usage.py` is C14.4's.)
       Plan: none — keeps the Day to the record and its two tools; no commitment is about it.
       broken: a driver file other than status.py edited → +"""The driver: reads a project's state and decides its step (plan.md)."""
 - [ ] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
@@ -192,9 +194,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ContainerTest.test_container_without_compare_or_tools_is_refused`.
       Plan: none — a refusal of a misuse; N12 is C14.2's.
 - [ ] C14.4 **hold** — Without `--container`, the folders read and the figures are as today:
-      `scripts/test_token_usage.py` passes, unedited since `3f31818` (C14.1).
+      `scripts/test_token_usage.py` passes. Since `3f31818` it changes in four lines only, in
+      `test_transcript_past_max_path_is_counted`, whose folder is padded past 260 characters
+      wherever the checkout is (D14.70): Verify's `git diff -U0` of the file counts 6 lines
+      that start `-` or `+`, the two file headers and the four.
       Plan: N12 "token-usage.py is pointed there"
       broken: the split day put on the earlier side → AssertionError: Lists differ: [50000, 60000] != [50000]
+      broken: a line added outside the max-path test → 9
 - [ ] C14.5 **new** — On a log with a step session `s1` and a review session `r1` (`start` with
       prefix "review", a `review` line with `"pr": 7`, an `end` with outcome "review: #7, 1
       blockers" and `cost_usd` 0.4), the `steps:` block's second row is exactly
@@ -383,7 +389,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 ```bash
 python -m unittest tests.test_status_review tests.test_status tests.test_status_trial tests.test_dashboard_files tests.test_trial_fourteen tests.test_trial_record tests.test_trial_ten tests.test_token_usage_container tests.test_picker_gone tests.test_session_rules tests.test_once -v
 python -m unittest scripts.test_token_usage scripts.test_dashboard_page -v
-git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker scripts/test_token_usage.py tests/test_once.py tests/test_box_session.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
+git -c core.safecrlf=false diff -U0 3f31818 -- scripts/test_token_usage.py | grep -c '^[-+]'  # 6
+git -c core.safecrlf=false diff --exit-code 3f31818 -- driver/__init__.py driver/box.py driver/config.py driver/decide.py driver/github.py driver/home.py driver/issues.py driver/livecheck.py driver/lock.py driver/loop.py driver/once.py driver/preflight.py driver/review.py driver/runlog.py driver/settings.py driver/steps.py driver/stream.py driver/switches.py driver/switchlog.py driver/tree.py run-steps.py hooks rules/reviewer.md docker tests/test_once.py tests/test_box_session.py tests/test_status.py tests/test_status_trial.py tests/test_trial_record.py tests/test_trial_ten.py docs/trial/day-08.md docs/trial/day-10.md docs/trial/run.jsonl
 git grep -n -w -e how_excerpts -e how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests
 git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests
 ```
@@ -456,4 +463,5 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.37 — found: Track D · cause: spec · made: Day 14 · C14.12 took the level 2 day to start on a later local date than the count run's last session; it started 15 minutes after the count's 15th merge, on the same local date, so the "after" side mixes two level 1 pull requests with the two of level 2 and gives no level 2 figure of its own; and "the first `on` of the level 2 day" did not say which of two `on` lines it is (fixed in a spec-change PR before Track D: two lines from the copy by `status._cost`, the `on` named).
 - **Defect** D14.38 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.36's and D14.37's fixes: `count run alone:` named two of the four sessions whose pull request has no `merged` line (#123 and #139 were left out) and not #101's opener; "level 2 from:" took any `on` line; "The level 2 day says so" had no check and the Goal still read "one whole day"; the Cost section set two measures side by side unsaid; the install's order was checked only for the session it did not name; a level 2 step took the reviewer's `start` lines; "every tool_use" was most; "16 minutes" was 15; and the reviewer-transcript Assumed line still read "not run" (fixed in this PR).
 - **Defect** D14.39 — found: auditor · cause: spec · made: Day 14 · the second recheck: "the last `on` line" holds only until the next `on`, since the copies had a first line and no last; with "when they differ" gone, a later test command as line 3 passed with no order checked; the Assumed line lost its "→" and version; "the CLI's total" was more than `driver/once.py` shows; and "by hand" was written as if the data showed it (fixed in this PR; these last fixes were read by no auditor).
+- **Defect** D14.70 — found: rehearsal · cause: spec · made: Day 14 · C14.4's hold, `scripts/test_token_usage.py` passes, failed CI's rehearsal of the close on Linux: `test_transcript_past_max_path_is_counted` builds a folder whose length is the temporary root's and the checkout's name plus 212, and in the rehearsal's short `/tmp/rehearsal-…` worktree it came to 250, not past 260 ("AssertionError: 250 not greater than 260"); on this PC the paths are longer, so the local rehearsal passed; C14.1 froze the file (fixed in a spec-change PR before the close: the folder padded past 260 wherever the checkout is, C14.4 allows those four lines, C14.1's diff and break leave the file out).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
