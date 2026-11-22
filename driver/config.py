@@ -3,12 +3,15 @@ load() checks the whole file and returns every problem as one line, so a person 
 pass. The optional container_image and container_secrets come as a pair, and a session's container
 needs both. The optional stale_minutes, a number above 0 (10 when absent), is how long a session may
 go without an event before the run's issue says so. The optional review, true or false, turns the
-reviewer on; absent is off. The optional level, 1 or 2, is 1 when absent. Plain stdlib: the file is
-read as UTF-8 bytes, and a problem is never raised."""
+reviewer on; absent is off. The optional level, 1 or 2, is 1 when absent. The optional waived_checks, a
+list of the kit's check names each once, is [] when absent. Plain stdlib: the file is read as UTF-8 bytes,
+and a problem is never raised."""
 
 import json
 import os
 from pathlib import Path
+
+from driver.github import KIT_CHECKS
 
 
 def is_path(value):
@@ -36,6 +39,16 @@ def is_abs_path(value):
 def is_level(value):
     # 2.0 equals 2 and True equals 1 in Python: a level is the int 1 or 2, so the type is tested first.
     return isinstance(value, int) and not isinstance(value, bool) and value in (1, 2)
+
+
+def is_waived(value):
+    # A list of distinct names, each one of the kit's checks; the names are tested before the set, so
+    # an unhashable item is refused and not raised.
+    return (
+        isinstance(value, list)
+        and all(item in KIT_CHECKS for item in value)
+        and len(set(value)) == len(value)
+    )
 
 
 def problems(path, config):
@@ -77,6 +90,11 @@ def problems(path, config):
     # Absent is 1: nothing reads level yet, so the driver runs as it did before the key existed.
     if "level" in config and not is_level(config["level"]):
         lines.append(f"cannot start: {path}'s level must be 1 or 2")
+    # Absent is []: no check is waived, and level 2 needs all nine.
+    if "waived_checks" in config and not is_waived(config["waived_checks"]):
+        lines.append(
+            f"cannot start: {path}'s waived_checks must be a list of the kit's check names, each once"
+        )
     return lines
 
 
