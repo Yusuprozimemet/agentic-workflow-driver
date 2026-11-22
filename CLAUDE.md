@@ -40,7 +40,8 @@ assumption, and lost about 25 minutes to them (#212, S23).
 **While a Day is open** (its spec PR merged, its closing PR not yet), an area PR (`tooling/`,
 `dashboard/`, `docs/` and the rest) opens only when it fixes what blocks the Day's next step: a
 failing check, or a tool the step needs that is broken. Say in the PR what it unblocks.
-Anything else goes into #213 and waits for the close. On 14 Nov 21 tooling and dashboard PRs
+Anything else waits for the close and goes into its Notes as a hand-off (the open-work
+issues are closed: `plan.md`, "Course correction after Phase 2"). On 14 Nov 21 tooling and dashboard PRs
 merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` branch (#212, S15).
 
 1. **Audit before writing anything.** On the first day of a phase, run the **plan-auditor**
@@ -144,7 +145,7 @@ own specs: in this repository that session has read past its own errors more tha
 | every day, before the spec-change PR | spec-auditor | Is every claim and check in this day's spec true, and can each check fail? |
 | a phase's last closing PR has merged, on fresh `main` | plan-auditor | What did the phase change that the next one must know? |
 | a stopping point `plan.md` names, before going on | plan-auditor, on the whole plan | Is `plan.md` still the right plan, and what has piled up that no day owns? |
-| the closing PR of Phase 3 (level 3: phases chain, the last phase `plan.md` names) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
+| the closing PR of Phase 3 (level 3: phases chain) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
 | every close, after the Notes are written | defect-rater, on `relabel.py`'s blind file | Does a reader who did not write the day tag its defects the same way? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
 | a PR edits a brief in `.claude/agents/` that has cases (`specs/agent-cases/`: the defect-rater so far) | `python scripts/agent-cases.py <agent>` | Does the agent still answer its known cases as it did? A count, not a gate: paste its lines in the PR, and `--record` when the maintainer accepts the new count. |
@@ -157,7 +158,7 @@ Both check hand-offs: what earlier days' Notes and test comments defer to a late
 else carries them forward, and that is where most gaps have come from.
 
 The three end-of-phase auditors run once, on Opus, on fresh `main` after the closing PR of
-Phase 3 (level 3: phases chain, the last phase `plan.md` names) has merged, beside the plan-auditor on the last phase and on the whole plan. Each runs from a fresh context and reads none of
+Phase 3 (level 3: phases chain) has merged, beside the plan-auditor on Phase 3 and on the whole plan. Each runs from a fresh context and reads none of
 the others' reports: their disagreement is part of the result.
 
 "Read-only" is enforced as far as a hook can: `.claude/settings.json` runs

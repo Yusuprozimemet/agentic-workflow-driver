@@ -31,3 +31,8 @@ Each closing PR adds what its day found; the details are in
 - **Day 08:** the driver ran one day of another project at level 1, three pull requests merged
   unchanged, two parks, one refusal, and that day's evidence replay green. The spec-auditor found 66 of the
   day's 85 defects before any code. The trial did not meet the usage limit, so that part stays not proven.
+- **Day 14:** the driver merged a pull request on its own for the first time (bearing #154),
+  after a count run of 15 merges at level 1 in its container. Level 2 cost $1.38 per merged pull
+  request against the baseline's $1.86, the reviewer included, but over 2 pull requests, and the
+  other one was merged by hand. Its gate read only that `main` requires some check, not which
+  ones: the plan change after the stop makes it read the kit's checks by name.
