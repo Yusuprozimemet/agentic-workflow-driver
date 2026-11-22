@@ -2846,5 +2846,211 @@ class ReflexPageTest(unittest.TestCase):
         )
 
 
+def needs_data():
+    """One of each thing the rule reads: today's list (a failing replay, a ticked box with no evidence, a flag on a
+    replaced criterion, two criteria whose replay report this build could not read, two expected flags, a hand-off),
+    and what each graph already draws (an unticked box, a replaced criterion not holding, criteria and commitments
+    never proved, a commitment due, a yardstick above its average, a pull request naming no ability)."""
+
+    def crit(cid, day, state, by=()):
+        return {"id": cid, "day": day, "state": state, "replaced_by": list(by)}
+
+    def cell(cid, st, rep=()):
+        return {"id": cid, "st": st, "rep": list(rep), "why": "code broken", "lp": 30}
+
+    def gene(pid, cls, uncovered=False):
+        return {"id": pid, "cls": cls, "owner_day": 1, "uncovered": uncovered, "settled_by": None}
+
+    def flag(cid, reason, detail, **more):
+        return dict(id=cid, reason=reason, detail=detail, **more)
+
+    return {
+        "now": {"head": "abc1234def", "last_pr": 30},
+        "days": [{"day": 1, "status": "done"}, {"day": 2, "status": "done"}],
+        "criteria_index": [
+            crit("C1.1", 1, "repair"),
+            crit("C1.2", 1, "replaced", ["C2.1"]),
+            crit("C1.3", 1, "replaced", ["C2.2"]),
+            crit("C1.4", 1, "open"),
+            crit("C1.5", 1, "unproven"),
+            crit("C1.6", 1, "skipped"),
+            crit("C2.1", 2, "proven"),
+            crit("C2.2", 2, "proven"),
+            crit("C2.3", 2, "proven"),
+        ],
+        "attention": [
+            flag("C1.1", "replay_failed", "break no longer applies at #30: t: 0 times."),
+            flag("C2.3", "evidence_missing", "No evidence and PR cited together"),
+            flag("C1.3", "test_not_found", "OldTest.test_gone"),
+            flag("C2.1", "evidence_missing", "Replay report: absent"),
+            flag("C2.2", "evidence_missing", "Replay report: absent"),
+            flag("C1.6", "not_breakable", "live", expected=True),
+            flag("C1.6", "test_skippable", "LiveTest", expected=True),
+            flag("C2.2", "test_skippable", "LiveTest", expected=True),
+            flag("H2.1", "handoff_unpicked", "Hand-off H2.1: decide"),
+        ],
+        "merge_graph": {
+            "crit": [
+                cell("C1.1", "stale"),
+                cell("C1.2", "bad", ["C2.1"]),
+                cell("C1.3", "ok", ["C2.2"]),
+                cell("C1.4", "due"),
+                cell("C1.5", "un"),
+                cell("C1.6", "none"),
+            ]
+        },
+        "protein": {
+            "chains": [
+                {"cells": [{"id": "C1.1", "state": "repair"}, {"id": "C1.4", "state": "open"}]},
+                {
+                    "cells": [
+                        {"id": "C1.5", "state": "unproven"},
+                        {"id": "C1.6", "state": "skipped"},
+                    ]
+                },
+            ]
+        },
+        "gene": {
+            "commitments": [
+                gene("P01", "unproved"),
+                gene("P02", "unreplayable"),
+                gene("P03", "untranscribed", uncovered=True),
+                gene("P04", "proved"),
+            ]
+        },
+        "gel": {
+            "panels": [
+                {
+                    "name": "Cost",
+                    "unit": "$",
+                    "decimals": 2,
+                    "verdict": "better",
+                    "last": {"day": 2, "value": 1.5},
+                    "average": 2.0,
+                },
+                {
+                    "name": "Replies",
+                    "unit": "",
+                    "decimals": 0,
+                    "verdict": "worse",
+                    "last": {"day": 2, "value": 37},
+                    "average": 36.52,
+                },
+            ]
+        },
+        "reading": {"opens": [{"id": "H2.1", "to": None}], "gap": [{"id": "C1.4", "d": 1}]},
+        "user_stories": {"problems": ["#7 names no ability: add an Ability: line"]},
+    }
+
+
+class NeedsAttentionTest(unittest.TestCase):
+    """needs_attention(): the one rule for what is open on the page, counted from the list and the graphs."""
+
+    def needs(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").needs_attention(data or needs_data())
+
+    def ids(self, got, group):
+        return [[x["id"] for x in ln["ids"]] for ln in got["lines"] if ln["group"] == group]
+
+    def test_the_headline_counts_what_is_broken_to_repair_and_waiting(self):
+        got = self.needs()
+        self.assertEqual(
+            [(g["key"], g["n"]) for g in got["groups"]],
+            [("broken", 1), ("repair", 5), ("waiting", 1)],
+        )
+        self.assertEqual((got["count"], got["last_pr"]), (7, 30))
+        self.assertEqual(self.ids(got, "broken"), [["C1.1"]])
+        self.assertEqual(
+            self.ids(got, "repair"), [["C2.3"], ["C1.4"], ["#7"], ["Replies"], ["P03"]]
+        )
+        self.assertEqual(self.ids(got, "waiting"), [["H2.1"]])
+        said = {ln["ids"][0]["id"]: (ln["mark"], ln["text"]) for ln in got["lines"]}
+        self.assertEqual(
+            said["C1.1"], ("bad", "The replay fails: break no longer applies at #30: t: 0 times.")
+        )
+        self.assertEqual(said["Replies"], ("rep", "37 on Day 2, above its average so far of 36.5."))
+        self.assertEqual(said["P03"], ("due", "Due by Day 1, and no criterion in force names it."))
+        self.assertEqual(said["#7"], ("rep", "Names no ability: add an Ability: line."))
+
+    def test_a_replaced_criterion_is_expected_whatever_is_flagged_on_it(self):
+        got = self.needs()
+        self.assertEqual(self.ids(got, "expected"), [["C1.3"], ["C2.2"], ["C1.2"]])
+        said = {
+            ln["ids"][0]["id"]: (ln["mark"], ln["text"])
+            for ln in got["lines"]
+            if ln["group"] == "expected"
+        }
+        self.assertEqual(
+            said["C1.3"],
+            ("exp", "Replaced by C2.2. The test it names is not found: OldTest.test_gone."),
+        )
+        self.assertEqual(
+            said["C1.2"],
+            (
+                "stl",
+                "Replaced by C2.1. Its old check stopped holding: code broken when last run, at #30.",
+            ),
+        )
+        self.assertEqual(
+            [(f["key"], f["n"]) for f in got["folded"]], [("never", 4), ("expected", 3)]
+        )
+
+    def test_never_proved_is_what_the_graphs_count_and_an_id_sits_under_its_worst_mark(self):
+        got = self.needs()
+        # C1.6 is flagged twice as expected and the abilities graph cannot replay it: once, under never proved
+        self.assertEqual(self.ids(got, "never"), [["C1.5"], ["C1.6"], ["P01"], ["P02"]])
+        self.assertEqual(sum(x["id"] == "C1.6" for ln in got["lines"] for x in ln["ids"]), 1)
+        data = needs_data()
+        data["protein"]["chains"][1]["cells"].append({"id": "C2.1", "state": "unproven"})
+        data["merge_graph"]["crit"].append({"id": "C2.1", "st": "un", "rep": []})
+        self.assertEqual(
+            self.ids(self.needs(data), "never")[0], ["C1.5", "C2.1"]
+        )  # the same sentence: one line
+
+    def test_a_report_this_build_could_not_read_is_no_problem(self):
+        got = self.needs()
+        self.assertEqual(got["unread"], [{"text": "Replay report: absent", "n": 2}])
+        self.assertNotIn("C2.1", [x["id"] for ln in got["lines"] for x in ln["ids"]])
+
+    def test_a_chip_counts_the_lines_that_name_its_graph_and_a_day_holds_its_marks(self):
+        got = self.needs()
+        chips = {g: {c["mark"]: c["n"] for c in cs} for g, cs in got["chips"].items()}
+        self.assertEqual(
+            chips,
+            {
+                "rdg": {"rep": 1, "hnd": 1},
+                "gel": {"rep": 1},
+                "prt": {"bad": 1, "rep": 1, "unp": 2},
+                "gene": {"due": 1, "unp": 2},
+                "g12": {"due": 1},
+                "mrg": {"bad": 1, "rep": 1, "unp": 2},
+            },
+        )
+        self.assertEqual(
+            [ln["graphs"] for ln in got["lines"] if ln["ids"][0]["id"] in ("C1.4", "C2.3")],
+            [[], ["rdg", "prt", "mrg"]],
+        )
+        self.assertEqual(
+            [(x["day"], x["n"], [m["mark"] for m in x["marks"]]) for x in got["days"]],
+            [
+                (1, 3, ["bad", "rep", "due", "unp", "unp", "exp", "stl"]),
+                (2, 2, ["rep", "hnd", "exp"]),
+                (None, 2, ["rep", "rep", "unp", "unp"]),
+            ],
+        )
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_chips_are_held_to_each_graphs_own_figure(self):
+        reconcile, data = load("dashboard_reconcile", "dashboard-reconcile.py"), demo_data.demo()
+        m = reconcile.model(data)
+        agree, said = reconcile.attention_line(m, data)
+        self.assertEqual((agree, said.endswith(": agree")), (True, True), said)
+        data["needs_attention"]["chips"].setdefault("mrg", []).append(
+            {"mark": "bad", "name": "broken", "n": 99}
+        )
+        agree, said = reconcile.attention_line(m, data)
+        self.assertEqual((agree, "DISAGREE (mrg bad)" in said), (False, True), said)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -365,9 +365,35 @@ def rfx_line(m):
                    f"proteins' real runs: {', '.join(map(str, prt)) if prt else 'none'}: " + ("agree" if agree else "DISAGREE"))
 
 
-SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line]
-# The sections whose original has left the page: each takes the data too, and recounts its figure from it.
-RECOUNTED = (ring_line, prt_line, atp_line, rng_line)
+def attention_line(m, data):
+    """Each chip "Needs attention" puts beside a graph's title against that graph's own figure, as the page's model has
+    it: what the merge graph's tile counts as not holding and still in force, the gel's yardsticks judged worse, the
+    proteins' cells by state, and the gene's commitments unproved, unreplayable and due. A chip with no figure here (the
+    hand-offs on graph 1, the merge graph's unticked and unproved, graph 12) is not held to one."""
+    chips = {g: {c["mark"]: c["n"] for c in cs} for g, cs in ((data.get("needs_attention") or {}).get("chips") or {}).items()}
+    for key in ("mrg", "gel", "prt", "gene"):
+        if (m.get(key) or {}).get("error"):
+            return False, f"attention: not drawn ({key}: {m[key]['error']})"
+    tiles = {t["sw"]: t["n"] for t in ((m.get("mrg") or {}).get("all") or {}).get("verdict") or []}
+    cells = (m.get("prt") or {}).get("counts") or {}
+    figs = {f["cls"]: f["n"] for f in (m.get("gene") or {}).get("figs") or []}
+    theirs = {("mrg", "bad"): tiles.get("st bad", 0),
+              ("gel", "rep"): sum(1 for p in (m.get("gel") or {}).get("panels") or [] if p.get("verdict") == "worse"),
+              ("prt", "bad"): cells.get("broken", 0) + cells.get("repair", 0), ("prt", "rep"): cells.get("open", 0),
+              ("prt", "unp"): cells.get("unproven", 0) + cells.get("skipped", 0),
+              ("gene", "unp"): figs.get("unproved", 0) + figs.get("unreplayable", 0),
+              ("gene", "due"): len((m.get("gene") or {}).get("uncovered") or [])}
+    ours = {k: chips.get(k[0], {}).get(k[1], 0) for k in theirs}
+    differ = [f"{g} {mark}" for (g, mark) in theirs if ours[g, mark] != theirs[g, mark]]
+    return not differ, (f"attention: {sum(ours.values())} in {len(theirs)} chips | the graphs' own figures: {sum(theirs.values())}: "
+                        + ("agree" if not differ else f"DISAGREE ({', '.join(differ)})"))
+
+
+SECTIONS = [gene_line, merge_line, ring_line, reading_line, gel_line, prt_line, prf_line, atp_line, rng_line, act_line, rfx_line,
+            attention_line]
+# The sections whose original has left the page: each takes the data too, and recounts its figure from it. The chips
+# are in the data alone until the page draws them, so their line takes it too.
+RECOUNTED = (ring_line, prt_line, atp_line, rng_line, attention_line)
 
 
 def main(argv=None):
