@@ -173,35 +173,45 @@ Test files, new and edited:
 ## Acceptance criteria
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
-- [ ] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, the
+- [x] C14.1 **hold** — The driver's code other than `driver/status.py`, its hooks, the
       reviewer's rules (`rules/reviewer.md`; `rules/session.md` is C14.19's) and image,
       `tests/test_once.py`, `tests/test_box_session.py`, the earlier trial records and their
       tests are unchanged since `3f31818`: Verify's `git diff` prints nothing.
       (`scripts/test_token_usage.py` is C14.4's.)
       Plan: none — keeps the Day to the record and its two tools; no commitment is about it.
+      Evidence: Verify's `git diff` from `3f31818` prints nothing on `main` at `66782b6`, after every Day 14 PR; its break recorded in #262.
       broken: a driver file other than status.py edited → +"""The driver: reads a project's state and decides its step (plan.md)."""
-- [ ] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
+- [x] C14.2 **new** — `transcripts(<empty>, <r>, container=<d>)` yields the files under
       `<d>/-work/`, a main session and one under `-work/<id>/subagents/`, and not a main session
       put directly in `<d>`. `compare()` over its main sessions, with two replies dated
       2026-11-20 and splits `(2026-11-02,)`, counts 2 replies on the "after" side.
       Red today: `transcripts()` takes no `container`, a TypeError.
       Test: `ContainerTest.test_work_folder_read`, `ContainerTest.test_compare_counts_container_replies`.
       Plan: N12 "token-usage.py is pointed there"
-- [ ] C14.3 **new** — `--container` with neither `--compare` nor `--tools` exits 2, and its stderr
+      Evidence: `ContainerTest.test_work_folder_read` and `ContainerTest.test_compare_counts_container_replies` pass on `main` at `66782b6` (#265).
+      seen red: python -m unittest tests.test_token_usage_container.ContainerTest.test_work_folder_read on 091a6ef → FAILED (errors=1) (#265, re-run at the close on #264's merge)
+      seen red: python -m unittest tests.test_token_usage_container.ContainerTest.test_compare_counts_container_replies on 091a6ef → FAILED (errors=1) (#265, re-run at the close on #264's merge)
+      broken: the container's -work folder left out of its glob → AssertionError: False is not true : read: -other/s2.jsonl, -work/s1.jsonl, -work/s1/subagents/agent-a1.jsonl, stray.jsonl
+      broken: the container's transcripts never read → AssertionError: 0 != 2
+- [x] C14.3 **new** — `--container` with neither `--compare` nor `--tools` exits 2, and its stderr
       holds "--container needs --compare or --tools". (Exit 2 and no `--out` written are true
       today too, through argparse.)
       Red today: stderr says "unrecognized arguments: --container", not the sentence.
       Test: `ContainerTest.test_container_without_compare_or_tools_is_refused`.
       Plan: none — a refusal of a misuse; N12 is C14.2's.
-- [ ] C14.4 **hold** — Without `--container`, the folders read and the figures are as today:
+      Evidence: `ContainerTest.test_container_without_compare_or_tools_is_refused` passes on `main` at `66782b6` (#265).
+      seen red: python -m unittest tests.test_token_usage_container -v on main → AssertionError: False is not true : stderr lacks the sentence: unrecognized arguments (#265)
+      broken: --container's refusal without --compare or --tools taken out → AssertionError: 1 != 2
+- [x] C14.4 **hold** — Without `--container`, the folders read and the figures are as today:
       `scripts/test_token_usage.py` passes. Since `3f31818` it changes in four lines only, in
       `test_transcript_past_max_path_is_counted`, whose folder is padded past 260 characters
       wherever the checkout is (D14.70): Verify's `git diff -U0` of the file counts 6 lines
       that start `-` or `+`, the two file headers and the four.
       Plan: N12 "token-usage.py is pointed there"
+      Evidence: `scripts/test_token_usage.py` passes on `main` at `66782b6`, unedited since `3f31818` (C14.1's diff); its break recorded in #262.
       broken: the split day put on the earlier side → AssertionError: Lists differ: [50000, 60000] != [50000]
       broken: a line added outside the max-path test → 9
-- [ ] C14.5 **new** — On a log with a step session `s1` and a review session `r1` (`start` with
+- [x] C14.5 **new** — On a log with a step session `s1` and a review session `r1` (`start` with
       prefix "review", a `review` line with `"pr": 7`, an `end` with outcome "review: #7, 1
       blockers" and `cost_usd` 0.4), the `steps:` block's second row is exactly
       `  <r1's at> review of #7: review: #7, 1 blockers, $0.40, refusals 0, session `r1``. A
@@ -209,20 +219,31 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: the row prints the step's sentence where "review of #7" is expected.
       Test: `StatusReviewTest.test_review_row`, `StatusReviewTest.test_review_row_without_review_line`.
       Plan: P62 "The run log has one line per step and `status` prints it"
-- [ ] C14.6 **new** — On the same log with a second review session (`cost_usd` 0.3),
+      Evidence: `StatusReviewTest.test_review_row` and `StatusReviewTest.test_review_row_without_review_line` pass on `main` at `66782b6` (#266).
+      seen red: python -m unittest tests.test_status_review.StatusReviewTest.test_review_row on main → AssertionError: 'Step A' != 'review of #7' (#266)
+      seen red: python -m unittest tests.test_status_review.StatusReviewTest.test_review_row_without_review_line on main → AssertionError: 'Step A' != 'review of an unknown pull request' (#266)
+      broken: the review row labelled by its step → AssertionError: 'Step A' != 'review of #7'
+      broken: the review row with no verdict naming no pull request → AssertionError: 'review of #None' != 'review of an unknown pull request'
+- [x] C14.6 **new** — On the same log with a second review session (`cost_usd` 0.3),
       `status._reviewer(records)` is `reviewer: 2 sessions, $0.70, in the cost above`, and it is
       the line right after `cost:` in the block, whose total still includes both.
       Red today: `status` has no `_reviewer`, an AttributeError.
       Test: `StatusReviewTest.test_reviewer_cost_line`.
       Plan: P55 "with the reviewer session counted in"
-- [ ] C14.7 **hold** — A log with no review `start` line prints the `status` block as before: the
+      Evidence: `StatusReviewTest.test_reviewer_cost_line` passes on `main` at `66782b6` (#266).
+      seen red: python -m unittest tests.test_status_review.StatusReviewTest.test_reviewer_cost_line on main → FAILED (errors=1) (#266)
+      broken: the reviewer's cost summed over the other sessions → AssertionError: 'reviewer: 2 sessions, $0.25, in the cost above' != 'reviewer: 2 sessions, $0.70, in the cost above'
+      broken: the reviewer line left out of the block → AssertionError: 'level 2: 0 of 15 pull requests in a row merged without a change asked' != 'reviewer: 2 sessions, $0.70, in the cost above'
+- [x] C14.7 **hold** — A log with no review `start` line prints the `status` block as before: the
       line after `cost:` is the `level 2:` line, and `tests/test_status.py` and
       `tests/test_status_trial.py` pass, unedited since `3f31818` (C14.1).
       Test: `StatusReviewTest.test_no_reviewer_line_without_review` (Track 0). Its break, in Track
       0's PR: a line put before the `level 2:` line, find `lines.append(_level_2(records))` in
       `driver/status.py`, which Track B leaves occurring once (it adds `_reviewer`'s line before it).
       Plan: none — Days 7 and 8's `status` output is kept; it serves no Day 14 commitment.
-- [ ] C14.8 **new** — The build's half of the picker is gone: `git grep -n -w -e how_excerpts -e
+      Evidence: `StatusReviewTest.test_no_reviewer_line_without_review` passes on `main` at `66782b6` (#263), and after Track B (#266); `tests/test_status.py` and `tests/test_status_trial.py` pass, unedited since `3f31818` (C14.1's diff).
+      broken: a line put before the level 2 line → AssertionError: 'x' != 'level 2'
+- [x] C14.8 **new** — The build's half of the picker is gone: `git grep -n -w -e how_excerpts -e
       how_excerpts_of -e how_specs -e how_this_works -e HOW_TEMPLATE -e HOW_REPLAY -e HOW_PLAN -e
       HOW_PLAN_PARTS -e HOW_NEEDED -e HOW_NO_PROMISE -- scripts tests` prints nothing.
       Red today: the grep finds lines in `scripts/spec_drift_page.py`, `scripts/spec-drift.py`
@@ -235,11 +256,15 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Replaces: S-how-follows-newest-day.3 — was: a replay history that has gone leaves the pick alone and shows as missing.
       Replaces: S-how-follows-newest-day.4 — was: a promise missing any other step of its record is still skipped.
       Plan: none — the maintainer's choice in #259 ("views go, picker stays") left code that nothing draws.
-- [ ] C14.9 **hold** — The page still builds and draws its graphs, the file map with `howBlob`
+      Evidence: `PickerGoneTest.test_build_half_gone` passes on `main` at `66782b6` (#269); Verify's first `git grep` prints nothing.
+      seen red: python -m unittest tests.test_picker_gone.PickerGoneTest.test_build_half_gone on main → AssertionError: 3 != 0 : ['scripts/spec-drift.py', 'scripts/spec_drift_page.py', 'tests/test_how_this_works.py'] (#269)
+      broken: a picker name put back in the build's page module → AssertionError: 1 != 0 : ['scripts/spec_drift_page.py']
+- [x] C14.9 **hold** — The page still builds and draws its graphs, the file map with `howBlob`
       included: `scripts/test_dashboard_page.py` and `tests/test_dashboard_files.py` pass.
       Plan: none — the dashboard's views are not commitments of `plan.md`.
+      Evidence: `scripts/test_dashboard_page.py` and `tests/test_dashboard_files.py` pass on `main` at `66782b6`, after both picker tracks (#268, #269); its break recorded in #262.
       broken: the helper the file map links by removed with the picker → AssertionError: Tuples differ: ('howBlob is not defined', []) != (None, [])
-- [ ] C14.10 **new** — The trial ran at level 2. The test builds a temporary state folder from the
+- [x] C14.10 **new** — The trial ran at level 2. The test builds a temporary state folder from the
       copies (`run-14.jsonl` as `run.jsonl`, `switches-14.jsonl` as `switches.jsonl`,
       `refusals-14.jsonl` as `refusals/hooks.jsonl`; an empty `refusals-14.jsonl` when the hook log
       had no line, which gives no late refusal) and calls `runlog.read`, `runlog.late_refusals`
@@ -252,7 +277,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/run-14.jsonl` does not exist.
       Test: `TrialFourteenTest.test_run_log_is_a_level_2_trial`.
       Plan: N25 "and the record names every merge the driver made, every park and every refusal"
-- [ ] C14.11 **new** — The record names every merge the driver made (Merges: each `"by":
+      Evidence: `TrialFourteenTest.test_run_log_is_a_level_2_trial` passes on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen.TrialFourteenTest.test_run_log_is_a_level_2_trial on main → AssertionError: docs/trial/run-14.jsonl does not exist (#273)
+      broken: a driver merge after a review with a blocker → AssertionError: a driver merge has no review with blockers 0
+- [x] C14.11 **new** — The record names every merge the driver made (Merges: each `"by":
       "driver"` line's pull request, time and head), every park (Parks: its time and line, and
       `status`'s "parks by reason" lines on the copy), and every refusal (Refusals: each `refused`
       entry's tool and input, each line of `docs/trial/refusals-14.jsonl`, and the
@@ -265,7 +293,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `TrialFourteenTest.test_every_driver_merge_named`, `TrialFourteenTest.test_every_park_named`,
       `TrialFourteenTest.test_every_refusal_named`, `TrialFourteenTest.test_sections_in_order`.
       Plan: N25 "and the record names every merge the driver made, every park and every refusal"; N28 "this repository's refusals.json on the dashboard-data branch"; P55 "parks by reason"
-- [ ] C14.12 **new** — The Cost section holds `status`'s `cost:` line and `_reviewer`'s line as
+      Evidence: `TrialFourteenTest.test_every_driver_merge_named`, `TrialFourteenTest.test_every_park_named`, `TrialFourteenTest.test_every_refusal_named` and `TrialFourteenTest.test_sections_in_order` pass on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: the hand merge left out of the record → AssertionError: The level 2 day does not name the merges made by hand
+- [x] C14.12 **new** — The Cost section holds `status`'s `cost:` line and `_reviewer`'s line as
       they come out on the copy (the test calls them). It also holds the two sides of
       `token-usage.py --compare --transcripts <an empty folder> --repo ../bearing --container
       <state>/claude/projects --split <the level 2 day's first local date>`, quoted: "between"
@@ -295,7 +326,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_cost_lines_are_status`, `TrialFourteenTest.test_cost_beside_level_1_and_baseline`.
       Plan: P55 "34.4 replies per merged pull request"; N25 "with cost beside the baseline and level 1"
-- [ ] C14.13 **new** — The Set-up names the project `bearing`, `budget_usd` 10, `steps_per_night`
+      Evidence: `TrialFourteenTest.test_cost_lines_are_status` and `TrialFourteenTest.test_cost_beside_level_1_and_baseline` pass on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: the record's cost line not status's → AssertionError: Cost lacks status's cost line
+- [x] C14.13 **new** — The Set-up names the project `bearing`, `budget_usd` 10, `steps_per_night`
       6, the ten `human_only` paths, the level of each run, the image, the driver's `main` commit,
       the commit of bearing's copy of the kit's `scripts/spec-drift.py`, "bearing at the level 2
       day: <commit>" (40 hex characters each), and "level 2 from: <time>" in the run log's UTC
@@ -304,7 +338,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_set_up`.
       Plan: N27 "with budget_usd 10 per step, steps_per_night 6 and a ten-path human-only list"; N11 "trial's record names the commit of its project's copy"
-- [ ] C14.14 **new** — The level 2 day closed with its evidence replay green. The Evidence section
+      Evidence: `TrialFourteenTest.test_set_up` passes on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: level 2 from: not the last on line → AssertionError: level 2 from is not the last on line
+- [x] C14.14 **new** — The level 2 day closed with its evidence replay green. The Evidence section
       names bearing's closing PR, its merge commit (40 hex characters), an evidence run id and
       "conclusion: success". The copy holds a `merged` line for that pull request. It also gives
       "escapes: <n>" for the level 2 day (`plan.md`, "Back one level"): each Defect line of
@@ -316,7 +353,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_evidence_section`, `TrialFourteenTest.test_escapes_counted`.
       Plan: N25 "closed with its evidence replay green"; P55 "escapes per day"
-- [ ] C14.15 **new** — The hand-offs are answered from the copies. The usage limit (H09.2): the
+      Evidence: `TrialFourteenTest.test_evidence_section` and `TrialFourteenTest.test_escapes_counted` pass on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: the escapes count not the lines quoted → AssertionError: escapes does not count the lines quoted under it
+      broken: the closing PR not the level 2 day's last merge → AssertionError: the closing PR is not the level 2 day's last merge
+- [x] C14.15 **new** — The hand-offs are answered from the copies. The usage limit (H09.2): the
       section says "met", with the transcript record and the `result` quoted, when any line of
       `run-14.jsonl` holds "usage limit", and "not met" only when none does. The install (H13.1):
       `docs/trial/install-14.jsonl` holds three lines: a session id that starts a level 2 step
@@ -340,7 +381,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_usage_limit_follows_the_copy`, `TrialFourteenTest.test_install_before_tests`.
       Plan: N10 "installs the project as CI does before running its tests"
-- [ ] C14.16 **new** — The page's half of the picker is gone: `git grep -n -w -e howRecheck -e
+      Evidence: `TrialFourteenTest.test_usage_limit_follows_the_copy` and `TrialFourteenTest.test_install_before_tests` pass on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: the install's session not a level 2 step → AssertionError: the install's session is not a level 2 step
+- [x] C14.16 **new** — The page's half of the picker is gone: `git grep -n -w -e howRecheck -e
       howHas -e howMissing -e howExcerpt -- docs/dashboard scripts tests` prints nothing, and
       `howBlob` is still defined in `docs/dashboard/dashboard.js` (C14.9).
       Red today: the grep finds lines in `docs/dashboard/dashboard.js` and
@@ -350,7 +394,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       track's break run on this test.
       Replaces: S-how-follows-newest-day.2 — was: step 7 says "not re-checked yet" for an empty record.
       Plan: none — the same leftover as C14.8, on the page.
-- [ ] C14.17 **new** — The reviewer section names each `review` line of the copy: its pull
+      Evidence: `PickerGoneTest.test_page_half_gone` passes on `main` at `66782b6` (#268); Verify's second `git grep` prints nothing, and `howBlob` is still defined in `docs/dashboard/dashboard.js`.
+      seen red: python -m unittest tests.test_picker_gone.PickerGoneTest.test_page_half_gone on main → AssertionError: Lists differ: ['docs/dashboard/dashboard.js', 'tests/test_how_this_works_page.py'] != [] (#268)
+      broken: a picker helper put back beside howBlob → AssertionError: Lists differ: ['docs/dashboard/dashboard.js'] != []
+- [x] C14.17 **new** — The reviewer section names each `review` line of the copy: its pull
       request, its head and its blocker count, and the reviewer's PR comment's URL, taken from
       `gh pr view <n> --repo Yusuprozimemet/bearing --json comments` (the run log writes none):
       `https://github.com/Yusuprozimemet/bearing/pull/<n>#issuecomment-<digits>`, the comment whose
@@ -361,12 +408,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_every_review_named`.
       Plan: N35 "The reviewer's findings go in one comment on the pull request"
-- [ ] C14.18 **new** — The first merge (H13.2) names the first `"by": "driver"` line's pull
+      Evidence: `TrialFourteenTest.test_every_review_named` passes on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: a review's comment URL on another pull request → AssertionError: The reviewer does not name the review of #154
+- [x] C14.18 **new** — The first merge (H13.2) names the first `"by": "driver"` line's pull
       request and head, and quotes the red-check probe's command, output and exit code.
       Red today: `docs/trial/day-14.md` does not exist.
       Test: `TrialFourteenTest.test_first_merge`.
       Plan: P64 "on the commit the checks and the reviewer saw"
-- [ ] C14.19 **new** — `rules/session.md` is its text at `5d4f1b5` with C13.14's install line
+      Evidence: `TrialFourteenTest.test_first_merge` passes on `main` at `66782b6` (#273).
+      seen red: python -m unittest tests.test_trial_fourteen on main → AssertionError: docs/trial/day-14.md does not exist (#273)
+      broken: the probe's output cut from the first merge → AssertionError: gh's output after the command is empty
+- [x] C14.19 **new** — `rules/session.md` is its text at `5d4f1b5` with C13.14's install line
       after the line that begins "- You never merge", and one more line right after the line
       that holds "PARK: <": "- After you open the step's pull request, end the last reply
       without a `PARK:` line, even where the project's CLAUDE.md says to stop and wait for
@@ -380,9 +433,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Red today: the file has 7 lines and not the new one.
       Test: `SessionRulesTest.test_after_pr_line` (it takes `test_install_line`'s place).
       Replaces: C13.14 — was: `rules/session.md` is its text at `5d4f1b5` with the install line only.
-      broken: the session rules without the after-PR line → (Track E records it: `break.py
-      --record --file rules/session.md --find "the driver waits for the merge itself"` on
-      `python -m unittest tests.test_session_rules.SessionRulesTest.test_after_pr_line`)
+      Evidence: `SessionRulesTest.test_after_pr_line` and `OnceTest.test_rules_file` pass on `main` at `66782b6` (#271).
+      seen red: python -m unittest tests.test_session_rules.SessionRulesTest.test_after_pr_line on main → AssertionError: Tuples differ: (7, [4, 5, 6]) != (8, []) (#271)
+      broken: the session rules without the after-PR line → AssertionError: Tuples differ: (8, [4]) != (8, [])
       Plan: P29 "how a session hands over a step it could not finish or would not decide"
 
 ## Verify
@@ -402,8 +455,11 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - The level 2 day is the driver's first live `gh pr merge` on a real pull request. A refused merge
   parks, as Day 13 built it (C13.13). The record names it under Parks and in The first merge.
 - **Assumed** — GitHub refuses `gh pr merge --match-head-commit` on a head whose required check is
-  red, as it refuses a wrong sha (merge-probe, 2026-11-18, gh 2.93.0) | not run: the maintainer,
-  on merge-probe, before the level 2 day (H13.2).
+  red, as it refuses a wrong sha (merge-probe, 2026-11-18, gh 2.93.0) | run by the maintainer on
+  merge-probe before the level 2 day, gh 2.93.0, the required check "test" red on the head:
+  `gh pr merge 1 --merge --match-head-commit ec3d79f…` → "X Pull request
+  Yusuprozimemet/merge-probe#1 is not mergeable: the base branch policy prohibits the merge.",
+  exit 1, the pull request left open (`docs/trial/day-14.md`, The first merge; H13.2).
 - **Assumed** — the container's Claude Code writes each session's transcript to
   `<state>/claude/projects/-work/<session>.jsonl`, its subagents under `<session>/subagents/`:
   `find state/claude/projects/-work` → `2d6771a4-63cb-4a41-b0ef-3da00a7fc3fb.jsonl` and
@@ -457,7 +513,11 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
   The count run after Track E checks it: the `outcome` of its first step's `end` line in
   `state/run.jsonl` (`python run-steps.py status` shows it) starts "opened: #" (`driver/once.py`),
   not "park: the session parked: " followed by the session's own words, which for #108 and #116
-  named the open pull request; the record's Parks section says which.
+  named the open pull request; the record's Parks section says which | checked by the count run on
+  `10b3d9d`: no step session after it ended with a `PARK:` line after opening its pull request.
+  The first (57665251, Day 15's close) ended "park: the session ended with no pull request and
+  no PARK line", since its #123 was merged by hand before its end; the next ended "opened: #127
+  from `day-16/track-a-silent-successes`" (`docs/trial/run-14.jsonl`).
 - **Defect** D14.35 — found: auditor · cause: spec · made: Day 14 · the recheck of D14.34's fix: Track E would delete the test Day 13's recorded break for C13.14 runs, so CI's breaks replay would fail it; C13.15's wording would go false unsaid; whether a session obeys the line was not marked Assumed; and "unedited" for `tests/test_once.py` had no check (fixed in this PR: the retire, the two Notes lines, both test files in C14.1's diff).
 - **Defect** D14.36 — found: Track D · cause: spec · made: Day 14 · C14.15's regex took `pip install -e` with nothing between, but both level 2 step sessions ran `python -m pip install -q -e ".[dev]"`, and Day 22 Track A's ran it and `python -m pytest -q` in one Bash command, so "an install command, then a test command" named two commands where the transcript holds one; the transcript also holds each tool_use twice, which the copy's rule did not say (fixed in a spec-change PR before Track D: the `-q`, the order inside one command, the `assistant` record).
 - **Defect** D14.37 — found: Track D · cause: spec · made: Day 14 · C14.12 took the level 2 day to start on a later local date than the count run's last session; it started 15 minutes after the count's 15th merge, on the same local date, so the "after" side mixes two level 1 pull requests with the two of level 2 and gives no level 2 figure of its own; and "the first `on` of the level 2 day" did not say which of two `on` lines it is (fixed in a spec-change PR before Track D: two lines from the copy by `status._cost`, the `on` named).
@@ -465,3 +525,46 @@ git grep -n -w -e howRecheck -e howHas -e howMissing -e howExcerpt -- docs/dashb
 - **Defect** D14.39 — found: auditor · cause: spec · made: Day 14 · the second recheck: "the last `on` line" holds only until the next `on`, since the copies had a first line and no last; with "when they differ" gone, a later test command as line 3 passed with no order checked; the Assumed line lost its "→" and version; "the CLI's total" was more than `driver/once.py` shows; and "by hand" was written as if the data showed it (fixed in this PR; these last fixes were read by no auditor).
 - **Defect** D14.70 — found: rehearsal · cause: spec · made: Day 14 · C14.4's hold, `scripts/test_token_usage.py` passes, failed CI's rehearsal of the close on Linux: `test_transcript_past_max_path_is_counted` builds a folder whose length is the temporary root's and the checkout's name plus 212, and in the rehearsal's short `/tmp/rehearsal-…` worktree it came to 250, not past 260 ("AssertionError: 250 not greater than 260"); on this PC the paths are longer, so the local rehearsal passed; C14.1 froze the file (fixed in a spec-change PR before the close: the folder padded past 260 wherever the checkout is, C14.4 allows those four lines, C14.1's diff and break leave the file out).
 - **Hand-off** H14.1 → the maintainer: a live reviewer's `in progress:` line names the step's sentence with "no estimate", since `_kind("review")` is `None`; giving the reviewer an estimate of its own is not asked for.
+- The close. The count run reached "level 2: 15 of 15" at bearing #151; the level 2 day was
+  bearing's Day 22, from its Track A: two step sessions and two reviews, 0 blockers each. The
+  maintainer merged #153 by hand a second after its review, so the driver's one merge is #154,
+  the day's closing PR, on the head the reviewer saw; its evidence run 44965577837 concluded
+  `success` (`docs/trial/day-14.md`). H09.2 is answered "not met": no session met the usage
+  limit. H10.2 by C14.2, H12.3 by C14.5 and C14.6 (with H14.1), H13.1 by The install, H13.2 by
+  The first merge.
+- Known limits, with no test: the `refusals.json` rows are quoted but not copied, so
+  `test_every_refusal_named` needs one row for a trial date, not every row (#273); Track 0's break
+  reaches only `test_no_reviewer_line_without_review`'s first assertion, and its last (no line
+  starts "reviewer") has none of its own (#263, found by the track-reviewer on the diff; C14.6's
+  breaks cover the reviewer line).
+- **Defect** D14.40 — found: track-reviewer · cause: process · made: Day 14 · Track A's C14.3 test reported, on `main`, argparse's whole usage text and a temporary path that differs by OS, which no recorded red can hold (fixed in #265: a short fixed sentence).
+- **Defect** D14.41 — found: break on purpose · cause: process · made: Day 14 · Track A's `-work` test reported its list diff shortened to "[40 chars]", which `break.py` refuses (fixed in #265: the test names the whole list).
+- **Defect** D14.42 — found: track-reviewer · cause: process · made: Day 14 · Track B's brief ran one `seen-red.py --expect` with an alternation, so one test's red would have passed all three and its one line named one red (fixed before the implementer ran: once per test).
+- **Defect** D14.43 — found: track-reviewer · cause: process · made: Day 14 · Track B's brief redefined `T2` and `T3`, which `tests/test_status.py` already has (fixed before the implementer ran: imported).
+- **Defect** D14.44 — found: review · cause: implementation · made: Day 14 · Track B's length guard before the reviewer line's check made that break report "1 not greater than or equal to 2" (fixed in #266: removed; the break reports the `level 2:` line in the reviewer's place).
+- **Defect** D14.45 — found: review · cause: implementation · made: Day 14 · Track B's module docstring's new clause ran past the file's width (fixed in #266).
+- **Defect** D14.46 — found: track-reviewer · cause: process · made: Day 14 · Track B's PR body said `seen-red.py` reports only `AssertionError` lines; it falls back through `break.py`'s list of failure lines (fixed in #266).
+- **Defect** D14.47 — found: track-reviewer · cause: process · made: Day 14 · Track C1's first build's break report held a line number (`dashboard.js:873`), which moves with any edit above it (fixed in #268: `git grep -l`).
+- **Defect** D14.48 — found: track-reviewer · cause: implementation · made: Day 14 · Track C1's test's `subprocess.run` had no `check=False`, which `ruff check` refuses (PLW1510) (fixed in #268).
+- **Defect** D14.49 — found: track-reviewer · cause: process · made: Day 14 · Track C1's PR body did not say the replaced criterion's break no longer applies (fixed in #268).
+- **Defect** D14.50 — found: track-reviewer · cause: process · made: Day 14 · Track C2's brief gave an expected red unittest shortens to "[40 chars]", which `seen-red.py` refuses (fixed before the implementer ran: `len(files)` asserted, the list as its message).
+- **Defect** D14.51 — found: track-reviewer · cause: process · made: Day 14 · Track C2's brief said to remove the imports ruff flags, which would have removed older unused imports in `scripts/` that ruff flagged on `main` already (fixed before the implementer ran).
+- **Defect** D14.52 — found: track-reviewer · cause: process · made: Day 14 · Track C2's brief invited `ruff format` on `scripts/`, whose `--check` already fails on `main` (fixed before the implementer ran).
+- **Defect** D14.53 — found: track-reviewer · cause: process · made: Day 14 · Track C2's PR body's oversized count left out the break record's 3 lines (fixed in #269).
+- **Defect** D14.54 — found: track-reviewer · cause: process · made: Day 14 · Track C2's PR body left out one replaced criterion, `S-how-follows-newest-day.4` (fixed in #269).
+- **Defect** D14.55 — found: track-reviewer · cause: process · made: Day 14 · Track C2's PR body said the old picker breaks stop applying in it, though their finds were gone before it (fixed in #269).
+- **Defect** D14.56 — found: Track C2 · cause: environment · made: none · Track C2's `pre-push.py` full run failed 7 driver test files with a build running beside it; each passed alone, and the run passed again without the build (not fixed: load, as N1's).
+- **Defect** D14.57 — found: track-reviewer · cause: process · made: Day 14 · Track E's brief named the two inserts into the held text without their order; the after-PR line first would have moved the "never merge" anchor and put the install line before it (fixed before the implementer ran).
+- **Defect** D14.58 — found: track-reviewer · cause: process · made: Day 14 · Track D's brief read the red in the wrong order and gave a loose `--expect` (fixed before the implementer ran).
+- **Defect** D14.59 — found: track-reviewer · cause: process · made: Day 14 · Track D's brief gave failure messages holding uuids, hashes or lists, which `break.py` refuses (fixed before the implementer ran: `longMessage = False`, fixed words).
+- **Defect** D14.60 — found: track-reviewer · cause: process · made: Day 14 · Track D's brief's check of the probe's output in The first merge could not fail (fixed before the implementer ran).
+- **Defect** D14.61 — found: track-reviewer · cause: process · made: Day 14 · Track D's brief read the copies without allowing for `\r` on a CRLF checkout (fixed before the implementer ran).
+- **Defect** D14.62 — found: track-reviewer · cause: process · made: Day 14 · Track D's brief called `runlog.late_refusals` and left its result unchecked (fixed before the implementer ran).
+- **Defect** D14.63 — found: track-reviewer · cause: process · made: Day 14 · Track D's PR body said the record's Unverified section lists every fact not tested; it lists five (fixed in #273).
+- **Defect** D14.64 — found: track-reviewer · cause: process · made: Day 14 · Track D's `test_evidence_section` took any merged pull request of the copy as the close, so #153 passed (fixed in #273: the level 2 day's last merge, with a break).
+- **Defect** D14.65 — found: track-reviewer · cause: process · made: Day 14 · Track D's install break stopped at the literal session id and never reached the level 2 step check (fixed in #273: re-recorded on `run-14.jsonl`).
+- **Defect** D14.66 — found: track-reviewer · cause: process · made: Day 14 · Track D's seen-red lines showed no red for C14.10 (fixed in #273: its line added).
+- **Defect** D14.67 — found: track-reviewer · cause: implementation · made: Day 14 · Track D's test gave two read failures one message (fixed in #273).
+- **Defect** D14.68 — found: Day 14 review · cause: spec · made: Day 13 · `status` prints "level: 1" whatever `driver.json`'s level (`driver/status.py`, `_report`, a line from Day 7): on the level 2 day it read "level: 1"; Day 13 added level 2 and no criterion named the line (not fixed: H14.2).
+- **Hand-off** H14.2 → the maintainer: `status` names the level `driver.json` gives, not "level: 1" (D14.68).
+- **Hand-off** H14.3 → the maintainer: `on` at level 2 reads `main`'s protection only, so `setup-check.py`'s two failed checks on bearing ("A closed day's evidence replays", "A track's breaks replay", which bearing does not have) did not stop it; whether level 2 should need them is not asked by any criterion.
