@@ -71,13 +71,26 @@ RELABEL_FIELD = re.compile(r"\b(stage|cause|made)\s+(\d+)\s+of\s+(\d+)")
 
 # The count lines `relabel.py compare` prints and a closing PR pastes, one line per axis.
 RELABEL_LINE = re.compile(r"^[ \t]*(stage|cause|made): (\d+) of (\d+) agree\b", re.M)
+# The phase's last close relabels every Day of the phase: `compare` heads each Day's lines "Day NN:".
+RELABEL_DAY = re.compile(r"^[ \t]*Day (\d+):[ \t]*\r?$", re.M)
 
 
-def final_run(body):
+def day_block(body, day):
+    """A Day's own lines in a body that pastes a phase's run, "" where it has no block for the Day;
+    a body with no "Day NN:" line whole."""
+    heads = list(RELABEL_DAY.finditer(body or ""))
+    if not heads or day is None:
+        return body
+    ends = [h.start() for h in heads[1:]] + [len(body)]
+    return "".join(body[h.end():e] for h, e in zip(heads, ends) if int(h.group(1)) == day)
+
+
+def final_run(body, day=None):
     """The last `relabel.py compare` run a closing PR's body pastes (a day may rerun the rater): its
     counts, None where it pastes none, False where the lines are not whole runs or their last run
-    cannot be right. False is never guessed into a count."""
-    lines = RELABEL_LINE.findall(body or "")
+    cannot be right. False is never guessed into a count. With `day`, a phase's run gives that Day's
+    block alone."""
+    lines = RELABEL_LINE.findall(day_block(body, day) or "")
     if not lines:
         return None
     if [f for f, _, _ in lines] != ["stage", "cause", "made"] * (len(lines) // 3):
@@ -86,12 +99,16 @@ def final_run(body):
     return last if all(0 < n and a <= n for a, n in last.values()) else False
 
 
-def relabel(text, bodies=()):
+def relabel(text, bodies=(), day=None, others=()):
     """How often the blind defect-rater agreed with the tags the close gave: the final run the day's
-    closing PR bodies paste; where none pastes one, what the spec's Notes quote from `relabel.py
-    compare` ("stage 3 of 4, cause 3 of 4, made 4 of 4"). None where a body's lines are unclear, two
-    closing PRs differ, or the day tells it in prose: not counted, and not counted as agreeing."""
-    runs = [r for r in map(final_run, bodies) if r is not None]
+    closing PR bodies paste; where none does, the Day's block in another Day's closing PR (`others`:
+    the phase's last close, which relabels the whole phase); where none pastes one, what the spec's
+    Notes quote from `relabel.py compare` ("stage 3 of 4, cause 3 of 4, made 4 of 4"). None where a
+    body's lines are unclear, two closing PRs differ, or the day tells it in prose: not counted, and
+    not counted as agreeing."""
+    runs = [r for r in (final_run(b, day) for b in bodies) if r is not None] or [
+        r for r in (final_run(b, day) for b in others if day is not None and RELABEL_DAY.search(b or ""))
+        if r is not None]
     if runs:
         return runs[0] if runs[0] and all(r == runs[0] for r in runs) else None
     for m in RELABEL.finditer(text):
@@ -102,9 +119,9 @@ def relabel(text, bodies=()):
 
 
 # A Defect line (specs/README.md): "- **Defect** D28.1 — found: … · same-as: D21.2 · <text>". The
-# ID and same-as: are optional; same-as: is one of the fields before the text, as relabel.py reads them.
+# ID, catchable: and same-as: are optional; they are fields before the text, as relabel.py reads them.
 DEFECT_LINE = re.compile(r"^- \*\*Defect\*\*(?:[ \t]+(\S+))?\s*[—-]\s*(.*)$")
-DEFECT_FIELD = re.compile(r"^(found|cause|made|same-as):\s*(.*)$")
+DEFECT_FIELD = re.compile(r"^(found|cause|made|catchable|same-as):\s*(.*)$")
 DEFECT_ID = re.compile(r"D(\d+)\.(\d+)")
 
 
@@ -130,6 +147,7 @@ def defect_lines(text, day):
         ok = DEFECT_ID.fullmatch(m.group(1) or "")
         out.append(dict(id=m.group(1), same_as=fields.get("same-as"), found=fields.get("found"), cause=fields.get("cause"),
                         made=fields.get("made"),  # as written: "Day 04", or "none" for one made outside any day
+                        catchable=fields.get("catchable"),  # the earliest found: value that could have caught it
                         problem=None if m.group(1) is None or ok and int(ok.group(1)) == day
                         else f"Day {day}: Defect ID {m.group(1)} is not D{day}.<n>"))
     return out
@@ -477,6 +495,7 @@ def test_state(tests, sha, blobs, moved=None):
 def roadmap(snaps, prs, blobs):
     head = snaps[-1]["sha"]
     merged = [p for p in prs.values() if p.get("state") == "MERGED"]
+    closes = [p for p in merged if day_branch(p).startswith("day-") and kind(p["title"], day_branch(p)) == "close"]
     days = []
     # A day's spec can be renamed (Day 10 was), so its first estimate is looked up by day.
     first_files = {day_of(f): f for f in run("git", "ls-tree", "--name-only", snaps[0]["sha"], "specs/").split()}
@@ -514,7 +533,8 @@ def roadmap(snaps, prs, blobs):
                          evidence_format=in_evidence_format(ev),
                          break_format=any(p["number"] >= BREAK_LINE_FROM_PR for p in mine),
                          evidence=ev, removal_checks=removal_checks(text),
-                         relabel=relabel(text, [p.get("body") for p in mine if kind(p["title"], day_branch(p)) == "close"]),
+                         relabel=relabel(text, [p.get("body") for p in mine if kind(p["title"], day_branch(p)) == "close"], d,
+                                         [p.get("body") for p in closes if p not in mine]),
                          defects=defect_lines(text, d)))
         days[-1]["broken_at_close"] = broken_at_close(days[-1])
     order, stop = run_order(blobs.read(head, "plan.md"), [d["day"] for d in days])

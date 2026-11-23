@@ -30,7 +30,7 @@ says what a day must make true; the kit's question is whether each claim of "don
   the merge it replays.
 - **Separate agents with fresh contexts.** A plan-auditor and a spec-auditor read the specs
   against the code before any work, an implementer on a smaller model writes the code, a
-  defect-rater relabels the day's defects blind (`scripts/relabel.py`), and three end-of-phase
+  defect-rater relabels a phase's defects blind at its last close (`scripts/relabel.py`), and three end-of-phase
   auditors judge the whole. Auditors only read: a hook blocks their writing git and `gh`
   commands (`scripts/auditor-guard.py`), but reads commands rather than what programs do and is
   not a sandbox. The main session reviews, breaks, commits and writes the
@@ -137,7 +137,7 @@ the CI checks gate its PRs, and every agent's work reaches `main` only through o
 | track-reviewer | Read, Grep, Glob, Bash | as the plan-auditor | the main session, which takes or leaves each finding; its catches are counted apart (`found: track-reviewer`) |
 | plan-auditor, spec-auditor | Read, Grep, Glob, Bash | `auditor-guard.py` (writing git and `gh` commands refused; repository compared at its stop); `read-guard.py`; `cap-output.py` | the maintainer, who decides what becomes a PR |
 | security-ops-, agentic-engineering-, architecture-auditor | Read, Grep, Glob, Bash | as the plan-auditor | the maintainer; the three reports are read side by side |
-| defect-rater | Read | `read-guard.py` | `relabel.py compare` against the day's tags, in the closing PR |
+| defect-rater | Read | `read-guard.py` | `relabel.py compare` against the tags of the phase's Days, in its last closing PR |
 
 `step-guard.py` is listed for the main session alone because it refuses starting a subagent
 while its marker is set, so no new subagent works under it. `auditor-guard.py` reads the command, not what a program does
