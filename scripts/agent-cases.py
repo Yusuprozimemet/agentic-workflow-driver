@@ -2,18 +2,25 @@
 
     python scripts/agent-cases.py defect-rater              # 3 runs, compared with the recorded count
     python scripts/agent-cases.py defect-rater --record     # and keep this count as the recorded one
+    python scripts/agent-cases.py reviewer                  # the driver's reviewer, rules/reviewer.md
 
 Nothing else runs an agent on a case whose answer is known: the tests read a brief's shape, and an
 edit that makes the agent miss what it caught shows up as a defect on a later Day, or never. The
-cases are in specs/agent-cases/<agent>.json: closed Days' specs, each pinned at a commit, so a
-later edit to their Notes changes nothing here. For the defect-rater the known answer is the
-tags those Days closed with, every disagreement decided; scripts/relabel.py hides them and counts.
+cases are in specs/agent-cases/<agent>.json, each pinned at a commit, so a later edit changes
+nothing here. For the defect-rater a case is a closed Day's spec, and the known answer the tags
+it closed with, every disagreement decided; scripts/relabel.py hides them and counts. For the
+reviewer (`"kind": "review"`) a case is a merged pull request, checked out at its head commit,
+and the known answer its verdict: `blocker` for a fault found only after it merged, with a
+pattern a blocker line naming that fault matches, or `none` for one nothing was found in later.
 
 An agent's answer differs from run to run, so this is a measurement, not a gate: it prints the
-worst of its runs beside the recorded count and exits 0. Exit 1 means no run could be counted.
-Each run is its own `claude -p --agent <agent>` session, which reads the brief as it is on disk:
-an edited brief is measured before the session that edited it could use it. The recorded count
-was partly shaped by the rater (a close may take its label), so read a fall, not the level.
+worst of its runs beside the recorded count and exits 0. A reply it cannot read counts as 0, as
+the driver parks on a verdict it cannot read; left out, two unreadable runs of three scored as
+well as three good ones. Exit 1 means no reply could be read at all. Each run is its own `claude
+-p` session, which reads the brief as it is on disk: an edited brief is measured before the
+session that edited it could use it. The defect-rater's recorded count was partly shaped by the
+rater (a close may take its label), so read a fall, not the level. A pull request that edits a
+brief with cases shows this count on its body (scripts/case-count.py, CI).
 """
 
 import argparse
@@ -23,6 +30,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -32,9 +40,18 @@ ROOT = os.path.dirname(HERE)
 spec = importlib.util.spec_from_file_location("relabel", os.path.join(HERE, "relabel.py"))
 relabel = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(relabel)
+sys.path.insert(0, ROOT)
+from driver import review  # noqa: E402  the verdict the driver reads, and its reviewer's agent
+from driver import settings as driver_settings  # noqa: E402
 
 AXES = ("stage", "cause", "made")
+REVIEW_AXES = ("verdict", "named")
+WORDS = {"named": "name the known fault"}
 COUNT = re.compile(r"^(stage|cause|made): (\d+) of (\d+) agree")
+PROMPT = (
+    "Review pull request #{pr} at commit {at}.\n"
+    "Read it as your brief says, change nothing, and end with the REVIEW line.\n"
+)
 
 
 def git(repo, *args):
@@ -68,6 +85,25 @@ def labels(reply):
     )
 
 
+def finish(lines, runs, totals, recorded, axes):
+    """The worst of the runs per axis, each run's count, and the recorded count beside them."""
+    worst = {a: min(r[a] for r in runs) for a in axes}
+    for a in axes:
+        each = ", ".join(str(r[a]) for r in runs)
+        word = WORDS.get(a, "agree")
+        lines.append(f"{a}: {worst[a]} of {totals[a]} {word} at worst ({each})")
+    if recorded:
+        was = ", ".join(f"{a} {recorded[a]}" for a in axes)
+        lines.append(
+            f"recorded: {was} (brief {recorded.get('brief', '?')}, {recorded.get('runs', '?')} runs)"
+        )
+        lower = [f"{a} {worst[a]} < {recorded[a]}" for a in axes if worst[a] < recorded[a]]
+        lines.append(
+            "lower than recorded: " + ", ".join(lower) if lower else "not lower than recorded"
+        )
+    return lines, dict(worst, runs=len(runs))
+
+
 def report(key, replies, recorded):
     """The lines to print, and the worst count per axis (None when no run could be counted)."""
     lines, runs = [], []
@@ -79,31 +115,134 @@ def report(key, replies, recorded):
             found = [COUNT.match(line) for line in relabel.compare(key, got)]
             runs.append({m.group(1): (int(m.group(2)), int(m.group(3))) for m in found if m})
         except SystemExit as e:
-            lines.append(f"run {n}: not counted ({e})")
-    if not runs:
+            lines.append(f"run {n}: counted as 0 ({e})")
+            runs.append(None)
+    counted = [r for r in runs if r]
+    if not counted:
         return lines + ["no run counted"], None
-    worst = {a: min(r[a][0] for r in runs) for a in AXES}
-    for a in AXES:
-        each = ", ".join(str(r[a][0]) for r in runs)
-        lines.append(f"{a}: {worst[a]} of {runs[0][a][1]} agree at worst ({each})")
-    if recorded:
-        was = ", ".join(f"{a} {recorded[a]}" for a in AXES)
-        lines.append(
-            f"recorded: {was} (brief {recorded.get('brief', '?')}, {recorded.get('runs', '?')} runs)"
-        )
-        lower = [f"{a} {worst[a]} < {recorded[a]}" for a in AXES if worst[a] < recorded[a]]
-        lines.append(
-            "lower than recorded: " + ", ".join(lower) if lower else "not lower than recorded"
-        )
-    return lines, dict(worst, runs=len(runs))
+    totals = {a: counted[0][a][1] for a in AXES}
+    runs = [{a: r[a][0] for a in AXES} if r else dict.fromkeys(AXES, 0) for r in runs]
+    return finish(lines, runs, totals, recorded, AXES)
 
 
-def ask(runner, prompt, repo):
+def review_report(cases, replies, recorded):
+    """As report(), for the reviewer: replies[r][c] is run r's reply on case c. Per run, the cases
+    whose verdict agrees with the known one, and the blocker cases whose blocker lines name the
+    known fault; an unreadable reply agrees with nothing."""
+    said = [[] for _ in cases]
+    runs = []
+    for run in replies:
+        count = dict.fromkeys(REVIEW_AXES, 0)
+        for i, (case, reply) in enumerate(zip(cases, run)):
+            got = review.verdict(reply)
+            if got is None:
+                said[i].append("unreadable")
+                continue
+            blockers = got[1]
+            said[i].append("blocker" if blockers else "none")
+            count["verdict"] += said[i][-1] == case["expect"]
+            count["named"] += case["expect"] == "blocker" and any(
+                re.search(case["names"], line, re.I) for line in blockers
+            )
+        runs.append(count)
+    lines = [
+        f"{re.split(r'[/\\]', c['repo'])[-1]}#{c['pr']} expects {c['expect']}: {', '.join(s)}"
+        for c, s in zip(cases, said)
+    ]
+    if all(s == "unreadable" for each in said for s in each):
+        return lines + ["no run counted"], None
+    totals = {
+        "verdict": len(cases),
+        "named": sum(c["expect"] == "blocker" for c in cases),
+    }
+    return finish(lines, runs, totals, recorded, REVIEW_AXES)
+
+
+def _writable(func, path, _):
+    os.chmod(path, stat.S_IWRITE)  # git's pack files are read-only on Windows
+    func(path)
+
+
+def checkout(case, out):
+    """A clone of the case's repository (a local path, or owner/name on GitHub) at its commit."""
+    repo = case["repo"]
+    name = os.path.basename(repo.rstrip("/\\")) if os.path.isdir(repo) else repo.replace("/", "-")
+    base = os.path.join(out, "clones", name)
+    if not os.path.isdir(base):
+        source = repo if os.path.isdir(repo) else f"https://github.com/{repo}.git"
+        os.makedirs(os.path.dirname(base), exist_ok=True)
+        git(out, "clone", "--quiet", "--no-checkout", source, base)
+    # A squash-merged pull request's head may be reachable only from GitHub's pull ref.
+    pull = f"+pull/{case['pr']}/head:refs/cases/{case['pr']}"
+    subprocess.run(["git", "-C", base, "fetch", "--quiet", "origin", pull], capture_output=True)
+    path = os.path.join(out, f"{name}-{case['pr']}")
+    if os.path.isdir(path):
+        shutil.rmtree(path, onerror=_writable)
+    git(out, "clone", "--quiet", "--shared", "--no-checkout", base, path)
+    git(path, "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", case["at"])
+    return path
+
+
+def ask(runner, prompt, cwd, env=None):
     cmd = [shutil.which(runner[0]) or runner[0], *runner[1:]]
     done = subprocess.run(
-        cmd, input=prompt.encode("utf-8"), capture_output=True, cwd=repo, timeout=1800, check=False
+        cmd,
+        input=prompt.encode("utf-8"),
+        capture_output=True,
+        cwd=cwd,
+        env=env,
+        timeout=1800,
+        check=False,
     )
     return done.stdout.decode("utf-8", "replace")
+
+
+def reviews(data, runs, out, runner):
+    """Each run's replies, one per case, from the driver's reviewer agent in the case's checkout.
+    The project's own settings are not loaded (`--setting-sources user`): an old commit's
+    session hooks would push counts from the scratch clone."""
+    cases = data["cases"]
+    paths = [checkout(case, out) for case in cases]
+    if runner is None:
+        runner = [
+            "claude",
+            "-p",
+            "--model",
+            "opus",
+            "--permission-mode",
+            "auto",
+            "--strict-mcp-config",
+            "--setting-sources",
+            "user",
+            "--settings",
+            driver_settings.review(out, ROOT),
+            "--max-budget-usd",
+            "5",
+            "--agents",
+            review.agents(out, ROOT),
+            "--agent",
+            "reviewer",
+        ]
+
+    def one(job):
+        case, path = cases[job % len(cases)], paths[job % len(cases)]
+        env = None if os.path.isdir(case["repo"]) else {**os.environ, "GH_REPO": case["repo"]}
+        return ask(runner, PROMPT.format(**case), path, env)
+
+    jobs = range(runs * len(cases))
+    with ThreadPoolExecutor(min(6, len(jobs))) as pool:
+        got = list(pool.map(one, jobs))
+    # Each reply is kept, so a count can be read back to what the reviewer said.
+    os.makedirs(os.path.join(out, "replies"), exist_ok=True)
+    for job, reply in zip(jobs, got):
+        name = os.path.basename(paths[job % len(cases)])
+        with open(
+            os.path.join(out, "replies", f"{name}-run{job // len(cases) + 1}.txt"),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            f.write(reply)
+    return [got[r * len(cases) : (r + 1) * len(cases)] for r in range(runs)]
 
 
 def main(argv, repo=ROOT, runner=None):
@@ -120,21 +259,27 @@ def main(argv, repo=ROOT, runner=None):
     with open(cases_file, encoding="utf-8") as f:
         data = json.load(f)
     out = os.path.join(repo, ".claude", "state", "agent-cases", args.agent)
-    key = prepare(repo, data["cases"], out)
-    blind = os.path.join(out, "blind.md").replace("\\", "/")
-    with open(blind, encoding="utf-8") as f:
-        n = len(f.read().splitlines())
-    prompt = f"Label the entries in {blind}. It has {n} lines: read it with limit {n}."
-    runner = runner or (
-        shlex.split(args.runner) if args.runner else ["claude", "-p", "--agent", args.agent]
-    )
-    brief = git(repo, "hash-object", f".claude/agents/{args.agent}.md").strip()[:7]
-    print(
-        f"{args.agent}: {len(key)} entries from {len(data['cases'])} specs, {args.runs} runs, brief {brief}"
-    )
-    with ThreadPoolExecutor(args.runs) as pool:
-        replies = list(pool.map(lambda _: ask(runner, prompt, repo), range(args.runs)))
-    lines, worst = report(key, replies, data.get("recorded"))
+    os.makedirs(out, exist_ok=True)
+    runner = runner or (shlex.split(args.runner) if args.runner else None)
+    path = data.get("brief", f".claude/agents/{args.agent}.md")
+    brief = git(repo, "hash-object", path).strip()[:7]
+    if data.get("kind") == "review":
+        print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
+        replies = reviews(data, args.runs, out, runner)
+        lines, worst = review_report(data["cases"], replies, data.get("recorded"))
+    else:
+        key = prepare(repo, data["cases"], out)
+        blind = os.path.join(out, "blind.md").replace("\\", "/")
+        with open(blind, encoding="utf-8") as f:
+            n = len(f.read().splitlines())
+        prompt = f"Label the entries in {blind}. It has {n} lines: read it with limit {n}."
+        runner = runner or ["claude", "-p", "--agent", args.agent]
+        print(
+            f"{args.agent}: {len(key)} entries from {len(data['cases'])} specs, {args.runs} runs, brief {brief}"
+        )
+        with ThreadPoolExecutor(args.runs) as pool:
+            replies = list(pool.map(lambda _: ask(runner, prompt, repo), range(args.runs)))
+        lines, worst = report(key, replies, data.get("recorded"))
     print("\n".join(lines))
     if worst is None:
         return 1

@@ -90,6 +90,8 @@ def checks(a, base, branch, files):
          [[PY, "scripts/test_service_wiring.py"]] + ([[PY, "scripts/service-wiring.py"]] if has("services") else [])),
         ('"Replaces: lines name real earlier criteria"',
          [[PY, "scripts/test_behaviour_index.py"], [PY, "scripts/behaviour-index.py"]]),
+        ("A changed brief shows its case count", "skip: pass --body <file>" if body is None else
+         [[PY, "scripts/test_case_count.py"], [PY, "scripts/case-count.py", base, "HEAD", "--body", a.body]]),
         ('"Plan links quote the plan\'s words"', [[PY, "scripts/test_plan_links.py"], [PY, "scripts/plan-links.py"]]),
         ("Branch, title, commits and Jira keys agree",
          "skip: pass --title" if not a.title else [[PY, "scripts/pr-names.py", base, "HEAD"]]),

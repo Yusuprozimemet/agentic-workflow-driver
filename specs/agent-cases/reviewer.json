@@ -1,0 +1,75 @@
+{
+ "agent": "reviewer",
+ "kind": "review",
+ "brief": "rules/reviewer.md",
+ "cases": [
+  {
+   "repo": "Yusuprozimemet/bearing",
+   "pr": 65,
+   "at": "7aef81045d039830fe83d7e8a644d27d3fd7a8aa",
+   "expect": "blocker",
+   "names": "manifest|no entry|same (name|what)|share|duplicate|D10\\.19|\\(close",
+   "why": "Two broken: lines share a name, one has no manifest entry, one ends \"(close, D10.19)\": the replay after the merge failed 4 lines (bearing D10.20)."
+  },
+  {
+   "repo": "Yusuprozimemet/bearing",
+   "pr": 13,
+   "at": "44705dfab9fb9f9ca0c7a801ba4b721768c1addb",
+   "expect": "blocker",
+   "names": "json|pars|escape|backslash|invalid",
+   "why": "The body's second manifest: line is not valid JSON (\\s for \\s), so its break cannot be replayed; found at the close (bearing D02.12)."
+  },
+  {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 85,
+   "at": "f5d6ca7786470709c2182ac06973de159b1547f1",
+   "expect": "blocker",
+   "names": "near.miss|never prints|passed with the break",
+   "why": "Three near-miss broken: lines record a report the check never prints (it prints OK); found at the close (D07.41)."
+  },
+  {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 24,
+   "at": "717da6cdbded236628b38cee94551f53fe04ea76",
+   "expect": "blocker",
+   "names": "broken: broken|doubled|repeated|twice",
+   "why": "All four break lines read \"broken: broken: ...\", so none matches its manifest entry; found at the close (D04.12)."
+  },
+  {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 5,
+   "at": "4c24172bd2dba647ee3cb8d0223519e1dbad4e9c",
+   "expect": "blocker",
+   "names": "hash|absolute|interpreter|python\\.exe|reproduc",
+   "why": "Two broken: reports cannot be reproduced (a fixture's commit hash, this machine's interpreter path); the replay after the merge failed both (D01.17, D01.18). No rule then forbade either."
+  },
+  {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 67,
+   "at": "43a2113154ed7bcbe959dd4b45e698586dcdc098",
+   "expect": "blocker",
+   "names": "absolute|python\\.exe|interpreter|windows|linux",
+   "why": "The body's 11 manifest: lines start with a Windows interpreter's absolute path, which CI's Linux replay cannot start; found at the close (D06.22). No rule then forbade it."
+  },
+  {
+   "repo": "Yusuprozimemet/bearing",
+   "pr": 153,
+   "at": "d316c6c2a2af86d735007384e226302c68d9077d",
+   "expect": "none",
+   "why": "Clean control: every Day 22 defect was found before the merge; the reviewer's real review of it was advice only."
+  },
+  {
+   "repo": "Yusuprozimemet/bearing",
+   "pr": 154,
+   "at": "6f61333e2401c761fdabcb2a96539e5863b18ac4",
+   "expect": "none",
+   "why": "Clean control: its evidence run passed, no later defect names Day 22; the reviewer's real review of it was advice only."
+  }
+ ],
+ "recorded": {
+  "verdict": 2,
+  "named": 0,
+  "runs": 3,
+  "brief": "401eb39"
+ }
+}

@@ -80,20 +80,24 @@ class ReportTest(unittest.TestCase):
         lines, _ = agent_cases.report(key(), [json.dumps(RIGHT)], recorded)
         self.assertEqual("not lower than recorded", lines[-1])
 
-    def test_a_run_with_no_array_or_a_missing_entry_is_not_counted(self):
+    def test_a_run_with_no_array_or_a_missing_entry_counts_as_zero(self):
+        # Left out, two unreadable runs of three scored as well as three good ones.
         lines, worst = agent_cases.report(
             key(), ["no", json.dumps(RIGHT[:2]), json.dumps(RIGHT)], None
         )
-        self.assertEqual(
+        # One line at a time: a whole list's diff is shortened ("[N chars]"), which break.py refuses.
+        for want, got in zip(
             [
-                "run 1: not counted (no JSON array in the reply)",
-                "run 2: not counted (no label for D44-3)",
+                "run 1: counted as 0 (no JSON array in the reply)",
+                "run 2: counted as 0 (no label for D44-3)",
+                "stage: 0 of 3 agree at worst (0, 0, 3)",
             ],
-            lines[:2],
-        )
-        self.assertEqual(1, worst["runs"])
+            lines,
+        ):
+            self.assertEqual(want, got)
+        self.assertEqual({"stage": 0, "cause": 0, "made": 0, "runs": 3}, worst)
         self.assertEqual(
-            (["run 1: not counted (no JSON array in the reply)", "no run counted"], None),
+            (["run 1: counted as 0 (no JSON array in the reply)", "no run counted"], None),
             agent_cases.report(key(), ["no"], None),
         )
 
@@ -175,6 +179,116 @@ class RunTest(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertEqual("no run counted", lines[-1])
         self.assertNotIn("recorded", self.saved())
+
+
+FAULT = {"repo": "o/bearing", "pr": 7, "at": "abc", "expect": "blocker", "names": "manifest"}
+CLEAN = {"repo": "o/bearing", "pr": 8, "at": "def", "expect": "none"}
+NAMED = "found: blocker — two broken: lines have no manifest entry\nREVIEW: blocker"
+OTHER = "found: blocker — a word\nREVIEW: blocker"
+NONE = "found: advice — wording\nREVIEW: none"
+
+
+class ReviewReportTest(unittest.TestCase):
+    def test_each_case_is_shown_and_the_worst_run_is_the_count(self):
+        lines, worst = agent_cases.review_report(
+            [FAULT, CLEAN], [[NAMED, NONE], [OTHER, NAMED], ["no verdict", NONE]], None
+        )
+        want = [
+            "bearing#7 expects blocker: blocker, blocker, unreadable",
+            "bearing#8 expects none: none, blocker, none",
+            "verdict: 1 of 2 agree at worst (2, 1, 1)",
+            "named: 0 of 1 name the known fault at worst (1, 0, 0)",
+        ]
+        self.assertEqual(len(want), len(lines))
+        for w, got in zip(want, lines):
+            self.assertEqual(w, got)
+        self.assertEqual({"verdict": 1, "named": 0, "runs": 3}, worst)
+
+    def test_a_fall_below_the_recorded_count_is_named(self):
+        recorded = {"verdict": 2, "named": 1, "runs": 3, "brief": "abc1234"}
+        lines, _ = agent_cases.review_report([FAULT, CLEAN], [[OTHER, NONE]], recorded)
+        self.assertEqual(
+            [
+                "recorded: verdict 2, named 1 (brief abc1234, 3 runs)",
+                "lower than recorded: named 0 < 1",
+            ],
+            lines[-2:],
+        )
+
+    def test_no_reply_read_is_no_run_counted(self):
+        lines, worst = agent_cases.review_report([FAULT], [["x"], [""]], None)
+        self.assertEqual(
+            ["bearing#7 expects blocker: unreadable, unreadable", "no run counted"], lines
+        )
+        self.assertIsNone(worst)
+
+
+class ReviewRunTest(unittest.TestCase):
+    """A scratch repository as the case's: its note at the case's commit is what the runner reads."""
+
+    def setUp(self):
+        self.origin, self.repo = tempfile.mkdtemp(), tempfile.mkdtemp()
+        git = [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "core.autocrlf=false",
+        ]
+        write = lambda root, path, text: (  # noqa: E731
+            os.makedirs(os.path.dirname(os.path.join(root, path)) or root, exist_ok=True),
+            open(os.path.join(root, path), "w", encoding="utf-8", newline="\n").write(text),
+        )
+        write(self.origin, "note.txt", "no manifest entry")
+        subprocess.run(git + ["-C", self.origin, "init", "-q"], check=True)
+        subprocess.run(git + ["-C", self.origin, "add", "."], check=True)
+        subprocess.run(git + ["-C", self.origin, "commit", "-q", "-m", "a"], check=True)
+        at = (
+            subprocess.run(
+                ["git", "-C", self.origin, "rev-parse", "HEAD"], capture_output=True, check=True
+            )
+            .stdout.decode()
+            .strip()
+        )
+        write(self.origin, "note.txt", "a word")
+        subprocess.run(git + ["-C", self.origin, "commit", "-q", "-am", "b"], check=True)
+        write(
+            self.repo,
+            "reply.py",
+            "import re, sys\nsys.stdout.reconfigure(encoding='utf-8')\nn = re.search(r'#(\\d+)', sys.stdin.read()).group(1)\n"
+            "note = open('note.txt', encoding='utf-8').read()\n"
+            "print('found: blocker — ' + note + '\\nREVIEW: blocker' if n == '7' else 'REVIEW: none')\n",
+        )
+        write(self.repo, "rules/reviewer.md", "brief\n")
+        subprocess.run(git + ["-C", self.repo, "init", "-q"], check=True)
+        self.cases = os.path.join(self.repo, "specs", "agent-cases", "reviewer.json")
+        cases = [dict(FAULT, repo=self.origin, at=at), dict(CLEAN, repo=self.origin, at=at)]
+        write(
+            self.repo,
+            "specs/agent-cases/reviewer.json",
+            json.dumps({"kind": "review", "brief": "rules/reviewer.md", "cases": cases}),
+        )
+
+    def test_each_case_runs_in_its_checkout_at_its_commit_and_record_keeps_the_count(self):
+        runner = [sys.executable, os.path.join(self.repo, "reply.py")]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = agent_cases.main(["reviewer", "--runs", "2", "--record"], self.repo, runner)
+        lines = out.getvalue().splitlines()
+        self.assertEqual(0, code)
+        self.assertRegex(lines[0], r"^reviewer: 2 cases, 2 runs, brief [0-9a-f]{7}$")
+        self.assertEqual("verdict: 2 of 2 agree at worst (2, 2)", lines[3])
+        self.assertEqual("named: 1 of 1 name the known fault at worst (1, 1)", lines[4])
+        replies = os.path.join(self.repo, ".claude", "state", "agent-cases", "reviewer", "replies")
+        self.assertEqual(4, len(os.listdir(replies)))
+        with open(self.cases, encoding="utf-8") as f:
+            recorded = json.load(f)["recorded"]
+        self.assertEqual(
+            {"verdict": 2, "named": 1, "runs": 2},
+            {k: recorded[k] for k in ("verdict", "named", "runs")},
+        )
 
 
 if __name__ == "__main__":
