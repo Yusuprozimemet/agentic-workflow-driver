@@ -110,6 +110,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N38 "requires each of the kit's nine checks by name, unless `waived_checks` in `driver.json` names it"
       Evidence: `KitChecksTest.test_only_the_projects_tests` and `KitChecksTest.test_one_missing` pass on `main` at `9d9be8e` (#281).
       seen red: python -m unittest tests.test_kit_checks.KitChecksTest.test_only_the_projects_tests tests.test_kit_checks.KitChecksTest.test_one_missing tests.test_kit_checks.KitChecksTest.test_bypassable_check on main → AssertionError: unexpectedly None (#281)
+      broken: the missing names never refused (C15.1) → AssertionError: unexpectedly None
 - [x] C15.2 **new** — `protection(..., waived=("A track's breaks replay",))` on the set-up of
       C15.1's second case gives `None`; with `waived` naming "Track tests seen red" instead, it
       gives `main does not require "A track's breaks replay"`. Red today: `protection` takes no
@@ -118,6 +119,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N38 "unless `waived_checks` in `driver.json` names it"
       Evidence: `KitChecksTest.test_waived` passes on `main` at `9d9be8e` (#281); its red on `main` was the spec's TypeError, which `seen-red.py` prints as unittest's last line.
       seen red: python -m unittest tests.test_kit_checks.KitChecksTest.test_waived on main → FAILED (errors=1) (#281)
+      broken: the waived names still refused (C15.2) → AssertionError: 'main does not require "A track\'s breaks replay"' is not None
 - [x] C15.3 **new** — A kit check only a source with a bypass requires is missing: ruleset 7
       (`bypass_actors` `[]`) requires the pull request and eight of the nine, and a classic
       protection with `enforce_admins` false requires the ninth, "Frozen files stay unedited":
@@ -126,6 +128,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N38 "requires each of the kit's nine checks by name"
       Evidence: `KitChecksTest.test_bypassable_check` passes on `main` at `9d9be8e` (#281).
       seen red: python -m unittest tests.test_kit_checks.KitChecksTest.test_only_the_projects_tests tests.test_kit_checks.KitChecksTest.test_one_missing tests.test_kit_checks.KitChecksTest.test_bypassable_check on main → AssertionError: unexpectedly None (#281)
+      broken: a name required only with a bypass counted (C15.3) → AssertionError: unexpectedly None
 - [x] C15.4 **hold** — C13.3's ten `ProtectionTest` cases, their checks the nine and `tests`
       (`CHECKS` in `tests/test_merge_gh.py` and the rules' `parameters`), give C13.3's answers;
       the nine required only as ruleset 7's rule `parameters.required_status_checks[].context`
@@ -151,6 +154,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N38 "the driver reads them itself and does not run setup-check.py"
       Evidence: `KitChecksTest.test_the_kits_nine` passes on `main` at `9d9be8e` (#281), and `git grep -l -e setup-check -e setup_check -- driver/` exits 1 there; its red on `main` was the spec's AttributeError. The grep half is not seen red on its own, as the criterion says.
       seen red: python -m unittest tests.test_kit_checks.KitChecksTest.test_the_kits_nine on main → FAILED (errors=1) (#281)
+      broken: a driver file naming setup-check (C15.5) → AssertionError: 0 != 1 : driver/github.py:1:"""The driver reads the project's GitHub state through setup-check.py: the evidence run on
 - [x] C15.6 **new** — `config.problems` gives `cannot start: <path>'s waived_checks must be a
       list of the kit's check names, each once` for `"A track's breaks replay"` (a string),
       `["nope"]` and `["Track tests seen red", "Track tests seen red"]`; and no line for `[]`,
@@ -173,6 +177,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N15 "the level 2 merge is switched on in a run, and refuses otherwise"; N38 "requires each of the kit's nine checks by name"
       Evidence: `LevelStartTest.test_needs_the_kits_checks` passes on `main` at `9d9be8e` (#281).
       seen red: python -m unittest tests.test_level_2_start.LevelStartTest.test_needs_the_kits_checks on main → AssertionError: differs: 0, 1, 2, 3 (#281)
+      broken: the missing names not passed to on (C15.7) → AssertionError: differs: 0, 1, 2, 3
 - [x] C15.8 **new** — `on` with `level` 2, `waived_checks` `["A track's breaks replay", "A closed
       day's evidence replays"]` and the fake requiring the other seven and `tests`, starts its
       session; its stdout holds `level 2: waived check "A track's breaks replay"` then `level 2:
@@ -186,6 +191,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: N39 "`on` prints each check `waived_checks` names and the switch log's `on` line names them"
       Evidence: `LevelStartTest.test_waived_printed_and_logged` passes on `main` at `9d9be8e` (#282).
       seen red: python -m unittest tests.test_level_2_start.LevelStartTest.test_waived_printed_and_logged on main → AssertionError: differs: 0, 1, 2, 3 (#282)
+      broken: the waived names not passed to protection (C15.8) → AssertionError: differs: 0, 1, 2, 3
 - [x] C15.9 **hold** — At level 1, `waived_checks` `["A track's breaks replay"]` changes nothing:
       `on` makes no call to `branches/main/protection` or `rules/branches/main` (the heartbeat's
       `api --method PATCH` calls aside), prints no `level 2: waived` line, and its switch log's `on` line is
@@ -202,6 +208,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: P62 "the mode, the level"
       Evidence: `StatusLevelTest.test_config_level` passes on `main` at `9d9be8e` (#283).
       seen red: python -m unittest tests.test_status_level.StatusLevelTest.test_config_level on main → AssertionError: 'level: 1' != 'level: 2' (#283)
+      broken: the config's level not passed to status (C15.10) → AssertionError: 'level: 1' != 'level: 2'
 - [x] C15.11 **new** — After a review on the fake `claude` (`tests/test_review_loop.py`'s set-up)
       of #12, the run log's `start` line with `prefix` "review" holds `"pr": 12`. Red today: no
       `pr` key.
@@ -209,6 +216,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: P62 "the step in progress and its cost so far"
       Evidence: `ReviewStartTest.test_start_names_the_pr` passes on `main` at `9d9be8e` (#283).
       seen red: python -m unittest tests.test_review_start.ReviewStartTest.test_start_names_the_pr on main → AssertionError: Lists differ: ['no pr key'] != [12] (#283)
+      broken: the review's start line without its pr (C15.11) → AssertionError: Lists differ: ['no pr key'] != [12]
 - [x] C15.12 **new** — `status` on a log whose live session (a child the test starts) has a
       `start` line with `prefix` "review" and `pr` 12 prints `in progress: review of #12 (session
       `r1`), cost so far $0.00` and a `running:` line ending `(no estimate: 0 earlier review
@@ -228,6 +236,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       seen red: python -m unittest tests.test_review_progress.ReviewProgressTest.test_review_estimate on main → AssertionError: 'no estimate: the step has no kind)' != 'estimate 20m00s, the median of 3 earlier review sessions)' (#283)
       seen red: python -m unittest tests.test_review_progress.ReviewProgressTest.test_no_pr_on_the_start on main → AssertionError: 'in progress: Day 15 Track C' != 'in progress: review of an unknown pull request' (#283)
       seen red: python -m unittest tests.test_review_progress.ReviewProgressTest.test_pr_from_review_line on main → AssertionError: 'in progress: Day 15 Track C (session `r1`), cost so far $0.00' != 'in progress: review of #12 (session `r1`), cost so far $0.00' (#283)
+      broken: a running review read as its step (C15.12) → AssertionError: 'in progress: Day 15 Track C (session `r1`), cost so far $0.00' != 'in progress: review of #12 (session `r1`), cost so far $0.00'
 - [x] C15.13 **hold** — A running track session with three earlier ended review sessions and no
       earlier track session reads `(no estimate: 0 earlier track sessions)`, and
       `tests/test_progress.py`'s cases pass unedited. True today: a review has no kind.
@@ -371,6 +380,7 @@ git -c core.safecrlf=false diff --exit-code 11206ea -- driver/__init__.py driver
 - **Defect** D15.30 — found: track-reviewer · cause: process · made: Day 15 · Track C's brief gave two tests no expected `running:` line (fixed before the implementer ran).
 - **Defect** D15.31 — found: Track C · cause: process · made: Day 15 · Track C's brief forbade comparing a list with `assertEqual`, then did so in C15.11's test, which the implementer reported (not fixed: kept, since its report is short and fixed).
 - **Defect** D15.32 — found: track-reviewer · cause: implementation · made: Day 15 · Track C's live log stamped the pid line's `started` before the child began, leaving about 1 s of `lock.lives`' 2 s slack under load (fixed in #283: the child started first, as `tests/test_status.py` does, and the file repeated under load).
+- **Defect** D15.33 — found: rehearsal · cause: spec · made: Day 15 · nine `new` criteria (C15.1, C15.2, C15.3, C15.5, C15.7, C15.8, C15.10, C15.11, C15.12) had a seen red line and no recorded break, since the spec named breaks for its holds only and the tracks recorded none beyond them, so the close's rehearsal failed each as "a new criterion with no break the replay can run" (fixed in this PR: a break for each recorded with `break.py --record`; C15.5's on the test's grep half, since any change to `KIT_CHECKS` gives a tuple diff unittest shortens).
 - **Hand-off** H15.5 → the maintainer: what CI and the auditors did not check in the tracks: a `once.settle` refusal at level 2 with names waived (#282); `status --watch --config <c>`'s level, on its own path (#283); the heartbeat comment's review estimate, tested through `status` and not through `once.py`'s comment (#283); and, during a live review whose start line has `pr` and no `review` line yet, `in progress:` reads "review of #12" while the same session's `steps:` row reads "review of an unknown pull request" (#283).
 - The close. Day 15 answers H14.1 (C15.12, C15.13: a running review's own line and estimate),
   H14.2 (C15.10: `status` prints the level `driver.json` gives) and H14.3 (C15.1 to C15.8: the
