@@ -112,6 +112,17 @@ class EntriesTest(unittest.TestCase):
                          open(os.path.join(out, "blind.md"), encoding="utf-8").read())
         self.assertEqual(("close", "D21.2"), (rows[0]["found"], rows[0]["same-as"]))
 
+    def test_the_blind_file_holds_no_catchable(self):
+        # catchable: names the earliest layer that could have caught the defect: a stage, which the
+        # rater would otherwise read beside the text.
+        _, path = write_spec("## Notes\n- **Defect** D44.1 — found: close · cause: spec · made: Day 44 · "
+                             "catchable: auditor · the count was wrong.\n")
+        out = tempfile.mkdtemp()
+        rows = relabel.blind([path], out)
+        self.assertEqual("### D44-1 (Day 44)\nthe count was wrong.\n\n",
+                         open(os.path.join(out, "blind.md"), encoding="utf-8").read())
+        self.assertEqual(("close", "auditor"), (rows[0]["found"], rows[0]["catchable"]))
+
 
 class CompareTest(unittest.TestCase):
     def setUp(self):
@@ -133,6 +144,18 @@ class CompareTest(unittest.TestCase):
         self.assertIn("- D44-2 cause: tagged implementation, rater spec (low): the spec asked for the comment", lines)
         self.assertIn("- D44-3 stage: tagged escape, rater before_merge (high): ", lines)
         self.assertIn("- D44-3 made: tagged earlier, rater unclear (high): ", lines)
+
+    def test_a_phase_of_days_gives_one_block_per_day_then_the_disagreements(self):
+        # The phase's last close relabels every Day of the phase at once; the dashboard counts each
+        # Day from its own block.
+        other = [dict(r, id=r["id"].replace("D44", "D45"), day=45, made="Day 45") for r in self.key[:2]]
+        labels = self.labels + [dict(l, id=r["id"], made="this") for l, r in zip(self.labels[:2], other)]
+        labels[-1].update(cause="spec", note="n")
+        self.assertEqual(["Day 44:", "stage: 3 of 3 agree (1 untagged or not a README value, not compared)",
+                          "cause: 4 of 4 agree", "made: 4 of 4 agree",
+                          "Day 45:", "stage: 2 of 2 agree", "cause: 1 of 2 agree", "made: 2 of 2 agree",
+                          "- D45-2 cause: tagged implementation, rater spec (high): n"],
+                         relabel.compare(self.key + other, labels))
 
     def test_an_entry_the_rater_left_out_stops_the_comparison(self):
         with self.assertRaises(SystemExit) as e:

@@ -425,6 +425,16 @@ class RelabelCountsTest(unittest.TestCase):
         self.assertIsNone(spec_drift.relabel("", [one, other]))
         self.assertEqual(spec_drift.relabel("", [one, one, None]), RELABEL_FULL)
 
+    def test_a_phase_close_gives_each_day_its_own_block(self):
+        # The phase's last closing PR relabels every Day of the phase, one "Day NN:" block each.
+        other = run_lines("1 of 2", "2 of 2", "2 of 2")
+        body = "Day 15:\n" + run_lines("7 of 15", "13 of 15", "14 of 15") + "Day 16:\n" + other
+        self.assertEqual(spec_drift.relabel("", [], day=15, others=[body]), RELABEL_FULL)
+        self.assertEqual(spec_drift.relabel("", [body], day=16)["stage"], [1, 2])
+        self.assertIsNone(spec_drift.relabel("", [], day=17, others=[body]))
+        # Another Day's close without blocks is that Day's own run, not this one's.
+        self.assertIsNone(spec_drift.relabel("", [], day=15, others=[other]))
+
     def test_with_no_paste_the_notes_are_still_read(self):
         notes = "(`relabel.py compare`): stage 3 of 4, cause 3 of 4, made 4 of 4"
         self.assertEqual(spec_drift.relabel(notes, ["no counts here", None])["made"], [4, 4])

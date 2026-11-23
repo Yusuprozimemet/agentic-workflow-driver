@@ -64,11 +64,14 @@ merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` b
    table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). The
    close commits no counts: the session hooks push them to the `dashboard-data` branch ("Where
    things live"). For the notebook's figures, run `python scripts/publish-counts.py` and read them
-   from that branch (`git show origin/dashboard-data:docs/dashboard/token-usage.json`). Then relabel the
-   day's defects blind: `python scripts/relabel.py blind specs/day-NN-*.md --out <dir>`, give
+   from that branch (`git show origin/dashboard-data:docs/dashboard/token-usage.json`). Each Defect
+   line carries `catchable:`, the earliest layer that could have caught it (`specs/README.md`). At a
+   phase's last close only, relabel the defects of the phase's Days blind (each Day the phase has
+   not relabelled at its own close; Phase 3: Days 16 to 18):
+   `python scripts/relabel.py blind specs/day-16-*.md specs/day-17-*.md specs/day-18-*.md --out <dir>`, give
    `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run
    `python scripts/relabel.py compare <dir>`, and paste its lines unchanged in the PR (the dashboard
-   counts the last whole run there) with a decision on each disagreement: the tag kept, and why, or changed in the Notes. Commit the break manifest
+   counts each Day's `Day NN:` block in the last whole run there) with a decision on each disagreement: the tag kept, and why, or changed in that Day's Notes. Commit the break manifest
    `specs/breaks/day-NN.json` with the actual mutation arguments, the `manifest:` lines the
    track PRs recorded (format and example in
    [`specs/README.md`](specs/README.md#evidence-at-the-close)); from Day 12 the tracks recorded
@@ -146,7 +149,7 @@ own specs: in this repository that session has read past its own errors more tha
 | a phase's last closing PR has merged, on fresh `main` | plan-auditor | What did the phase change that the next one must know? |
 | a stopping point `plan.md` names, before going on | plan-auditor, on the whole plan | Is `plan.md` still the right plan, and what has piled up that no day owns? |
 | the closing PR of Phase 3 (level 3: phases chain) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
-| every close, after the Notes are written | defect-rater, on `relabel.py`'s blind file | Does a reader who did not write the day tag its defects the same way? |
+| a phase's last close, after the Notes are written | defect-rater, on `relabel.py`'s blind file of the phase's Days | Does a reader who did not write the phase tag its defects the same way? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
 | a PR edits a brief that has cases (`specs/agent-cases/`: the defect-rater, and the driver's reviewer in `rules/reviewer.md`) | `python scripts/agent-cases.py <agent>` | Does the agent still answer its known cases as it did? A count, not a gate: paste its lines in the PR (CI's "A changed brief shows its case count" checks they were run on the brief the PR ends with), and `--record` when the maintainer accepts the new count. |
 | only when the maintainer asks for it by name | instrument-auditor | Starting from a picture of every view of the live page, those behind a button or a closed section included: is each view true when recounted from git and GitHub, and what does each say needs fixing, in the dashboard or in the project? "On the tooling": do the tooling scripts still enforce the rules they were written for? |

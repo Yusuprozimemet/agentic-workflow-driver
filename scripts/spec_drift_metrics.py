@@ -706,10 +706,32 @@ def found_stage(value, day):
     return next((s for s in STAGES if s.lower() == f and s not in ("work", "unsplit", "Day review")), None)
 
 
+# The order a Day's layers run in, for catchable: (the earliest layer that could have caught a defect):
+# one rank for layers that run side by side.
+LAYER_RANK = {"auditor": 0, "spec-change PR": 0, "track-reviewer": 1, "seen red": 2, "work": 3, "review": 4,
+              "break on purpose": 4, "close": 5, "rehearsal": 6, "evidence replay": 7, "unsplit": 7,
+              "dashboard": 8, "Day review": 8}
+
+
+def catchable_counts(lines, day, stages):
+    """Of a Day's Defect lines: those an earlier layer than the one that found them could have caught
+    (catchable:), those it could not, those with no catchable: (every line before Day 16), and those
+    whose catchable: is off the found: list."""
+    out = dict(earlier=0, not_earlier=0, not_given=0, off_list=0)
+    for x, s in zip(lines, stages):
+        c = x.get("catchable")
+        could = found_stage(c, day) if c else None
+        key = ("not_given" if not c else "off_list" if could is None
+               else "earlier" if s is not None and LAYER_RANK[could] < LAYER_RANK[s] else "not_earlier")
+        out[key] += 1
+    return out
+
+
 def defect_counts(days):
     """Per Day: its Defect lines, by stage, per criterion, caught late (after a track started) and
-    escaped (made on another Day); the blind rater's agreement per tag; and the IDs off the found:
-    list. Totals over the Days with a Defect line."""
+    escaped (made on another Day), and what catchable: says an earlier layer could have caught; the
+    blind rater's agreement per tag; and the IDs off the found: list (and, named so, off it in
+    catchable:). Totals over the Days with a Defect line."""
     rows, rater, off = [], {}, []
     for d in days:
         lines = d.get("defects", [])
@@ -719,15 +741,18 @@ def defect_counts(days):
         made = [re.fullmatch(r"day 0*(\d+)", (x.get("made") or "").strip().lower()) for x in lines]
         criteria = (d.get("criteria") or {}).get("total") or 0
         off += [x.get("id") or f"Day {d['day']}: {x.get('found')}" for x, s in zip(lines, stages) if s is None]
+        off += [f"{x.get('id') or 'Day ' + str(d['day'])} catchable" for x in lines
+                if x.get("catchable") and found_stage(x["catchable"], d["day"]) is None]
         for tag, (agreed, of) in (d.get("relabel") or {}).items():
             rater[tag] = [a + b for a, b in zip(rater.get(tag, [0, 0]), (agreed, of))]
         rows.append(dict(day=d["day"], defects=len(lines), criteria=criteria,
                          per_criterion=round(len(lines) / criteria, 2) if criteria else None,
                          stages={s: stages.count(s) for s in STAGES if s in stages},
                          late=sum(s is not None and s not in EARLY for s in stages),
-                         escapes=sum(bool(m) and int(m.group(1)) != d["day"] for m in made)))
+                         escapes=sum(bool(m) and int(m.group(1)) != d["day"] for m in made),
+                         catchable=catchable_counts(lines, d["day"], stages)))
     total = {k: sum(r[k] for r in rows) for k in ("defects", "criteria", "late", "escapes")}
-    return dict(days=rows, rater=rater, off_list=off,
+    return dict(days=rows, rater=rater, off_list=off, catchable_earlier=sum(r["catchable"]["earlier"] for r in rows),
                 **total, per_criterion=round(total["defects"] / total["criteria"], 2) if total["criteria"] else None)
 
 

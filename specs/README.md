@@ -259,6 +259,12 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     and never opened) or `environment` (tooling, CI, the machine, a library).
   - `made:` the day whose work holds the defect, merged or not (`Day 21`, or `none` for work outside any
     day). When it is not this day, the defect is an escape from that day, whatever `found:` says.
+  - `catchable:` the earliest layer that could have caught it, one of the `found:` values above,
+    after `made:`: the same value as `found:` when no earlier layer could have (`found: close ·
+    … · catchable: auditor` says the spec-auditor could have counted it). From Day 16 on, every
+    Defect line has one; earlier Days' lines have none and are not given it. `spec-drift.py`
+    counts, per Day, the lines an earlier layer could have caught, and reports a value off the
+    list; `relabel.py` strips it with the tags.
   - `same-as:`, only when the defect repeats one an earlier Defect line records: that line's ID
     (`same-as: D21.2`), after `made:` and before the text. `scripts/spec-drift.py` counts it as
     a recurrence, ringed in the dashboard's graph of defects, and reports an ID it cannot place
@@ -282,12 +288,16 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   jobmatch-microservices, these are the counts `docs/paper/success-criteria.md` judges H1–H3 by; its
   amendment maps `process` and the `found:` values above.
 
-  At the close, a reader who wrote none of it labels them again, blind
-  ([`scripts/relabel.py`](../scripts/relabel.py), the `defect-rater` agent): the tagger has also
-  written the work, and in jobmatch-microservices, on Days 21–28 a blind rater disagreed with 11 of 82 causes and 16 stages,
-  mostly defects made on one day and found on another. The closing PR lists each disagreement
-  and decides it: the tag kept, with the reason, or changed in the Notes. A tag is never changed
-  without a line in the PR.
+  At a phase's last close, a reader who wrote none of it labels the defects of every Day of the
+  phase again, blind ([`scripts/relabel.py`](../scripts/relabel.py), the `defect-rater` agent):
+  the tagger has also written the work, and in jobmatch-microservices, on Days 21–28 a blind
+  rater disagreed with 11 of 82 causes and 16 stages, mostly defects made on one day and found on
+  another. Once a phase, not at every close: the rater reads a phase's Days in one run, and the
+  defects made on one Day and found on another sit in the same file. `relabel.py compare` prints
+  one block per Day, headed `Day NN:`, and the closing PR pastes them unchanged: the dashboard
+  counts each Day from its own block. The closing PR lists each disagreement and decides it: the
+  tag kept, with the reason, or changed in that Day's Notes. A tag is never changed without a
+  line in the PR. Days up to 15 were relabelled at their own close.
 - **IDs.** Each criterion starts with its ID, `C28.3` for Day
   28's third, and keeps it when others are added or dropped. Each item a day leaves for later is
   a `Hand-off` line in its Notes with an ID, `H28.1`, and the day or the maintainer it goes to.

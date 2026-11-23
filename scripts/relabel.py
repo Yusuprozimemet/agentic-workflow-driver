@@ -6,10 +6,11 @@
 The session that tags a defect also wrote the code, the spec or the review it is about, and the
 paper found that tags then follow the session's own reading (docs/paper, the tagger-bias lesson):
 on Days 21-28 a fresh rater, given the text alone, disagreed on 11 of 82 causes and 16 stages,
-mostly defects made on one day and found on a later one. So at the close, `blind` strips the
-`found:`, `cause:`, `made:` and `same-as:` fields from the day's entries (a `same-as:` names
-an earlier defect, whose tags the rater could look up), the defect-rater agent labels the
-text alone, and `compare` prints each disagreement for the closing PR to decide.
+mostly defects made on one day and found on a later one. So at a phase's last close, `blind`
+strips the `found:`, `cause:`, `made:`, `catchable:` and `same-as:` fields from the entries of
+the phase's Days (a `same-as:` names an earlier defect, whose tags the rater could look up), the
+defect-rater agent labels the text alone, and `compare` prints each Day's counts and each
+disagreement for the closing PR to decide.
 
 Stages come from the found: values in specs/README.md; a defect made on an earlier day is an
 escape whatever found: says. A value the README does not list is reported, not guessed.
@@ -22,7 +23,7 @@ import sys
 from collections import Counter
 
 ENTRY = re.compile(r"^- \*\*Defect\*\*(?:\s+D[\w.]+)?\s*[—-]\s*(.*)$")  # D28.1, the line's ID, is optional
-FIELD = re.compile(r"^(found|cause|made|same-as):\s*(.*)$")
+FIELD = re.compile(r"^(found|cause|made|catchable|same-as):\s*(.*)$")
 BEFORE_CODE = ("auditor", "spec-change pr")
 BEFORE_MERGE = ("review", "track-reviewer", "seen red", "break on purpose", "self")
 ESCAPE = ("close", "evidence replay", "dashboard")
@@ -52,7 +53,7 @@ def entries(path):
             else:
                 text.append(p)
         rows.append(dict(id=f"D{day}-{len(rows) + 1}", day=day, line=i + 1, text=" · ".join(text),
-                         **{k: tags.get(k, "") for k in ("found", "cause", "made", "same-as")}))
+                         **{k: tags.get(k, "") for k in ("found", "cause", "made", "catchable", "same-as")}))
     return rows
 
 
@@ -95,11 +96,28 @@ def blind(paths, out):
 
 
 def compare(key, labels):
-    """The closing PR's lines: one count per axis, then one line per disagreement."""
+    """The closing PR's lines: one count per axis, then one line per disagreement. With more than one
+    Day (the phase's last close relabels them all), a "Day NN:" line heads each Day's counts, and the
+    disagreements follow them all."""
     got = {r["id"]: r for r in labels}
     missing = [r["id"] for r in key if r["id"] not in got]
     if missing:
         raise SystemExit(f"no label for {', '.join(missing)}")
+    days = sorted({r["day"] for r in key})
+    out, diffs = [], []
+    for day in days:
+        if len(days) > 1:
+            out.append(f"Day {day}:")
+        lines, more = day_counts([r for r in key if r["day"] == day], got)
+        out, diffs = out + lines, diffs + more
+    unclear = Counter(axis for r in labels for axis in ("stage", "cause", "made") if r.get(axis) == "unclear")
+    if unclear:
+        out.append("rater unclear: " + ", ".join(f"{k} {v}" for k, v in sorted(unclear.items())))
+    return out + diffs
+
+
+def day_counts(key, got):
+    """One Day's count per axis, and its disagreements."""
     out, diffs = [], []
     for axis, tag in (("stage", stage), ("cause", lambda r: r["cause"].lower()), ("made", made)):
         pairs = [(r, tag(r), got[r["id"]].get(axis, "")) for r in key]
@@ -111,10 +129,7 @@ def compare(key, labels):
         out.append(line)
         diffs += [f"- {r['id']} {axis}: tagged {a}, rater {b} ({got[r['id']].get('confidence', '?')}):"
                   f" {got[r['id']].get('note', '')}" for r, a, b in tagged if a != b]
-    unclear = Counter(axis for r in labels for axis in ("stage", "cause", "made") if r.get(axis) == "unclear")
-    if unclear:
-        out.append("rater unclear: " + ", ".join(f"{k} {v}" for k, v in sorted(unclear.items())))
-    return out + diffs
+    return out, diffs
 
 
 def main(argv):

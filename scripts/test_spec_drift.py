@@ -950,6 +950,20 @@ class DefectCountTest(unittest.TestCase):
         self.assertEqual(sd.defect_count_line(c), "defect counts: 10 over 4 criteria (2.5 each), 7 caught late, "
                                                   "1 escaped, rater agreed on cause 7 of 10")
 
+    def test_catchable_counts_the_defects_an_earlier_layer_could_have_caught(self):
+        line = lambda n, rest: f"- **Defect** D16.{n} — found: {rest} · x.\n"
+        text = "".join(line(n, r) for n, r in enumerate([
+            "close · cause: spec · made: Day 16 · catchable: auditor",
+            "auditor · cause: spec · made: Day 16 · catchable: auditor",
+            "review · cause: spec · made: Day 16",
+            "seen red · cause: spec · made: Day 16 · catchable: lunch",
+            "Track A · cause: spec · made: Day 16 · catchable: review"], 1))
+        lines = sd.defect_lines(text, 16)
+        self.assertEqual([x["catchable"] for x in lines], ["auditor", "auditor", None, "lunch", "review"])
+        c = sd.defect_counts([dict(day=16, criteria=dict(total=5), defects=lines)])
+        self.assertEqual(c["days"][0]["catchable"], dict(earlier=1, not_earlier=2, not_given=1, off_list=1))
+        self.assertEqual((c["catchable_earlier"], c["off_list"]), (1, ["D16.4 catchable"]))
+
     def test_the_main_sessions_diff_review_is_a_stage_of_its_own_and_a_late_one(self):
         self.assertEqual([sd.found_stage(f, 11) for f in ("review", "Review", "self", "Track C1", "Day 12 review")],
                          ["review", "review", "work", "work", "Day review"])
