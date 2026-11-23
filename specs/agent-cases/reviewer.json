@@ -52,6 +52,22 @@
    "why": "The body's 11 manifest: lines start with a Windows interpreter's absolute path, which CI's Linux replay cannot start; found at the close (D06.22). No rule then forbade it."
   },
   {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 214,
+   "at": "d727bfd024f9cab3d89362a15156f0613414ec83",
+   "expect": "blocker",
+   "names": "git.{0,60}after (the )?review|after (the )?review.{0,60}git|second (git|check)|same (line|message|words)",
+   "why": "Regression: driver/loop.py reports a failed git after the review with the line of the check before it (\"git failed before the review\"), and no test reads the second; found after the merge (D12.38)."
+  },
+  {
+   "repo": "Yusuprozimemet/agentic-workflow-driver",
+   "pr": 250,
+   "at": "23a87f38f5c207b0bca90eaf61f6b18a572a390a",
+   "expect": "blocker",
+   "names": "status\\.py|status.{0,40}level|level.{0,40}status|level: ?1|hard.?coded",
+   "why": "Regression: driver.json takes a level, but driver/status.py, which the PR does not touch, still prints \"level: 1\" whatever the level; on the level 2 day it read \"level: 1\" (D14.68)."
+  },
+  {
    "repo": "Yusuprozimemet/bearing",
    "pr": 153,
    "at": "d316c6c2a2af86d735007384e226302c68d9077d",
