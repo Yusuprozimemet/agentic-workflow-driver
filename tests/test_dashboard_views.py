@@ -372,13 +372,13 @@ class MergeGraphTest(unittest.TestCase):
             [(1, "loose", 5), (2, "loose", 6)],
         )
 
-    def fixture(self):
+    def fixture(self, index=None):
         # Row i and the replay's n differ on purpose: a cell's n is the replay's, an event's n is the row's.
         rows = [
             merge_row(i, 10 + i, "code", prod=p, branch=f"day-01/track-{i}")
             for i, p in ((1, 5), (2, 4), (3, 0), (4, 0), (5, 0), (6, 0))
         ]
-        index = [merge_crit("C1.1", 1, [11]), merge_crit("C1.2", 1, [12])]
+        index = index or [merge_crit("C1.1", 1, [11]), merge_crit("C1.2", 1, [12])]
         replay = {
             "merges": [
                 {"n": 100 + i, "pr": 10 + i, "sample": "all" if i in (1, 4) else "day"}
@@ -475,6 +475,32 @@ class MergeGraphTest(unittest.TestCase):
         )
         self.assertEqual((g["all_at"], g["at_all"], g["win"]), ([11, 14], 1, {"min": 3, "max": 3}))
         self.assertEqual(g["flap"], {"series": 4, "stopped": 2, "twice": 0, "crit_twice": 0})
+
+    def test_a_stop_replaced_by_a_criterion_that_holds_is_replaced_and_one_whose_successor_does_not_is_retired(
+        self,
+    ):
+        # C1.2 stopped holding and is replaced: by C1.1, which holds at the end, it is settled ("replaced");
+        # by C1.3, which the replay never ran, it is still a finding to read ("retired").
+        held = self.fixture(
+            [merge_crit("C1.1", 1, [11]), merge_crit("C1.2", 1, [12], replaced_by=["C1.1"])]
+        )
+        self.assertEqual(
+            [(f["n"], f["kind"], f.get("c")) for f in held["finds"]],
+            [(1, "back", 0), (2, "replaced", 1)],
+        )
+        self.assertEqual(held["all"]["finds"]["replaced"], [2])
+        self.assertEqual(held["all"]["finds"]["retired"], [])
+        unrun = self.fixture(
+            [
+                merge_crit("C1.1", 1, [11]),
+                merge_crit("C1.2", 1, [12], replaced_by=["C1.3"]),
+                merge_crit("C1.3", 1, [13]),
+            ]
+        )
+        self.assertEqual(
+            [(f["n"], f["kind"], f.get("c")) for f in unrun["finds"]],
+            [(1, "back", 0), (2, "retired", 1)],
+        )
 
     def test_the_days_plan_md_lists_with_no_spec_are_future_with_their_hand_offs_and_commitments(
         self,

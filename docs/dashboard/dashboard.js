@@ -1891,6 +1891,8 @@ function mergeDraw(D, get, onDay) {
 
   // one finding per criterion that ever stopped holding and one per uncited merge, numbered left to right as drawn
   const finds = D.finds.map(f => f.kind === "loose" ? { kind: f.kind, n: f.n, m: at(f.pr) } : { kind: f.kind, n: f.n, c: crit[f.c], ev: events.filter(e => e.c === f.c) });
+  // stops whose replacement chain ends in a criterion that holds: drawn grey, not red
+  const settled = new Set(finds.filter(f => f.kind === "replaced").map(f => f.c));
   const view = () => state.day == null ? D.all : D.by_day[state.day];
 
   const svg = $("g"), tip = $("tip");
@@ -2030,8 +2032,8 @@ function mergeDraw(D, get, onDay) {
       const cx = c.x + U / 2, sx = c.x + (big ? 4 : .7), sw = U - (big ? 8 : 1.4), dim = c.rep.length ? .5 : 1;
       if (c.st === "ok") el("rect", { x: sx, y: SY, width: sw, height: SH, rx: .8, fill: "var(--c-ok)", opacity: dim });
       else if (c.st === "un") el("rect", { x: sx + .6, y: SY + .6, width: sw - 1.2, height: SH - 1.2, rx: .8, fill: "var(--card)", stroke: "var(--c-ok)", "stroke-width": 1.2, opacity: dim });
-      else if (c.st === "bad") el("rect", { x: sx, y: SY, width: sw, height: SH, rx: .8, fill: "var(--c-bad)" });
-      else if (c.st === "stale") el("rect", { x: sx + .6, y: SY + .6, width: sw - 1.2, height: SH - 1.2, rx: .8, fill: "var(--card)", stroke: "var(--c-bad)", "stroke-width": 1.2 });
+      else if (c.st === "bad") el("rect", { x: sx, y: SY, width: sw, height: SH, rx: .8, fill: settled.has(c) ? "var(--muted)" : "var(--c-bad)", opacity: settled.has(c) ? dim : 1 });
+      else if (c.st === "stale") el("rect", { x: sx + .6, y: SY + .6, width: sw - 1.2, height: SH - 1.2, rx: .8, fill: "var(--card)", stroke: settled.has(c) ? "var(--muted)" : "var(--c-bad)", "stroke-width": 1.2 });
       else if (c.st === "due") el("rect", { x: sx + .5, y: SY + .5, width: sw - 1, height: SH - 1, rx: .8, fill: "var(--card)", stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "1.8 1.4" });
       else el("rect", { x: sx, y: SY + SH / 2 - .8, width: sw, height: 1.6, fill: "var(--muted)" });
       if (c.rep.length) el("path", { d: `M${cx} ${TY} l-2.8 5.2 h5.6 z`, fill: "var(--ink-2)" });
@@ -2048,9 +2050,11 @@ function mergeDraw(D, get, onDay) {
     const lane = fs.map(f => ({ f, ax: f.c ? f.c.x + U / 2 : f.m.lx + UL / 2 })).sort((a, b) => a.ax - b.ax);
     const bx = spread(lane.map(b => b.ax), 2 * BR + 2, BR + 2, W - BR - 2);
     lane.forEach((b, k) => {
-      const f = b.f, col = f.kind === "loose" ? "var(--c-unpl)" : f.kind === "back" ? "var(--muted)" : "var(--c-bad)", solid = f.kind === "fix" || f.kind === "loose";
+      const f = b.f, col = f.kind === "loose" ? "var(--c-unpl)" : f.kind === "back" || f.kind === "replaced" ? "var(--muted)" : "var(--c-bad)", solid = f.kind === "fix" || f.kind === "loose";
       el("line", { x1: b.ax, y1: f.c ? TY + (f.c.rep.length ? 6.4 : -1) : CY + CH + 1, x2: bx[k], y2: BY - BR, stroke: "var(--muted)", "stroke-width": .7 });
-      el("circle", { cx: bx[k], cy: BY, r: BR, fill: solid ? col : "var(--card)", stroke: col, "stroke-width": 1.4 });
+      const ring = { cx: bx[k], cy: BY, r: BR, fill: solid ? col : "var(--card)", stroke: col, "stroke-width": 1.4 };
+      if (f.kind === "replaced") ring["stroke-dasharray"] = "2.2 1.6";
+      el("circle", ring);
       el("text", { x: bx[k], y: BY + 3.2, "text-anchor": "middle", class: "bn", style: `fill:${f.kind === "fix" ? "var(--card)" : f.kind === "loose" ? "var(--on-unpl)" : "var(--ink)"}` }, f.n);
     });
 
@@ -2132,12 +2136,14 @@ function mergeDraw(D, get, onDay) {
       h("b", "", f.c.id, d); d.append(` · ${f.c.tag} · ${f.ev.map(evText).join("; ")}; the replay last ran it at #${f.c.lp}. No later criterion replaces it.`);
       const e = f.ev[f.ev.length - 1]; if (e.detail) h("small", "", `${e.check ? e.check + ": " : ""}${e.detail}`, d);
     });
-    group(a, "Not holding when last run, since replaced", fs.filter(f => f.kind === "retired"), (d, f) => {
+    const replacedBy = (d, f) => {
       const ch = chain(f.c), end = ch[ch.length - 1];
       h("b", "", f.c.id, d); d.append(` · ${f.c.tag} · ${f.ev.map(evText).join("; ")}; the replay stopped running it after #${f.c.lp}.`);
       h("small", "", `Replaced by ${ch.map(c => c.id).join(" → ")}. ${end.id} ${stWord(end)}${end.lp ? " at #" + end.lp : ""}.`, d);
-    });
+    };
+    group(a, "Not holding when last run, since replaced by one not shown to hold", fs.filter(f => f.kind === "retired"), replacedBy);
     const b = col();
+    group(b, "Not holding when last run, since replaced by one that holds", fs.filter(f => f.kind === "replaced"), replacedBy);
     group(b, "Stopped holding and came back", fs.filter(f => f.kind === "back"), (d, f) => {
       h("b", "", f.c.id, d); d.append(` · ${f.ev.map(e => `"${e.state}" #${e.pr} → held again #${e.end}`).join("; ")}`);
     });
