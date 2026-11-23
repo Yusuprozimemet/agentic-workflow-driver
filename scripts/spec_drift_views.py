@@ -259,7 +259,7 @@ def _merge_view(crit, merges, events, finds, cs, ms, ls, future=None):
     for k in evs:
         stopped[events[k]["pr"]] = stopped.get(events[k]["pr"], 0) + 1
     return dict(criteria=len(cs), events=len(evs), merges=list(ms), loose=list(ls), verdict=verdict,
-                finds={k: [f["n"] for f in shown if f["kind"] == k] for k in ("fix", "retired", "back", "loose")},
+                finds={k: [f["n"] for f in shown if f["kind"] == k] for k in ("fix", "retired", "replaced", "back", "loose")},
                 piles=[dict(e=p[0], n=len(p), pr=events[p[0]]["pr"], ids=[crit[events[k]["c"]]["id"] for k in p])
                        for p in piled],
                 pile_merges=len({events[k]["pr"] for k in evs}),
@@ -345,12 +345,25 @@ def merge_graph(d):
                 at[p]["lands"].append(i)
                 if (at[p]["day"] or 0) < (c["day"] or 0):
                     at[p]["early"].append(i)
-    # one finding per criterion that ever stopped holding, then one per merge none cites, numbered as the bar runs
+    # one finding per criterion that ever stopped holding, then one per merge none cites, numbered as the bar runs;
+    # a stop whose replacement chain ends in a criterion that holds is settled ("replaced"), else still read ("retired")
+    by_id = {c["id"]: c for c in crit}
+
+    def chain_end(c):
+        for _ in range(9):  # the page's chain() walks as far
+            if not c["rep"] or c["rep"][0] not in by_id:
+                break
+            c = by_id[c["rep"][0]]
+        return c
+
     finds = []
     for i, c in enumerate(crit):
         ev = [e for e in events if e["c"] == i]
         if ev:
-            finds.append(dict(kind="back" if all(e["end"] for e in ev) else "retired" if c["rep"] else "fix", c=i))
+            kind = ("back" if all(e["end"] for e in ev) else "fix" if not c["rep"]
+                    else "replaced" if chain_end(c)["st"] in ("ok", "un") else "retired")
+            finds.append(dict(kind=kind, c=i))
+    settled = {f["c"] for f in finds if f["kind"] == "replaced"}
     finds += [dict(kind="loose", pr=m["pr"]) for m in merges if m["loose"]]
     for k, f in enumerate(finds, 1):
         f["n"] = k
@@ -387,7 +400,10 @@ def merge_graph(d):
                           for g in groups},
                win=dict(min=min(wins), max=max(wins)) if wins else dict(min=0, max=0),
                flap=dict(_flap(followed), crit_twice=sum(1 for k in per.values() if k > 1)),
-               early_n=sum(len(m["early"]) for m in merges), open_events=sum(1 for e in events if not e["end"]),
+               early_n=sum(len(m["early"]) for m in merges),
+               # a stop not come back is open, unless a criterion that holds has replaced it
+               open_events=sum(1 for e in events if not e["end"] and e["c"] not in settled),
+               replaced_events=sum(1 for e in events if not e["end"] and e["c"] in settled),
                nocite=[m["pr"] for m in merges if m["nocite"]], uncited=uncited)
     out["all"] = _merge_view(crit, merges, events, finds, list(range(len(crit))), [m["pr"] for m in merges], loose,
                              future)
