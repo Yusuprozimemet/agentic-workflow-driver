@@ -192,6 +192,27 @@ jobs:
       - run: python scripts/test_behaviour_index.py
       - run: python scripts/behaviour-index.py
 
+  case-count:
+    name: A changed brief shows its case count
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/test_case_count.py
+      - name: Compare the briefs changed with the body
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/body.md"
+          python scripts/case-count.py "$BASE_SHA" "$HEAD_SHA" --body "$RUNNER_TEMP/body.md"
+
   plan-links:
     name: "Plan links quote the plan's words"
     runs-on: ubuntu-latest
