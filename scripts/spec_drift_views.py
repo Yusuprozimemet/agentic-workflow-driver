@@ -363,6 +363,7 @@ def merge_graph(d):
             kind = ("back" if all(e["end"] for e in ev) else "fix" if not c["rep"]
                     else "replaced" if chain_end(c)["st"] in ("ok", "un") else "retired")
             finds.append(dict(kind=kind, c=i))
+    settled = {f["c"] for f in finds if f["kind"] == "replaced"}
     finds += [dict(kind="loose", pr=m["pr"]) for m in merges if m["loose"]]
     for k, f in enumerate(finds, 1):
         f["n"] = k
@@ -399,7 +400,10 @@ def merge_graph(d):
                           for g in groups},
                win=dict(min=min(wins), max=max(wins)) if wins else dict(min=0, max=0),
                flap=dict(_flap(followed), crit_twice=sum(1 for k in per.values() if k > 1)),
-               early_n=sum(len(m["early"]) for m in merges), open_events=sum(1 for e in events if not e["end"]),
+               early_n=sum(len(m["early"]) for m in merges),
+               # a stop not come back is open, unless a criterion that holds has replaced it
+               open_events=sum(1 for e in events if not e["end"] and e["c"] not in settled),
+               replaced_events=sum(1 for e in events if not e["end"] and e["c"] in settled),
                nocite=[m["pr"] for m in merges if m["nocite"]], uncited=uncited)
     out["all"] = _merge_view(crit, merges, events, finds, list(range(len(crit))), [m["pr"] for m in merges], loose,
                              future)

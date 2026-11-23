@@ -2003,7 +2003,7 @@ function mergeDraw(D, get, onDay) {
     evs.forEach(e => {
       const r0 = rows[rowOf.get(e.pr)], r1 = e.end != null ? rows[rowOf.get(e.end)] : null; if (!r0) return;
       const y1 = r0.y + RH - 1, y2 = r1 ? r1.y + 1 : CY, cx = crit[e.c].x + U / 2;
-      if (y2 > y1) { const a = { x1: cx, y1, x2: cx, y2, stroke: "var(--c-bad)", "stroke-width": big ? 1.6 : 1.2 }; if (e.state === STALE) a["stroke-dasharray"] = "2.5 2.5"; el("line", a); }
+      if (y2 > y1) { const a = { x1: cx, y1, x2: cx, y2, stroke: !r1 && settled.has(crit[e.c]) ? "var(--muted)" : "var(--c-bad)", "stroke-width": big ? 1.6 : 1.2 }; if (e.state === STALE) a["stroke-dasharray"] = "2.5 2.5"; el("line", a); }
     });
 
     // marks
@@ -2180,10 +2180,11 @@ function mergeDraw(D, get, onDay) {
     td(tr, "", e.lo == null ? "not holding at its first replay" : `${plural(e.wn, "merge")}; ${e.sus.length ? "product code changed in " + hash(e.sus) : "none changed product code"}`);
     const s = td(tr, ""), p = h("span", "pill " + (stale ? "stale" : "bad"), null, s); p.append(document.createElement("i"), e.state);
     if (e.detail) h("div", "", e.detail, s);
-    td(tr, e.end ? "pr" : "pr open", e.end ? "#" + e.end : "not yet");
+    const done = !e.end && settled.has(c) ? chain(c).at(-1) : null;
+    td(tr, e.end || done ? "pr" : "pr open", e.end ? "#" + e.end : done ? `replaced: ${done.id} holds` : "not yet");
     tb.appendChild(tr);
   });
-  $("ev-h").textContent = `Where a criterion stopped holding · ${events.length} times, ${D.open_events} still open (the table)`;
+  $("ev-h").textContent = `Where a criterion stopped holding · ${events.length} times, ${D.open_events} still open${D.replaced_events ? `, ${D.replaced_events} since replaced by one that holds` : ""} (the table)`;
 
   const futureDays = D.future.map(f => dayName(f.day)).join(" and ");
   const cannot = $("cannot"); cannot.replaceChildren();

@@ -490,6 +490,7 @@ class MergeGraphTest(unittest.TestCase):
         )
         self.assertEqual(held["all"]["finds"]["replaced"], [2])
         self.assertEqual(held["all"]["finds"]["retired"], [])
+        self.assertEqual((held["open_events"], held["replaced_events"]), (0, 1))
         unrun = self.fixture(
             [
                 merge_crit("C1.1", 1, [11]),
@@ -501,6 +502,7 @@ class MergeGraphTest(unittest.TestCase):
             [(f["n"], f["kind"], f.get("c")) for f in unrun["finds"]],
             [(1, "back", 0), (2, "retired", 1)],
         )
+        self.assertEqual((unrun["open_events"], unrun["replaced_events"]), (1, 0))
 
     def test_the_days_plan_md_lists_with_no_spec_are_future_with_their_hand_offs_and_commitments(
         self,
