@@ -743,6 +743,11 @@ function model(DATA) {
     if (R.missing) return { empty: R.missing };
     return (R.rows || []).length ? R : { empty: "the driver has started no step yet, so there is no row to draw." };
   }
+  // Graph 13, does it learn: counted in Python (learning); with no Day whose spec has merged it draws nothing.
+  function lrnGraph() {
+    const L = DATA.learning;
+    return L && (L.days || []).length ? L : { empty: "no Day's spec has merged yet, so there is no Day to count repeats on." };
+  }
   function mrgGraph() {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
@@ -885,7 +890,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph),
+    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -3478,6 +3483,136 @@ function rfxDraw(R, get) {
   return fig;
 }
 
+/* Graph 13, does it learn: two plain pictures from Python's counts (spec_drift_views.learning). The first is one bar per
+   Day of the defects that repeat an earlier one, split by whether a fix of their problem counted by then, with a dashed
+   line at each Day a fix counts from; the second is one row per fix, its times before against its times after. Red is
+   never alone: a repeat past a fix is hatched too, and an after dot carries a tick or a cross. Colours are under #lrn. */
+const LRN_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const lrnDate = iso => iso ? `${+iso.slice(8, 10)} ${LRN_MON[+iso.slice(5, 7) - 1]}` : "";
+const lrnTimes = n => n === 0 ? "never" : n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+const lrnDays = n => `${n} ${n === 1 ? "Day" : "Days"}`;
+const lrnIds = (ids, most) => ids.length > most ? `${ids.slice(0, most).join(", ")} and ${ids.length - most} more` : ids.join(", ");
+const lrnCut = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+function lrnDraw(L, get, onDay) {
+  const $ = id => get("lrn-" + id), tip = $("tip"), days = L.days, fixes = L.fixes || [], tips = {}, groups = [];
+  const byPr = Object.fromEntries(fixes.map(f => [f.pr, f]));
+  const mark = (fig, k, day, label) => { const g = svgEl(fig, "g", { class: "b", tabindex: 0, "data-k": k, "aria-label": label }); groups.push([g, day]); return g; };
+
+  // the first picture: a bar per Day, the repeats with no fix yet at the bottom and those past a fix on top
+  const epi = $("epi"), E = { w: 960, l: 56, r: 944, t: 66, b: 292 }, SW = (E.r - E.l) / days.length, BW = Math.min(34, SW * .6);
+  const most = Math.max(1, ...days.map(x => x.n)), step = most > 30 ? 10 : 5, top = Math.ceil(most / step) * step, U = (E.b - E.t) / top;
+  const ep = (n, a, txt, parent) => svgEl(epi, n, a, txt, parent);
+  epi.replaceChildren();
+  epi.setAttribute("viewBox", `0 0 ${E.w} ${E.b + 38}`);
+  const defs = ep("defs", {}), pat = ep("pattern", { id: "lrn-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+  ep("rect", { class: "l-hatchl", width: 2.2, height: 6 }, null, pat);
+  for (let v = 0; v <= top; v += step) {
+    ep("path", { class: v ? "l-grid" : "l-base", d: `M${E.l} ${E.b - v * U}H${E.r}` });
+    ep("text", { class: "l-tick", x: E.l - 10, y: E.b - v * U + 4, "text-anchor": "end" }, String(v));
+  }
+  ep("text", { class: "l-axis", x: E.l - 40, y: 14 }, "times an old problem came back");
+  days.forEach((x, i) => {
+    const cx = E.l + (i + .5) * SW, x0 = cx - BW / 2, nb = x.before.length, np = x.past_fix.length;
+    const g = mark(epi, `d${x.day}`, x.day, `Day ${x.day}: ${x.n} came back, ${np} although a fix was in place`);
+    ep("rect", { class: "hit", x: cx - SW / 2 + 3, y: E.t - 6, width: SW - 6, height: E.b - E.t + 30, rx: 3 }, null, g);
+    // a segment from v0 to v1, its top rounded when it is the bar's top, 2 px of card between the two
+    const seg = (cls, v0, v1, cap) => {
+      const y1 = E.b - v0 * U - (v0 ? 1 : 0), y0 = E.b - v1 * U + (cap ? 0 : 1), r = cap ? Math.min(4, (y1 - y0) / 2) : 0;
+      const d = `M${x0} ${y1}V${y0 + r}Q${x0} ${y0} ${x0 + r} ${y0}H${x0 + BW - r}Q${x0 + BW} ${y0} ${x0 + BW} ${y0 + r}V${y1}Z`;
+      ep("path", { class: cls, d }, null, g);
+      if (cls === "l-past") ep("path", { class: "l-pasth", d }, null, g);
+    };
+    if (nb) seg("l-before", 0, nb, !np);
+    if (np) seg("l-past", nb, x.n, true);
+    ep("text", { class: x.n ? "l-n" : "l-n0", x: cx, y: E.b - x.n * U - 7, "text-anchor": "middle" }, String(x.n), g);
+    ep("text", { class: "l-tick", x: cx, y: E.b + 18, "text-anchor": "middle" }, String(x.day), g);
+    tips[`d${x.day}`] = { t: `Day ${x.day} · ${x.n ? `${x.n} came back` : "nothing came back"}`, l: [
+      nb && `${nb} with no fix in place for it yet: ${lrnIds(x.before, 8)}`,
+      np && `${np} although a fix was in place: ${lrnIds(x.past_fix, 8)}`,
+      x.fixes.length && `Fixes that count from this Day: ${x.fixes.map(p => "#" + p).join(", ")}`] };
+  });
+  ep("text", { class: "l-axis", x: (E.l + E.r) / 2, y: E.b + 34, "text-anchor": "middle" }, "Day");
+  days.forEach((x, i) => {
+    if (!x.fixes.length) return;
+    const fx = E.l + i * SW, g = mark(epi, `f${x.day}`, x.day, `${x.fixes.length} fixes count from Day ${x.day}`);
+    ep("path", { class: "hitl", d: `M${fx} ${E.t - 40}V${E.b}` }, null, g);
+    ep("path", { class: "l-fixline", d: `M${fx} ${E.t - 16}V${E.b}` }, null, g);
+    ep("path", { class: "l-fixcap", d: `M${fx} ${E.t - 26} ${fx + 5} ${E.t - 21} ${fx} ${E.t - 16} ${fx - 5} ${E.t - 21}Z` }, null, g);
+    ep("text", { class: "l-fixt", x: fx, y: E.t - 32, "text-anchor": "middle" }, x.fixes.length === 1 ? `#${x.fixes[0]}` : `${x.fixes.length} fixes`, g);
+    tips[`f${x.day}`] = { t: `Counting from Day ${x.day}`, l: x.fixes.map(p => byPr[p]).map(f => `#${f.pr}, merged ${lrnDate(f.merged)}: ${f.title}`) };
+  });
+  epi.setAttribute("aria-label", "Times an old problem came back, by Day: " + days.map(x => `Day ${x.day}, ${x.n}`).join("; ") + ".");
+
+  // the second picture: a row per fix, a grey dot at its times before and a ticked or crossed one at its times after
+  const dmb = $("dmb"), D = { w: 1100, x0: 470, x1: 860, vx: 892, t: 46, rh: 50 };
+  const dm = (n, a, txt, parent) => svgEl(dmb, n, a, txt, parent);
+  dmb.replaceChildren();
+  const H = D.t + Math.max(1, fixes.length) * D.rh + 8;
+  dmb.setAttribute("viewBox", `0 0 ${D.w} ${H}`);
+  const most2 = Math.max(1, ...fixes.map(f => Math.max(f.before, f.after))), step2 = most2 > 20 ? 10 : 5, top2 = Math.ceil(most2 / step2) * step2, U2 = (D.x1 - D.x0) / top2;
+  dm("text", { class: "l-axis", x: D.x0, y: 14 }, "times the problems it names happened");
+  for (let v = 0; v <= top2; v += step2) {
+    dm("path", { class: v ? "l-grid" : "l-base", d: `M${D.x0 + v * U2} ${D.t - 8}V${H - 8}` });
+    dm("text", { class: "l-tick", x: D.x0 + v * U2, y: D.t - 14, "text-anchor": "middle" }, String(v));
+  }
+  if (!fixes.length) dm("text", { class: "l-sub", x: 12, y: D.t + 26 }, "specs/fixes.json names no fix yet.");
+  fixes.forEach((f, i) => {
+    const y = D.t + i * D.rh, cy = y + D.rh / 2, xb = D.x0 + f.before * U2, xa = D.x0 + f.after * U2, on = f.from_day != null;
+    const g = mark(dmb, `p${f.pr}`, f.from_day, `#${f.pr}: ${f.before} before, ${on ? `${f.after} after` : "counts from no Day yet"}`);
+    dm("rect", { class: "hit", x: 0, y: y + 1, width: D.w, height: D.rh - 2, rx: 4 }, null, g);
+    dm("text", { class: "l-name", x: 12, y: cy - 2 }, lrnCut(f.title, 62), g);
+    dm("text", { class: "l-sub", x: 12, y: cy + 14 }, `#${f.pr} · merged ${lrnDate(f.merged)} · ${on ? `counts from Day ${f.from_day}` : "counts from no Day yet"}`, g);
+    if (on) dm("path", { class: "l-link", d: `M${Math.min(xa, xb)} ${cy}H${Math.max(xa, xb)}` }, null, g);
+    dm("circle", { class: "l-dot-before", cx: xb, cy, r: 6.5 }, null, g);
+    dm("text", { class: "l-n", x: xb + (on && xa > xb ? -13 : 13), y: cy + 4, "text-anchor": on && xa > xb ? "end" : "start" }, String(f.before), g);
+    if (on) {
+      const back = f.after > 0, a = svgEl(dmb, "g", { transform: `translate(${xa},${cy})` }, null, g);
+      svgEl(dmb, "circle", { class: back ? "l-dot-back" : "l-dot-held", r: 7.5 }, null, a);
+      svgEl(dmb, "path", { class: "l-on", d: back ? "M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6" : "M-3.2 .2-.9 2.6 3.4-2.4" }, null, a);
+      if (xa !== xb) dm("text", { class: "l-n", x: xa + (xa > xb ? 13 : -13), y: cy + 4, "text-anchor": xa > xb ? "start" : "end" }, String(f.after), g);
+    }
+    dm("text", { class: "l-verdict", x: D.vx, y: cy - 1 }, !on ? "no Day since it yet" : f.after ? `came back ${lrnTimes(f.after)}` : "nothing came back", g);
+    dm("text", { class: "l-sub", x: D.vx, y: cy + 14 }, on ? `in the ${lrnDays(f.days_since)} since` : "its first Day is still to merge", g);
+    dm("path", { class: "l-row", d: `M0 ${y + D.rh}H${D.w}` });
+    tips[`p${f.pr}`] = { t: `#${f.pr} · merged ${lrnDate(f.merged)}${on ? ` · counts from Day ${f.from_day}` : ""}`, l: [
+      `Before: ${f.before}. ${on ? `After: ${f.after}, in ${lrnDays(f.days_since)}.` : "After: nothing yet to count."}`,
+      `Meant to stop: ${lrnIds(f.stops, 8)}`, f.after && `Came back as: ${lrnIds(f.after_ids, 8)}`], q: f.title };
+  });
+  dmb.setAttribute("aria-label", "Before and after each fix: " + fixes.map(f => `#${f.pr}, ${f.before} before, ${f.after} after`).join("; ") + ".");
+
+  // the figures, the folded text and the tables
+  const inForce = fixes.filter(f => f.from_day != null), first = days.find(x => x.n), last = [...days].reverse().find(x => x.n);
+  const fig = (num, what, sub) => h("div", null, h("span", { class: "num" }, String(num)), h("span", { class: "txt" }, h("b", { class: "what" }, what), h("span", { class: "sub" }, sub)));
+  $("figs").replaceChildren(
+    fig(L.repeats, "times an old problem came back", first ? `on Days ${first.day} to ${last.day}` : "on no Day yet"),
+    fig(L.past_fix, "of them although a fix was in place", "drawn red and hatched"),
+    fig(fixes.length, fixes.length === 1 ? "fix on record" : "fixes on record", "each names the defects it was meant to stop"),
+    fig(L.held, "with nothing back since", `of the ${inForce.length} that count from a Day`));
+  $("stamp").textContent = `Counted from the Days' Notes and specs/fixes.json at ${L.head || "?"}, to #${L.last_pr || "?"}, on ${(L.generated || "").slice(0, 10)}.`;
+  const peak = days.reduce((a, x) => x.n > a.n ? x : a, days[0]), held = inForce.filter(f => !f.after), worst = inForce.reduce((a, f) => !a || f.after > a.after ? f : a, null);
+  const finds = [
+    ["", "Old problems keep coming back.", L.repeats ? `${L.repeats} times over ${lrnDays(days.length)}, the most on Day ${peak.day} (${peak.n}).` : "Not once yet."],
+    [L.past_fix ? "fault" : "good", `${L.past_fix} of the ${L.repeats} got past a fix.`, `The other ${L.repeats - L.past_fix} were problems no fix named yet, or not yet in force.`],
+    held.length && ["good", "Some fixes held.", `Nothing came back after ${held.map(f => "#" + f.pr).join(", ")}, ${lrnDays(Math.min(...held.map(f => f.days_since)))} or more since each.`],
+    worst && worst.after && ["fault", `#${worst.pr} held least.`, `Its problems came back ${lrnTimes(worst.after)} after it, against ${worst.before} before.`],
+    ...(L.problems || []).map(p => ["fault", "A row of specs/fixes.json reads wrong.", p])].filter(Boolean);
+  $("finds").replaceChildren(...finds.map(([c, b, t]) => h("li", { class: c || null }, h("b", null, b), " ", rich(t))));
+  $("bends").replaceChildren(...[
+    ["A repeat is what the Notes tag.", "A defect that repeats an earlier one with no `same-as:` line is not counted. Days 14 and 15 were tagged by hand after they closed."],
+    ["A fix is what `specs/fixes.json` lists.", "A rule or a gate added with no row there is not drawn, and a row names only the defects its pull request said it was for."],
+    ["Before and after are not the same span.", "Before covers every earlier Day, after only the Days since: a fix with fewer Days since has had fewer chances to fail."],
+    ["A Day counts whole.", "A fix that merged in the middle of a Day counts only from the next Day whose spec merged."]].map(([b, t]) => h("li", null, h("b", null, rich(b)), " ", rich(t))));
+  const table = (id, head, rows) => $(id).replaceChildren(h("thead", null, h("tr", null, head.map(c => h("th", null, c)))), h("tbody", null, rows.map(r => h("tr", null, r.map(c => h("td", null, String(c)))))));
+  table("days", ["Day", "Came back", "With no fix yet", "Although a fix was in place", "Fixes that count from it"],
+    days.map(x => [x.day, x.n, x.before.length, x.past_fix.length, x.fixes.map(p => "#" + p).join(", ")]));
+  table("fixes", ["Fix", "Merged", "Counts from", "Meant to stop", "Before", "After", "Came back as", "Days since"],
+    fixes.map(f => [`#${f.pr}`, lrnDate(f.merged), f.from_day == null ? "no Day yet" : `Day ${f.from_day}`, f.stops.join(", "), f.before, f.after, f.after_ids.join(", "), f.days_since]));
+
+  [epi, dmb].forEach(f => pointerBox(f, tip, key => key != null && tips[key] ? tipFill(tip, tips[key]) : false, b => b.getAttribute("data-k")));
+  onDay.push(day => groups.forEach(([g, d]) => g.classList.toggle("mk-dim", day != null && d !== day)));
+  return epi;
+}
+
 /* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10) opens every fold around it, and
    scrolls to it. A link to a graph that has left the page (#g3, #g4, #g5, #g8, #g9) lands on the empty anchor in the
    section drawn in its place, which is in no fold. */
@@ -3625,7 +3760,7 @@ function draw(M, DATA) {
      growth rings and graph 10 as an actogram, in their places; graphs 2, 7 and 10 are folded under theirs */
   // graph 10 turns to a date the actogram's row names, once both are drawn
   const onDate = [];
-  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
+  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["lrn", lrnDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
