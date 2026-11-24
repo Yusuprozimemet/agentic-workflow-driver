@@ -346,7 +346,8 @@ def pooled(one, runs, paths, out):
     # Each reply is kept, so a count can be read back to what the agent said.
     os.makedirs(os.path.join(out, "replies"), exist_ok=True)
     for job, reply in zip(jobs, got):
-        name = os.path.basename(paths[job % n])
+        # the path under `out`: an audit's checkouts share the repository's name
+        name = os.path.relpath(paths[job % n], out).replace(os.sep, "-")
         with open(
             os.path.join(out, "replies", f"{name}-run{job // n + 1}.txt"),
             "w",

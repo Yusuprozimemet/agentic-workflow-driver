@@ -304,7 +304,20 @@
    "at": "1d1361a4d92b03c7c9f07d8f5ee304aad258f505",
    "base": "be7153003a67e7112da754111e6cd3c35910eca5",
    "prompt": "recheck: Day 14, specs/day-14-the-level-2-record.md. Read only the latest commit's diff (`git show HEAD`): the fixes D14.33 made to a first recheck's findings: the Tracks paragraph (C1 lands before C2), C14.8's and C14.16's `Test:` lines (git grep -l from the root, exit code 1 asserted, names spelled in parts, the break runs the test), and the D14.33 line. Check each is true, testable, can fail (e.g. does git grep -l exit 1 with no match and 128 outside a repo; does track-red's TEST_FIELD still take only the first backticked name given the reworded lines, with `__file__` now backticked), and agrees with the rest of the spec. Report only, findings ranked.",
-   "known": []
+   "known": [
+    {
+     "id": "D14.69",
+     "escape": true,
+     "names": "(?s)(Verify|replay|evidence\\.py|rehears)[^\\n]{0,200}exit\\w* (with )?(code )?1|exit\\w* (with )?(code )?1[^\\n]{0,200}(Verify|replay|evidence\\.py|rehears)|nothing, exit 1",
+     "why": "Verify's git grep lines exit 1 when they find nothing, their pass, and the replay reads the exit code: in the text this recheck read, outside the diff it was asked about. Found by the close's rehearsal; here the pattern names Verify or the replay too, since every finding on this diff is about git grep's exit code."
+    }
+   ]
   }
- ]
+ ],
+ "recorded": {
+  "named": 30,
+  "clean": 0,
+  "runs": 3,
+  "brief": "19c1a5e"
+ }
 }

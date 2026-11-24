@@ -524,6 +524,8 @@ class AuditRunTest(unittest.TestCase):
         self.assertEqual("Day 44 #9 recheck, clean: none, none", lines[2])
         self.assertEqual("named: 1 of 1 name the known fault at worst (1, 1)", lines[3])
         state = os.path.join(self.repo, ".claude", "state", "agent-cases", "spec-auditor")
+        # every case's checkout has the repository's name: each reply is kept all the same
+        self.assertEqual(4, len(os.listdir(os.path.join(state, "replies"))))
         with open(os.path.join(state, "agents.json"), encoding="utf-8") as f:
             self.assertEqual("audit\n", json.load(f)["spec-auditor"]["prompt"])
         with open(self.cases, encoding="utf-8") as f:
