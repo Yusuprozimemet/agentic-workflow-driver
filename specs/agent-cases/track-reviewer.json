@@ -12,10 +12,26 @@
    "at": "f9256656553e242cb133adcbc6dc6816a50f243a",
    "file": "specs/agent-cases/track-reviewer/day-13-a.md",
    "known": [
-    {"id": "D13.31", "names": "differs:|never (print|match)|cannot match|once per test|one run per test|one (seen.red )?line per", "why": "The seen-red --expect named the refusal's text, which same() never prints, and one run was to print three seen red: lines."},
-    {"id": "D13.32", "names": "resolv|short path|8\\.3|~1|config\\.load", "why": "test_same_origin compared stderr with the project path unresolved; config.load resolves it, and the Windows temporary folder is a short path."},
-    {"id": "D13.33", "names": "finally|releas|lock.{0,40}remov|remov.{0,40}lock|no state folder", "why": "The lock file was the sign of no lock, but run's finally removes it on main too."},
-    {"id": "D13.34", "names": "one (positional|pattern)|nargs|six (globs|patterns)|run-steps\\.py", "why": "test-parallel.py was given six patterns where it takes one, and run-steps.py's docstring order was left out."}
+    {
+     "id": "D13.31",
+     "names": "differs:|never (print|match)|cannot match|once per test|one run per test|one (seen.red )?line per",
+     "why": "The seen-red --expect named the refusal's text, which same() never prints, and one run was to print three seen red: lines."
+    },
+    {
+     "id": "D13.32",
+     "names": "resolv|short path|8\\.3|~1|config\\.load",
+     "why": "test_same_origin compared stderr with the project path unresolved; config.load resolves it, and the Windows temporary folder is a short path."
+    },
+    {
+     "id": "D13.33",
+     "names": "finally|releas|lock.{0,40}remov|remov.{0,40}lock|no state folder",
+     "why": "The lock file was the sign of no lock, but run's finally removes it on main too."
+    },
+    {
+     "id": "D13.34",
+     "names": "one (positional|pattern)|nargs|six (globs|patterns)|run-steps\\.py",
+     "why": "test-parallel.py was given six patterns where it takes one, and run-steps.py's docstring order was left out."
+    }
    ]
   },
   {
@@ -27,9 +43,21 @@
    "at": "4bb93bf592c9c6887c1319dad16a7e443671bf8e",
    "file": "specs/agent-cases/track-reviewer/day-13-d.md",
    "known": [
-    {"id": "D13.44", "names": "heartbeat|PATCH|before the (first |run's )?issue|depends on (the )?load", "why": "The brief compared all of the fake gh's api calls, which the session's heartbeat adds to by a number that depends on load."},
-    {"id": "D13.45", "names": "\\brun\\b.{0,60}(required|positional|missing)|(required|positional).{0,60}\\brun\\b|run=\\[", "why": "The brief left out box's required run argument, an error in setup and not a red."},
-    {"id": "D13.46", "names": "any (AssertionError|assertion)|AssertionError.{0,60}(any|every|setup)|--expect \"?differs", "why": "seen red's --expect \"AssertionError\" matches any assertion."}
+    {
+     "id": "D13.44",
+     "names": "heartbeat|PATCH|before the (first |run's )?issue|depends on (the )?load",
+     "why": "The brief compared all of the fake gh's api calls, which the session's heartbeat adds to by a number that depends on load."
+    },
+    {
+     "id": "D13.45",
+     "names": "\\brun\\b.{0,60}(required|positional|missing)|(required|positional).{0,60}\\brun\\b|run=\\[",
+     "why": "The brief left out box's required run argument, an error in setup and not a red."
+    },
+    {
+     "id": "D13.46",
+     "names": "any (AssertionError|assertion)|AssertionError.{0,60}(any|every|setup)|--expect \"?differs",
+     "why": "seen red's --expect \"AssertionError\" matches any assertion."
+    }
    ]
   },
   {
@@ -41,8 +69,17 @@
    "at": "78f430df7dcd2122ebbf5510a823f5e3ffb1d6ca",
    "file": "specs/agent-cases/track-reviewer/day-13-f.md",
    "known": [
-    {"id": "D13.64", "names": "shallow|depth|fetch-depth", "why": "The test read 5d4f1b5 with git show, which fails in CI's depth-1 clone."},
-    {"id": "D13.65", "escape": true, "names": "\\[\\d+ chars\\]|chars\\]|shorten|truncat|maxDiff|refus", "why": "The brief's assertEqual on two lists gave a \"[331 chars]\" failure line, which seen-red.py refused; found by Track F's own run, after the track-reviewer's pass."}
+    {
+     "id": "D13.64",
+     "names": "shallow|depth|fetch-depth",
+     "why": "The test read 5d4f1b5 with git show, which fails in CI's depth-1 clone."
+    },
+    {
+     "id": "D13.65",
+     "escape": true,
+     "names": "\\[\\d+ chars\\]|chars\\]|shorten|truncat|maxDiff|refus",
+     "why": "The brief's assertEqual on two lists gave a \"[331 chars]\" failure line, which seen-red.py refused; found by Track F's own run, after the track-reviewer's pass."
+    }
    ]
   },
   {
@@ -54,8 +91,16 @@
    "at": "f707bb3850958573209249144a59e1d20e8aa0d7",
    "file": "specs/agent-cases/track-reviewer/day-14-b.md",
    "known": [
-    {"id": "D14.42", "names": "alternation|whole output|one (matching )?test|once per test|one run per test|per test", "why": "One seen-red.py --expect with an alternation: one test's red would pass all three."},
-    {"id": "D14.43", "names": "\\bT2\\b|\\bT3\\b|already (defines|has)|duplicat", "why": "The brief redefined T2 and T3, which tests/test_status.py already has."}
+    {
+     "id": "D14.42",
+     "names": "alternation|whole output|one (matching )?test|once per test|one run per test|per test",
+     "why": "One seen-red.py --expect with an alternation: one test's red would pass all three."
+    },
+    {
+     "id": "D14.43",
+     "names": "\\bT2\\b|\\bT3\\b|already (defines|has)|duplicat",
+     "why": "The brief redefined T2 and T3, which tests/test_status.py already has."
+    }
    ]
   },
   {
@@ -67,8 +112,16 @@
    "at": "2e24e869c98df053c1f80a73e39be23ea805e48e",
    "file": "specs/agent-cases/track-reviewer/day-14-c2.md",
    "known": [
-    {"id": "D14.50", "names": "\\[\\d+ chars\\]|chars\\]|shorten|truncat|not what the test prints|maxDiff", "why": "The expected red is one unittest shortens to \"[40 chars]\", which seen-red.py refuses."},
-    {"id": "D14.51", "names": "already (report|flag|fail)|on main already|extend-exclude|older|\\b89\\b", "why": "Removing the imports ruff flags would remove older unused imports in scripts/ that ruff flagged on main already."}
+    {
+     "id": "D14.50",
+     "names": "\\[\\d+ chars\\]|chars\\]|shorten|truncat|not what the test prints|maxDiff",
+     "why": "The expected red is one unittest shortens to \"[40 chars]\", which seen-red.py refuses."
+    },
+    {
+     "id": "D14.51",
+     "names": "already (report|flag|fail)|on main already|extend-exclude|older|\\b89\\b",
+     "why": "Removing the imports ruff flags would remove older unused imports in scripts/ that ruff flagged on main already."
+    }
    ]
   },
   {
@@ -80,11 +133,32 @@
    "at": "d49a1333e7ed892de2c26a6aee7fffe5f8c873f2",
    "file": "specs/agent-cases/track-reviewer/day-15-c.md",
    "known": [
-    {"id": "D15.27", "names": "six tests|one match|once per test|one run per test|per test|alternation", "why": "One seen-red.py run for six tests passes on one match while the other five error."},
-    {"id": "D15.28", "names": "FileNotFound|never (creat|made|make)|mkdir|makedirs|does not exist", "why": "The live log's state folder was never made: the four C15.12 tests would stop on FileNotFoundError."},
-    {"id": "D15.29", "names": "no estimate|second (part|red)|has no kind", "why": "Every C15.12 test asserted the in progress: line first, so the spec's second red was seen by none."},
-    {"id": "D15.30", "names": "(no|without|missing|give only).{0,80}running|running.{0,80}(no|missing|guess)", "why": "Two tests had no expected running: line."},
-    {"id": "D15.31", "escape": true, "names": "assertEqual\\(prs|\\[12\\]|list.{0,40}assertEqual|assertEqual.{0,40}list", "why": "The brief forbade comparing a list with assertEqual, then did so in C15.11's test; the implementer reported it."}
+    {
+     "id": "D15.27",
+     "names": "six tests|one match|once per test|one run per test|per test|alternation",
+     "why": "One seen-red.py run for six tests passes on one match while the other five error."
+    },
+    {
+     "id": "D15.28",
+     "names": "FileNotFound|never (creat|made|make)|mkdir|makedirs|does not exist",
+     "why": "The live log's state folder was never made: the four C15.12 tests would stop on FileNotFoundError."
+    },
+    {
+     "id": "D15.29",
+     "names": "no estimate|second (part|red)|has no kind",
+     "why": "Every C15.12 test asserted the in progress: line first, so the spec's second red was seen by none."
+    },
+    {
+     "id": "D15.30",
+     "names": "(no|without|missing|give only).{0,80}running|running.{0,80}(no|missing|guess)",
+     "why": "Two tests had no expected running: line."
+    },
+    {
+     "id": "D15.31",
+     "escape": true,
+     "names": "assertEqual\\(prs|\\[12\\]|list.{0,40}assertEqual|assertEqual.{0,40}list",
+     "why": "The brief forbade comparing a list with assertEqual, then did so in C15.11's test; the implementer reported it."
+    }
    ]
   },
   {
@@ -96,8 +170,18 @@
    "base": "f9256656553e242cb133adcbc6dc6816a50f243a",
    "at": "23a87f38f5c207b0bca90eaf61f6b18a572a390a",
    "known": [
-    {"id": "D13.67", "escape": true, "names": "cause: brief|found: CI|closed list|not (a|one of)[^.]{0,40}(cause|found)|allowed (values|words)", "why": "The body's Defect lines wrote fields off the closed lists (cause: brief, found: CI); found at the close."},
-    {"id": "D13.68", "escape": true, "names": "(no|without|lacks?|missing|never) (recorded )?break|break.{0,60}\\b(new|C13\\.1|C13\\.2)\\b|\\b(C13\\.1|C13\\.2)\\b.{0,60}break", "why": "Breaks were recorded only for the holds: C13.1 and C13.2, both new, had seen red and no break the replay could run; found by the close's rehearsal."}
+    {
+     "id": "D13.67",
+     "escape": true,
+     "names": "cause: brief|found: CI|closed list|not (a|one of)[^.]{0,40}(cause|found)|allowed (values|words)",
+     "why": "The body's Defect lines wrote fields off the closed lists (cause: brief, found: CI); found at the close."
+    },
+    {
+     "id": "D13.68",
+     "escape": true,
+     "names": "(no|without|lacks?|missing|never) (recorded )?break|break.{0,60}\\b(new|C13\\.1|C13\\.2)\\b|\\b(C13\\.1|C13\\.2)\\b.{0,60}break",
+     "why": "Breaks were recorded only for the holds: C13.1 and C13.2, both new, had seen red and no break the replay could run; found by the close's rehearsal."
+    }
    ]
   },
   {
@@ -109,7 +193,12 @@
    "base": "38570d89e24865d039e100e1c5a55cd91929b558",
    "at": "2641ffed00f1fbf8bc9813c54b203a2db7b0105b",
    "known": [
-    {"id": "D15.33", "escape": true, "names": "(no|without|lacks?|missing|never) (recorded )?break|break.{0,60}\\b(new|C15\\.[12357])\\b|\\bC15\\.[12357]\\b.{0,60}break", "why": "C15.1, C15.2, C15.3, C15.5 and C15.7, all new, had a seen red line and no recorded break; found by the close's rehearsal."}
+    {
+     "id": "D15.33",
+     "escape": true,
+     "names": "(no|without|lacks?|missing|never) (recorded )?break|break.{0,60}\\b(new|C15\\.[12357])\\b|\\bC15\\.[12357]\\b.{0,60}break",
+     "why": "C15.1, C15.2, C15.3, C15.5 and C15.7, all new, had a seen red line and no recorded break; found by the close's rehearsal."
+    }
    ]
   },
   {
@@ -123,5 +212,11 @@
    "known": [],
    "why": "A clean case: the track-reviewer found nothing on its diff, and no later Defect names #271."
   }
- ]
+ ],
+ "recorded": {
+  "named": 9,
+  "clean": 1,
+  "runs": 3,
+  "brief": "a004055"
+ }
 }
