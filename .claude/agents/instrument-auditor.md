@@ -113,6 +113,7 @@ with sync_playwright() as p:
         shot(page, sel, name)
     for g in GRAPHS:
         shot(page, f"#{g}", g)
+    shot(page, "#lrn", "lrn", "(Graph 13: Does it learn from its mistakes?)")
     # Each closed section on its own.
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
@@ -120,6 +121,7 @@ with sync_playwright() as p:
     shot(page, "#attention-never", "attention-never", "(Hold, never proved)")
     shot(page, "#attention-known", "attention-known", "(Expected, not counted)")
     shot(page, "#g7-days", "g7-byday", "(By Day: each Day's catches)")
+    shot(page, "#lrn", "lrn-open", "(Graph 13, its three folds opened)")
     shot(page, "details:has(#g12-ladder)", "g12-ladder", "(the ladder)")
     for g in GRAPHS:
         shot(page, f"#{g} details.exact:has(table#{g}-table)", f"{g}-exact", "(Exact numbers)")
@@ -186,7 +188,7 @@ page changed, or this script is out of date), never a reason to skip the view.
 Go down this list in order. Every row gets an answer in the report, "not checked, and why" included.
 If the page has a view this list lacks (a new graph, a new button), add it at the end and say so.
 Keep about two minutes a row: a recount that would take longer is "not checked, and why", not a
-reason to stop before row 18. Then read each `wide-NN.png` the script printed (about 3 minutes):
+reason to stop before row 19. Then read each `wide-NN.png` the script printed (about 3 minutes):
 a box that is cut off or overlaps is a finding.
 
 | # | View | Pictures |
@@ -203,13 +205,14 @@ a box that is cut off or overlaps is a finding.
 | 10 | Graph 6: Do the spec and the code still agree? | `g6`, `g6-exact` |
 | 11 | Graph 7: Does the checking work, and is it worth it? (the pipeline) | `g7`, `g7-exact` |
 | 12 | Graph 7, By Day: each Day's catches side by side | `g7-byday` |
-| 13 | Graph 8: What did it cost? By who | `g8`, `g8-exact` |
-| 14 | Graph 8, By Day | `g8-byday` |
-| 15 | Graph 9: Where did the work go? | `g9`, `g9-exact` |
-| 16 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
-| 17 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
-| 18 | What these figures cannot see; Not measured yet | `page-NN` |
-| 19 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
+| 13 | Graph 13: Does it learn from its mistakes? Its two pictures (repeats by Day, before and after each fix), then its three folds opened | `lrn`, `lrn-open` |
+| 14 | Graph 8: What did it cost? By who | `g8`, `g8-exact` |
+| 15 | Graph 8, By Day | `g8-byday` |
+| 16 | Graph 9: Where did the work go? | `g9`, `g9-exact` |
+| 17 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
+| 18 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
+| 19 | What these figures cannot see; Not measured yet | `page-NN` |
+| 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 

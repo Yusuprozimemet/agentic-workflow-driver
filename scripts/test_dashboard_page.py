@@ -1546,6 +1546,68 @@ class ActogramPageTest(unittest.TestCase):
         self.assertIn('"Not measured yet: ", rich(g.empty)', loop[:loop.index("});")])
 
 
+# lrnDraw() on the model of the data from stdin, on a document that keeps every node: how many marks of each kind it
+# drew, the words of its figures, and which marks a Day's button dims.
+LRN = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {} };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  const is = (root, c) => all(root).filter(e => has(e, c)).length;
+  const keys = (root, re) => all(root).filter(e => e.attrs && re.test(e.attrs["data-k"] || "")).map(e => e.attrs["data-k"]);
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const days = [], e = $("lrn-epi"), d = $("lrn-dmb");
+  lrnDraw(model(DATA).lrn, $, days);
+  days.forEach(f => f(8));
+  ({ bars: keys(e, /^d/), lines: keys(e, /^f/), rows: keys(d, /^p/), before: is(e, "l-before"), past: is(e, "l-past"), hatch: is(e, "l-pasth"),
+     held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), dim: [...all(e), ...all(d)].filter(x => has(x, "mk-dim")).map(x => x.attrs["data-k"]),
+     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(), table: $("lrn-fixes").kids[1].kids.length })`, ctx)));
+"""
+
+
+class LearnPageTest(unittest.TestCase):
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def test_does_it_learn_draws_a_bar_per_day_a_line_per_fix_day_and_a_row_per_fix_red_never_alone(self):
+        def fix(pr, day, before, after):
+            return dict(pr=pr, title=f"fix {pr}", merged="2026-11-10T08:00:00Z", from_day=day, stops=["D07.1"], before=before,
+                        after=after, after_ids=[f"D08.{i}" for i in range(after)], days_since=2)
+        learning = dict(head="abc1234", last_pr=9, generated="2026-11-24", repeats=5, past_fix=2, held=1, problems=[],
+                        days=[dict(day=7, n=2, before=["D07.2", "D07.3"], past_fix=[], fixes=[]),
+                              dict(day=8, n=3, before=["D08.1"], past_fix=["D08.2", "D08.3"], fixes=[112]),
+                              dict(day=9, n=0, before=[], past_fix=[], fixes=[133])],
+                        fixes=[fix(112, 8, 4, 2), fix(133, 9, 1, 0), fix(150, None, 1, 0)])
+        out = node(LRN, data(learning=learning))
+        self.assertEqual(out["bars"], ["d7", "d8", "d9"])
+        self.assertEqual(out["lines"], ["f8", "f9"])
+        self.assertEqual(out["rows"], ["p112", "p133", "p150"])
+        # a grey segment for each Day with a repeat before a fix; each red segment carries its hatch
+        self.assertEqual((out["before"], out["past"], out["hatch"]), (2, 1, 1))
+        # a fix in force gets a ticked or a crossed dot after it; one that counts from no Day yet gets none
+        self.assertEqual((out["held"], out["back"]), (1, 1))
+        # Day 8's button dims every mark of another Day: the bars, the fix lines and the fixes' rows
+        self.assertEqual(sorted(out["dim"]), ["d7", "d9", "f9", "p133", "p150"])
+        self.assertIn("5 times an old problem came back", out["figs"])
+        self.assertIn("2 of them although a fix was in place", out["figs"])
+        self.assertIn("1 with nothing back since of the 2 that count from a Day", out["figs"])
+        self.assertEqual(out["table"], 3)
+
+    def test_does_it_learn_without_a_merged_day_says_so_under_not_measured(self):
+        self.assertIn("empty", model(data(learning=dict(days=[], fixes=[])))["lrn"])
+        self.assertIn("empty", model(data())["lrn"])
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
@@ -1640,13 +1702,13 @@ class PageFilesTest(unittest.TestCase):
 
     def test_the_graphs_sit_in_order_under_five_group_headings(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|atp|rng|act|rfx)"[ >]', html),
-                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "atp", "rng", "act", "rfx"])
+        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|lrn|atp|rng|act|rfx)"[ >]', html),
+                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "lrn", "atp", "rng", "act", "rfx"])
         heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
                  "Can it be left alone?"]
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
         starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "act": 3, "g10": 3,
+        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "lrn": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "act": 3, "g10": 3,
                  "rfx": 4}
         for n, g in group.items():
             at = re.search(f'id="{n}"[ >]', html).start()
@@ -1654,7 +1716,8 @@ class PageFilesTest(unittest.TestCase):
         self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
         self.assertLess(html.index('id="g6-fold">'), html.index('id="prf">'))
         self.assertLess(html.index('id="prf">'), html.index('id="g7-fold">'))
-        self.assertLess(html.index('id="g7-fold">'), html.index('id="atp" '))
+        self.assertLess(html.index('id="g7-fold">'), html.index('id="lrn">'))
+        self.assertLess(html.index('id="lrn">'), html.index('id="atp" '))
         self.assertLess(html.index('id="atp" '), html.index('id="rng">'))
         self.assertLess(html.index('id="rng">'), html.index('id="act">'))
         self.assertLess(html.index('id="act">'), html.index('id="g10-fold">'))
