@@ -288,6 +288,13 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
   jobmatch-microservices, these are the counts `docs/paper/success-criteria.md` judges H1–H3 by; its
   amendment maps `process` and the `found:` values above.
 
+  The Defect lines are the one record; the close's views of them are printed, not written:
+  `python scripts/close-views.py specs/day-NN-slug.md` prints the Defects bullet of the Day's
+  entry in `docs/lab-notebook.md`, its "Escapes per day" cell and the closing PR's "## Defects"
+  section, counted as `spec-drift.py` counts them. Paste them unchanged; a tag changes in the
+  Notes, and the script runs again. Written by hand, Day 12's entry counts 4 escapes and its
+  Notes hold 5 (D12.39).
+
   At a phase's last close, a reader who wrote none of it labels the defects of every Day of the
   phase again, blind ([`scripts/relabel.py`](../scripts/relabel.py), the `defect-rater` agent):
   the tagger has also written the work, and in jobmatch-microservices, on Days 21–28 a blind
