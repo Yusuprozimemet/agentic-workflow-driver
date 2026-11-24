@@ -1,4 +1,5 @@
 [tool.ruff]
-# The kit's scripts are in the kit's style, not this project's.
-extend-exclude = ["scripts"]
+# The kit's scripts are in the kit's style, not this project's; an agent case's brief is kept
+# as it was written.
+extend-exclude = ["scripts", "specs/agent-cases"]
 line-length = 100
