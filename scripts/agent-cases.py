@@ -17,6 +17,12 @@ specs/agent-cases/track-reviewer/ (briefs are never committed) and read against 
 when it was written, or a merged track's diff and body; the known answer each fault found after
 it, with a pattern a line under "Findings" naming it matches (`"escape": true` where nobody caught
 it on that draft and it was tagged by hand), or none for a clean case.
+For the spec-auditor (`"kind": "audit"`) a case is a Day's spec as the auditor first read it, or
+as a recheck read the fixes, checked out at that commit with `main` at its base, given the prompt
+the main session gave it then; `"beside"` puts another repository the spec reads as `../<name>`
+at its commit of that time. The known answer each fault taken from that report, or found later in
+text it read (`"escape": true`); a clean case is one whose report held no "must fix" or "should
+fix", and "note" lines leave it clean.
 
 An agent's answer differs from run to run, so this is a measurement, not a gate: it prints the
 worst of its runs beside the recorded count and exits 0. A reply it cannot read counts as 0, as
@@ -71,6 +77,15 @@ TRACK_PROMPTS = {
         "Report as your brief says; change nothing.\n"
     ),
 }
+AUDIT_PROMPT = (
+    "{prompt}\n\nThis directory is the repository: the spec's commit is HEAD ({at}), on `main`"
+    " ({base}).{beside} Report in your brief's Report form, its Findings section included;"
+    " change nothing.\n"
+)
+AUDIT_END = (
+    "Hand-offs to this day|Tracks walked|Who else reads|Assumed of the outside|Plan lines"
+    "|Suggested track order|Not checked"
+)
 
 
 def git(repo, *args):
@@ -184,22 +199,44 @@ def findings(reply):
     return m.group(1) if m else None
 
 
-def track_report(cases, replies, recorded):
-    """As review_report(), for the track-reviewer: per run, the known faults its findings name, and
-    the clean cases (none known) it reports no finding on. A finding counts only under "Findings":
-    the same words under "Held" were seen and let pass."""
+def track_calm(text):
+    return re.match(r"\s*(none|0)\b", text, re.I) is not None
+
+
+def audit_findings(reply):
+    """The spec-auditor's "Findings" section, up to the next section of its Report; None without
+    one. "Checks run" comes before it: a check's line is not a finding."""
+    m = re.search(rf"(?mi)^\W*Findings\b:?(.*?)(?=^\W*({AUDIT_END})|\Z)", reply, re.S)
+    return m.group(1) if m else None
+
+
+def audit_calm(text):
+    """No finding the main session must or should fix: a note is advice."""
+    return re.search(r"must fix|should fix", text, re.I) is None
+
+
+def label(case):
+    if "track" in case:
+        return f"Day {case['day']} {case['track']} {case['moment']}"
+    return f"Day {case['day']} #{case['pr']} {case['moment']}"
+
+
+def track_report(cases, replies, recorded, read=findings, calm_on=track_calm):
+    """As review_report(), for the track-reviewer and the spec-auditor: per run, the known faults
+    its findings name, and the clean cases (none known) it reports no finding on. A finding counts
+    only under "Findings": the same words under "Held" were seen and let pass."""
     said = [[] for _ in cases]
     named = set()
     runs = []
     for run in replies:
         count = dict.fromkeys(TRACK_AXES, 0)
         for i, (case, reply) in enumerate(zip(cases, run)):
-            text = findings(reply)
+            text = read(reply)
             if text is None:
                 said[i].append("unreadable")
                 continue
             if not case["known"]:
-                calm = re.match(r"\s*(none|0)\b", text, re.I) is not None
+                calm = calm_on(text)
                 said[i].append("none" if calm else "findings")
                 count["clean"] += calm
                 continue
@@ -211,7 +248,7 @@ def track_report(cases, replies, recorded):
     lines = []
     for c, s in zip(cases, said):
         what = f"{len(c['known'])} known" if c["known"] else "clean"
-        lines.append(f"Day {c['day']} {c['track']} {c['moment']}, {what}: {', '.join(s)}")
+        lines.append(f"{label(c)}, {what}: {', '.join(s)}")
     if all(s == "unreadable" for each in said for s in each):
         return lines + ["no run counted"], None
     missed = [k["id"] for c in cases for k in c["known"] if k["id"] not in named]
@@ -229,9 +266,9 @@ def _writable(func, path, _):
     func(path)
 
 
-def checkout(case, out, tag=""):
-    """A clone of the case's repository (a local path, or owner/name on GitHub) at its commit;
-    `tag` keeps two cases on one pull request apart."""
+def checkout(case, out, tag="", dest=None):
+    """A clone of the case's repository (a local path, or owner/name on GitHub) at its commit, at
+    `dest` or in `out`; `tag` keeps two cases on one pull request apart."""
     repo = case["repo"]
     name = os.path.basename(repo.rstrip("/\\")) if os.path.isdir(repo) else repo.replace("/", "-")
     base = os.path.join(out, "clones", name)
@@ -239,10 +276,11 @@ def checkout(case, out, tag=""):
         source = repo if os.path.isdir(repo) else f"https://github.com/{repo}.git"
         os.makedirs(os.path.dirname(base), exist_ok=True)
         git(out, "clone", "--quiet", "--no-checkout", source, base)
-    # A squash-merged pull request's head may be reachable only from GitHub's pull ref.
-    pull = f"+pull/{case['pr']}/head:refs/cases/{case['pr']}"
-    subprocess.run(["git", "-C", base, "fetch", "--quiet", "origin", pull], capture_output=True)
-    path = os.path.join(out, f"{name}-{case['pr']}{tag}")
+    if "pr" in case:
+        # A squash-merged pull request's head may be reachable only from GitHub's pull ref.
+        pull = f"+pull/{case['pr']}/head:refs/cases/{case['pr']}"
+        subprocess.run(["git", "-C", base, "fetch", "--quiet", "origin", pull], capture_output=True)
+    path = dest or os.path.join(out, f"{name}-{case.get('pr')}{tag}")
     if os.path.isdir(path):
         shutil.rmtree(path, onerror=_writable)
     git(out, "clone", "--quiet", "--shared", "--no-checkout", base, path)
@@ -308,7 +346,8 @@ def pooled(one, runs, paths, out):
     # Each reply is kept, so a count can be read back to what the agent said.
     os.makedirs(os.path.join(out, "replies"), exist_ok=True)
     for job, reply in zip(jobs, got):
-        name = os.path.basename(paths[job % n])
+        # the path under `out`: an audit's checkouts share the repository's name
+        name = os.path.relpath(paths[job % n], out).replace(os.sep, "-")
         with open(
             os.path.join(out, "replies", f"{name}-run{job // n + 1}.txt"),
             "w",
@@ -318,10 +357,10 @@ def pooled(one, runs, paths, out):
     return [got[r * n : (r + 1) * n] for r in range(runs)]
 
 
-def track_agents(repo, out):
-    """The track-reviewer's brief as this repository has it, for --agents: a case's checkout holds
-    the brief of its own commit, which `--agent` would read instead."""
-    with open(os.path.join(repo, ".claude", "agents", "track-reviewer.md"), encoding="utf-8") as f:
+def track_agents(repo, out, name="track-reviewer"):
+    """The agent's brief as this repository has it, for --agents: a case's checkout holds the
+    brief of its own commit, which `--agent` would read instead."""
+    with open(os.path.join(repo, ".claude", "agents", name + ".md"), encoding="utf-8") as f:
         text = f.read()
     head, _, body = text.partition("\n---\n")
     meta = dict(
@@ -331,7 +370,7 @@ def track_agents(repo, out):
     agent = {"description": meta.get("description", ""), "prompt": body, "tools": tools}
     path = os.path.join(out, "agents.json")
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"track-reviewer": agent}, f, indent=2)
+        json.dump({name: agent}, f, indent=2)
     return path
 
 
@@ -391,6 +430,46 @@ def tracks(data, runs, out, runner, repo):
     return pooled(lambda job: ask(runner, prompts[job % n], paths[job % n]), runs, paths, out)
 
 
+def audits(data, runs, out, runner, repo):
+    """Each run's replies from the spec-auditor, one per case: the repository at the spec's commit
+    in a folder of its own, `main` at the base, no remote, and each repository the case puts
+    beside it at its commit. The project's own settings are not loaded, as for the reviewer."""
+    cases = [dict(c, repo=data["repo"]) for c in data["cases"]]
+    paths, prompts = [], []
+    for case in cases:
+        here = os.path.join(out, "cases", f"{case['day']}-{case['at'][:7]}")
+        name = os.path.basename(case["repo"].rstrip("/\\"))
+        path = checkout(case, out, dest=os.path.join(here, name))
+        git(path, "branch", "--quiet", "--force", "main", case["base"])
+        git(path, "remote", "remove", "origin")
+        beside = ""
+        for other in case.get("beside", []):
+            there = checkout(other, out, dest=os.path.join(here, other["as"]))
+            git(there, "remote", "remove", "origin")
+            beside += f" `../{other['as']}` is {other['as']} as it stood then."
+        paths.append(path)
+        prompts.append(AUDIT_PROMPT.format(**dict(case, beside=beside)))
+    agents = track_agents(repo, out, "spec-auditor")
+    if runner is None:
+        runner = [
+            "claude",
+            "-p",
+            "--permission-mode",
+            "auto",
+            "--strict-mcp-config",
+            "--setting-sources",
+            "user",
+            "--max-budget-usd",
+            "5",
+            "--agents",
+            agents,
+            "--agent",
+            "spec-auditor",
+        ]
+    n = len(cases)
+    return pooled(lambda job: ask(runner, prompts[job % n], paths[job % n]), runs, paths, out)
+
+
 def main(argv, repo=ROOT, runner=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("agent")
@@ -417,6 +496,12 @@ def main(argv, repo=ROOT, runner=None):
         print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
         replies = tracks(data, args.runs, out, runner, repo)
         lines, worst = track_report(data["cases"], replies, data.get("recorded"))
+    elif data.get("kind") == "audit":
+        print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
+        replies = audits(data, args.runs, out, runner, repo)
+        lines, worst = track_report(
+            data["cases"], replies, data.get("recorded"), audit_findings, audit_calm
+        )
     else:
         key = prepare(repo, data["cases"], out)
         blind = os.path.join(out, "blind.md").replace("\\", "/")
