@@ -300,7 +300,10 @@ BRIEF = {
 QUIET = {"moment": "diff", "day": "44", "track": "B", "known": []}
 HEAD = "track-reviewer: Day 44 track A, brief\n\n"
 BOTH = HEAD + "Findings: 2\n- the heartbeat adds calls\n- prints [40 chars]\n\nHeld: 1\n"
-ONE = HEAD + "Findings: 1\n- the heartbeat adds calls\n\nHeld: 2. [40 chars] seen\nNot checked: none\n"
+ONE = (
+    HEAD
+    + "Findings: 1\n- the heartbeat adds calls\n\nHeld: 2. [40 chars] seen\nNot checked: none\n"
+)
 CALM = HEAD + "Findings: none\n\nHeld: 1-6\n"
 SOME = HEAD + "Findings: 1\n- a comment is long\n"
 
@@ -354,7 +357,9 @@ class TrackRunTest(unittest.TestCase):
         write(self.origin, "code.py", "the heartbeat\n")
         run(self.origin, "commit", "-q", "-am", "b")
         head = sha()
-        write(self.repo, ".claude/agents/track-reviewer.md", "---\nname: track-reviewer\n---\nbrief\n")
+        write(
+            self.repo, ".claude/agents/track-reviewer.md", "---\nname: track-reviewer\n---\nbrief\n"
+        )
         write(self.repo, "briefs/a.md", "a brief that says [40 chars]\n")
         write(
             self.repo,
@@ -385,7 +390,9 @@ class TrackRunTest(unittest.TestCase):
         runner = [sys.executable, os.path.join(self.repo, "reply.py")]
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = agent_cases.main(["track-reviewer", "--runs", "2", "--record"], self.repo, runner)
+            code = agent_cases.main(
+                ["track-reviewer", "--runs", "2", "--record"], self.repo, runner
+            )
         lines = out.getvalue().splitlines()
         self.assertEqual(0, code, lines)
         self.assertRegex(lines[0], r"^track-reviewer: 2 cases, 2 runs, brief [0-9a-f]{7}$")
@@ -399,6 +406,127 @@ class TrackRunTest(unittest.TestCase):
             self.assertEqual("brief\n", json.load(f)["track-reviewer"]["prompt"])
         with open(self.cases, encoding="utf-8") as f:
             self.assertEqual(2, json.load(f)["recorded"]["named"])
+
+
+AUDIT = {
+    "moment": "audit",
+    "day": "44",
+    "pr": 9,
+    "known": [{"id": "D44.4", "names": "heartbeat"}, {"id": "D44.5", "names": "P54"}],
+}
+RECHECK = {"moment": "recheck", "day": "44", "pr": 9, "known": []}
+AUDIT_HEAD = "Verdict: 2 findings\n\nChecks run\n- C44.1: P54 → hold: green\n\n"
+AUDITED = (
+    AUDIT_HEAD
+    + "Findings\n1. [must fix] the heartbeat adds calls\n\nHand-offs to this day\n- P54\n"
+)
+NOTE = AUDIT_HEAD + "Findings\n1. [note] a branch exists\n\nNot checked, and why: none\n"
+FIX = AUDIT_HEAD + "Findings\n1. [should fix] C44.2 can pass\n\nPlan lines\n- none\n"
+
+
+class AuditReportTest(unittest.TestCase):
+    def test_a_finding_counts_only_under_findings_and_a_note_leaves_a_case_clean(self):
+        lines, worst = agent_cases.track_report(
+            [AUDIT, RECHECK],
+            [[AUDITED, NOTE], [NOTE, FIX]],
+            None,
+            agent_cases.audit_findings,
+            agent_cases.audit_calm,
+        )
+        want = [
+            "Day 44 #9 audit, 2 known: 1, 0",
+            "Day 44 #9 recheck, clean: none, findings",
+            "never named: D44.5",
+            "named: 0 of 2 name the known fault at worst (1, 0)",
+            "clean: 0 of 1 say none on a clean case at worst (1, 0)",
+        ]
+        self.assertEqual(want, lines)
+        self.assertEqual({"named": 0, "clean": 0, "runs": 2}, worst)
+
+    def test_a_report_with_no_findings_section_is_unreadable(self):
+        lines, worst = agent_cases.track_report(
+            [AUDIT], [[AUDIT_HEAD]], None, agent_cases.audit_findings, agent_cases.audit_calm
+        )
+        self.assertEqual("no run counted", lines[-1])
+        self.assertIsNone(worst)
+
+
+class AuditRunTest(unittest.TestCase):
+    """The case's repository at the draft, `main` at its base, no remote, and the repository beside
+    it at its own commit, where the spec's `../<name>` reads it."""
+
+    def setUp(self):
+        self.origin, self.beside, self.repo = (
+            tempfile.mkdtemp(),
+            tempfile.mkdtemp(),
+            tempfile.mkdtemp(),
+        )
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+        run = lambda *a: subprocess.run(git + ["-C", *a], check=True, capture_output=True)  # noqa: E731
+        sha = lambda r: run(r, "rev-parse", "HEAD").stdout.decode().strip()  # noqa: E731
+
+        def write(root, path, text):
+            os.makedirs(os.path.dirname(os.path.join(root, path)) or root, exist_ok=True)
+            with open(os.path.join(root, path), "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+
+        for r, first, then in ((self.origin, "one", "the draft"), (self.beside, "then", "later")):
+            run(r, "init", "-q")
+            write(r, "f.txt", first + "\n")
+            run(r, "add", ".")
+            run(r, "commit", "-q", "-m", "a")
+            write(r, "f.txt", then + "\n")
+            run(r, "commit", "-q", "-am", "b")
+        base = run(self.origin, "rev-parse", "HEAD~1").stdout.decode().strip()
+        then = run(self.beside, "rev-parse", "HEAD~1").stdout.decode().strip()
+        write(self.repo, ".claude/agents/spec-auditor.md", "---\nname: spec-auditor\n---\naudit\n")
+        write(
+            self.repo,
+            "reply.py",
+            "import os, subprocess, sys\nsys.stdout.reconfigure(encoding='utf-8')\n"
+            "p = sys.stdin.read().replace('\\n', ' ')\n"
+            "g = lambda *a: subprocess.run(['git', *a], capture_output=True).stdout.decode().strip()\n"
+            "there = open('../there/f.txt').read().strip() if os.path.exists('../there') else ''\n"
+            "said = [g('show', 'main:f.txt'), open('f.txt').read().strip(), g('remote'), there, p]\n"
+            "print('Verdict: 1\\n\\nFindings\\n1. [note] ' + ' | '.join(said))\n",
+        )
+        run(self.repo, "init", "-q")
+        case = dict(AUDIT, at=sha(self.origin), base=base, prompt="Audit Day 44.")
+        case["beside"] = [{"repo": self.beside, "at": then, "as": "there"}]
+        # main is the base, HEAD the draft, no remote, ../there at its commit, the prompt as given
+        case["known"] = [
+            {"id": "D44.6", "names": r"\] one \| the draft \|  \| then \| Audit Day 44\. .*Report"}
+        ]
+        self.cases = os.path.join(self.repo, "specs", "agent-cases", "spec-auditor.json")
+        write(
+            self.repo,
+            "specs/agent-cases/spec-auditor.json",
+            json.dumps(
+                {
+                    "kind": "audit",
+                    "repo": self.origin,
+                    "cases": [case, dict(RECHECK, at=base, base=base, prompt="x")],
+                }
+            ),
+        )
+
+    def test_each_case_is_read_at_its_draft_beside_its_repository_and_record_keeps_the_count(self):
+        runner = [sys.executable, os.path.join(self.repo, "reply.py")]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = agent_cases.main(["spec-auditor", "--runs", "2", "--record"], self.repo, runner)
+        lines = out.getvalue().splitlines()
+        self.assertEqual(0, code, lines)
+        self.assertRegex(lines[0], r"^spec-auditor: 2 cases, 2 runs, brief [0-9a-f]{7}$")
+        self.assertEqual("Day 44 #9 audit, 1 known: 1, 1", lines[1])
+        self.assertEqual("Day 44 #9 recheck, clean: none, none", lines[2])
+        self.assertEqual("named: 1 of 1 name the known fault at worst (1, 1)", lines[3])
+        state = os.path.join(self.repo, ".claude", "state", "agent-cases", "spec-auditor")
+        with open(os.path.join(state, "agents.json"), encoding="utf-8") as f:
+            self.assertEqual("audit\n", json.load(f)["spec-auditor"]["prompt"])
+        with open(self.cases, encoding="utf-8") as f:
+            recorded = json.load(f)["recorded"]
+        self.assertEqual({"named": 1, "clean": 1}, {k: recorded[k] for k in ("named", "clean")})
 
 
 if __name__ == "__main__":

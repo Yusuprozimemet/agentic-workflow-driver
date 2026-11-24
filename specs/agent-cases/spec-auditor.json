@@ -1,0 +1,310 @@
+{
+ "agent": "spec-auditor",
+ "kind": "audit",
+ "repo": "Yusuprozimemet/agentic-workflow-driver",
+ "cases": [
+  {
+   "moment": "audit",
+   "day": "14",
+   "spec": "specs/day-14-the-level-2-record.md",
+   "pr": 262,
+   "at": "d65636f5ba39f0186bd585ebf1620b8e7dca0b21",
+   "base": "3f31818650b7d91d80930939c33612f1ecb2c4c1",
+   "beside": [
+    {
+     "repo": "Yusuprozimemet/bearing",
+     "at": "2e3dd70916637cbdd72c382991fab97177c4b827",
+     "as": "bearing"
+    }
+   ],
+   "prompt": "Audit Day 14's spec: specs/day-14-the-level-2-record.md (commit d65636f, one commit over main at 3f31818; the commit also moves P54's settled_by from 14 to 15 in specs/plan/overdue.json). Do your full brief: run every check on the code as it is, try to break every hold, count every claim, check hand-offs from earlier days' Notes that point at Day 14 (H09.2, H10.2, H12.3, H13.1, H13.2, and the file-map hand-off from #259: four Replaces lines for S-how-follows-newest-day.1-4 and a track deleting the leftover picker), and check each new criterion is red today for the reason it says.\n\nDecisions the maintainer took on 2026-11-19 (not findings in themselves, but check the spec states and applies them consistently): (1) status reads \"level 2: 0 of 15\" today, so the maintainer first runs bearing at level 1 in the container until 15 of 15, then one bearing day at level 2; Track D's record covers both runs. (2) P54 is not built; overdue.json's settled_by moves to 15. (3) The reviewer's session is its own kind in status (H12.3).\n\nThings I am unsure of, look hard at: whether C14.2's described token-usage behaviour fits how compare()/--split/HOOKS_DAY actually split sides; whether C14.5/C14.6 match driver/status.py's real output format (the cost line, the steps rows, the line after cost:); whether removing how_excerpts/how_this_works/howRecheck breaks anything else that reads them (dashboard.js helpers shared with other views, spec-drift.json consumers, tests); whether C14.10-C14.15 are checkable from the record and copy alone in CI; whether the Verify block's test modules all exist (tests.test_dashboard_page etc.); whether the Plan: lines claim more than the criteria show; and whether the tracks fit under 400 changed lines. Report findings only, ranked; never edit.",
+   "known": [
+    {
+     "id": "D14.1",
+     "names": "test_dashboard_page",
+     "why": "Verify and C14.9 named tests.test_dashboard_page; the file is scripts/test_dashboard_page.py."
+    },
+    {
+     "id": "D14.2",
+     "names": "(?s)how_this_works.{0,160}(--build|page|true today|already)|C14\\.8.{0,200}(does not exist|no such|not found|true today|passes today)",
+     "why": "C14.8 named a test class that does not exist, and its no-how_this_works-key half was true today."
+    },
+    {
+     "id": "D14.3",
+     "names": "HOOKS_DAY|three sides|cost per merged|\\bbaseline",
+     "why": "C14.12's side before the split: --split with HOOKS_DAY gives three sides; lines no code prints."
+    },
+    {
+     "id": "D14.4",
+     "names": "(?s)Track C\\b[^\\n]{0,200}(\\b4\\d\\d\\b|\\b5\\d\\d\\b|Oversized)|(\\b4\\d\\d\\b|\\b5\\d\\d\\b|Oversized)[^\\n]{0,200}Track C\\b",
+     "why": "Track C measured about 520 changed lines with no split and no Oversized: line."
+    },
+    {
+     "id": "D14.5",
+     "names": "\\[\\d+ chars\\]|\\[N chars\\]|chars\\]|shorten|truncat|maxDiff",
+     "why": "C14.7's named tests report shortened diffs that break.py refuses."
+    },
+    {
+     "id": "D14.6",
+     "names": "halt|switches-14|S-switch-log|switch log.{0,160}(not copied|copy|copied|missing)",
+     "why": "C14.10's rule failed on a reviewer stopped by a halt; the switch log was not copied."
+    },
+    {
+     "id": "D14.7",
+     "names": "(?s)C14\\.15.{0,250}(not met|install)|(not met|pip install).{0,250}C14\\.15",
+     "why": "C14.15 passed on \"not met\" for any record and on the install's wording alone."
+    },
+    {
+     "id": "D14.8",
+     "names": "(?s)reset.{0,200}merge|no container session|not opened (in|by) (a|the) container",
+     "why": "The count run's resets left out a merge no container session opened."
+    },
+    {
+     "id": "D14.9",
+     "names": "#101|`?wait`? and `?merged`?",
+     "why": "The copy from the count run's first start left out #101's wait and merged lines."
+    },
+    {
+     "id": "D14.10",
+     "names": "late refusal|hooks\\.jsonl",
+     "why": "\"Every refusal\" left out the late refusals in <state>/refusals/hooks.jsonl."
+    },
+    {
+     "id": "D14.11",
+     "names": "(?s)(reviewer section|what the reviewer found).{0,200}(no criterion|not covered|missing|uncovered|nothing)|(no criterion|nothing).{0,120}what the reviewer found",
+     "why": "The reviewer section of plan.md had no criterion."
+    },
+    {
+     "id": "D14.12",
+     "names": "H12\\.3.{0,200}(in progress|unsaid|cost only|rows)|in progress:",
+     "why": "H12.3 was taken for the rows and the cost only; the in-progress line still names the step."
+    },
+    {
+     "id": "D14.13",
+     "names": "_reviewer|reviewer.line function",
+     "why": "Track D's test needed a reviewer-line function In scope did not name."
+    },
+    {
+     "id": "D14.14",
+     "names": "(?s)howBlob|grep.{0,160}(miss|leaves|lets|stay|not cover|survive)",
+     "why": "The grep let nine of the picker's names stay, and howBlob was not protected."
+    },
+    {
+     "id": "D14.15",
+     "names": "(?s)--retire.{0,160}(refus|HEAD)|retir\\w*.{0,160}short spec|short spec.{0,160}retir",
+     "why": "Retiring the short spec's breaks with break.py --retire refuses at HEAD."
+    },
+    {
+     "id": "D14.16",
+     "names": "argparse|real `?--repo|transcripts\\(\\)|(no|without|lacks) `?--split",
+     "why": "C14.2's command had no --split and needed a real --repo; its test was red only through argparse."
+    },
+    {
+     "id": "D14.17",
+     "names": "(?s)Track D\\b[^\\n]{0,200}(\\b4\\d\\d\\b|Oversized)|(\\b4\\d\\d\\b|Oversized)[^\\n]{0,200}Track D\\b",
+     "why": "Track D's copies would pass 400 lines with nothing said."
+    },
+    {
+     "id": "D14.18",
+     "names": "P54|[Oo]verdue",
+     "why": "P54 is overdue and the spec had no Overdue: line (and four smaller gaps)."
+    },
+    {
+     "id": "D14.31",
+     "escape": true,
+     "names": "(?s)(LIST_TESTS|track-red|Track tests seen red|seen-red\\.py).{0,250}(scripts/|ContainerTest|tests/ only)|ContainerTest.{0,250}(tests/ only|under `?tests/|not under)",
+     "why": "ContainerTest was put in scripts/, where CI's \"Track tests seen red\" and seen-red.py find no test. Found by the track-reviewer on Track A's brief."
+    },
+    {
+     "id": "D14.32",
+     "escape": true,
+     "names": "(?s)(Test:|TEST_FIELD).{0,200}git grep|git grep.{0,200}(Test:|names no test|no test in backticks|track-red)",
+     "why": "C14.8's Test: was Verify's git grep, which CI's \"Track tests seen red\" fails. Found by Track C1."
+    },
+    {
+     "id": "D14.69",
+     "escape": true,
+     "names": "(?s)git grep.{0,200}exits? (with )?(code )?1|exits? (with )?(code )?1.{0,200}git grep",
+     "why": "Verify's git grep lines exit 1 when they find nothing, their pass, and the replay reads the exit code. Found by the close's rehearsal."
+    }
+   ]
+  },
+  {
+   "moment": "recheck",
+   "day": "14",
+   "spec": "specs/day-14-the-level-2-record.md",
+   "pr": 262,
+   "at": "4df51dacab1c5588ff49284f07930d1dfe22ea07",
+   "base": "3f31818650b7d91d80930939c33612f1ecb2c4c1",
+   "beside": [
+    {
+     "repo": "Yusuprozimemet/bearing",
+     "at": "2e3dd70916637cbdd72c382991fab97177c4b827",
+     "as": "bearing"
+    }
+   ],
+   "prompt": "recheck: Day 14, specs/day-14-the-level-2-record.md. The first audit had 22 findings, taken in commit 4df51da as Defects D14.1-D14.18 and hand-off H14.1 (see `git show 4df51da`). Recheck the criteria those fixes added, split, retagged or rewrote: C14.2, C14.3, C14.5 through C14.17, Track 0, Tracks C1/C2 (Track C was split for the 400-line limit), the \"copies\" (what the spec copies from bearing and the run log: #101, halted reviewers, late refusals), and the Overdue line (P54 settled_by moved to 15). For each: run its check on the code as it is, confirm `new` criteria fail today for the reason the spec gives and `hold` ones pass, try to break each hold, recount every number the spec states, and check its Plan: line and any hand-offs. Also run `python scripts/plan-links.py`. Report findings ranked, each with the line in the spec, what is wrong, and the fix you would suggest. Report only; do not edit.",
+   "known": [
+    {
+     "id": "D14.19",
+     "names": "(?s)\\bC2\\b[^\\n]{0,200}(\\b4\\d\\d\\b|Oversized)|(\\b4\\d\\d\\b|Oversized)[^\\n]{0,200}\\bC2\\b",
+     "why": "D14.4's split left Track C2 at about 420 lines, all deletions, with nothing said."
+    },
+    {
+     "id": "D14.20",
+     "names": "run\\.jsonl|Day 8|docs/trial|runlog\\.read",
+     "why": "C14.10's test, reading docs/trial with runlog.read, would read Day 8's run.jsonl."
+    },
+    {
+     "id": "D14.21",
+     "names": "HOW_PLAN_PARTS",
+     "why": "C14.8's grep let HOW_PLAN_PARTS stay, which In scope removes."
+    },
+    {
+     "id": "D14.22",
+     "names": "(?s)(no|writes? no|without a) level|level 2 step.{0,160}(cannot|tell)|pip install|\\[dev\\]",
+     "why": "C14.15's \"a level 2 step\" could not be told from the copies, and \"pip install\" took any install."
+    },
+    {
+     "id": "D14.23",
+     "names": "P55|escapes per day",
+     "why": "P55's \"escapes per day\" had no criterion."
+    },
+    {
+     "id": "D14.24",
+     "names": "local date|merged_prs|local `?main|hand.merged",
+     "why": "C14.12's --split by local date; merged_prs reads ../bearing's local main; hand-merged PRs counted unsaid."
+    },
+    {
+     "id": "D14.25",
+     "names": "(?s)comment(\\x27s)? URL|failed comment|C14\\.17.{0,200}\\bN25\\b|\\bN25\\b.{0,200}C14\\.17",
+     "why": "C14.17's comment URL had no source and no result for a failed comment; its Plan: N25 does not hold it."
+    },
+    {
+     "id": "D14.26",
+     "names": "(?s)C14\\.1\\b.{0,200}broken:|no `?broken:|C14\\.7.{0,200}(break|find)",
+     "why": "C14.1 was said proved with no broken: line; C14.7 named no break Track B leaves applying."
+    },
+    {
+     "id": "D14.27",
+     "names": "(?s)Assumed.{0,200}(who|no one|nobody|owner)|H10\\.2|Unverified",
+     "why": "The reviewer-transcript Assumed line named no one who checks it; H10.2's Unverified items had no owner."
+    }
+   ]
+  },
+  {
+   "moment": "second recheck",
+   "day": "14",
+   "spec": "specs/day-14-the-level-2-record.md",
+   "pr": 262,
+   "at": "83c84d8a3411d504432a7810f22cee2cb4b49e37",
+   "base": "3f31818650b7d91d80930939c33612f1ecb2c4c1",
+   "beside": [
+    {
+     "repo": "Yusuprozimemet/bearing",
+     "at": "2e3dd70916637cbdd72c382991fab97177c4b827",
+     "as": "bearing"
+    }
+   ],
+   "prompt": "recheck: Day 14, specs/day-14-the-level-2-record.md (main = 3f31818). Commit 83c84d8 took a previous recheck's findings as D14.19-D14.27 (`git show 83c84d8`). Recheck only the text that commit added or rewrote: the Tracks paragraph on C1/C2 sizes and C2's Oversized line; C14.1's new broken: line (recorded in specs/breaks/day-14.json, with C14.4's and C14.9's); C14.7's named break find; C14.8's grep with HOW_PLAN_PARTS (and Verify's); C14.10's temporary state folder; C14.12's added sentences; C14.14's escapes count and its Plan: P55 \"escapes per day\"; C14.15's install command and \"level 2 from:\" rule (check against ../bearing's .github/workflows/evidence.yml and driver/switchlog.py); C14.17/C14.18 split and their Plan lines; the Assumed line; the new Out of scope line on plan.md's Unverified items. For each: is it true on the code as it is, can each new check fail, are the numbers right. Run `python scripts/plan-links.py` and `python scripts/break-lines.py --spec specs/day-14-the-level-2-record.md`. Report only, ranked; say \"no findings\" if none. Do not edit.",
+   "known": [
+    {
+     "id": "D14.28",
+     "names": "(?s)\\bN35\\b|\\bP64\\b|C14\\.1[78].{0,160}Plan: none",
+     "why": "D14.25's fix gave C14.17 Plan: none, though N35 is that comment, and C14.18 N25, though its merge is P64's."
+    },
+    {
+     "id": "D14.29",
+     "names": "(?s)level 2 from:.{0,250}(test|check|neither|no test)|literal string|one literal|quoting",
+     "why": "D14.22's fix read \"level 2 from:\" from a Set-up whose test checks neither, and matched the install as one literal string."
+    },
+    {
+     "id": "D14.30",
+     "names": "(?s)which comment|keeps? a failed comment|cancelled|Day NN review|review.{0,40}bearing never writes",
+     "why": "C14.17 did not say which comment answers which review line; the escapes count took cancelled runs and a \"Day NN review\" bearing never writes."
+    }
+   ]
+  },
+  {
+   "moment": "audit",
+   "day": "15",
+   "spec": "specs/day-15-the-gate-by-name.md",
+   "pr": 280,
+   "at": "96b60f0188ead70d6b8a32d97e32cf187b9340e1",
+   "base": "11206eabbadd8b6ddc982b7262759dfb5644fe3a",
+   "beside": [
+    {
+     "repo": "Yusuprozimemet/bearing",
+     "at": "7f8ec5ddd45d7683db8075ba5dc1221a807ca9f1",
+     "as": "bearing"
+    }
+   ],
+   "prompt": "Audit specs/day-15-the-gate-by-name.md (Day 15, first day of Phase 3) against the code as it is (base main at 11206ea; the spec draft is commit 96b60f0). The plan-auditor already read Phase 3 at 11206ea; its findings are recorded in the spec's Notes. Follow your brief: run every check, try to break every hold, count every claim, check hand-offs from earlier days' Notes (Day 14 especially: H14.1-H14.3) and the Plan: lines. Report findings ranked, each with the criterion ID, what is wrong, the evidence (command and what it printed), and the fix you suggest.",
+   "known": [
+    {
+     "id": "D15.1",
+     "names": "3f31818|[Ff]rozen|freez|invariants",
+     "why": "The tracks edit six files Day 14's Verify freezes at 3f31818, with no Replaces: for them."
+    },
+    {
+     "id": "D15.2",
+     "names": "(?s)test_starts_when_all_hold|protected.{0,40}fixture.{0,200}(Track A|refus)|test_needs_the_kits_checks.{0,200}(pass|whole)",
+     "why": "Track A's protection refuses the protected fixture, failing tests in Track A's own PR; two new tests pass whole."
+    },
+    {
+     "id": "D15.3",
+     "names": "(?s)test_needs_protection|C15\\.14.{0,250}(not fail|does not fail|still passes|\\bOK\\b)",
+     "why": "C15.14's break did not fail LevelMergeTest; Day 13 recorded it against LevelStartTest.test_needs_protection."
+    },
+    {
+     "id": "D15.4",
+     "names": "\\[\\d+ chars\\]|\\[N chars\\]|chars\\]|shorten|truncat|maxDiff",
+     "why": "Day 13's C13.3 break and C15.1-C15.3's red reach a reason unittest shortens to \"[N chars]\", which break.py refuses."
+    },
+    {
+     "id": "D15.5",
+     "names": "(?s)heartbeat|PATCH|C15\\.8.{0,200}(Red today|red at|`at`)",
+     "why": "C15.8's Red today was not the red at Track B's start; C15.9's no-api-call fails on the heartbeat's PATCH."
+    },
+    {
+     "id": "D15.6",
+     "names": "evidence replays|rules/branches|ruleset|7f8ec5d",
+     "why": "The Notes said bearing lacks \"A closed day's evidence replays\", which it requires; the Assumed call exited 1."
+    },
+    {
+     "id": "D15.7",
+     "names": "(?s)(earlier Days?\\W{0,2}|Day 1[34]\\W{0,2}s?) break.{0,200}(rewrit|not listed|find)|no `?pr`?.{0,80}review|waived_checks`? `?\\[\\]|setup-check",
+     "why": "Earlier Days' break finds in rewritten code were not listed; two cases in scope had no criterion; C15.5 checked only the names."
+    },
+    {
+     "id": "D15.10",
+     "escape": true,
+     "names": "C13\\.18|line number|github\\.merge",
+     "why": "Day 13's break C13.18 reports a line number in driver/github.py that Track A's new lines move. Found by the track-reviewer on Track A's brief."
+    },
+    {
+     "id": "D15.11",
+     "escape": true,
+     "names": "(?s)day-14\\.json.{0,200}(C15\\.16|replac|in force)|(C15\\.16|replaced C14\\.1\\b).{0,200}day-14\\.json|driver file other than status\\.py",
+     "why": "C14.1's break stayed in force in specs/breaks/day-14.json though C15.16 replaced C14.1. Found by Track A."
+    },
+    {
+     "id": "D15.33",
+     "escape": true,
+     "names": "(?s)(`?new`? criteri\\w*).{0,200}(no (recorded )?break|without a break|names? no break)|breaks? for (its|the) holds only",
+     "why": "Nine new criteria had a seen red line and no recorded break, since the spec named breaks for its holds only. Found by the close's rehearsal."
+    }
+   ]
+  },
+  {
+   "moment": "second recheck",
+   "day": "14",
+   "spec": "specs/day-14-the-level-2-record.md",
+   "pr": 267,
+   "at": "1d1361a4d92b03c7c9f07d8f5ee304aad258f505",
+   "base": "be7153003a67e7112da754111e6cd3c35910eca5",
+   "prompt": "recheck: Day 14, specs/day-14-the-level-2-record.md. Read only the latest commit's diff (`git show HEAD`): the fixes D14.33 made to a first recheck's findings: the Tracks paragraph (C1 lands before C2), C14.8's and C14.16's `Test:` lines (git grep -l from the root, exit code 1 asserted, names spelled in parts, the break runs the test), and the D14.33 line. Check each is true, testable, can fail (e.g. does git grep -l exit 1 with no match and 128 outside a repo; does track-red's TEST_FIELD still take only the first backticked name given the reworded lines, with `__file__` now backticked), and agrees with the rest of the spec. Report only, findings ranked.",
+   "known": []
+  }
+ ]
+}
