@@ -3152,14 +3152,14 @@ class LearningTest(unittest.TestCase):
 
     def test_a_repeat_past_a_fix_of_its_chain_is_counted_apart(self):
         got = self.learn()
+        # one short line per Day, "day:before/past fix", so a failure prints it whole
+        said = " ".join(
+            f"{r['day']}:{','.join(r['before'])}/{','.join(r['past_fix'])}" for r in got["days"]
+        )
+        self.assertEqual(said, "1:/ 2:D2.1/ 3:/D3.1,D3.2 4:/D4.1")
         self.assertEqual(
-            [(r["day"], r["n"], r["before"], r["past_fix"], r["fixes"]) for r in got["days"]],
-            [
-                (1, 0, [], [], []),
-                (2, 1, ["D2.1"], [], [12]),
-                (3, 2, [], ["D3.1", "D3.2"], [10]),
-                (4, 1, [], ["D4.1"], [11]),
-            ],
+            [(r["day"], r["n"], r["fixes"]) for r in got["days"]],
+            [(1, 0, []), (2, 1, [12]), (3, 2, [10]), (4, 1, [11])],
         )
         self.assertEqual((got["repeats"], got["past_fix"]), (4, 3))
 
