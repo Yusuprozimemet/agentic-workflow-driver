@@ -61,7 +61,9 @@ merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` b
    Track 0 holds the tests that must pass before and after the change, and lands first.
 3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
    command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
-   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings). The
+   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings).
+   Its defect counts and the PR's "## Defects" section are printed from the Notes by
+   `python scripts/close-views.py specs/day-NN-slug.md`: paste them unchanged. The
    close commits no counts: the session hooks push them to the `dashboard-data` branch ("Where
    things live"). For the notebook's figures, run `python scripts/publish-counts.py` and read them
    from that branch (`git show origin/dashboard-data:docs/dashboard/token-usage.json`). Each Defect
