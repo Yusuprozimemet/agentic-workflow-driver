@@ -291,5 +291,115 @@ class ReviewRunTest(unittest.TestCase):
         )
 
 
+BRIEF = {
+    "moment": "brief",
+    "day": "44",
+    "track": "A",
+    "known": [{"id": "D44.1", "names": "heartbeat"}, {"id": "D44.2", "names": r"\[\d+ chars\]"}],
+}
+QUIET = {"moment": "diff", "day": "44", "track": "B", "known": []}
+HEAD = "track-reviewer: Day 44 track A, brief\n\n"
+BOTH = HEAD + "Findings: 2\n- the heartbeat adds calls\n- prints [40 chars]\n\nHeld: 1\n"
+ONE = HEAD + "Findings: 1\n- the heartbeat adds calls\n\nHeld: 2. [40 chars] seen\nNot checked: none\n"
+CALM = HEAD + "Findings: none\n\nHeld: 1-6\n"
+SOME = HEAD + "Findings: 1\n- a comment is long\n"
+
+
+class TrackReportTest(unittest.TestCase):
+    def test_each_case_is_shown_and_a_known_fault_counts_only_under_findings(self):
+        lines, worst = agent_cases.track_report(
+            [BRIEF, QUIET], [[BOTH, CALM], [ONE, SOME], ["no report", CALM]], None
+        )
+        want = [
+            "Day 44 A brief, 2 known: 2, 1, unreadable",
+            "Day 44 B diff, clean: none, findings, none",
+            "named: 0 of 2 name the known fault at worst (2, 1, 0)",
+            "clean: 0 of 1 say none on a clean case at worst (1, 0, 1)",
+        ]
+        self.assertEqual(len(want), len(lines))
+        for w, got in zip(want, lines):
+            self.assertEqual(w, got)
+        self.assertEqual({"named": 0, "clean": 0, "runs": 3}, worst)
+
+    def test_a_fault_no_run_named_is_listed(self):
+        lines, _ = agent_cases.track_report([BRIEF], [[ONE], [ONE]], None)
+        self.assertEqual("never named: D44.2", lines[1])
+
+    def test_no_report_read_is_no_run_counted(self):
+        lines, worst = agent_cases.track_report([BRIEF], [["x"]], None)
+        self.assertEqual("no run counted", lines[-1])
+        self.assertIsNone(worst)
+
+
+class TrackRunTest(unittest.TestCase):
+    """A scratch repository as the case's: `main` is where the brief was written, or the diff's base,
+    and the reply reads what the session would."""
+
+    def setUp(self):
+        self.origin, self.repo = tempfile.mkdtemp(), tempfile.mkdtemp()
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+        run = lambda *a: subprocess.run(git + ["-C", *a], check=True, capture_output=True)  # noqa: E731
+        sha = lambda: run(self.origin, "rev-parse", "HEAD").stdout.decode().strip()  # noqa: E731
+
+        def write(root, path, text):
+            os.makedirs(os.path.dirname(os.path.join(root, path)) or root, exist_ok=True)
+            with open(os.path.join(root, path), "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+
+        run(self.origin, "init", "-q")
+        write(self.origin, "code.py", "one\n")
+        run(self.origin, "add", ".")
+        run(self.origin, "commit", "-q", "-m", "a")
+        base = sha()
+        write(self.origin, "code.py", "the heartbeat\n")
+        run(self.origin, "commit", "-q", "-am", "b")
+        head = sha()
+        write(self.repo, ".claude/agents/track-reviewer.md", "---\nname: track-reviewer\n---\nbrief\n")
+        write(self.repo, "briefs/a.md", "a brief that says [40 chars]\n")
+        write(
+            self.repo,
+            "reply.py",
+            "import re, subprocess, sys\nsys.stdout.reconfigure(encoding='utf-8')\n"
+            "p = sys.stdin.read()\n"
+            "g = lambda *a: subprocess.run(['git', *a], capture_output=True).stdout.decode().strip()\n"
+            "said = [g('show', 'main:code.py'), g('remote')]\n"
+            "if p.startswith('brief'):\n"
+            "    said.append(open(re.search(r'is at (\\S+)\\. ', p).group(1)).read())\n"
+            "else:\n"
+            "    said.append(open(re.search(r'draft is at (\\S+)\\. ', p).group(1)).read())\n"
+            "print('Findings: 1\\n- ' + ' | '.join(said))\n",
+        )
+        run(self.repo, "init", "-q")
+        brief = dict(BRIEF, spec="s.md", pr=7, at=base, file="briefs/a.md")
+        diff = dict(QUIET, spec="s.md", pr=7, base=base, at=head, body="the heartbeat body")
+        # main is the base, the clone has no remote to read later commits from, the body is a file
+        diff["known"] = [{"id": "D44.3", "names": r"(?m)^- one \|  \| the heartbeat body$"}]
+        self.cases = os.path.join(self.repo, "specs", "agent-cases", "track-reviewer.json")
+        write(
+            self.repo,
+            "specs/agent-cases/track-reviewer.json",
+            json.dumps({"kind": "track", "repo": self.origin, "cases": [brief, diff]}),
+        )
+
+    def test_each_case_reads_its_brief_or_diff_against_main_and_record_keeps_the_count(self):
+        runner = [sys.executable, os.path.join(self.repo, "reply.py")]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = agent_cases.main(["track-reviewer", "--runs", "2", "--record"], self.repo, runner)
+        lines = out.getvalue().splitlines()
+        self.assertEqual(0, code, lines)
+        self.assertRegex(lines[0], r"^track-reviewer: 2 cases, 2 runs, brief [0-9a-f]{7}$")
+        self.assertEqual("Day 44 A brief, 2 known: 1, 1", lines[1])
+        self.assertEqual("Day 44 B diff, 1 known: 1, 1", lines[2])
+        self.assertEqual("never named: D44.1", lines[3])
+        self.assertEqual("named: 2 of 3 name the known fault at worst (2, 2)", lines[4])
+        state = os.path.join(self.repo, ".claude", "state", "agent-cases", "track-reviewer")
+        self.assertEqual(4, len(os.listdir(os.path.join(state, "replies"))))
+        with open(os.path.join(state, "agents.json"), encoding="utf-8") as f:
+            self.assertEqual("brief\n", json.load(f)["track-reviewer"]["prompt"])
+        with open(self.cases, encoding="utf-8") as f:
+            self.assertEqual(2, json.load(f)["recorded"]["named"])
+
+
 if __name__ == "__main__":
     unittest.main()
