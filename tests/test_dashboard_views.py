@@ -3081,5 +3081,146 @@ class NeedsAttentionTest(unittest.TestCase):
         self.assertEqual((agree, "DISAGREE (mrg bad)" in said), (False, True), said)
 
 
+def learn_data():
+    """Four Days whose specs merged at noon on 1 to 4 January and a fifth not begun. One problem is a chain of three
+    links (D1.1 <- D2.1 <- D3.1, and D4.1 back to D1.1), another one link (D1.2 <- D3.2); D2.2 and D4.2 repeat
+    nothing. Four fixes: #10 between Day 2's spec and Day 3's, naming the chain's middle; #11 before Day 4's, naming
+    D2.2; #12 before Day 2's, naming D1.2 and an ID no Day has; #14 after the last spec."""
+
+    def defect(i, same=None):
+        return {"id": i, "same_as": same, "problem": None}
+
+    def spec(day):
+        return {"number": day, "kind": "spec", "day": day, "merged": f"2026-01-0{day}T12:00:00Z"}
+
+    def fix(pr, when, stops):
+        return {"pr": pr, "title": f"fix {pr}", "merged": when, "stops": stops}
+
+    reps = [("D2.1", "D1.1"), ("D3.1", "D2.1"), ("D3.2", "D1.2"), ("D4.1", "D1.1")]
+    return {
+        "now": {"head": "abc1234def", "last_pr": 14},
+        "days": [
+            {"day": 1, "defects": [defect("D1.1"), defect("D1.2")]},
+            {"day": 2, "defects": [defect("D2.1", "D1.1"), defect("D2.2")]},
+            {"day": 3, "defects": [defect("D3.1", "D2.1"), defect("D3.2", "D1.2")]},
+            {"day": 4, "defects": [defect("D4.1", "D1.1"), defect("D4.2")]},
+            {"day": 5, "defects": []},
+        ],
+        "defect_recurrence": {"recurrences": [{"id": i, "same_as": s} for i, s in reps]},
+        "clock": {
+            "prs": [
+                spec(1),
+                spec(2),
+                spec(3),
+                spec(4),
+                {"number": 9, "kind": "code", "day": 4, "merged": "2026-01-04T20:00:00Z"},
+            ]
+        },
+        "fixes": {
+            "problems": ["specs/fixes.json: #99 is not a merged pull request"],
+            "fixes": [
+                fix(10, "2026-01-02T18:00:00Z", ["D2.1"]),
+                fix(11, "2026-01-03T18:00:00Z", ["D2.2"]),
+                fix(12, "2026-01-01T18:00:00Z", ["D1.2", "D9.9"]),
+                fix(14, "2026-01-04T18:00:00Z", ["D4.2"]),
+            ],
+        },
+    }
+
+
+class LearningTest(unittest.TestCase):
+    """learning(): "Does it learn?", the repeats per Day and the times before and after each fix (specs/fixes.json)."""
+
+    def learn(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").learning(data or learn_data())
+
+    def test_each_fix_counts_its_chains_before_and_after_the_first_day_after_it(self):
+        got = self.learn()
+        self.assertEqual(
+            [
+                (f["pr"], f["from_day"], f["before"], f["after"], f["after_ids"], f["days_since"])
+                for f in got["fixes"]
+            ],
+            [
+                (12, 2, 1, 1, ["D3.2"], 3),
+                (10, 3, 2, 2, ["D3.1", "D4.1"], 2),
+                (11, 4, 1, 0, [], 1),
+                (14, None, 1, 0, [], 0),
+            ],
+        )
+        self.assertEqual(got["held"], 1)
+
+    def test_a_repeat_past_a_fix_of_its_chain_is_counted_apart(self):
+        got = self.learn()
+        self.assertEqual(
+            [(r["day"], r["n"], r["before"], r["past_fix"], r["fixes"]) for r in got["days"]],
+            [
+                (1, 0, [], [], []),
+                (2, 1, ["D2.1"], [], [12]),
+                (3, 2, [], ["D3.1", "D3.2"], [10]),
+                (4, 1, [], ["D4.1"], [11]),
+            ],
+        )
+        self.assertEqual((got["repeats"], got["past_fix"]), (4, 3))
+
+    def test_a_stop_no_day_has_is_a_problem_beside_the_records(self):
+        got = self.learn()
+        self.assertEqual(
+            got["problems"],
+            [
+                "specs/fixes.json: #99 is not a merged pull request",
+                "#12: stops D9.9 names no Defect line",
+            ],
+        )
+        self.assertEqual(self.learn({"now": {}})["fixes"], [])
+
+    def test_the_record_keeps_good_rows_and_names_each_bad_one(self):
+        record = load("spec_drift_metrics", "spec_drift_metrics.py").fixes_record
+        prs = {
+            1: {"title": "one", "mergedAt": "2026-01-01T00:00:00Z"},
+            2: {"title": "two", "mergedAt": None},
+        }
+        rows = [
+            {"pr": 1, "stops": ["D1.1", "D1.1", "D2.3"]},
+            {"pr": 1, "stops": ["D1.2"]},
+            {"pr": 2, "stops": ["D1.2"]},
+            {"pr": "3", "stops": ["D1.2"]},
+            {"pr": 4, "stops": []},
+            {"pr": 5, "stops": ["D1"]},
+        ]
+        got = record(json.dumps(rows), prs)
+        self.assertEqual(
+            got["fixes"],
+            [
+                {
+                    "pr": 1,
+                    "title": "one",
+                    "merged": "2026-01-01T00:00:00Z",
+                    "stops": ["D1.1", "D2.3"],
+                }
+            ],
+        )
+        bad = "row {} is not {{pr: a number, stops: [IDs like D21.2]}}"
+        self.assertEqual(
+            [p.removeprefix("specs/fixes.json").lstrip(": ") for p in got["problems"]],
+            ["#1 is named twice", "#2 is not a merged pull request"]
+            + [bad.format(i) for i in (4, 5, 6)],
+        )
+        self.assertEqual(record("", prs)["problems"], ["specs/fixes.json is missing"])
+        self.assertEqual(record("{}", prs)["problems"], ["specs/fixes.json is not a list"])
+
+    def test_the_committed_record_names_only_defect_lines_the_days_have(self):
+        with open(os.path.join(ROOT, "specs", "fixes.json"), encoding="utf-8") as f:
+            rows = json.load(f)
+        ids = set()
+        for name in os.listdir(os.path.join(ROOT, "specs")):
+            m = re.fullmatch(r"day-(\d+)-.*\.md", name)
+            if m:
+                with open(os.path.join(ROOT, "specs", name), encoding="utf-8") as f:
+                    ids |= {x["id"] for x in specs.defect_lines(f.read(), int(m.group(1)))}
+        self.assertEqual(len({r["pr"] for r in rows}), len(rows))
+        self.assertEqual([s for r in rows for s in r["stops"] if s not in ids], [])
+
+
 if __name__ == "__main__":
     unittest.main()

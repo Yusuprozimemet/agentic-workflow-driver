@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from spec_drift_metrics import defect_counts  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
-from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, needs_attention,  # noqa: E402
+from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention,  # noqa: E402
                               proofreading, protein, reading, reflex, rings, where_ring)
 
 PROJECT = "sample-shop"
@@ -525,6 +525,13 @@ def demo():
     out["where_ring"], out["reading"] = where_ring(out), reading(out)
     out["gel"], out["protein"], out["proofreading"] = gel(out), protein(out), proofreading(out)
     out["budget"], out["rings"], out["actogram"], out["reflex"] = budget(out), rings(out), actogram(out), reflex(out)
+    # specs/fixes.json's rows as fixes_record gives them: #103 counts from Day 2, where D1.1's problem came back past
+    # it; #119 merged after the last Day's spec, so it counts from no Day yet.
+    merged = {p["number"]: p["merged"] for p in out["clock"]["prs"]}
+    out["fixes"] = dict(source="specs/fixes.json", problems=[], fixes=[
+        dict(pr=103, title="Made-up fix: the auditor reads the spec's tests", merged=merged[103], stops=["D1.1"]),
+        dict(pr=119, title="Made-up fix: a break's find checked before it runs", merged=merged[119], stops=["D4.1"])])
+    out["learning"] = learning(out)
     out["needs_attention"] = needs_attention(out)
     return out
 

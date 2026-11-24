@@ -3,6 +3,7 @@
 import builtins
 import collections
 import concurrent.futures
+import json
 import os
 import posixpath
 import re
@@ -119,6 +120,46 @@ def recurrence(days):
         else:
             found.append(dict(id=x["id"], same_as=x["same_as"]))
     return dict(defects=len(lines), with_id=len(known), recurrences=found, problems=problems)
+
+
+FIXES_FILE = "specs/fixes.json"
+
+
+def fixes_record(text, prs):
+    """specs/fixes.json, a list of {pr, stops}: each pull request made to stop a kind of defect and the Defect IDs it
+    names, with its title and merge time from GitHub (prs, by number). A row that is not of that shape, a pull request
+    named twice or not merged is a problem, reported, and left out; whether each stop names a Defect line is the
+    view's to say (spec_drift_views.learning), which reads the Days."""
+    out = dict(source=FIXES_FILE, fixes=[], problems=[])
+    if not text:
+        out["problems"].append(f"{FIXES_FILE} is missing")
+        return out
+    try:
+        rows = json.loads(text)
+    except ValueError as e:
+        out["problems"].append(f"{FIXES_FILE} is not JSON: {e}")
+        return out
+    if not isinstance(rows, list):
+        out["problems"].append(f"{FIXES_FILE} is not a list")
+        return out
+    seen = set()
+    for i, row in enumerate(rows, 1):
+        stops = row.get("stops") if isinstance(row, dict) else None
+        pr = row.get("pr") if isinstance(row, dict) else None
+        if not isinstance(pr, int) or isinstance(pr, bool) or not isinstance(stops, list) or not stops \
+                or not all(isinstance(s, str) and DEFECT_ID.fullmatch(s) for s in stops):
+            out["problems"].append(f"{FIXES_FILE} row {i} is not {{pr: a number, stops: [IDs like D21.2]}}")
+            continue
+        if pr in seen:
+            out["problems"].append(f"{FIXES_FILE}: #{pr} is named twice")
+            continue
+        seen.add(pr)
+        p = prs.get(pr) or {}
+        if not p.get("mergedAt"):
+            out["problems"].append(f"{FIXES_FILE}: #{pr} is not a merged pull request")
+            continue
+        out["fixes"].append(dict(pr=pr, title=p.get("title") or "", merged=p["mergedAt"], stops=list(dict.fromkeys(stops))))
+    return out
 
 
 def break_state(body, number):

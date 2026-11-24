@@ -9,6 +9,7 @@ A criterion is *in force* while no later criterion's `Replaces:` line names it (
 `scripts/plan-links.py`, graph 12 and the gene count the same set.
 """
 
+import collections
 import datetime
 import math
 import re
@@ -2164,3 +2165,69 @@ def needs_attention(d):
                 days=[dict(day=day, n=sum(1 for x in under(day) if x["group"] in NEEDS_COUNTED),
                            marks=[dict(mark=x["mark"], id=x["id"]) for x in under(day)]) for day in known + [None]],
                 unread=[dict(text=k, n=v) for k, v in unread.items()])
+
+
+def _day_of_id(i):
+    return int(i[1:].split(".")[0])
+
+
+def learning(d):
+    """"Does it learn?": the two graphs' figures, from the Days' Defect lines, their same-as: tags and specs/fixes.json.
+
+    A problem is a chain of same-as: links, followed both ways: every Defect line linked to another is the same
+    problem. A fix counts from the first Day whose spec merged after the fix merged (no such Day yet: it counts from
+    none, and everything is before it). Per fix, "before" is the defects of the chains its stops sit in on earlier
+    Days and "after" those from that Day on; a stop in no chain is a chain of one. Per Day, a repeat is a Defect line
+    with a same-as: tag, and it got past a fix when a fix of its chain counted from that Day or earlier; only the
+    Days whose spec has merged get a row, and a fix's days_since counts them."""
+    days = sorted(x["day"] for x in d.get("days") or [] if isinstance(x.get("day"), int))
+    ids = {x["id"]: x_day["day"] for x_day in d.get("days") or [] for x in x_day.get("defects") or []
+           if x.get("id") and not x.get("problem")}
+    reps = [r for r in (d.get("defect_recurrence") or {}).get("recurrences") or [] if r.get("id") in ids]
+    root = {}
+
+    def find(i):
+        root.setdefault(i, i)
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+
+    for r in reps:
+        root[find(r["id"])] = find(r["same_as"])
+    chain = collections.defaultdict(set)
+    for i in list(root):
+        chain[find(i)].add(i)
+    members = lambda i: chain.get(find(i)) if i in root else {i}  # noqa: E731
+    spec_at = {}
+    for p in (d.get("clock") or {}).get("prs") or []:
+        if p.get("kind") == "spec" and p.get("merged") and isinstance(p.get("day"), int):
+            spec_at[p["day"]] = min(spec_at.get(p["day"], p["merged"]), p["merged"])
+    record = d.get("fixes") or {}
+    problems, fixes, past = list(record.get("problems") or []), [], collections.defaultdict(set)
+    for f in record.get("fixes") or []:
+        unknown = [s for s in f["stops"] if s not in ids]
+        if unknown:
+            problems.append(f"#{f['pr']}: stops {_list(unknown)} {'names' if len(unknown) == 1 else 'name'} no Defect line")
+        known = [s for s in f["stops"] if s in ids]
+        if not known:
+            continue
+        later = [day for day in days if day in spec_at and _ms(spec_at[day]) > _ms(f["merged"])]
+        start = later[0] if later else None
+        hit = set().union(*(members(s) for s in known))
+        after = sorted((i for i in hit if start is not None and ids[i] >= start), key=_order)
+        for i in hit:
+            past[find(i) if i in root else i].add(start)
+        fixes.append(dict(pr=f["pr"], title=f.get("title") or "", merged=f["merged"], from_day=start, stops=known,
+                          before=len(hit) - len(after), after=len(after), after_ids=after,
+                          days_since=sum(1 for day in spec_at if start is not None and day >= start)))
+    fixes.sort(key=lambda f: (f["from_day"] is None, f["from_day"] or 0, f["pr"]))
+    by_day = collections.defaultdict(lambda: dict(before=[], past_fix=[]))
+    for r in sorted(reps, key=lambda r: _order(r["id"])):
+        day, starts = ids[r["id"]], past.get(find(r["id"]), ())
+        by_day[day]["past_fix" if any(s is not None and s <= day for s in starts) else "before"].append(r["id"])
+    rows = [dict(day=day, n=len(by_day[day]["before"]) + len(by_day[day]["past_fix"]), **by_day[day],
+                 fixes=[f["pr"] for f in fixes if f["from_day"] == day]) for day in days if day in spec_at]
+    return dict(_stamp(d), days=rows, fixes=fixes, repeats=sum(r["n"] for r in rows),
+                past_fix=sum(len(r["past_fix"]) for r in rows),
+                held=sum(1 for f in fixes if f["from_day"] is not None and not f["after"]), problems=problems)

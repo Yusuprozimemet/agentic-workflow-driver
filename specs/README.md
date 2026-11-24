@@ -271,6 +271,12 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     (malformed, unknown, used twice, or not earlier); `scripts/relabel.py` strips it with the
     tags, so the blind rater does not read the earlier defect's.
 
+  A pull request made to stop a kind of defect coming back (a gate, a rule, a brief's
+  checklist) adds its own row to [`fixes.json`](fixes.json), `{"pr": N, "stops": [IDs]}`,
+  with the IDs of the Defect lines it names. `spec-drift.py` reports a row it cannot place,
+  and counts, per fix, the times its problems (their `same-as:` chains) happened before the
+  first Day whose spec merged after it, and from that Day on.
+
   Two tags are easy to get wrong; in wordtally, Days 1 and 3 got both wrong and Day 2 the
   first, and the blind rater's pass corrected each:
   - A defect caught in the spec-change PR, before any code, is `found: spec-change PR`, even
