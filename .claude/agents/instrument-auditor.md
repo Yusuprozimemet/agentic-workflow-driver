@@ -262,7 +262,7 @@ first. Mark each:
 The rules behind the gates, not the page. About 15 minutes.
 
 - **Rules against tools:** for the rules in `specs/README.md` "Evidence at the close" and
-  CLAUDE.md "Breaks on purpose", name the script or CI check that enforces each, or say none.
+  `docs/procedure.md` "Breaks on purpose", name the script or CI check that enforces each, or say none.
   Check which checks `main` requires:
   `gh api repos/{owner}/{repo}/branches/main/protection/required_status_checks`. Try at most two
   inputs that should fail a tool, in a scratch clone.

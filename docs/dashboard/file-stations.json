@@ -4,7 +4,7 @@
     {"at": "s1", "label": "plan.md", "kind": "spec", "what": "The plan: the one text everything else is copied from.",
      "paths": ["plan.md"]},
     {"at": "s1", "label": "working rules", "kind": "spec", "what": "The working rules every session reads, and the forms a spec is filled in from.",
-     "paths": ["CLAUDE.md", "AGENTS.md", "specs/README.md", "specs/_*.md"]},
+     "paths": ["CLAUDE.md", "AGENTS.md", "docs/procedure.md", "docs/outside-review.md", "specs/README.md", "specs/_*.md"]},
     {"at": "plan-auditor", "label": "agents", "kind": "tool", "what": "Briefs of the AI reviewers that read the plan: the plan-auditor and the three end-of-phase auditors.",
      "paths": [".claude/agents/plan-auditor.md", ".claude/agents/security-ops-auditor.md", ".claude/agents/agentic-engineering-auditor.md", ".claude/agents/architecture-auditor.md"]},
     {"at": "s2", "label": "day specs", "kind": "spec", "what": "One Day's work, written down first: one file per Day.",

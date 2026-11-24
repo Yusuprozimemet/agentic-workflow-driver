@@ -1,30 +1,63 @@
 # Working in this repository
 
-This repository builds `run-steps.py`, a driver that runs the kit's day loop on another project, one `claude -p` session per step, and parks for the maintainer when a step needs a person, one day spec at a
-time, and records what each day turned up. Three layers have to agree: [`plan.md`](plan.md) is the goal and
-changes rarely; the day specs in [`specs/`](specs/) are the steps; the code is where the steps
-land. The spec rules are in [`specs/README.md`](specs/README.md) and the template in
-[`specs/_template.md`](specs/_template.md). This file is the working order and the lessons the
-rules do not state. [`docs/workflow.md`](docs/workflow.md) draws it.
+This repository builds `run-steps.py`, a driver that runs the kit's day loop on another project,
+one `claude -p` session per step, parks for the maintainer when a step needs a person, one day
+spec at a time, and records what each day turned up. Three layers have to agree:
+[`plan.md`](plan.md) is the goal and changes rarely; the day specs in [`specs/`](specs/) are the
+steps; the code is where the steps land. The spec rules are in
+[`specs/README.md`](specs/README.md) and the template in [`specs/_template.md`](specs/_template.md).
+This file is the principles, the working order and the lessons the rules do not state;
+[`docs/procedure.md`](docs/procedure.md) holds the detail of each step, read when the step comes
+up, and [`docs/workflow.md`](docs/workflow.md) draws it.
 
 **Source of truth, when they disagree:** the code on `main` for what the system does; the merged
 spec for what a day promised; `plan.md` for the goal. The dashboard and memory only record
 the others: correct them, never the other way round.
+
+## Five principles
+
+Every rule below is one of these applied. Where no rule speaks, act on them.
+
+1. **See a check fail before trusting it.** A test that passes before and after a change proves
+   nothing. A new test is seen red on `main` before its code, and a check is broken on purpose
+   once (`seen-red.py`, `break.py`). Four `new` tests were already green on `main` when their
+   track's code was written, for nothing (D09.26, D10.12, D10.13, D11.19); hand-run breaks
+   half-applied or never started the build. The checking agents are held to it too: an agent with
+   cases has a count (`agent-cases.py`), and on the worst of three runs the merge reviewer gives
+   the right verdict on 2 of its 10 cases and names 0 of 8 known faults, the spec-auditor names 30
+   of 44 and the track-reviewer 9 of 21. A check that has not been measured is a hope.
+2. **The writer is not the only checker.** The session that writes a spec or a brief has read
+   past its own errors more than once, so a fresh context reads it: the spec-auditor the spec and
+   its fixes (D10.12, D12.25), the track-reviewer the brief and the diff (D09.22, D09.23, D11.24,
+   D12.33), CI and the reviewer the PR, and once a phase a model from outside the repository a
+   few merged PRs ([`docs/outside-review.md`](docs/outside-review.md)). The counts above say none
+   of them is enough alone.
+3. **Decide the scope before building.** Take the lowest rung of the
+   [size-of-change ladder](specs/README.md#size-of-change), run the gates that decide what a
+   change may touch, and ask the maintainer once, early, for what is theirs to decide. The N1 fix
+   found two such rules after building and lost about 25 minutes (#212, S23); on 14 Nov 21 area
+   PRs merged and no Day moved (#212, S15).
+4. **Output in the main session is paid for on every reply.** Every reply re-reads the whole
+   conversation: in jobmatch-microservices 61% of the main sessions' context tokens up to Day 17
+   were read after a session had passed 300k, and 29% over the whole project
+   (`python scripts/token-usage.py --compare`). One session per step, small outputs, few replies.
+5. **Record departures.** A criterion that cannot be met as written, a premise that looks wrong,
+   a mistake of your own: say so in the PR and the Day's Notes, never deviate silently. The
+   corrections are part of what this repository measures.
 
 ## Starting
 
 A person or an agent new to this repository: read `plan.md`, then run
 `python scripts/behaviour-index.py` to see what the system does now, then `specs/README.md`; run
 `python scripts/spec-drift.py --out spec-drift.json` (it needs `numpy` and the `gh` CLI; or open
-the dashboard) for the current day and next step; then ask for it, for example "start Day 12". Nothing merges without the
-maintainer, and nothing starts after a phase ends until they say so.
+the dashboard) for the current day and next step; then ask for it, for example "start Day 12".
+Nothing merges without the maintainer, and nothing starts after a phase ends until they say so.
 
 **The merge gate is CI and the auditors; the maintainer's merge is a go-ahead.** CI's required
 checks and the auditors' reports are what a PR must pass; the maintainer's "merged" says go
 ahead, not that every line was reviewed by a person. Of the first 213 PRs, the median went from
 open to merged in 4 minutes, CI included (#211, N3). So a PR body says what CI and the auditors
-did not check, where a reader should look. `plan.md` takes the same sentence in the plan-change
-PR after Day 12's close.
+did not check, where a reader should look.
 
 ## A day, in order
 
@@ -34,15 +67,13 @@ that qualifies (area branch, short spec, day spec) and say which in the PR.
 **Run the gates before planning, not before pushing:** the ones that decide the rung and the
 files a change may touch (`python scripts/invariants.py main HEAD` for frozen files, the rung's
 own rules, `python scripts/plan-links.py`), and ask the maintainer once, early, for everything
-that is theirs to decide. The N1 fix found two such rules after building on the wrong
-assumption, and lost about 25 minutes to them (#212, S23).
+that is theirs to decide (principle 3).
 
 **While a Day is open** (its spec PR merged, its closing PR not yet), an area PR (`tooling/`,
 `dashboard/`, `docs/` and the rest) opens only when it fixes what blocks the Day's next step: a
 failing check, or a tool the step needs that is broken. Say in the PR what it unblocks.
-Anything else waits for the close and goes into its Notes as a hand-off (the open-work
-issues are closed: `plan.md`, "Course correction after Phase 2"). On 14 Nov 21 tooling and dashboard PRs
-merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` branch (#212, S15).
+Anything else waits for the close and goes into its Notes as a hand-off (`plan.md`, "Course
+correction after Phase 2").
 
 1. **Audit before writing anything.** On the first day of a phase, run the **plan-auditor**
    agent on the phase first: do the specs still add up to what `plan.md` wants from it, and
@@ -59,74 +90,46 @@ merged and no Day moved; 103 of the first 213 merged PRs were not on a `day-*` b
 2. **One PR per track**, each branched from fresh `main` after the previous one merged. Never
    stack branches. `day-NN/track-<letter>-<slug>`, titled `Day NN track X: <what it does>`. A
    Track 0 holds the tests that must pass before and after the change, and lands first.
-3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence (test or
-   command, and the PR it landed in), add Notes to the spec, and update the Day entry and measurement
-   table in [`docs/lab-notebook.md`](docs/lab-notebook.md) (the README keeps only its Findings).
-   Its defect counts and the PR's "## Defects" section are printed from the Notes by
-   `python scripts/close-views.py specs/day-NN-slug.md`: paste them unchanged. The
-   close commits no counts: the session hooks push them to the `dashboard-data` branch ("Where
-   things live"). For the notebook's figures, run `python scripts/publish-counts.py` and read them
-   from that branch (`git show origin/dashboard-data:docs/dashboard/token-usage.json`). Each Defect
-   line carries `catchable:`, the earliest layer that could have caught it (`specs/README.md`). At a
-   phase's last close only, relabel the defects of the phase's Days blind (each Day the phase has
-   not relabelled at its own close; Phase 3: Days 16 to 18):
-   `python scripts/relabel.py blind specs/day-16-*.md specs/day-17-*.md specs/day-18-*.md --out <dir>`, give
-   `<dir>/blind.md` to the **defect-rater** agent, save its JSON as `<dir>/labels.json`, run
-   `python scripts/relabel.py compare <dir>`, and paste its lines unchanged in the PR (the dashboard
-   counts each Day's `Day NN:` block in the last whole run there) with a decision on each disagreement: the tag kept, and why, or changed in that Day's Notes. Commit the break manifest
-   `specs/breaks/day-NN.json` with the actual mutation arguments, the `manifest:` lines the
-   track PRs recorded (format and example in
-   [`specs/README.md`](specs/README.md#evidence-at-the-close)); from Day 12 the tracks recorded
-   it already, and `python scripts/break-lines.py --spec specs/day-NN-slug.md` checks the spec's
-   `broken:` lines against it and prints the ones it lacks. After this closing PR merges,
-   on fresh `main`, run
-   `python scripts/evidence.py specs/day-NN-slug.md --ref main --json evidence.json` and retain
-   the report for local runs. CI replays automatically after the merge; check its run in step 5.
-   Replay finds a **merged closing commit**; squash-merged closing PRs count too. Keep **missing** evidence/report, **stale**
-   inputs or closing commit, and **failed** replay checks separate; resolve each before
-   advancing. Execution errors also block advancement; review reasons for inapplicable checks.
+3. **A closing PR:** `day-NN/close-the-day`. Tick each criterion with its evidence, add Notes
+   to the spec, update the lab notebook, paste what `close-views.py` prints, commit the break
+   manifest, and at a phase's last close relabel the phase's defects blind: the commands are in
+   [The close, step by step](docs/procedure.md#the-close-step-by-step). Rehearse the replay
+   before opening it (`close-evidence.py --rehearse`); after it merges, run `evidence.py` on
+   fresh `main` and keep missing, stale and failed evidence apart, resolving each before
+   advancing.
 4. **After opening any PR, stop and wait for the maintainer to say "merged".** Do not start the
    next step, and do not start a new phase, until told.
 5. **After a closing PR's "merged", check evidence before advancing:** run
    `gh run list --workflow evidence.yml --commit <sha>` for its merge commit, then
    `gh run view <run-id> --exit-status`. Require a completed successful run; a failed, missing,
-   pending or cancelled run blocks the next step. Inspect its checks and retain its evidence
-   artifact. This post-merge gate cannot block its own merge. The same check rehearses the replay
-   on the closing PR, before the merge, and that one can be required ("Breaks on purpose", below).
-   **After every "merged", refresh the dashboard before the next step:** the merge rebuilds the
-   [public one](https://yusuprozimemet.github.io/agentic-workflow-driver/) by itself (`.github/workflows/dashboard.yml`). On fresh
-   `main`, run `python scripts/spec-drift.py` and report the next step it prints. The page on
-   GitHub Pages is the only dashboard; nothing else is republished.
+   pending or cancelled run blocks the next step. Retain its evidence artifact.
+   **After every "merged",** on fresh `main`, run `python scripts/spec-drift.py` and report the
+   next step it prints (the merge rebuilds the
+   [public dashboard](https://yusuprozimemet.github.io/agentic-workflow-driver/) by itself).
    **Then stop.** Tell the maintainer to start a new session (or `/compact`) for the next step,
-   with a one-line prompt for it, and do nothing more in this one. This holds after every
-   "merged": a day's PR, a `tooling/` or other area branch, a spec-change PR, and a close whose
-   next step is step 6. A hook enforces it (`scripts/step-guard.py`): after a short "merged" it
-   refuses subagents, edits inside the repository, branches, commits, pushes and PRs until a new
-   session, `/clear` or `/compact`. In bearing, the rule alone was read past twice in a row
-   (bearing D01.23, D01.24).
-6. **When a phase's last closing PR has merged,** in a new session after step 5, on fresh `main`: run the
-   plan-auditor on the phase that just ended and on the next (at the end of Phase 3, the three end-of-phase auditors too), report, and stop. They never run inside the
-   closing PR: they read what merged. Beside their report, give the maintainer the phase-end table:
-   `python scripts/phase-table.py spec-drift.json --phase N` (and with no `--phase`, every phase). It
-   flags nothing; the maintainer reads it. Its "after the close" is not an escape (`made:` another Day).
+   with a one-line prompt for it, and do nothing more in this one, after every kind of PR. A hook
+   enforces it (`scripts/step-guard.py`): after a short "merged" it refuses subagents, edits,
+   branches, commits, pushes and PRs until a new session, `/clear` or `/compact`. In bearing, the
+   rule alone was read past twice in a row (bearing D01.23, D01.24).
+6. **When a phase's last closing PR has merged,** in a new session after step 5, on fresh
+   `main`: run the plan-auditor on the phase that just ended and on the next (at the end of
+   Phase 3, the three end-of-phase auditors too); they read what merged, never the closing PR.
+   Beside their report, give the maintainer the phase-end table
+   (`python scripts/phase-table.py spec-drift.json --phase N`; it flags nothing, and its "after
+   the close" is not an escape) and the outside review's prompt
+   ([`docs/outside-review.md`](docs/outside-review.md)), for a model outside this repository.
+   Report, and stop.
 
 Tracks may run in a different order from the spec's table when one depends on another; say so in
 the PR.
 
 ## One session per step
 
-Every reply re-reads the whole conversation, and that re-reading is most of what the project
-costs: in jobmatch-microservices, up to Day 17, 61% of the main sessions' context tokens were
-read after a session had passed 300k, and 29% over the whole project
-(`python scripts/token-usage.py --compare --repo <its path> --split 2026-09-28`). So a step starts in a fresh
-session: after reporting the next step in step 5, suggest the maintainer start a new session for
-it (or `/compact` if they keep this one), and stop: `scripts/step-guard.py` refuses new work
-until they do. Nothing is lost: the spec, `spec-drift.json`, this file
-and memory carry what the next step needs. `python scripts/token-usage.py --simulate` prints what
-a fresh session past 100k, 200k or 300k, or each tool result capped at 2k or 5k tokens, would have
-saved on this machine's transcripts.
-
-Output that lands in the main session is re-read by every later reply. Keep it small:
+A step starts in a fresh session (principle 4): after step 5, the maintainer starts a new session
+or `/compact`s, and `scripts/step-guard.py` refuses new work until they do. Nothing is lost: the
+spec, `spec-drift.json`, this file and memory carry what the next step needs.
+`python scripts/token-usage.py --simulate` prints what fresher sessions or capped tool results
+would have saved on this machine's transcripts. Keep the main session's output small:
 
 - Test runs and CI logs: filter to the failures and the counts (`grep`, `tail`), or have a
   subagent read them and return the summary. Never print a whole log or report.
@@ -135,14 +138,15 @@ Output that lands in the main session is re-read by every later reply. Keep it s
   (`run_in_background`) with `gh pr checks <n> --watch > <file>`, then print only the final
   `gh pr checks <n>`: never watch it in the foreground.
 - Read the part of a file you need (`offset`/`limit`, `grep -n`), not the whole file, unless the
-  step changes all of it. Diffs: `--stat` first, then the files that matter. A hook enforces the
-  first half ("Where things live").
+  step changes all of it. Diffs: `--stat` first, then the files that matter. Hooks refuse a
+  whole Read of a file over 8,000 bytes and cut long Bash output
+  ([The hooks](docs/procedure.md#the-hooks)).
 
 ## The auditors
 
 `.claude/agents/plan-auditor.md` and `.claude/agents/spec-auditor.md`. Separate agents with their
 own brief and a fresh context, so the session that implements is not the only one checking its
-own specs: in this repository that session has read past its own errors more than once.
+own specs (principle 2).
 
 | When | Run | What it answers |
 |---|---|---|
@@ -152,140 +156,65 @@ own specs: in this repository that session has read past its own errors more tha
 | a stopping point `plan.md` names, before going on | plan-auditor, on the whole plan | Is `plan.md` still the right plan, and what has piled up that no day owns? |
 | the closing PR of Phase 3 (level 3: phases chain) has merged, on fresh `main` | security-ops-auditor, agentic-engineering-auditor, architecture-auditor | Can the workflow take more autonomy safely; what does it show about agents; do its gates hold? |
 | a phase's last close, after the Notes are written | defect-rater, on `relabel.py`'s blind file of the phase's Days | Does a reader who did not write the phase tag its defects the same way? |
+| a phase's last closing PR has merged, beside the plan-auditor | a model outside this repository, given [`docs/outside-review.md`](docs/outside-review.md) by the maintainer | Would a reader with none of this repository's habits accept a few of the phase's merged PRs? |
 | any time, by hand | either | "use the plan-auditor on Phase 3" |
-| a PR edits a brief that has cases (`specs/agent-cases/`: the defect-rater, the track-reviewer, the spec-auditor, and the driver's reviewer in `rules/reviewer.md`) | `python scripts/agent-cases.py <agent>` | Does the agent still answer its known cases as it did? A count, not a gate: paste its lines in the PR (CI's "A changed brief shows its case count" checks they were run on the brief the PR ends with, and that the agent's cases did not change beside it: only `recorded` may), and `--record` when the maintainer accepts the new count. A case change goes in its own PR, so a brief is never measured on cases written to fit it. |
-| only when the maintainer asks to improve an agent with cases | `python scripts/improve-loop.py <agent>`, which starts the **brief-improver** | Would a drafted brief, or one with an unused passage cut, answer more of the agent's known cases? It returns a draft; the script counts it, before and after, and each cut alone, into `.claude/state/improve-loop/<agent>/report.md`. Advice: an approved draft goes in a `tooling/brief-<agent>` PR, counted and recorded there with `agent-cases.py`. |
-| only when the maintainer asks for it by name | instrument-auditor | Starting from a picture of every view of the live page, those behind a button or a closed section included: is each view true when recounted from git and GitHub, and what does each say needs fixing, in the dashboard or in the project? "On the tooling": do the tooling scripts still enforce the rules they were written for? |
+| a PR edits a brief that has cases (`specs/agent-cases/`: the defect-rater, the track-reviewer, the spec-auditor, and the driver's reviewer in `rules/reviewer.md`) | `python scripts/agent-cases.py <agent>` | Does the agent still answer its known cases as it did? A count, not a gate: paste its lines in the PR, `--record` when the maintainer accepts it, and change cases only in a PR of their own ([Agents with cases](docs/procedure.md#agents-with-cases)). |
+| only when the maintainer asks to improve an agent with cases | `python scripts/improve-loop.py <agent>`, which starts the **brief-improver** | Would a drafted brief, or one with an unused passage cut, answer more of the agent's known cases? Advice ([Agents with cases](docs/procedure.md#agents-with-cases)). |
+| only when the maintainer asks for it by name | instrument-auditor | Is each view of the live page, those behind a button or a closed section included, true when recounted from git and GitHub, and what does it say needs fixing? "On the tooling": do the tooling scripts still enforce their rules? |
 
 The instrument-auditor is manual only: no step of a day, no close, no phase end and no driver run
 starts it, and a session does not start it on its own initiative. Its report is advice.
 
-Both check hand-offs: what earlier days' Notes and test comments defer to a later day. Nothing
-else carries them forward, and that is where most gaps have come from.
+The plan-auditor and spec-auditor both check hand-offs: what earlier days' Notes and test
+comments defer to a later day. Nothing else carries them forward, and that is where most gaps
+have come from. The three end-of-phase auditors run on Opus, each from a fresh context, and read
+none of the others' reports: their disagreement is part of the result.
 
-The three end-of-phase auditors run once, on Opus, on fresh `main` after the closing PR of
-Phase 3 (level 3: phases chain) has merged, beside the plan-auditor on Phase 3 and on the whole plan. Each runs from a fresh context and reads none of
-the others' reports: their disagreement is part of the result.
-
-"Read-only" is enforced as far as a hook can: `.claude/settings.json` runs
-`scripts/auditor-guard.py` on every Bash command and every subagent's stop. For the six
-auditors with Bash, and the track-reviewer, it blocks a git command that changes a repository (but `git -C <absolute
-path> fetch` into another repository, a scratch clone, passes) and a `gh` command that is
-not a read, and at the auditor's stop it compares HEAD, the refs, the stash and `git status` with
-what they were and sends the auditor back once if they changed; the main session and other agents
-pass. It is not a sandbox: it reads the command, not what a program does (`python -c` that writes
-a file gets through), and the stop sees only what git shows in this repository. The hooks sit in
-the project settings, not the agents' frontmatter: the VS Code extension's Claude Code (2.1.312)
-ignored frontmatter hooks. VS Code Copilot reads the same settings, ignores the matcher and sets
-no `CLAUDE_PROJECT_DIR`; the hook command reads that variable in Python and passes without it, since a
-missing script exits 2 and denied every Copilot tool call (seen in PR #58). An edit to `.claude/` takes effect in the next session, not this one.
+"Read-only" is enforced as far as a hook can (`scripts/auditor-guard.py`): a command guard, not a
+sandbox ([The hooks](docs/procedure.md#the-hooks)).
 
 Their findings are advice to the maintainer. What becomes a PR is the maintainer's call.
 
 ## The implementer
 
-`.claude/agents/implementer.md`, on Haiku (`claude-haiku-5-5`): the maintainer's
-choice, so that code is written by a smaller model and everything else stays with the main session. For each track, the main session
-writes the brief (files, changes, tests), sends it, and then does what the implementer does not:
-reviews the diff, runs the full checks in "Before pushing", breaks the code on purpose, commits,
-and writes the PR. Specs, audits, spec-change PRs and closing PRs stay with the main session. The
-implementer never commits or pushes.
+`.claude/agents/implementer.md`, on Haiku (`claude-haiku-5-5`), the maintainer's choice. For each
+track, the main session writes the brief (files, changes, tests, the spec's exact expected
+outputs), sends it, and then does what the implementer does not: reviews the diff, runs the full
+checks in "Before pushing", breaks the code on purpose, commits, and writes the PR. Specs,
+audits, spec-change PRs and closing PRs stay with the main session. The implementer never
+commits or pushes.
 
-A brief that carries the spec's exact expected outputs lets the implementer finish in one pass.
-Before sending it, run `python scripts/brief-check.py <brief file>`: it fails when a backticked
-name sits in another file than the one the line names (D07.24, D08.77).
-Then give the brief's file to the **track-reviewer** agent (`.claude/agents/track-reviewer.md`),
-with the word "brief": from a fresh context it greps the callers of what the brief changes,
-walks each fake's states and works out each expected count, which nothing checked before the
-implementer's first run (D09.22, D09.23, D11.24, D12.33). Fix the brief before sending it, and
-record each finding you take as a Defect line, `found: track-reviewer`.
-Every track PR shows its new tests failing first (`specs/README.md`). When the tests live under
-`tests/`, `python scripts/seen-red.py --expect <regex> -- <the test command>` runs the branch's
-`tests/` on `main`'s code in a scratch worktree and prints the `seen red: ... → <what it reported>`
-line for the PR; exit 1 means they pass there, or fail for another reason than `--expect`, the
-spec's Red today (D08.67), or a failure line holds what `break.py` refuses in a break's report
-(a uuid, a pid, a commit hash, an absolute path, "[N chars]"): the test is rewritten then, before
-the code, not at the break (D12.37, D12.40). A red that passes is not a break's report proved
-fit: a break may reach another assertion. Otherwise, without a Track 0 or an extra commit, stash the
-code change (`git stash push -- <the code's directory>`), run the new tests on `main`'s code,
-compare with what the spec says fails today, `git stash pop`, and put what they reported in the
-PR. CI's "Track tests seen red" re-runs each `new` criterion's test this way when the
-repository variable `TRACK_RED_RUNNER` names the project's runner (`docs/kit.md`, setup); unset, it fails
-a track that owns a `new` criterion and passes the rest.
+Before sending a brief, run `python scripts/brief-check.py <brief file>` (a backticked name in
+another file than the line names, D07.24, D08.77), then give the brief's file to the
+**track-reviewer** with the word "brief": it greps the callers of what the brief changes, walks
+each fake's states and works out each expected count. Fix the brief first, and record each
+finding you take as a Defect line, `found: track-reviewer`.
 
-Run it at the track's start, not after its code: the brief gives the spec's Red today, and the
-implementer writes the tests, runs `seen-red.py --expect` on them and stops if they are not red
-for that reason, before any code (the maintainer's choice, #212 S6). Run it again yourself before
-the PR; breaks stay with the main session. Before the breaks, send the track-reviewer again,
-with the word "diff" and the PR body's draft: it answers the checklist in
+New tests are seen red at the track's start, before any code: the implementer writes them, runs
+`python scripts/seen-red.py --expect <the spec's Red today> -- <the test command>`, and stops if
+they are not red for that reason (#212 S6; [Seen red](docs/procedure.md#seen-red)). A `new` test
+already green on `main` is a spec defect, a hold or a test that checks the wrong thing. Run it
+again yourself before the PR. Before the breaks, send the track-reviewer again, with the word
+"diff" and the PR body's draft: it answers
 [Reviewing a track's diff](specs/README.md#reviewing-a-tracks-diff) and checks each claim of the
 PR against the diff (D11.30, D11.31). Then read the diff yourself: what it found is
 `found: track-reviewer`, what you find after it `found: review`. It is not the driver's reviewer
-(`rules/reviewer.md`), which reads the pull request once it is open. A `new` test already green on `main`
-is a spec defect, a hold or a test that checks the wrong thing; four reached CI's check after their
-track's code was written (D09.26, D10.12, D10.13, D11.19), and the code was written for nothing.
+(`rules/reviewer.md`), which reads the pull request once it is open.
 
 Re-count any number the implementer reports (lines, tests, entries in a file) before it goes in
 a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 
 ## Before pushing
 
-- Run `python scripts/pre-push.py --title "<PR title>" --body <body file>` on the committed
-  branch: one line per PR check with a local command (`invariants.py main HEAD`, "Frozen files
-  stay unedited", among them), exit 1 on any failure; "A track's breaks replay" needs Linux and
-  only says so. The items below say what each one is for. Its "Tests" line runs the test files
-  the branch changes 5 times each inside the whole run (`test-parallel.py --repeat 5 --of
-  <files>`), which CI does not: a test that fails on and off under load is met in the PR that
-  wrote it, not in a later track's full run (D12.34 passed 25 of 25 alone). The scripts' own
-  tests (`scripts/test_*.py`) are not repeated.
-- Run the check-only style command `ruff check . && ruff format --check .`; it must fail on unformatted code and never rewrite files.
-- While working, run only the test files the change touches
-  (`python scripts/test-parallel.py "test_setup*.py"`, a glob under `tests/`), and name them in
-  an implementer's brief; the full run below goes once, before pushing. Waiting on commands
-  was 55% of the main session's busy time over 6 to 15 Nov, most of it whole-suite runs (#212, S1).
-- Run `python scripts/test-parallel.py` from the repository root: the whole of `tests/`, one
-  file per process, slowest first, the failures printed whole. It is the same tests as
-  `python -m unittest discover -s tests`, which CI (`tests.yml`) runs serially with `-v`, and
-  which the specs' Verify blocks replay; on this machine the serial run takes 2 to 8 minutes
-  and the runner about half (337 s against 164 s, back to back), since the suite's time is
-  spent starting processes (#60); the runner's floor is its slowest file, `test_on.py`. Run
-  the serial command only to reproduce CI. Nothing is built first; the tests need
-  `numpy` (`ContractTest` loads `scripts/spec-drift.py`). CI runs the style check and the
-  serial command, nothing the local commands do not. A failing file's output is kept in
-  `.claude/state/test-failures/` and its path printed: a failure seen once is not lost
-  (D07.27, D08.81). For a file that fails on and off, `--repeat 10 <file>` says how often, and
-  `--repeat 10 --of <file>` says it with the whole suite as the load.
-- There is no test report directory: read unittest's "Ran N tests" and "OK" lines, and that N is
-  the count the change should give, not the exit code.
-- A test that passes before and after a change proves nothing until it has been seen to fail.
-  Break the code on purpose, run it, record what it reported, revert. The break never merges.
-  Record it in one line, `broken: <what> → <what it reported>` (`specs/README.md`): the
-  dashboard reads no other wording. `scripts/break.py` does one break this way and prints the
-  line: one exact replacement, the file's bytes put back, the command run without a shell, a build
-  only with `clean`, the check run twice with the break in. It refuses a report that differs
-  between the two runs or holds a pid, a uuid, a commit hash or an absolute path: have the test
-  print a fixed word there (`<uuid>`, `<head>`), in a fixture too. Hand-run breaks have half-applied, skipped the compile, never started the
-  build, and lost unstaged work. Above the `broken:` line it prints `manifest: {...}`, the
-  break's entry for the close's break manifest: put it in the PR beside its `broken:` line.
-  Paste it as printed into the body file and check it with `gh pr view <n> --json body`: retyped
-  or passed through a shell string, it loses a level of backslashes (`\s` for `\\s`) and no
-  longer parses or matches (bearing D01.21). GitHub's rendered page drops one too: copy from the
-  raw body. CI's "A track's breaks replay" (`scripts/track-breaks.py`) replays them, and the
-  day's earlier tracks', on Linux on the PR's merge commit, and runs again when the body is
-  edited: a report recorded on Windows, or a find this track rewrote, fails there and not at the
-  close. Record the break again in this PR's body, under the same `<what>`, with CI's report.
-  On a `day-NN/` branch, run it with `break.py --record` instead, commit `specs/breaks/day-NN.json`
-  with the code, and paste what `python scripts/break-lines.py` prints: CI replays the record,
-  and a re-run replaces its entry. When CI's report differs from the recorded one, take it with
-  `break.py --take-reports` (CI's output names the artifact). When CI says an earlier Day's break
-  "no longer applies", re-record or retire it in this PR, as its line says
-  ([Evidence at the close](specs/README.md#evidence-at-the-close)).
-- The PR diff must stay under **400 changed lines** (CI: "Diff stays reviewable"). If it does not,
-  split the PR along a line where each part stands alone. An `Oversized:` line in the
-  description turns the failure into a warning. None yet. `main` is protected, so the check must
-  pass before a merge.
-- A grep criterion cannot tell a comment from code: do not name, in a comment, the thing the
-  day's grep checks is gone.
+Run `python scripts/pre-push.py --title "<PR title>" --body <body file>` on the committed branch:
+one line per PR check with a local command, exit 1 on any failure. Then the check-only style
+command `ruff check . && ruff format --check .`, and `python scripts/test-parallel.py` once for the
+whole of `tests/` (while working, only the files the change touches). Read unittest's "Ran N
+tests" and "OK", and that N is the count the change should give. Break each check once with
+`scripts/break.py` and copy the `broken:` line and `manifest:` it prints into the PR's raw body.
+The diff stays under 400 changed lines, or carries an `Oversized:` line. What each step is for,
+and the traps in each, are in [Before pushing](docs/procedure.md#before-pushing) and
+[Breaks on purpose](docs/procedure.md#breaks-on-purpose).
 
 ## Stop and ask, do not patch
 
@@ -299,13 +228,12 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 
 - **State:** no database. The driver decides from git and GitHub; its run log, lock and halt
   file sit in its own folder, uncommitted (`plan.md`, "Recovery").
-- **Measurement:** `python scripts/spec-drift.py --out spec-drift.json` rebuilds the project
-  dashboard's data from git and GitHub; `--build` writes the page (`docs/dashboard/`) with it, and until the first day spec exists it shows example data under a banner; `--out` never does.
-  Every merge to `main` republishes it to [GitHub Pages](https://yusuprozimemet.github.io/agentic-workflow-driver/).
-- **What git and GitHub cannot give the page:** one route, the `dashboard-data` branch, filled by machines and never committed to `main` (the seven files are gitignored there). A SessionStart and a SessionEnd hook run `scripts/publish-counts.py --detach`: it counts in the background from the last count on the branch, pushes the five count files (`token-usage.json`, `refusals.json`, `gates.json`, `sessions.json`, `counted.json`) and the driver's count (`driver-runs.json`, from the run log beside `run-steps.py`) to that branch (no working tree or branch here moves) and asks for the page's rebuild. A count with nothing new is not pushed, and a push that lost a race with another session's is built again on it. After every merge to `main`, `.github/workflows/recheck.yml` re-checks the merges with no Linux row (`scripts/replay-history.py`) and pushes `replay-history.json` to the same branch. `spec-drift.py` fetches the branch and reads the seven there, in CI and in a local run alike; with the branch or one of its files missing, the page says so in a banner and draws none of it. What the publisher printed is in `.claude/state/publish-counts.log`: read it when the page's session lanes stand still.
-- **Whole-file Reads:** a PreToolUse hook (`scripts/read-guard.py`) refuses a Read with no `offset`, `limit` or `pages` of a file over 8,000 bytes, and names its size and line count. Find the part with `grep -n` and read that range; to read all of it on purpose, give the `limit` it names. Edit works after a ranged Read. Images, PDFs and notebooks pass.
-- **Refusals:** step-guard, read-guard and auditor-guard each append every refusal to `.claude/state/refusals.jsonl` (gitignored; `scripts/refusal_log.py`). `token-usage.py` counts it into `refusals.json` on the `dashboard-data` branch, shown under the dashboard's graph 8 ("What did it cost?") and as a row of graph 2. Many of one kind mean a rule is read past or in the way: say so in the day's Notes.
-- **Long Bash output:** a PostToolUse hook (`scripts/cap-output.py`) cuts stdout over 8,000 characters to its head and tail; the full output is in `.claude/tool-output/` (gitignored). Claude Code merges stderr into stdout, so a failing command's error comes back at the end of stdout with stderr `''`: it is cut, and the tail (last 3,000 characters) keeps it; the stderr guard only catches a separate stderr. An interrupted command is left whole, as is output of 30,000 characters or more, which Claude Code saves itself.
+- **Measurement:** `python scripts/spec-drift.py --out spec-drift.json` rebuilds the dashboard's
+  data from git and GitHub; every merge to `main` republishes the page. What git and GitHub cannot
+  give it lives on the `dashboard-data` branch, filled by hooks and CI, never committed to `main`
+  ([Where the counts live](docs/procedure.md#where-the-counts-live)).
+- **Refusals:** the guards log every refusal to `.claude/state/refusals.jsonl`, counted on the
+  dashboard. Many of one kind mean a rule is read past or in the way: say so in the day's Notes.
 
 ## Pitfalls this repository has already hit
 
@@ -314,15 +242,13 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
   session (a scratch virtualenv in the kit's workflow comparison). Leave a scratch directory in
   the session's scratchpad, remove it with `python -c "import shutil; shutil.rmtree('<dir>')"`,
   or let the build's `clean` delete old reports.
-- A project started from the kit inherits the kit's `docs/dashboard/token-usage.json`, and
-  `token-usage.py` never lowers a row: the kit's six dates stayed on graph 8 as $151.56 of
-  "set-up" until they were deleted by hand. The counts now live on the `dashboard-data` branch:
-  a project started from the kit must not copy that branch.
 - The dashboard's dollars are API list prices, not a bill, and its sessions are this repository's
   only. On the page, "Day" is the plan's step and "date" the calendar's: keep the capital.
+- `scripts/spec-drift.py` reads `main` by name: on a branch it shows `main`. To see a branch's
+  effect, merge it into a scratch clone ([The dashboard script](docs/procedure.md#the-dashboard-script)).
 
 What a session learns goes here, not into the next session's prompt: every session reads this
-file. None of this project's own yet.
+file. A lesson that only one step needs goes in `docs/procedure.md`, under that step.
 
 On Windows, in Git Bash and PowerShell:
 
@@ -339,50 +265,8 @@ On Windows, in Git Bash and PowerShell:
   to a scratch file (`git commit -F`, `gh pr create --body-file`); give the maintainer one-line
   commands, with any JSON in a file (`gh api --input <file>`).
 - The Write tool will not overwrite a file this session has not read, even one a shell made.
-
-Breaks on purpose:
-
-- Name the exact test, and check that the run failed: an error in the setup proves nothing.
-  Clear the language's caches first (Python: `PYTHONDONTWRITEBYTECODE=1`, no `__pycache__`).
-- Run the break, then copy its `broken:` line from what `scripts/break.py` printed. A line
-  written before the run differed from the report.
-- On Windows, `bash` may be WSL's, which never starts the check ("execvpe(/bin/bash) failed"):
-  name Git Bash by its full path (`"C:/Program Files/Git/bin/bash.exe" -c "..."`). `break.py`
-  refuses such a run rather than record it.
-- A check judged by what it prints, not its exit code (`grep -c` exits 1 at 0, a count): pass
-  `--expect-stdout <regex>`, its output without the break; break.py refuses if it does not match,
-  or if it matches any output (`^$` under `re.M` does, D11.21): for "prints nothing", `\A\Z`.
-- On a CRLF tree, a `git diff --exit-code` check prints git's CRLF warning, and `break.py`
-  reports that warning as the check's line: run `git -c core.safecrlf=false diff ...`.
-- Replaying each manifest entry through `break.py` does not check the spec's `broken:` lines
-  against the manifest. In bearing, the Day 10 close did only that, and the replay after its
-  merge failed four lines (bearing D10.20): two breaks shared a name, two lines had no entry,
-  one ended in "(close, D10.19)". The rules are in
-  [Evidence at the close](specs/README.md#evidence-at-the-close). Before opening the closing
-  PR, commit the close and run `python scripts/close-evidence.py --rehearse day-NN/close-the-day`:
-  it replays the branch as its merge into `main` would, moves no ref, and writes
-  `evidence-rehearsal.json`. CI runs the same on the PR ("A closed day's evidence replays"). On
-  bearing's Day 10 branch as it stood before its merge, it fails those lines. It is not the replay
-  after the merge, which step 5 still checks: `main` can move in between. It does not run the
-  dashboard either: on a scratch clone where the branch is merged with
-  `--no-ff -m "Merge pull request #0 from me/day-NN/close-the-day"`, run `spec-drift.py --out`: a
-  "No evidence and PR cited together" flag on the day's criteria means the Evidence is
-  worded so the dashboard does not count it (bearing D12.11 to D12.13, fixed by a spec change
-  after the close).
-
-The dashboard script and the PR checks:
-
-- `scripts/spec-drift.py` reads `main` by name: on a branch it shows `main`. To see a branch's
-  effect, clone into a scratch directory, merge the branch with `--no-ff`, and run there. Pass
-  `--cache <scratch>/c.json` by hand; `--build` and `--out` do not go together. Its output holds
-  an en dash: grep it with `grep -a`.
-- In a spec, put in backticks only identifiers, paths and commands; quote literal output. The gap
-  reads backticked snake_case and camelCase names as code.
-- CI runs `scripts/behaviour-index.py` to check `Replaces:` lines.
-- Before pushing: `PR_BRANCH=<branch> PR_TITLE="<title>" python scripts/pr-names.py main HEAD`,
-  `git diff --numstat main...HEAD`, and `python scripts/check-links.py` on each Markdown file
-  touched. Re-read the PR body's counts and `broken:` lines. Never force-push without the
-  maintainer's OK.
+- `bash` may be WSL's, which never starts a check: name Git Bash by its full path
+  (`"C:/Program Files/Git/bin/bash.exe" -c "..."`).
 
 ## Commits and pull requests
 
@@ -391,5 +275,4 @@ The dashboard script and the PR checks:
   non-technical reader follows (as a…, I want…, so that…), what was built, why this approach
   (including what was broken on purpose and what it reported), contract impact, how to run, and
   the self-check. Spec-change PRs tick the `new`/`hold` line.
-- Record mistakes, including your own, in the PR and the day's Notes. The corrections are part of
-  what this repository measures.
+- Record mistakes, including your own, in the PR and the day's Notes (principle 5).
