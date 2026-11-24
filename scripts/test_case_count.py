@@ -55,6 +55,48 @@ class MissingTest(unittest.TestCase):
         self.assertEqual([], case_count.missing(["rules/session.md"], CASED, {}, ""))
 
 
+CASES = {"agent": "reviewer", "brief": "rules/reviewer.md", "cases": [{"pr": 1}]}
+
+
+class CasesStayTest(unittest.TestCase):
+    """A brief's proposer never edits its cases in the same pull request."""
+
+    def moved(self, after, changed=("rules/reviewer.md",), before=CASES):
+        return case_count.cases_moved(list(changed), CASED, {"reviewer": (before, after)})
+
+    def test_only_the_recorded_count_may_change_beside_the_brief(self):
+        self.assertEqual([], self.moved(CASES))
+        self.assertEqual([], self.moved(dict(CASES, recorded={"verdict": 3})))
+
+    def test_a_case_added_or_rewritten_beside_its_brief_fails(self):
+        for name, after in {
+            "added": dict(CASES, cases=[{"pr": 1}, {"pr": 2}]),
+            "rewritten": dict(CASES, cases=[{"pr": 9}]),
+        }.items():
+            got = self.moved(after)
+            self.assertEqual(["specs/agent-cases/reviewer.json"], [m.split(":")[0] for m in got])
+            self.assertEqual(
+                [
+                    (
+                        "specs/agent-cases/reviewer.json: its cases changed in the PR that edits"
+                        " rules/reviewer.md: a brief's proposer never edits its cases, so move"
+                        " the case change to its own PR"
+                    )
+                ],
+                got,
+                name,
+            )
+
+    def test_a_case_file_in_the_agents_folder_counts_as_its_cases(self):
+        got = self.moved(CASES, ("rules/reviewer.md", "specs/agent-cases/reviewer/day-1.md"))
+        self.assertEqual(1, len(got))
+        self.assertIn("specs/agent-cases/reviewer/day-1.md", got[0])
+
+    def test_cases_alone_or_a_first_case_set_pass(self):
+        self.assertEqual([], self.moved(dict(CASES, cases=[]), changed=()))
+        self.assertEqual([], self.moved(CASES, before=None))
+
+
 class RunTest(unittest.TestCase):
     """A scratch repository: main, then a branch that edits the brief."""
 
