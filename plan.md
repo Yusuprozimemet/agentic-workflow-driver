@@ -419,8 +419,8 @@ before the PR opened may have left no line.
 | Say "merged", refresh the dashboard, report the next step | maintainer and session | driver | |
 | Check the evidence run after a close | session, step 5 | driver: `gh run list`, `gh run view --exit-status` | a failed, missing or pending run parks |
 | Start a new session | maintainer | driver: each `claude -p` call is one | |
-| Closing PR: ticks, Notes, lab notebook, `token-usage.py`, blind relabel, break manifest, rehearsal | main session | step session, on the same PC; the step sessions' transcripts are in the driver's state, the container's Claude Code folder, and `token-usage.py` is pointed there | "A closed day's evidence replays" |
-| Decide each relabel disagreement | main session, maintainer reads it | step session; the report lists them | |
+| Closing PR: ticks, Notes, lab notebook (its defect counts printed from the Notes by `close-views.py`), `token-usage.py`, break manifest, rehearsal; at a phase's last close, the blind relabel of each of the phase's Days | main session | step session, on the same PC; the step sessions' transcripts are in the driver's state, the container's Claude Code folder, and `token-usage.py` is pointed there | "A closed day's evidence replays" |
+| Decide each relabel disagreement, at a phase's last close | main session, maintainer reads it | step session; the report lists them | |
 | End of a phase: plan-auditor on both phases | session reports, maintainer says go | runs by itself; **parks with the report** until level 3 | |
 | A stopping point `plan.md` names | maintainer | **maintainer**, always | `spec-drift.py` holds the next step |
 | End of the last phase: the three auditors | session reports | run by themselves; **the maintainer reads them** | |
