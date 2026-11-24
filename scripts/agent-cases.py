@@ -3,6 +3,7 @@
     python scripts/agent-cases.py defect-rater              # 3 runs, compared with the recorded count
     python scripts/agent-cases.py defect-rater --record     # and keep this count as the recorded one
     python scripts/agent-cases.py reviewer                  # the driver's reviewer, rules/reviewer.md
+    python scripts/agent-cases.py reviewer --brief d.md     # a draft in its brief's place, never recorded
 
 Nothing else runs an agent on a case whose answer is known: the tests read a brief's shape, and an
 edit that makes the agent miss what it caught shows up as a defect on a later Day, or never. The
@@ -302,12 +303,25 @@ def ask(runner, prompt, cwd, env=None):
     return done.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
 
 
-def reviews(data, runs, out, runner):
+def review_agents(out, brief):
+    """The driver's reviewer for --agents, the draft at `brief` in place of rules/reviewer.md."""
+    if brief is None:
+        return review.agents(out, ROOT)
+    with open(brief, encoding="utf-8") as f:
+        agent = {"description": review.DESCRIPTION, "prompt": f.read(), "tools": review.TOOLS}
+    path = os.path.join(out, "agents.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"reviewer": agent}, f, indent=2)
+    return path
+
+
+def reviews(data, runs, out, runner, brief=None):
     """Each run's replies, one per case, from the driver's reviewer agent in the case's checkout.
     The project's own settings are not loaded (`--setting-sources user`): an old commit's
     session hooks would push counts from the scratch clone."""
     cases = data["cases"]
     paths = [checkout(case, out) for case in cases]
+    agents = review_agents(out, brief)
     if runner is None:
         runner = [
             "claude",
@@ -324,7 +338,7 @@ def reviews(data, runs, out, runner):
             "--max-budget-usd",
             "5",
             "--agents",
-            review.agents(out, ROOT),
+            agents,
             "--agent",
             "reviewer",
         ]
@@ -357,10 +371,11 @@ def pooled(one, runs, paths, out):
     return [got[r * n : (r + 1) * n] for r in range(runs)]
 
 
-def track_agents(repo, out, name="track-reviewer"):
-    """The agent's brief as this repository has it, for --agents: a case's checkout holds the
-    brief of its own commit, which `--agent` would read instead."""
-    with open(os.path.join(repo, ".claude", "agents", name + ".md"), encoding="utf-8") as f:
+def track_agents(repo, out, name="track-reviewer", path=None):
+    """The agent's brief as this repository has it, or the draft at `path`, for --agents: a case's
+    checkout holds the brief of its own commit, which `--agent` would read instead."""
+    path = path or os.path.join(repo, ".claude", "agents", name + ".md")
+    with open(path, encoding="utf-8") as f:
         text = f.read()
     head, _, body = text.partition("\n---\n")
     meta = dict(
@@ -368,6 +383,8 @@ def track_agents(repo, out, name="track-reviewer"):
     )
     tools = [t.strip() for t in meta.get("tools", "Read, Grep, Glob, Bash").split(",")]
     agent = {"description": meta.get("description", ""), "prompt": body, "tools": tools}
+    if "model" in meta:  # the defect-rater's draft runs on the model its brief names
+        agent["model"] = meta["model"]
     path = os.path.join(out, "agents.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({name: agent}, f, indent=2)
@@ -386,7 +403,7 @@ def pr_body(case, repo):
     return done.stdout.decode("utf-8")
 
 
-def tracks(data, runs, out, runner, repo):
+def tracks(data, runs, out, runner, repo, brief=None):
     """Each run's replies from the track-reviewer, one per case, in the case's checkout with `main`
     where the brief was written or at the diff's base, and no remote to read later commits from.
     The project's own settings are not loaded, as for the reviewer."""
@@ -408,6 +425,7 @@ def tracks(data, runs, out, runner, repo):
                 f.write(pr_body(case, data["repo"]))
         paths.append(path)
         prompts.append(TRACK_PROMPTS[case["moment"]].format(**fields))
+    agents = track_agents(repo, out, path=brief)
     if runner is None:
         runner = [
             "claude",
@@ -420,17 +438,15 @@ def tracks(data, runs, out, runner, repo):
             "--max-budget-usd",
             "5",
             "--agents",
-            track_agents(repo, out),
+            agents,
             "--agent",
             "track-reviewer",
         ]
-    else:
-        track_agents(repo, out)
     n = len(cases)
     return pooled(lambda job: ask(runner, prompts[job % n], paths[job % n]), runs, paths, out)
 
 
-def audits(data, runs, out, runner, repo):
+def audits(data, runs, out, runner, repo, brief=None):
     """Each run's replies from the spec-auditor, one per case: the repository at the spec's commit
     in a folder of its own, `main` at the base, no remote, and each repository the case puts
     beside it at its commit. The project's own settings are not loaded, as for the reviewer."""
@@ -449,7 +465,7 @@ def audits(data, runs, out, runner, repo):
             beside += f" `../{other['as']}` is {other['as']} as it stood then."
         paths.append(path)
         prompts.append(AUDIT_PROMPT.format(**dict(case, beside=beside)))
-    agents = track_agents(repo, out, "spec-auditor")
+    agents = track_agents(repo, out, "spec-auditor", brief)
     if runner is None:
         runner = [
             "claude",
@@ -470,35 +486,24 @@ def audits(data, runs, out, runner, repo):
     return pooled(lambda job: ask(runner, prompts[job % n], paths[job % n]), runs, paths, out)
 
 
-def main(argv, repo=ROOT, runner=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("agent")
-    ap.add_argument("--runs", type=int, default=3)
-    ap.add_argument("--record", action="store_true", help="keep this count as the recorded one")
-    ap.add_argument(
-        "--runner",
-        help="the command that takes the prompt on stdin (default: claude -p --agent <agent>)",
-    )
-    args = ap.parse_args(argv)
-    cases_file = os.path.join(repo, "specs", "agent-cases", args.agent + ".json")
-    with open(cases_file, encoding="utf-8") as f:
+def count(agent, runs=3, brief=None, out=None, repo=ROOT, runner=None):
+    """(header, lines, worst) of `runs` runs of the agent on its known cases, with its own brief or
+    the draft at `brief`; worst is None when no run could be counted. Replies go under `out`."""
+    with open(os.path.join(repo, "specs", "agent-cases", agent + ".json"), encoding="utf-8") as f:
         data = json.load(f)
-    out = os.path.join(repo, ".claude", "state", "agent-cases", args.agent)
+    out = out or os.path.join(repo, ".claude", "state", "agent-cases", agent)
     os.makedirs(out, exist_ok=True)
-    runner = runner or (shlex.split(args.runner) if args.runner else None)
-    path = data.get("brief", f".claude/agents/{args.agent}.md")
-    brief = git(repo, "hash-object", path).strip()[:7]
+    path = brief or data.get("brief", f".claude/agents/{agent}.md")
+    sha = git(repo, "hash-object", path).strip()[:7]
+    head = f"{agent}: {len(data['cases'])} cases, {runs} runs, brief {sha}"
     if data.get("kind") == "review":
-        print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
-        replies = reviews(data, args.runs, out, runner)
+        replies = reviews(data, runs, out, runner, brief)
         lines, worst = review_report(data["cases"], replies, data.get("recorded"))
     elif data.get("kind") == "track":
-        print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
-        replies = tracks(data, args.runs, out, runner, repo)
+        replies = tracks(data, runs, out, runner, repo, brief)
         lines, worst = track_report(data["cases"], replies, data.get("recorded"))
     elif data.get("kind") == "audit":
-        print(f"{args.agent}: {len(data['cases'])} cases, {args.runs} runs, brief {brief}")
-        replies = audits(data, args.runs, out, runner, repo)
+        replies = audits(data, runs, out, runner, repo, brief)
         lines, worst = track_report(
             data["cases"], replies, data.get("recorded"), audit_findings, audit_calm
         )
@@ -508,18 +513,45 @@ def main(argv, repo=ROOT, runner=None):
         with open(blind, encoding="utf-8") as f:
             n = len(f.read().splitlines())
         prompt = f"Label the entries in {blind}. It has {n} lines: read it with limit {n}."
-        runner = runner or ["claude", "-p", "--agent", args.agent]
-        print(
-            f"{args.agent}: {len(key)} entries from {len(data['cases'])} specs, {args.runs} runs, brief {brief}"
-        )
-        with ThreadPoolExecutor(args.runs) as pool:
-            replies = list(pool.map(lambda _: ask(runner, prompt, repo), range(args.runs)))
+        if brief:
+            agents = track_agents(repo, out, agent, brief)
+            runner = runner or ["claude", "-p", "--agents", agents, "--agent", agent]
+        runner = runner or ["claude", "-p", "--agent", agent]
+        n = len(data["cases"])
+        head = f"{agent}: {len(key)} entries from {n} specs, {runs} runs, brief {sha}"
+        with ThreadPoolExecutor(runs) as pool:
+            replies = list(pool.map(lambda _: ask(runner, prompt, repo), range(runs)))
         lines, worst = report(key, replies, data.get("recorded"))
+    with open(os.path.join(out, "count.txt"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join([head, *lines]) + "\n")
+    return head, lines, worst
+
+
+def main(argv, repo=ROOT, runner=None):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("agent")
+    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--record", action="store_true", help="keep this count as the recorded one")
+    ap.add_argument("--brief", help="count this draft in place of the agent's brief")
+    ap.add_argument("--out", help="the replies' folder (default .claude/state/agent-cases/<agent>)")
+    ap.add_argument(
+        "--runner",
+        help="the command that takes the prompt on stdin (default: claude -p --agent <agent>)",
+    )
+    args = ap.parse_args(argv)
+    if args.record and args.brief:
+        ap.error("a draft's count is never recorded: record it in the pull request that adopts it")
+    runner = runner or (shlex.split(args.runner) if args.runner else None)
+    head, lines, worst = count(args.agent, args.runs, args.brief, args.out, repo, runner)
+    print(head)
     print("\n".join(lines))
     if worst is None:
         return 1
     if args.record:
-        data["recorded"] = dict(worst, brief=brief)
+        cases_file = os.path.join(repo, "specs", "agent-cases", args.agent + ".json")
+        with open(cases_file, encoding="utf-8") as f:
+            data = json.load(f)
+        data["recorded"] = dict(worst, brief=head.rsplit(" ", 1)[1])
         with open(cases_file, "w", encoding="utf-8", newline="\n") as f:
             f.write(json.dumps(data, indent=1) + "\n")
         print(f"recorded in specs/agent-cases/{args.agent}.json")

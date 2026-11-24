@@ -180,6 +180,22 @@ class RunTest(unittest.TestCase):
         self.assertEqual("no run counted", lines[-1])
         self.assertNotIn("recorded", self.saved())
 
+    def test_a_draft_is_counted_in_its_briefs_place_and_never_recorded(self):
+        draft = os.path.join(self.repo, "draft.md")
+        with open(draft, "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nname: rater\ntools: Read\nmodel: m\n---\ndraft\n")
+        sha = subprocess.run(["git", "hash-object", draft], capture_output=True, check=True)
+        code, lines = self.run_it(json.dumps(RIGHT), "--brief", draft)
+        self.assertEqual((0, "brief " + sha.stdout.decode()[:7]), (code, lines[0][-13:]))
+        agents = os.path.join(self.repo, ".claude/state/agent-cases/rater/agents.json")
+        with open(agents, encoding="utf-8") as f:
+            got = json.load(f)["rater"]
+        want = {"description": "", "prompt": "draft\n", "tools": ["Read"], "model": "m"}
+        self.assertEqual(want, got)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            self.run_it(json.dumps(RIGHT), "--brief", draft, "--record")
+        self.assertNotIn("recorded", self.saved())
+
 
 FAULT = {"repo": "o/bearing", "pr": 7, "at": "abc", "expect": "blocker", "names": "manifest"}
 CLEAN = {"repo": "o/bearing", "pr": 8, "at": "def", "expect": "none"}
