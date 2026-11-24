@@ -440,7 +440,9 @@ class AuditReportTest(unittest.TestCase):
             "named: 0 of 2 name the known fault at worst (1, 0)",
             "clean: 0 of 1 say none on a clean case at worst (1, 0)",
         ]
-        self.assertEqual(want, lines)
+        self.assertEqual(len(want), len(lines))
+        for w, got in zip(want, lines):
+            self.assertEqual(w, got)
         self.assertEqual({"named": 0, "clean": 0, "runs": 2}, worst)
 
     def test_a_report_with_no_findings_section_is_unreadable(self):
