@@ -75,7 +75,7 @@ from spec_drift_data import *  # noqa: F403
 from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
-from spec_drift_views import (actogram, budget, criterion_states, gel, gene, merge_graph, needs_attention, proofreading, protein,
+from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention, proofreading, protein,
                                reading, reflex, rings, where_ring)
 from spec_drift_score import quality_score
 from spec_drift_files import build_file_map
@@ -256,7 +256,7 @@ def main():
                     removals=removal_history(days, snaps, blobs),
                     hand_offs=handoffs, look_ahead=look_ahead(snaps, days, index, order, blobs),
                     criteria_index=index, attention=attention, test_inventory=tests,
-                    defect_recurrence=recurrence(days),
+                    defect_recurrence=recurrence(days), fixes=fixes_record(blobs.read(head, FIXES_FILE), prs),
                     user_stories=stories, plan=planned, gene=gene(planned, index, days),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     defect_counts=defect_counts(days),
@@ -277,6 +277,7 @@ def main():
         real["where_ring"], real["reading"] = where_ring(real), reading(real)
         real["gel"], real["protein"], real["proofreading"] = gel(real), protein(real), proofreading(real)
         real["budget"], real["rings"], real["actogram"], real["reflex"] = budget(real), rings(real), actogram(real), reflex(real)
+        real["learning"] = learning(real)
         real["needs_attention"] = needs_attention(real)  # after the graphs: it reads their verdicts, and `attention` above
         real["file_map"] = build_file_map(head, run)  # every tracked file at its station: read from git, not from the specs
     payload = page_data(real, spec_days) if args.build else real
