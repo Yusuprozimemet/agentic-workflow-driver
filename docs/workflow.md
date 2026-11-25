@@ -82,7 +82,7 @@ flowchart TD
     Close --> W3{{"wait: 'merged'"}}
     W3 --> Dash2["refresh dashboard"]
     Dash2 --> Last{"Last day<br/>of the phase?"}
-    Last -- yes --> PA2["plan-auditor<br/>phase-end review<br/>(after the last phase:<br/>the three end-of-phase<br/>auditors too)"] --> Stop(["Stop. Report.<br/>Wait for the maintainer."])
+    Last -- yes --> PA2["plan-auditor<br/>phase-end review<br/>(after the last phase:<br/>the three end-of-phase<br/>auditors too),<br/>then the outside<br/>review's prompt"] --> Stop(["Stop. Report.<br/>Wait for the maintainer."])
     Last -- no --> Stop
 ```
 
@@ -91,7 +91,7 @@ flowchart TD
 | "start Day N", first day of a phase | plan-auditor, then spec-auditor | findings, then a spec-change or plan-change PR |
 | "start Day N", any other day | spec-auditor | findings, then a spec-change PR |
 | "merged" | dashboard refresh, then the next track or the closing PR | a PR, then wait |
-| "merged" on a phase's last closing PR | dashboard refresh, then the plan-auditor, phase-end review, on fresh `main` | a report; nothing starts until the maintainer says so |
+| "merged" on a phase's last closing PR | dashboard refresh, then the plan-auditor, phase-end review, on fresh `main`, and the outside review's prompt ([`outside-review.md`](outside-review.md)) for the maintainer to give a model outside the repository | a report and a prompt; nothing starts until the maintainer says so |
 | "merged" on the closing PR of Phase 3 (level 3: phases chain, the last phase `plan.md` names) | dashboard refresh, then the three end-of-phase auditors, independently, on fresh `main` | three reports for the maintainer; nothing is destroyed until they say so |
 | any time, by hand | either auditor | for example "use the plan-auditor on Phase 3" |
 
