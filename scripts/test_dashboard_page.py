@@ -1569,7 +1569,7 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   lrnDraw(model(DATA).lrn, $, days);
   days.forEach(f => f(8));
   ({ bars: keys(e, /^d/), lines: keys(e, /^f/), rows: keys(d, /^p/), before: is(e, "l-before"), past: is(e, "l-past"), hatch: is(e, "l-pasth"),
-     held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), dim: [...all(e), ...all(d)].filter(x => has(x, "mk-dim")).map(x => x.attrs["data-k"]),
+     held: is(d, "l-dot-held"), less: is(d, "l-dot-less"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"), dim: [...all(e), ...all(d)].filter(x => has(x, "mk-dim")).map(x => x.attrs["data-k"]),
      figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(), table: $("lrn-fixes").kids[1].kids.length })`, ctx)));
 """
 
@@ -1598,8 +1598,8 @@ class LearnPageTest(unittest.TestCase):
         # a grey segment for each Day with a repeat before a fix; each red segment carries its hatch
         self.assertEqual((out["before"], out["past"], out["hatch"]), (2, 1, 1))
         # a fix in force gets a dot after it, ticked when gone (133), arrowed when reduced (112), crossed when not; one
-        # that counts from no Day yet gets none
-        self.assertEqual((out["held"], out["back"]), (1, 0))
+        # that counts from no Day yet gets none: three fixes, two after dots
+        self.assertEqual((out["held"], out["less"], out["back"], out["early"]), (1, 1, 0, 0))
         # Day 8's button dims every mark of another Day: the bars, the fix lines and the fixes' rows
         self.assertEqual(sorted(out["dim"]), ["d7", "d9", "f9", "p133", "p150"])
         self.assertIn("5 times an old problem came back", out["figs"])

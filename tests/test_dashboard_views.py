@@ -1593,6 +1593,15 @@ class ProofreadingTest(unittest.TestCase):
             (layer["caught"], layer["leak"], layer["gated"], layer["gated_pct"]), (3, 2, 1, 20)
         )
 
+    def test_a_gate_with_no_run_on_record_has_no_cost(self):
+        data = prf_data()
+        row = next(g for g in data["gate_report"]["gates"] if g["found"])
+        row.update(runs=0, cost=0)
+        gates = {g["key"]: g for g in self.prf(data)["gates"]}
+        self.assertIn(row["found"], sorted(gates))
+        g = gates[row["found"]]
+        self.assertEqual((g["runs"], g["cost"], g["per"]), (None, None, None))
+
     def test_the_gate_a_found_value_names_is_graph_7s_rule(self):
         gate_of = load("spec_drift_views", "spec_drift_views.py").gate_of
         cases = {
@@ -1655,6 +1664,20 @@ class ProofreadingTest(unittest.TestCase):
         self.assertIn("2 came back.", words)
         self.assertIn("They are not the 2 caught after the merge: the two sets share 1.", words)
         self.assertIn("Days merged by the count", words)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_layers_label_says_gates_and_the_last_layer_gives_no_rate(self):
+        data = with_prf(prf_data())
+        layers = data["proofreading"]["layers"]
+        self.assertEqual(len(layers), 4)
+        # the second layer: 5 reached it, the gates caught 1 and 2 more were only noticed in the work
+        self.assertEqual((layers[1]["reached"], layers[1]["gated"]), (5, 1))
+        last = layers[-1]
+        self.assertEqual(last["caught"], last["reached"])
+        words = prf_node(data)["prf"]["words"]
+        self.assertIn("gates catch 1 of 5 · 20%", words)
+        self.assertIn(f"finds the last {last['caught']}: no rate", words)
+        self.assertNotIn(f"catches {last['caught']} of {last['reached']} · 100%", words)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
     def test_without_the_data_branch_the_stream_draws_nothing_and_the_banner_says_so(self):
@@ -3115,16 +3138,21 @@ def learn_data():
     return {
         "now": {"head": "abc1234def", "last_pr": 14},
         "days": [
-            {"day": 1, "defects": [defect("D1.1"), defect("D1.2")]},
-            {"day": 2, "defects": [defect("D2.1", "D1.1"), defect("D2.2")]},
+            {"day": 1, "status": "done", "defects": [defect("D1.1"), defect("D1.2")]},
+            {"day": 2, "status": "done", "defects": [defect("D2.1", "D1.1"), defect("D2.2")]},
             {
                 "day": 3,
+                "status": "done",
                 "defects": [
                     defect("D3.1", "D2.1", "track-reviewer"),
-                    defect("D3.2", "D1.2", "Track A"),
+                    defect("D3.2", "D1.2", "evidence replay"),
                 ],
             },
-            {"day": 4, "defects": [defect("D4.1", "D1.1", "auditor"), defect("D4.2")]},
+            {
+                "day": 4,
+                "status": "done",
+                "defects": [defect("D4.1", "D1.1", "Track A"), defect("D4.2")],
+            },
             {"day": 5, "defects": []},
         ],
         "defect_recurrence": {"recurrences": [{"id": i, "same_as": s} for i, s in reps]},
@@ -3201,13 +3229,27 @@ class LearningTest(unittest.TestCase):
         said = " ".join(
             f"{r['day']}:{','.join(r['gated'])}/{','.join(r['leaked'])}" for r in got["days"]
         )
-        self.assertEqual(said, "1:/ 2:/ 3:D3.1/D3.2 4:D4.1/")
-        self.assertEqual((got["past_gated"], got["past_leaked"]), (2, 1))
+        # D3.2 was found by the evidence replay, after the close: past the gates, as D4.1 noticed in the work
+        self.assertEqual(said, "1:/ 2:/ 3:D3.1/D3.2 4:/D4.1")
+        self.assertEqual((got["past_gated"], got["past_leaked"]), (1, 2))
         fixes = {f["pr"]: f for f in got["fixes"]}
         self.assertEqual(sorted(fixes), [10, 11, 12, 14])
         self.assertEqual(keys_in(list(fixes.values()), ("gated", "leaked")), [True] * 4)
-        self.assertEqual((fixes[10]["gated"], fixes[10]["leaked"]), (["D3.1", "D4.1"], []))
+        self.assertEqual((fixes[10]["gated"], fixes[10]["leaked"]), (["D3.1"], ["D4.1"]))
         self.assertEqual((fixes[12]["gated"], fixes[12]["leaked"]), ([], ["D3.2"]))
+
+    def test_a_day_still_open_is_no_day_since(self):
+        data = learn_data()
+        data["clock"]["prs"].append(
+            {"number": 5, "kind": "spec", "day": 5, "merged": "2026-01-05T12:00:00Z"}
+        )
+        got = self.learn(data)
+        self.assertEqual(keys_in(got["fixes"], ("days_since", "rate_after")), [True] * 4)
+        # fix 14 now counts from Day 5, whose spec merged but which has not finished
+        self.assertEqual(
+            [(f["pr"], f["days_since"], f["rate_after"]) for f in got["fixes"]],
+            [(12, 3, 0.33), (10, 2, 1.0), (11, 1, 0.0), (14, 0, None)],
+        )
 
     def test_a_fix_is_rated_by_the_day_before_and_after(self):
         got = self.learn()
@@ -3336,7 +3378,8 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   ({ gate: is(e, "l-gate"), gateh: is(e, "l-gateh"), past: is(e, "l-past"), pasth: is(e, "l-pasth"),
      held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"),
      rows: rows.map(r => [r.attrs["data-k"], all(r).filter(x => has(x, "l-dot-before")).map(x => x.attrs.cy), all(r).filter(x => x.attrs.transform).map(x => x.attrs.transform)]),
-     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim() })`, ctx)));
+     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(),
+     texts: all(e).filter(x => x.tag === "text").map(x => x.textContent) })`, ctx)));
 """
 
 
@@ -3485,8 +3528,12 @@ class LearnDrawTest(unittest.TestCase):
         before = float(out["rows"][2][1][0])
         after = float(re.findall(r"[\d.]+", out["rows"][2][2][0])[1])
         self.assertNotEqual(before, after)
-        self.assertIn("a gate caught 1 before the close, 2 got past the gates", out["figs"])
+        self.assertIn(
+            "a gate caught 1 before the close, 2 got past the gates before the close", out["figs"]
+        )
         self.assertIn("2 fixes old enough to judge", out["figs"])
+        # under each Day with repeats its share of the Day's defects; Day 9, with none, has no share label
+        self.assertEqual([t for t in out["texts"] if t.endswith("%")], ["33%", "75%"])
 
 
 if __name__ == "__main__":

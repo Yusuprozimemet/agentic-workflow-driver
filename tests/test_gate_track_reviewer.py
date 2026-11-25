@@ -56,5 +56,40 @@ class TrackReviewerGateTest(unittest.TestCase):
         self.assertEqual(self.gates("implementer"), [("seen red", 1, 2)])
 
 
+class TrackReviewerReportTest(unittest.TestCase):
+    def test_the_gate_report_gives_the_track_reviewers_catches_its_runs_and_cost(self):
+        spec = importlib.util.spec_from_file_location(
+            "spec_drift_metrics", os.path.join(SCRIPTS, "spec_drift_metrics.py")
+        )
+        metrics = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(metrics)
+        days = [
+            {
+                "defects": [
+                    {"found": "track-reviewer", "cause": "spec"},
+                    {"found": "Track A", "cause": "spec"},
+                ]
+            }
+        ]
+        gates = [
+            {
+                "gate": "track-reviewer",
+                "runs": 2,
+                "replies": 3,
+                "context": 10,
+                "output": 5,
+                "cost": 1.5,
+            }
+        ]
+        report = metrics.gate_report(days, gates, [])
+        rows = {r["gate"]: r for r in report["gates"]}
+        self.assertIn("track-reviewer", sorted(rows))
+        row = rows["track-reviewer"]
+        self.assertEqual(
+            (row["found"], row["defects"], row["runs"], row["cost"]), ("track-reviewer", 1, 2, 1.5)
+        )
+        self.assertEqual(report["elsewhere"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

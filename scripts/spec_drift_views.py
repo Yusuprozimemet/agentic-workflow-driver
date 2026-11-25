@@ -2191,7 +2191,8 @@ def learning(d):
     none, and everything is before it). Per fix, "before" is the defects of the chains its stops sit in on earlier
     Days and "after" those from that Day on; a stop in no chain is a chain of one. Per Day, a repeat is a Defect line
     with a same-as: tag, and it got past a fix when a fix of its chain counted from that Day or earlier; only the
-    Days whose spec has merged get a row, and a fix's days_since counts them.
+    Days whose spec has merged get a row, and a fix's days_since counts those of them that have finished, as a Day
+    still open has observed nothing yet.
 
     A rate is times a Day: the problems before a fix over the Days before it (from the first Day they were
     recorded), and the ones after it over the Days since. A verdict is "gone" when nothing came back, "reduced" when
@@ -2200,6 +2201,7 @@ def learning(d):
     lines = [(x_day["day"], x) for x_day in d.get("days") or [] for x in x_day.get("defects") or []
              if x.get("id") and not x.get("problem")]
     days = sorted(x["day"] for x in d.get("days") or [] if isinstance(x.get("day"), int))
+    row_of = {x["day"]: x for x in d.get("days") or [] if isinstance(x.get("day"), int)}
     ids = {x["id"]: day for day, x in lines}
     count = collections.Counter(day for day, _ in lines)
     gated_ids = {x["id"] for _, x in lines if gate_of(x.get("found")) in LRN_GATED}
@@ -2239,7 +2241,7 @@ def learning(d):
         for i in hit:
             past[find(i) if i in root else i].add(start)
         first = min((ids[i] for i in hit if i in ids), default=None)
-        days_since = sum(1 for day in spec_at if start is not None and day >= start)
+        days_since = sum(1 for day in spec_at if start is not None and day >= start and _finished(row_of.get(day)))
         days_before = sum(1 for day in days if day in spec_at and first is not None and day >= first
                           and (start is None or day < start))
         before = len(hit) - len(after)
