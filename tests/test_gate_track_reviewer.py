@@ -6,10 +6,12 @@ import collections
 import importlib.util
 import json
 import os
+import sys
 import tempfile
 import unittest
 
 SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+sys.path.insert(0, SCRIPTS)  # spec_drift_metrics.py imports its neighbours by name
 spec = importlib.util.spec_from_file_location(
     "token_usage_lines", os.path.join(SCRIPTS, "test_token_usage.py")
 )
