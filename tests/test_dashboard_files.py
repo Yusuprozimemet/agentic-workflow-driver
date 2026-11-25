@@ -309,7 +309,10 @@ class FileMapTest(unittest.TestCase):
 
         # the brief a case set names, .claude/agents/<agent>.md when it names none; a set that cannot be read
         # names no brief, and a case's text in a folder is not a case set
-        self.assertEqual(files.case_briefs(counts, "abc1234", run), BRIEFS)
+        got = files.case_briefs(counts, "abc1234", run)
+        self.assertEqual(sorted(got), sorted(BRIEFS))
+        for agent, brief in BRIEFS.items():
+            self.assertEqual(got[agent], brief, agent)
         m = files.build_file_map("abc1234", run)
         self.assertEqual([t["agents"] for t in m["loop"]["to"]], [["spec-auditor"], ["reviewer"]])
 
