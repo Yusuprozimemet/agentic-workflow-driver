@@ -45,6 +45,21 @@ FILES = {
     ".gitignore": 10, "pyproject.toml": 20,
 }  # fmt: skip
 
+# The improve loop's own files, two case sets (one keeps a case's text in a folder of its own) and the driver's
+# reviewer; then which brief each case set names, as the build reads it from the case sets.
+LOOP = {
+    ".claude/agents/brief-improver.md": 60, "scripts/improve-loop.py": 300, "scripts/test_improve_loop.py": 200,
+    "specs/agent-cases/spec-auditor.json": 90, "specs/agent-cases/reviewer.json": 70,
+    "specs/agent-cases/track-reviewer/day-13-a.md": 40, "rules/reviewer.md": 50,
+}  # fmt: skip
+BRIEFS = {"spec-auditor": ".claude/agents/spec-auditor.md", "reviewer": "rules/reviewer.md"}
+# What the table did not place when the loop was built (#288 to #297): each has a station now.
+ONCE_UNPLACED = (
+    ".claude/agents/brief-improver.md", "scripts/improve-loop.py", "scripts/test_improve_loop.py",
+    "scripts/case-count.py", "scripts/test_case_count.py", "scripts/close-views.py",
+    "scripts/test_close_views.py", "specs/fixes.json",
+)  # fmt: skip
+
 
 def table():
     groups, why = files.load_table()
@@ -213,6 +228,91 @@ class FileMapTest(unittest.TestCase):
             },
         )
 
+    def test_the_improve_loops_files_have_a_station(self):
+        for path in ONCE_UNPLACED:
+            self.assertIsNotNone(files.place(path, table()), path)
+        m = files.file_map(dict(FILES, **LOOP), table(), "abc1234", briefs=BRIEFS)
+        self.assertEqual(m["unplaced"], [])
+        for path in list(LOOP)[:3]:
+            group = home(m, path)[0]
+            self.assertEqual(
+                (group["label"], group["at"]),
+                ("improve loop", "the defect-rater's check, after station 6"),
+                path,
+            )
+
+    def test_the_loop_lands_where_each_brief_with_cases_hangs(self):
+        counts = dict(FILES, **LOOP)
+        m = files.file_map(counts, table(), "abc1234", briefs=BRIEFS)
+        loop, col = m["loop"], files.COLUMNS
+        self.assertEqual(
+            (loop["x"], loop["y"]),
+            (col["defect-rater"]["x"], files.LOOP_Y),
+            "it leaves where its files hang",
+        )
+        self.assertEqual(
+            [(t["col"], t["x"], t["at"], t["agents"]) for t in loop["to"]],
+            [
+                (
+                    "spec-auditor",
+                    col["spec-auditor"]["x"],
+                    col["spec-auditor"]["at"],
+                    ["spec-auditor"],
+                ),
+                ("s5", col["s5"]["x"], col["s5"]["at"], ["reviewer"]),
+            ],
+        )
+        # the picture opens higher to hold the line, and ends where it ended
+        plain = files.file_map(counts, table(), "abc1234")
+        self.assertIsNone(
+            plain["loop"], "no case set names a brief, so there is nothing to land on"
+        )
+        self.assertEqual((plain["geo"]["top"], m["geo"]["top"]), (files.VIEW_TOP, files.LOOP_TOP))
+        self.assertLess(files.LOOP_TOP, files.LOOP_Y - 12)
+        self.assertEqual(
+            m["geo"]["top"] + m["geo"]["height"], plain["geo"]["top"] + plain["geo"]["height"]
+        )
+        # two briefs in one column share an arrow; a brief git does not track gets none
+        more = {"implementer": ".claude/agents/implementer.md", "gone": ".claude/agents/gone.md"}
+        more["track-reviewer"] = ".claude/agents/track-reviewer.md"
+        shared = files.file_map(
+            dict(counts, **{".claude/agents/track-reviewer.md": 100}),
+            table(),
+            "abc1234",
+            briefs=dict(BRIEFS, **more),
+        )
+        self.assertEqual(
+            [(t["col"], t["agents"]) for t in shared["loop"]["to"]],
+            [
+                ("spec-auditor", ["spec-auditor"]),
+                ("implementer", ["implementer", "track-reviewer"]),
+                ("s5", ["reviewer"]),
+            ],
+        )
+        # without the loop's own files there is no loop to draw, whatever has cases
+        self.assertIsNone(files.file_map(FILES, table(), "abc1234", briefs=BRIEFS)["loop"])
+
+    def test_the_build_reads_which_brief_each_case_set_names(self):
+        shown = {
+            "abc1234:specs/agent-cases/reviewer.json": '{"agent": "reviewer", "brief": "rules/reviewer.md"}',
+            "abc1234:specs/agent-cases/spec-auditor.json": '{"agent": "spec-auditor", "cases": []}',
+            "abc1234:specs/agent-cases/torn.json": '{"agent": ',
+        }
+        counts = dict(FILES, **LOOP, **{"specs/agent-cases/torn.json": 1})
+
+        def run(*cmd):
+            if cmd[1] == "ls-tree":
+                return "\n".join(counts)
+            if cmd[1] == "grep":
+                return "\n".join(f"abc1234:{p}:{n}" for p, n in counts.items() if n)
+            return shown[cmd[2]]
+
+        # the brief a case set names, .claude/agents/<agent>.md when it names none; a set that cannot be read
+        # names no brief, and a case's text in a folder is not a case set
+        self.assertEqual(files.case_briefs(counts, "abc1234", run), BRIEFS)
+        m = files.build_file_map("abc1234", run)
+        self.assertEqual([t["agents"] for t in m["loop"]["to"]], [["spec-auditor"], ["reviewer"]])
+
     def test_the_build_puts_it_in_the_data(self):
         wired = real("scripts", "spec-drift.py").count('real["file_map"] = build_file_map(')
         self.assertEqual(wired, 1, "spec-drift.py puts the file map in the data once")
@@ -239,6 +339,7 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   const f = $("fil-fig"), key = $("fil-key");
   ({ dots: is(f, ["f"]), kinds: ["spec", "code", "test", "tool", "tooltest"].map(k => is(f, ["f", k])), groups: is(f, ["grp"]),
      pills: is(f, ["pill"]), plasmid: is(f, ["plasmid"]), ribo: is(f, ["ribo"]), checks: is(f, ["chk"]),
+     loop: [is(f, ["loop-line"]), is(f, ["loop-head"]), is(key, ["loop-line"])],
      keyMarks: [is(key, ["chk"]), is(key, ["ribo"]), is(key, ["f"])], view: f.attrs.viewBox || "", label: f.attrs["aria-label"] || "",
      key: words(key).replace(/\\s+/g, " "), rows: all($("fil-table")).filter(e => e.tag === "tr").length,
      words: ["fil-figs", "fil-key", "fil-hint", "fil-table", "fil-stamp", "fil-how", "fil-scroll"].map(id => words($(id))).join(" ").replace(/\\s+/g, " "),
@@ -316,6 +417,23 @@ class FilePageTest(unittest.TestCase):
         text = (got["words"] + got["label"] + section).lower()
         for gone in ("graph above", "folded below", "the panel it was"):
             self.assertNotIn(gone, text)
+
+    def test_the_page_draws_the_improve_loop_back_to_each_brief_with_cases(self):
+        m = files.file_map(dict(FILES, **LOOP), table(), "abc1234", briefs=BRIEFS)
+        got = page(m)
+        self.assertEqual(
+            got["loop"], [1, 2, 1], "one line, an arrow for each column it lands on, and its key"
+        )
+        self.assertEqual(got["view"], f"0 {files.LOOP_TOP:g} 1236 {m['geo']['height']:g}")
+        self.assertIn("the improve loop", got["figure"])
+        self.assertIn("the improve loop, only when the maintainer asks", got["key"])
+        self.assertIn(
+            "spec-auditor at the spec-auditor's check and reviewer at station 5", got["words"]
+        )
+        # a repository with no case set has no loop: no line, no key for it, no word about it
+        plain = page(drawn(FILES))
+        self.assertEqual(plain["loop"], [0, 0, 0])
+        self.assertNotIn("improve loop", plain["words"] + plain["figure"])
 
     def test_a_file_the_table_does_not_place_is_named_on_the_page(self):
         got = page(drawn(dict(FILES, **{"scripts/brand-new.py": 77})))

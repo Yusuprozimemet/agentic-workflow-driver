@@ -4061,6 +4061,17 @@ function filDraw(F, get) {
     el("circle", { class: "sw", cx: x, cy: y, r: 4 }, null, g);
     el("tspan", { class: "t-bio", dx: 8 }, FIL_REGION[k], el("text", { class: "t-reg", x: x + 10, y: y + 4 }, (zone ? zone.name : k).toUpperCase(), g));
   });
+  // the improve loop is no station: a dashed line over the cell, from the column its files hang at back to each brief with known cases
+  const L = F.loop, loopTo = L ? andList(L.to.flatMap(t => t.agents.map(a => `${a} at ${t.at.split(",")[0]}`))) : "";
+  if (L) {
+    const top = c => c === "implementer" ? 143 : c === "ci" ? 160 : /^s\d$/.test(c) ? 149 : 158; // where a column's mark begins
+    const xs = [L.x, ...L.to.map(t => t.x)], g = el("g", { class: "loop", role: "img", "aria-label": `The improve loop, run only when the maintainer asks: a dashed line back to where each brief with known cases hangs, ${loopTo}` });
+    el("path", { class: "loop-line", d: `M${Math.max(...xs)},${L.y} H${Math.min(...xs)}` + L.to.map(t => ` M${t.x},${L.y} V${top(t.col) - 9}`).join("") }, null, g);
+    L.to.forEach(t => { const y = top(t.col) - 9; el("polygon", { class: "loop-head", points: `${t.x - 3.6},${y} ${t.x + 3.6},${y} ${t.x},${y + 6.5}` }, null, g); });
+    el("circle", { class: "loop-start", cx: L.x, cy: L.y, r: 2.8 }, null, g);
+    el("text", { class: "t-g", x: L.x + 9, y: L.y - 2 }, "the improve loop", g);
+    el("text", { class: "t-bio", x: L.x + 9, y: L.y + 9.5 }, "feedback, on request", g);
+  }
   // the way, left to right, and on it the checks by someone else: a diamond an AI reviewer, a square a script, the gate a person
   el("line", { class: "way", x1: 76, y1: 168, x2: 1182, y2: 168 });
   [188, 360, 498, 674, 962, 1128].forEach(x => el("polygon", { class: "head", points: `${x},164 ${x + 7},168 ${x},172` }));
@@ -4115,7 +4126,8 @@ function filDraw(F, get) {
     entry(ico(14, 14, [["path", { class: "chk", d: "M7,0.5 l6.5,6.5 l-6.5,6.5 l-6.5,-6.5 z" }]]), "check by an AI reviewer"),
     entry(ico(12, 12, [["rect", { class: "chk", width: 12, height: 12, rx: 2 }]]), "check by a script"),
     entry(ico(10, 20, [["rect", { class: "chk", width: 10, height: 8.5, rx: 3 }], ["rect", { class: "chk", y: 11.5, width: 10, height: 8.5, rx: 3 }]]), "check by a person"),
-    entry(ico(26, 18, [["ellipse", { class: "ribo", cx: 13, cy: 6, rx: 12, ry: 5.4 }], ["ellipse", { class: "ribo", cx: 13, cy: 14, rx: 9, ry: 3.4 }]]), "the writer"));
+    entry(ico(26, 18, [["ellipse", { class: "ribo", cx: 13, cy: 6, rx: 12, ry: 5.4 }], ["ellipse", { class: "ribo", cx: 13, cy: 14, rx: 9, ry: 3.4 }]]), "the writer"),
+    ...(L ? [entry(ico(30, 12, [["path", { class: "loop-line", d: "M1,6 H23" }], ["polygon", { class: "loop-head", points: "22,2.4 22,9.6 29,6" }]]), "the improve loop, only when the maintainer asks")] : []));
   const U = F.unplaced || [], them = U.length === 1 ? "it" : "them";
   $("hint").replaceChildren("Point at a dot for the file's name, its length and what it is for.",
     ...(U.length ? [` ${cnt(U.length, "file is", "files are")} in the ring because the table does not place ${them}: ${U.slice(0, 6).join(", ")}${U.length > 6 ? ` and ${U.length - 6} more` : ""}. Add ${them} to `, h("code", null, F.table), "."] : []));
@@ -4130,6 +4142,7 @@ function filDraw(F, get) {
     li("The path is one promise's way.", "Seven numbered stations, left to right, from the written goal to the re-check on later merged code. Between them a diamond is a check by an AI reviewer and a square is a check by a script; the doubled gate in the cell's wall is the maintainer's merge, and the two ovals are the implementer, who writes the code. The small square on station 7 says that station is itself a script's check."),
     li("A folder places itself.", "A file hangs where its folder belongs", ...folders.flatMap((g, i) => [i ? ", " : ": ", h("code", null, g.label), ` at ${g.at.split(",")[0]}`]), ". A new file there appears by itself."),
     li("A script is placed by a short table.", `The ${cnt(F.scripts, "script sits", "scripts sit")} in one folder, so a table says which station each one checks. A script's own test hangs beside it, hollow. A script the table does not name is drawn in the ring, on no station.`),
+    ...(L ? [li("The dashed line is the improve loop.", `It is no station, because no Day runs it: it starts only when the maintainer asks. It drafts a better brief for an agent that has known cases, counts the draft on those cases, and leaves the change to the maintainer. An arrow lands where the brief of each such agent hangs: ${loopTo}.`)] : []),
     li("A dot's area is the file's line count.", "Within a group the longest file comes first."),
     li("Colour is the kind of file.", "They are the page's colours: blue for written text, orange for the app's code, magenta for its tests, grey for tooling and docs."));
 }
