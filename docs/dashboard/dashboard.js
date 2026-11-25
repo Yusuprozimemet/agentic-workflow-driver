@@ -2579,7 +2579,7 @@ function prfDraw(P, get, onDay) {
   const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
   const f = v => (+v).toFixed(1).replace(/\.0$/, "");
   const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
-  const G = P.gates, L = P.layers, T = P.total, k = Math.min(0.4, 143.6 / T), Y0 = 66, last = L.length - 1;
+  const G = P.gates, L = P.layers.map(x => Object.assign({ leak: 0, gated: x.caught, gated_pct: x.pct }, x)), T = P.total, k = Math.min(0.4, 143.6 / T), Y0 = 66, last = L.length - 1;
   const leak = G.find(g => g.key === P.leak), lower1 = s => s.charAt(0).toLowerCase() + s.slice(1);
   const layerWord = i => lower1(L[i].name), gateAt = key => (G.find(g => g.key === key) || {}).at;
   fig.replaceChildren();
@@ -2670,7 +2670,7 @@ function prfDraw(P, get, onDay) {
   L.forEach((x, i) => { const mx = PRF_MEM[i];
     el("rect", { class: "mem", x: f(mx - 3.5), y: 57, width: 7, height: 180, rx: 3.5 });
     el("path", { class: "mem-c", d: `M${mx} 62V232` });
-    const say = `catches ${x.caught} of ${x.reached} · ${x.pct}%`;
+    const say = x.leak > 0 ? `gates catch ${x.gated} of ${x.reached} · ${x.gated_pct}%` : i === last && x.caught === x.reached ? `finds the last ${x.caught}: no rate` : `catches ${x.caught} of ${x.reached} · ${x.pct}%`;
     const b = el("g", { class: "b lay", "data-k": "L", "data-v": i, tabindex: 0, role: "group", "aria-label": `Layer ${i + 1}, ${x.name}: ${say}` });
     el("rect", { class: "hit", x: f(mx + 4 - 172), y: 6, width: 172, height: 48, rx: 4 }, null, b);
     const t = el("text", { x: f(mx + 4), y: 20, class: "t-name", "text-anchor": "end" }, null, b);
@@ -2767,7 +2767,9 @@ function prfDraw(P, get, onDay) {
   // what the picture shows, and where the model bends
   const li = (list, b, t) => list.appendChild(h("li", null, h("b", null, b), t));
   const finds = $("finds"), bends = $("bends"); finds.replaceChildren(); bends.replaceChildren();
-  li(finds, "Each layer, of what reached it.", " " + L.map((x, i) => i === last && x.caught === x.reached
+  li(finds, "Each layer, of what reached it.", " " + L.map((x, i) => x.leak > 0
+    ? `${x.name}: the gates caught ${comma(x.gated)} of ${comma(x.reached)} (${x.gated_pct}%), and ${comma(x.leak)} more were only noticed in the work.`
+    : i === last && x.caught === x.reached
     ? `${x.name}: the last ${comma(x.caught)}, all of them, because nothing uncaught is counted.` : `${x.name}: ${comma(x.caught)} of ${comma(x.reached)} (${x.pct}%).`).join(" "));
   if (leak) { const Lk = L[leak.layer], gated = G.filter(g => g.layer === leak.layer && g !== leak), by = leak.by || { track: 0, self: 0, other: 0 };
     const above = G.filter(g => g !== leak && g.caught > leak.caught);
@@ -2806,7 +2808,9 @@ function prfDraw(P, get, onDay) {
     if (kind === "g") { const g = G[+v];
       return { t: g.label + (g.sub ? ` · ${g.sub}` : ""), l: [`${n(g.caught, "defect", "defects")} caught` + (g.caught ? `: ${causes(g)}.` : "."),
         g.runs != null ? `${n(g.runs, "run", "runs")} · ${money(g.cost)}` + (g.per != null ? ` · about ${money(g.per)} a catch, over its ${n(g.in_count, "catch", "catches")} on the Days merged by the count.` : ".") : "Its runs and cost are not counted.", extra(g), g.does] }; }
-    if (kind === "L") { const x = L[+v]; return { t: `${x.name} · ${x.bio}`, l: [`${x.reached} reached it. ${x.caught} caught here (${x.pct}%). ${x.went_on} went on.`, x.what] }; }
+    if (kind === "L") { const x = L[+v]; return { t: `${x.name} · ${x.bio}`, l: [x.leak > 0 ? `${x.reached} reached it. Its gates caught ${x.gated} (${x.gated_pct}%); ${x.leak} more were only noticed in the work, with no gate. ${x.went_on} went on.`
+      : +v === last && x.caught === x.reached ? `${x.reached} reached it and all ${x.caught} were found here. That is not a catch rate: a defect is counted only once somebody found it.`
+      : `${x.reached} reached it. ${x.caught} caught here (${x.pct}%). ${x.went_on} went on.`, x.what] }; }
     if (kind === "h") { const g = HK.guards.find(x => x.guard === v); return g ? { t: `${g.guard} · ${n(g.refused, "call", "calls")} refused`, l: [hookDoes(g.guard)] } : null; }
     if (kind === "mk" && v === "esc") return { t: `${n(M.escaped.n, "defect", "defects")} made on an earlier Day`, l: ["Counted as graph 7 counts it: the line's made: names a Day, and it is not the Day whose Notes record the defect. A line that says none (made in the plan, a tool or a machine) is not counted.",
       `Drawn square, in the tray of the gate that caught it on the later Day: ${perLayer(M.escaped).join(", ") || "none"}.`] };
@@ -3490,11 +3494,13 @@ function rfxDraw(R, get) {
 const LRN_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const lrnDate = iso => iso ? `${+iso.slice(8, 10)} ${LRN_MON[+iso.slice(5, 7) - 1]}` : "";
 const lrnTimes = n => n === 0 ? "never" : n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+const lrnRate = v => v == null ? "–" : v === 0 ? "0" : v < 0.1 ? v.toFixed(2) : v.toFixed(1);
 const lrnDays = n => `${n} ${n === 1 ? "Day" : "Days"}`;
 const lrnIds = (ids, most) => ids.length > most ? `${ids.slice(0, most).join(", ")} and ${ids.length - most} more` : ids.join(", ");
 const lrnCut = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
 function lrnDraw(L, get, onDay) {
   const $ = id => get("lrn-" + id), tip = $("tip"), days = L.days, fixes = L.fixes || [], tips = {}, groups = [];
+  const wait = L.wait || 5, shared = L.shared || [], pastGated = L.past_gated || 0, pastLeaked = "past_leaked" in L ? L.past_leaked : L.past_fix;
   const byPr = Object.fromEntries(fixes.map(f => [f.pr, f]));
   const mark = (fig, k, day, label) => { const g = svgEl(fig, "g", { class: "b", tabindex: 0, "data-k": k, "aria-label": label }); groups.push([g, day]); return g; };
 
@@ -3503,7 +3509,7 @@ function lrnDraw(L, get, onDay) {
   const most = Math.max(1, ...days.map(x => x.n)), step = most > 30 ? 10 : 5, top = Math.ceil(most / step) * step, U = (E.b - E.t) / top;
   const ep = (n, a, txt, parent) => svgEl(epi, n, a, txt, parent);
   epi.replaceChildren();
-  epi.setAttribute("viewBox", `0 0 ${E.w} ${E.b + 38}`);
+  epi.setAttribute("viewBox", `0 0 ${E.w} ${E.b + 58}`);
   const defs = ep("defs", {}), pat = ep("pattern", { id: "lrn-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
   ep("rect", { class: "l-hatchl", width: 2.2, height: 6 }, null, pat);
   for (let v = 0; v <= top; v += step) {
@@ -3512,26 +3518,29 @@ function lrnDraw(L, get, onDay) {
   }
   ep("text", { class: "l-axis", x: E.l - 40, y: 14 }, "times an old problem came back");
   days.forEach((x, i) => {
-    const cx = E.l + (i + .5) * SW, x0 = cx - BW / 2, nb = x.before.length, np = x.past_fix.length;
-    const g = mark(epi, `d${x.day}`, x.day, `Day ${x.day}: ${x.n} came back, ${np} although a fix was in place`);
-    ep("rect", { class: "hit", x: cx - SW / 2 + 3, y: E.t - 6, width: SW - 6, height: E.b - E.t + 30, rx: 3 }, null, g);
+    const cx = E.l + (i + .5) * SW, x0 = cx - BW / 2, nb = x.before.length, gated = x.gated || [], leaked = x.leaked || x.past_fix;
+    const ng = gated.length, nl = leaked.length, g = mark(epi, `d${x.day}`, x.day, `Day ${x.day}: ${x.n} came back, ${ng} although a fix was in place and caught by a gate, ${nl} although a fix was in place and past the gates before the close`);
+    ep("rect", { class: "hit", x: cx - SW / 2 + 3, y: E.t - 6, width: SW - 6, height: E.b - E.t + 44, rx: 3 }, null, g);
     // a segment from v0 to v1, its top rounded when it is the bar's top, 2 px of card between the two
     const seg = (cls, v0, v1, cap) => {
       const y1 = E.b - v0 * U - (v0 ? 1 : 0), y0 = E.b - v1 * U + (cap ? 0 : 1), r = cap ? Math.min(4, (y1 - y0) / 2) : 0;
       const d = `M${x0} ${y1}V${y0 + r}Q${x0} ${y0} ${x0 + r} ${y0}H${x0 + BW - r}Q${x0 + BW} ${y0} ${x0 + BW} ${y0 + r}V${y1}Z`;
       ep("path", { class: cls, d }, null, g);
-      if (cls === "l-past") ep("path", { class: "l-pasth", d }, null, g);
+      if (cls === "l-past" || cls === "l-gate") ep("path", { class: cls + "h", d }, null, g);
     };
-    if (nb) seg("l-before", 0, nb, !np);
-    if (np) seg("l-past", nb, x.n, true);
+    if (nb) seg("l-before", 0, nb, !(ng + nl));
+    if (ng) seg("l-gate", nb, nb + ng, !nl);
+    if (nl) seg("l-past", nb + ng, nb + ng + nl, true);
     ep("text", { class: x.n ? "l-n" : "l-n0", x: cx, y: E.b - x.n * U - 7, "text-anchor": "middle" }, String(x.n), g);
     ep("text", { class: "l-tick", x: cx, y: E.b + 18, "text-anchor": "middle" }, String(x.day), g);
-    tips[`d${x.day}`] = { t: `Day ${x.day} · ${x.n ? `${x.n} came back` : "nothing came back"}`, l: [
+    if (x.n > 0 && typeof x.share === "number") ep("text", { class: "l-tick", x: cx, y: E.b + 32, "text-anchor": "middle" }, `${x.share}%`, g);
+    tips[`d${x.day}`] = { t: `Day ${x.day} · ${x.n ? `${x.n} came back` : "nothing came back"}${typeof x.share === "number" ? `, ${x.share}% of its ${x.defects} defects` : ""}`, l: [
       nb && `${nb} with no fix in place for it yet: ${lrnIds(x.before, 8)}`,
-      np && `${np} although a fix was in place: ${lrnIds(x.past_fix, 8)}`,
+      ng && `${ng} although a fix was in place, caught by a gate before the close: ${lrnIds(gated, 8)}`,
+      nl && `${nl} although a fix was in place, and past the gates before the close: ${lrnIds(leaked, 8)}`,
       x.fixes.length && `Fixes that count from this Day: ${x.fixes.map(p => "#" + p).join(", ")}`] };
   });
-  ep("text", { class: "l-axis", x: (E.l + E.r) / 2, y: E.b + 34, "text-anchor": "middle" }, "Day");
+  ep("text", { class: "l-axis", x: (E.l + E.r) / 2, y: E.b + 50, "text-anchor": "middle" }, "Day · under it, the repeats as a share of that Day's defects");
   days.forEach((x, i) => {
     if (!x.fixes.length) return;
     const fx = E.l + i * SW, g = mark(epi, `f${x.day}`, x.day, `${x.fixes.length} fixes count from Day ${x.day}`);
@@ -3544,69 +3553,86 @@ function lrnDraw(L, get, onDay) {
   epi.setAttribute("aria-label", "Times an old problem came back, by Day: " + days.map(x => `Day ${x.day}, ${x.n}`).join("; ") + ".");
 
   // the second picture: a row per fix, a grey dot at its times before and a ticked or crossed one at its times after
-  const dmb = $("dmb"), D = { w: 1100, x0: 470, x1: 860, vx: 892, t: 46, rh: 50 };
+  const dmb = $("dmb"), D = { w: 1160, x0: 470, x1: 860, vx: 892, t: 46, rh: 50 };
   const dm = (n, a, txt, parent) => svgEl(dmb, n, a, txt, parent);
   dmb.replaceChildren();
   const H = D.t + Math.max(1, fixes.length) * D.rh + 8;
   dmb.setAttribute("viewBox", `0 0 ${D.w} ${H}`);
-  const most2 = Math.max(1, ...fixes.map(f => Math.max(f.before, f.after))), step2 = most2 > 20 ? 10 : 5, top2 = Math.ceil(most2 / step2) * step2, U2 = (D.x1 - D.x0) / top2;
-  dm("text", { class: "l-axis", x: D.x0, y: 14 }, "times the problems it names happened");
+  const most2 = Math.max(1, ...fixes.flatMap(f => [f.rate_before || 0, f.rate_after || 0])), step2 = most2 > 5 ? 2 : 1, top2 = Math.ceil((most2 + .5) / step2) * step2, U2 = (D.x1 - D.x0) / top2;
+  dm("text", { class: "l-axis", x: D.x0, y: 14 }, "times a Day the problems it names happened");
   for (let v = 0; v <= top2; v += step2) {
     dm("path", { class: v ? "l-grid" : "l-base", d: `M${D.x0 + v * U2} ${D.t - 8}V${H - 8}` });
     dm("text", { class: "l-tick", x: D.x0 + v * U2, y: D.t - 14, "text-anchor": "middle" }, String(v));
   }
   if (!fixes.length) dm("text", { class: "l-sub", x: 12, y: D.t + 26 }, "specs/fixes.json names no fix yet.");
   fixes.forEach((f, i) => {
-    const y = D.t + i * D.rh, cy = y + D.rh / 2, xb = D.x0 + f.before * U2, xa = D.x0 + f.after * U2, on = f.from_day != null;
-    const g = mark(dmb, `p${f.pr}`, f.from_day, `#${f.pr}: ${f.before} before, ${on ? `${f.after} after` : "counts from no Day yet"}`);
+    const y = D.t + i * D.rh, cy = y + D.rh / 2, rb = f.rate_before || 0, ra = f.rate_after || 0, xb = D.x0 + rb * U2, xa = D.x0 + ra * U2, on = f.from_day != null;
+    // the two dots of a fix whose rates are as near as this sit one above the other, not on each other
+    const near = on && Math.abs(xa - xb) < 16, leftOf = on && !near && xa > xb;
+    const g = mark(dmb, `p${f.pr}`, f.from_day, `#${f.pr}: ${lrnRate(f.rate_before)} a Day before, ${on ? `${lrnRate(f.rate_after)} a Day after, ${f.verdict || "too early to say"}` : "counts from no Day yet"}`);
     dm("rect", { class: "hit", x: 0, y: y + 1, width: D.w, height: D.rh - 2, rx: 4 }, null, g);
     dm("text", { class: "l-name", x: 12, y: cy - 2 }, lrnCut(f.title, 62), g);
     dm("text", { class: "l-sub", x: 12, y: cy + 14 }, `#${f.pr} · merged ${lrnDate(f.merged)} · ${on ? `counts from Day ${f.from_day}` : "counts from no Day yet"}`, g);
-    if (on) dm("path", { class: "l-link", d: `M${Math.min(xa, xb)} ${cy}H${Math.max(xa, xb)}` }, null, g);
-    dm("circle", { class: "l-dot-before", cx: xb, cy, r: 6.5 }, null, g);
-    dm("text", { class: "l-n", x: xb + (on && xa > xb ? -13 : 13), y: cy + 4, "text-anchor": on && xa > xb ? "end" : "start" }, String(f.before), g);
+    if (on && !near) dm("path", { class: "l-link", d: `M${Math.min(xa, xb)} ${cy}H${Math.max(xa, xb)}` }, null, g);
+    dm("circle", { class: "l-dot-before", cx: xb, cy: near ? cy - 8 : cy, r: 6.5 }, null, g);
+    dm("text", { class: "l-n", x: xb + (leftOf ? -13 : 13), y: (near ? cy - 8 : cy) + 4, "text-anchor": leftOf ? "end" : "start" }, lrnRate(f.rate_before), g);
     if (on) {
-      const back = f.after > 0, a = svgEl(dmb, "g", { transform: `translate(${xa},${cy})` }, null, g);
-      svgEl(dmb, "circle", { class: back ? "l-dot-back" : "l-dot-held", r: 7.5 }, null, a);
-      svgEl(dmb, "path", { class: "l-on", d: back ? "M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6" : "M-3.2 .2-.9 2.6 3.4-2.4" }, null, a);
-      if (xa !== xb) dm("text", { class: "l-n", x: xa + (xa > xb ? 13 : -13), y: cy + 4, "text-anchor": xa > xb ? "start" : "end" }, String(f.after), g);
+      // by its verdict: gone is ticked, reduced has an arrow down, not reduced is crossed, and too early has no mark yet
+      const [cls, mark2] = f.verdict === "gone" ? ["l-dot-held", "M-3.2 .2-.9 2.6 3.4-2.4"] : f.verdict === "reduced" ? ["l-dot-less", "M0-3.2V3.2M-2.8 .6 0 3.4 2.8 .6"]
+        : f.verdict === "not reduced" ? ["l-dot-back", "M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6"] : ["l-dot-early", null];
+      const a = svgEl(dmb, "g", { transform: `translate(${xa},${near ? cy + 8 : cy})` }, null, g);
+      svgEl(dmb, "circle", { class: cls, r: 7.5 }, null, a);
+      if (mark2) svgEl(dmb, "path", { class: "l-on", d: mark2 }, null, a);
+      dm("text", { class: "l-n", x: xa + (!near && xa < xb ? -13 : 13), y: (near ? cy + 8 : cy) + 4, "text-anchor": !near && xa < xb ? "end" : "start" }, lrnRate(f.rate_after), g);
     }
-    dm("text", { class: "l-verdict", x: D.vx, y: cy - 1 }, !on ? "no Day since it yet" : f.after ? `came back ${lrnTimes(f.after)}` : "nothing came back", g);
-    dm("text", { class: "l-sub", x: D.vx, y: cy + 14 }, on ? `in the ${lrnDays(f.days_since)} since` : "its first Day is still to merge", g);
+    const verdict = !on ? "no Day since it yet" : f.verdict || (f.rate_before == null ? "nothing before it to compare" : "too early to say");
+    const sub = !on ? "its first Day is still to merge" : f.verdict ? `${lrnRate(f.rate_after)} a Day, against ${lrnRate(f.rate_before)} · ${lrnDays(f.days_since)} since`
+      : f.rate_before == null ? `${lrnDays(f.days_since)} since` : `${f.days_since} of ${wait} Days since · ${f.after ? `back ${lrnTimes(f.after)} so far` : "nothing back so far"}`;
+    dm("text", { class: "l-verdict", x: D.vx, y: cy - 1 }, verdict, g);
+    dm("text", { class: "l-sub", x: D.vx, y: cy + 14 }, sub, g);
     dm("path", { class: "l-row", d: `M0 ${y + D.rh}H${D.w}` });
     tips[`p${f.pr}`] = { t: `#${f.pr} · merged ${lrnDate(f.merged)}${on ? ` · counts from Day ${f.from_day}` : ""}`, l: [
-      `Before: ${f.before}. ${on ? `After: ${f.after}, in ${lrnDays(f.days_since)}.` : "After: nothing yet to count."}`,
-      `Meant to stop: ${lrnIds(f.stops, 8)}`, f.after && `Came back as: ${lrnIds(f.after_ids, 8)}`], q: f.title };
+      f.days_before == null ? `Before: ${f.before}.` : `Before: ${f.before} in ${lrnDays(f.days_before)}, ${lrnRate(f.rate_before)} a Day, counted from Day ${f.first_day}.`,
+      on ? `After: ${f.after} in ${lrnDays(f.days_since)}, ${lrnRate(f.rate_after)} a Day.` : "After: nothing yet to count.",
+      `Meant to stop: ${lrnIds(f.stops, 8)}`, f.after && `Came back as: ${lrnIds(f.after_ids, 8)}`,
+      f.after && `A gate caught ${(f.gated || []).length} of them before the close; ${(f.leaked || f.after_ids).length} got past the gates before the close.`], q: f.title };
   });
-  dmb.setAttribute("aria-label", "Before and after each fix: " + fixes.map(f => `#${f.pr}, ${f.before} before, ${f.after} after`).join("; ") + ".");
+  dmb.setAttribute("aria-label", "Before and after each fix: " + fixes.map(f => `#${f.pr}, ${lrnRate(f.rate_before)} a Day before, ${lrnRate(f.rate_after)} after`).join("; ") + ".");
 
   // the figures, the folded text and the tables
-  const inForce = fixes.filter(f => f.from_day != null), first = days.find(x => x.n), last = [...days].reverse().find(x => x.n);
+  const first = days.find(x => x.n), last = [...days].reverse().find(x => x.n), judged = fixes.filter(f => f.verdict), count = v => judged.filter(f => f.verdict === v).length;
   const fig = (num, what, sub) => h("div", null, h("span", { class: "num" }, String(num)), h("span", { class: "txt" }, h("b", { class: "what" }, what), h("span", { class: "sub" }, sub)));
   $("figs").replaceChildren(
     fig(L.repeats, "times an old problem came back", first ? `on Days ${first.day} to ${last.day}` : "on no Day yet"),
-    fig(L.past_fix, "of them although a fix was in place", "drawn red and hatched"),
+    fig(L.past_fix, "of them although a fix was in place", `a gate caught ${pastGated} before the close, ${pastLeaked} got past the gates before the close`),
     fig(fixes.length, fixes.length === 1 ? "fix on record" : "fixes on record", "each names the defects it was meant to stop"),
-    fig(L.held, "with nothing back since", `of the ${inForce.length} that count from a Day`));
+    fig(judged.length, judged.length === 1 ? "fix old enough to judge" : "fixes old enough to judge", `${count("gone")} gone, ${count("reduced")} reduced, ${count("not reduced")} not reduced · a verdict waits for ${wait} Days`));
   $("stamp").textContent = `Counted from the Days' Notes and specs/fixes.json at ${L.head || "?"}, to #${L.last_pr || "?"}, on ${(L.generated || "").slice(0, 10)}.`;
-  const peak = days.reduce((a, x) => x.n > a.n ? x : a, days[0]), held = inForce.filter(f => !f.after), worst = inForce.reduce((a, f) => !a || f.after > a.after ? f : a, null);
+  const peak = days.reduce((a, x) => x.n > a.n ? x : a, days[0]), topShare = days.filter(x => typeof x.share === "number").reduce((a, x) => !a || x.share > a.share ? x : a, null);
+  const leakedAll = days.flatMap(x => x.leaked || x.past_fix), group = v => fixes.filter(f => f.verdict === v), young = fixes.filter(f => f.from_day != null && !f.verdict && f.rate_before != null);
+  const prs = list => list.map(f => "#" + f.pr).join(", "), ways = list => list.map(f => `#${f.pr} from ${lrnRate(f.rate_before)} a Day to ${lrnRate(f.rate_after)}`).join("; ") + ".";
   const finds = [
-    ["", "Old problems keep coming back.", L.repeats ? `${L.repeats} times over ${lrnDays(days.length)}, the most on Day ${peak.day} (${peak.n}).` : "Not once yet."],
-    [L.past_fix ? "fault" : "good", `${L.past_fix} of the ${L.repeats} got past a fix.`, `The other ${L.repeats - L.past_fix} were problems no fix named yet, or not yet in force.`],
-    held.length && ["good", "Some fixes held.", `Nothing came back after ${held.map(f => "#" + f.pr).join(", ")}, ${lrnDays(Math.min(...held.map(f => f.days_since)))} or more since each.`],
-    worst && worst.after && ["fault", `#${worst.pr} held least.`, `Its problems came back ${lrnTimes(worst.after)} after it, against ${worst.before} before.`],
+    ["", "Old problems keep coming back.", (L.repeats ? `${L.repeats} times over ${lrnDays(days.length)}, the most on Day ${peak.day} (${peak.n}).` : "Not once yet.") + (topShare ? ` The largest share of a Day's defects was ${topShare.share}%, on Day ${topShare.day} (${topShare.n} of ${topShare.defects}).` : "")],
+    [pastLeaked ? "fault" : "good", `${L.past_fix} of the ${L.repeats} came back although a fix was in place.`, `A gate caught ${pastGated} of them before the close, and ${pastLeaked} got past the gates before the close${leakedAll.length ? `: ${lrnIds(leakedAll, 8)}` : ""}. The gate is any gate before the close, not the fix's own: the Notes cannot say that yet. The other ${L.repeats - L.past_fix} were problems no fix named yet, or not yet in force.`],
+    group("gone").length && ["good", "Gone so far.", `Nothing came back after ${prs(group("gone"))} in ${lrnDays(Math.min(...group("gone").map(f => f.days_since)))} or more.`],
+    group("reduced").length && ["good", "Reduced.", ways(group("reduced"))],
+    group("not reduced").length && ["fault", "Not reduced.", ways(group("not reduced"))],
+    young.length && ["", `${young.length} ${young.length === 1 ? "fix is" : "fixes are"} too young to judge.`, `Fewer than ${wait} Days since each: ${young.map(f => `#${f.pr} (${lrnRate(f.rate_before)} a Day before, ${lrnRate(f.rate_after)} in the ${lrnDays(f.days_since)} since)`).join("; ")}.`],
+    shared.length && ["", "The second picture counts some repeats twice.", `Its after counts add up to ${fixes.reduce((a, f) => a + f.after, 0)}, and the first picture's ${L.past_fix} count each repeat once: ${shared.join(", ")} ${shared.length === 1 ? "sits" : "sit"} under more than one fix.`],
     ...(L.problems || []).map(p => ["fault", "A row of specs/fixes.json reads wrong.", p])].filter(Boolean);
   $("finds").replaceChildren(...finds.map(([c, b, t]) => h("li", { class: c || null }, h("b", null, b), " ", rich(t))));
   $("bends").replaceChildren(...[
     ["A repeat is what the Notes tag.", "A defect that repeats an earlier one with no `same-as:` line is not counted. Days 14 and 15 were tagged by hand after they closed."],
     ["A fix is what `specs/fixes.json` lists.", "A rule or a gate added with no row there is not drawn, and a row names only the defects its pull request said it was for."],
-    ["Before and after are not the same span.", "Before covers every earlier Day, after only the Days since: a fix with fewer Days since has had fewer chances to fail."],
+    ["A rate is times a Day.", `Before runs from the Day the problem was first recorded to the Day before the fix counts, after from that Day on. A rate over one or two Days is rough, so a verdict waits for ${wait} Days.`],
+    ["Reduced means half.", "A fix's problems are reduced when they happen at most half as often a Day as before, and gone when nothing came back."],
+    ["A gate, not the fix's gate.", "A repeat caught by any gate before the close counts as caught. The Notes cannot say yet whether it was the gate the fix added."],
     ["A Day counts whole.", "A fix that merged in the middle of a Day counts only from the next Day whose spec merged."]].map(([b, t]) => h("li", null, h("b", null, rich(b)), " ", rich(t))));
-  const table = (id, head, rows) => $(id).replaceChildren(h("thead", null, h("tr", null, head.map(c => h("th", null, c)))), h("tbody", null, rows.map(r => h("tr", null, r.map(c => h("td", null, String(c)))))));
-  table("days", ["Day", "Came back", "With no fix yet", "Although a fix was in place", "Fixes that count from it"],
-    days.map(x => [x.day, x.n, x.before.length, x.past_fix.length, x.fixes.map(p => "#" + p).join(", ")]));
-  table("fixes", ["Fix", "Merged", "Counts from", "Meant to stop", "Before", "After", "Came back as", "Days since"],
-    fixes.map(f => [`#${f.pr}`, lrnDate(f.merged), f.from_day == null ? "no Day yet" : `Day ${f.from_day}`, f.stops.join(", "), f.before, f.after, f.after_ids.join(", "), f.days_since]));
+  const table = (id, head, rows) => $(id).replaceChildren(h("thead", null, h("tr", null, head.map(c => h("th", null, c)))), h("tbody", null, rows.map(r => h("tr", null, r.map(c => h("td", null, c == null ? "" : String(c)))))));
+  table("days", ["Day", "Defects", "Came back", "Share", "With no fix yet", "Fix in place, caught by a gate", "Fix in place, past the gates before the close", "Fixes that count from it"],
+    days.map(x => [x.day, x.defects, x.n, x.share == null ? null : `${x.share}%`, x.before.length, (x.gated || []).length, (x.leaked || x.past_fix).length, x.fixes.map(p => "#" + p).join(", ")]));
+  table("fixes", ["Fix", "Merged", "Counts from", "Meant to stop", "Before", "Days before", "A Day before", "After", "Days since", "A Day after", "Verdict", "Came back as"],
+    fixes.map(f => [`#${f.pr}`, lrnDate(f.merged), f.from_day == null ? "no Day yet" : `Day ${f.from_day}`, f.stops.join(", "), f.before, f.days_before, f.rate_before == null ? "" : lrnRate(f.rate_before), f.after, f.days_since, f.rate_after == null ? "" : lrnRate(f.rate_after), f.verdict || (f.from_day == null ? "" : f.rate_before == null ? "nothing before it" : "too early"), f.after_ids.join(", ")]));
 
   [epi, dmb].forEach(f => pointerBox(f, tip, key => key != null && tips[key] ? tipFill(tip, tips[key]) : false, b => b.getAttribute("data-k")));
   onDay.push(day => groups.forEach(([g, d]) => g.classList.toggle("mk-dim", day != null && d !== day)));

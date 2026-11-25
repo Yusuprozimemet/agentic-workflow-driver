@@ -692,7 +692,7 @@ def yardsticks(concluded, tokens):
 
 # Each gate and the found: value its Defect lines carry (specs/README.md); the hooks find no Defect
 # line: what they catch is each refusal, from refusals.json.
-GATES = (("auditors", "auditor"), ("seen red", "seen red"), ("break on purpose", "break on purpose"),
+GATES = (("auditors", "auditor"), ("track-reviewer", "track-reviewer"), ("seen red", "seen red"), ("break on purpose", "break on purpose"),
          ("evidence replay", "evidence replay"), ("hooks", None))
 CAUSES = ("spec", "implementation", "process", "environment")
 

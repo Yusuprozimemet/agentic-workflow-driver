@@ -913,6 +913,7 @@ class GateReportTest(unittest.TestCase):
         self.assertEqual([(g["gate"], g["defects"], g["refused"], [n for n in g["causes"].values()], g["runs"], g["replies"], g["cost"])
                           for g in r["gates"]], [
             ("auditors", 2, None, [1, 0, 0, 0, 1], 0, 0, 0),
+            ("track-reviewer", 0, None, [0, 0, 0, 0, 0], 0, 0, 0),
             ("seen red", 1, None, [0, 1, 0, 0, 0], 0, 0, 0),
             ("break on purpose", 1, None, [0, 0, 1, 0, 0], 3, 5, 0.75),
             ("evidence replay", 1, None, [0, 0, 0, 1, 0], 0, 0, 0),
