@@ -1734,6 +1734,9 @@ footer { font-size: 12.5px; color: var(--muted); }
 #lrn .l-before{fill:var(--s3)}
 #lrn .l-past{fill:var(--broken)}
 #lrn .l-pasth{fill:url(#lrn-hatch)}
+#lrn .l-gate{fill:var(--repair)}
+#lrn .l-gateh{fill:url(#lrn-hatch)}
+#lrn .keys .l-gateh{fill:none;stroke:var(--card);stroke-width:2;stroke-dasharray:2 2.4}
 #lrn .l-hatchl{fill:var(--card);fill-opacity:.55}
 #lrn .keys .l-pasth{fill:none;stroke:var(--card);stroke-width:2;stroke-dasharray:2 2.4}
 #lrn .l-fixline{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3}
@@ -1747,7 +1750,9 @@ footer { font-size: 12.5px; color: var(--muted); }
 #lrn .l-dot-before{fill:var(--s3)}
 #lrn .l-dot-held{fill:var(--proven);stroke:var(--card);stroke-width:2}
 #lrn .l-dot-back{fill:var(--broken);stroke:var(--card);stroke-width:2}
-#lrn .keys .l-dot-held,#lrn .keys .l-dot-back{stroke:none}
+#lrn .l-dot-less{fill:var(--proven);stroke:var(--card);stroke-width:2}
+#lrn .l-dot-early{fill:var(--card);stroke:var(--muted);stroke-width:2}
+#lrn .keys .l-dot-held,#lrn .keys .l-dot-back,#lrn .keys .l-dot-less{stroke:none}
 #lrn .l-on{fill:none;stroke:var(--card);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #lrn .hit{fill:var(--ink);fill-opacity:0}
 #lrn .hitl{fill:none;stroke:var(--ink);stroke-opacity:0;stroke-width:14;pointer-events:stroke}

@@ -249,7 +249,7 @@ def count(files):
     return totals
 
 
-# The gates (docs/dashboard/gates.json): an auditor's whole run, and in any session the scripts that run
+# The gates (docs/dashboard/gates.json): an auditor's or a track-reviewer's whole run, and in any session the scripts that run
 # seen red, a break on purpose and the evidence replay, and a call a guard refused. A refusal's result
 # starts with the hook's command, which names the guard's script.
 GATE_SCRIPT = (("seen red", re.compile(r"\bseen-red\.py\b")), ("break on purpose", re.compile(r"\bbreak\.py\b")),
@@ -267,11 +267,13 @@ def gate_of_call(name, args):
 
 def gates(files):
     """Per (date, day, gate): its runs, and the replies that made its call or read what the call
-    returned, with their context, output and cost. Every reply of an auditor's run is the auditors'.
-    A reply counts toward one gate: the first its own calls name, else the one whose result it reads."""
+    returned, with their context, output and cost. Every reply of an auditor's run is the auditors', and every reply
+    of a track-reviewer's run is the track-reviewer's. A reply counts toward one gate: the first its own calls name,
+    else the one whose result it reads."""
     rows = collections.defaultdict(lambda: dict.fromkeys(GATE_FIELDS, 0))
     for path in files:
-        auditor = agent(path).endswith("-auditor")
+        kind = agent(path)
+        run = "auditors" if kind.endswith("-auditor") else "track-reviewer" if kind == "track-reviewer" else None
         last, own, of_call, calls = {}, {}, {}, {}
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -298,17 +300,17 @@ def gates(files):
         order = list(last)
         where = lambda key, g: row_key(last[key], None)[:2] + (g,)
         for i, key in enumerate(order):
-            g = "auditors" if auditor else own.get(key) or (own.get(order[i - 1]) if i else None)
+            g = run or own.get(key) or (own.get(order[i - 1]) if i else None)
             if g:
                 usage, t = last[key]["message"]["usage"], rows[where(key, g)]
                 t["replies"] += 1
                 t["context"] += sum(usage.get(k, 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
                 t["output"] += usage.get("output_tokens", 0)
                 t["cost"] += cost(last[key]["message"].get("model"), usage)
-        for tid, g in ([] if auditor else calls.items()):
+        for tid, g in ([] if run else calls.items()):
             rows[where(of_call[tid], g)]["runs"] += 1
-        if auditor and order:
-            rows[where(order[0], "auditors")]["runs"] += 1
+        if run and order:
+            rows[where(order[0], run)]["runs"] += 1
     return rows
 
 

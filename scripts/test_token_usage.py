@@ -583,7 +583,7 @@ REFUSAL = ("PreToolUse:Read hook error: [python -c \"import os,subprocess,sys;d=
 class GatesTest(unittest.TestCase):
     """Each gate's runs, and the replies that ran it or read its result (gates.json)."""
 
-    def gates(self, main, auditor=()):
+    def gates(self, main, auditor=(), agent="spec-auditor"):
         with tempfile.TemporaryDirectory() as folder:
             paths = [os.path.join(folder, "session.jsonl")]
             with open(paths[0], "w", encoding="utf-8") as f:
@@ -594,7 +594,7 @@ class GatesTest(unittest.TestCase):
                 with open(paths[1], "w", encoding="utf-8") as f:
                     f.write("\n".join(auditor) + "\n")
                 with open(os.path.join(folder, "subagents", "agent-1.meta.json"), "w", encoding="utf-8") as f:
-                    json.dump({"agentType": "spec-auditor"}, f)
+                    json.dump({"agentType": agent}, f)
             rows = tu.gates(paths)
         out = collections.defaultdict(lambda: [0, 0])
         for (_, day, gate), t in rows.items():
@@ -616,6 +616,11 @@ class GatesTest(unittest.TestCase):
         self.assertEqual(self.gates([call("a", "Bash", {"command": "ls"})], [
             call("x", "Bash", {"command": "python scripts/seen-red.py -- pytest"}), result("x", "seen red"),
             call("y", "Read"), result("y", "text")]), {"auditors": (1, 2)})
+
+    def test_a_track_reviewers_run_is_all_its_replies_and_its_calls_are_no_other_gate(self):
+        self.assertEqual(self.gates([call("a", "Bash", {"command": "ls"})], [
+            call("x", "Bash", {"command": "python scripts/seen-red.py -- pytest"}), result("x", "seen red"),
+            call("y", "Read"), result("y", "text")], agent="track-reviewer"), {"track-reviewer": (1, 2)})
 
     def test_each_script_names_its_gate(self):
         self.assertEqual([tu.gate_of_call("Bash", {"command": c}) for c in (

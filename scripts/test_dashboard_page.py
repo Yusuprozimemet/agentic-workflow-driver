@@ -1580,27 +1580,32 @@ class LearnPageTest(unittest.TestCase):
             self.skipTest("needs node")
 
     def test_does_it_learn_draws_a_bar_per_day_a_line_per_fix_day_and_a_row_per_fix_red_never_alone(self):
-        def fix(pr, day, before, after):
+        def fix(pr, day, before, after, verdict=None):
             return dict(pr=pr, title=f"fix {pr}", merged="2026-11-10T08:00:00Z", from_day=day, stops=["D07.1"], before=before,
-                        after=after, after_ids=[f"D08.{i}" for i in range(after)], days_since=2)
+                        after=after, after_ids=[f"D08.{i}" for i in range(after)], days_since=2, first_day=7,
+                        days_before=1 if day else 0, rate_before=before if day else None,
+                        rate_after=round(after / 2, 2) if day else None, gated=[], leaked=[f"D08.{i}" for i in range(after)],
+                        verdict=verdict)
         learning = dict(head="abc1234", last_pr=9, generated="2026-11-24", repeats=5, past_fix=2, held=1, problems=[],
                         days=[dict(day=7, n=2, before=["D07.2", "D07.3"], past_fix=[], fixes=[]),
                               dict(day=8, n=3, before=["D08.1"], past_fix=["D08.2", "D08.3"], fixes=[112]),
                               dict(day=9, n=0, before=[], past_fix=[], fixes=[133])],
-                        fixes=[fix(112, 8, 4, 2), fix(133, 9, 1, 0), fix(150, None, 1, 0)])
+                        fixes=[fix(112, 8, 4, 2, "reduced"), fix(133, 9, 1, 0, "gone"), fix(150, None, 1, 0)])
         out = node(LRN, data(learning=learning))
         self.assertEqual(out["bars"], ["d7", "d8", "d9"])
         self.assertEqual(out["lines"], ["f8", "f9"])
         self.assertEqual(out["rows"], ["p112", "p133", "p150"])
         # a grey segment for each Day with a repeat before a fix; each red segment carries its hatch
         self.assertEqual((out["before"], out["past"], out["hatch"]), (2, 1, 1))
-        # a fix in force gets a ticked or a crossed dot after it; one that counts from no Day yet gets none
-        self.assertEqual((out["held"], out["back"]), (1, 1))
+        # a fix in force gets a dot after it, ticked when gone (133), arrowed when reduced (112), crossed when not; one
+        # that counts from no Day yet gets none
+        self.assertEqual((out["held"], out["back"]), (1, 0))
         # Day 8's button dims every mark of another Day: the bars, the fix lines and the fixes' rows
         self.assertEqual(sorted(out["dim"]), ["d7", "d9", "f9", "p133", "p150"])
         self.assertIn("5 times an old problem came back", out["figs"])
         self.assertIn("2 of them although a fix was in place", out["figs"])
-        self.assertIn("1 with nothing back since of the 2 that count from a Day", out["figs"])
+        self.assertIn("2 fixes old enough to judge", out["figs"])
+        self.assertIn("1 gone, 1 reduced, 0 not reduced", out["figs"])
         self.assertEqual(out["table"], 3)
 
     def test_does_it_learn_without_a_merged_day_says_so_under_not_measured(self):

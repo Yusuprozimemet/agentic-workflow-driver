@@ -1583,6 +1583,16 @@ class ProofreadingTest(unittest.TestCase):
         self.assertEqual(f["late"], [2])
         self.assertEqual((f["total"], [x["reached"] for x in f["layers"]]), (8, [8, 5, 2, 2]))
 
+    def test_a_layers_rate_counts_its_gates_and_not_what_was_only_noticed(self):
+        p = self.prf(prf_data())
+        self.assertEqual(keys_in(p["layers"], ("leak", "gated", "gated_pct")), [True] * 4)
+        self.assertEqual([x["leak"] for x in p["layers"]], [0, 2, 0, 0])
+        self.assertEqual([x["gated"] == x["caught"] - x["leak"] for x in p["layers"]], [True] * 4)
+        layer = p["layers"][1]
+        self.assertEqual(
+            (layer["caught"], layer["leak"], layer["gated"], layer["gated_pct"]), (3, 2, 1, 20)
+        )
+
     def test_the_gate_a_found_value_names_is_graph_7s_rule(self):
         gate_of = load("spec_drift_views", "spec_drift_views.py").gate_of
         cases = {
@@ -3081,14 +3091,19 @@ class NeedsAttentionTest(unittest.TestCase):
         self.assertEqual((agree, "DISAGREE (mrg bad)" in said), (False, True), said)
 
 
+def keys_in(rows, keys):
+    # one bool per row: a row without one of the keys fails as an assertion, not as a KeyError
+    return [all(k in r for k in keys) for r in rows]
+
+
 def learn_data():
     """Four Days whose specs merged at noon on 1 to 4 January and a fifth not begun. One problem is a chain of three
     links (D1.1 <- D2.1 <- D3.1, and D4.1 back to D1.1), another one link (D1.2 <- D3.2); D2.2 and D4.2 repeat
     nothing. Four fixes: #10 between Day 2's spec and Day 3's, naming the chain's middle; #11 before Day 4's, naming
     D2.2; #12 before Day 2's, naming D1.2 and an ID no Day has; #14 after the last spec."""
 
-    def defect(i, same=None):
-        return {"id": i, "same_as": same, "problem": None}
+    def defect(i, same=None, found=None):
+        return {"id": i, "same_as": same, "problem": None, "found": found}
 
     def spec(day):
         return {"number": day, "kind": "spec", "day": day, "merged": f"2026-01-0{day}T12:00:00Z"}
@@ -3102,8 +3117,14 @@ def learn_data():
         "days": [
             {"day": 1, "defects": [defect("D1.1"), defect("D1.2")]},
             {"day": 2, "defects": [defect("D2.1", "D1.1"), defect("D2.2")]},
-            {"day": 3, "defects": [defect("D3.1", "D2.1"), defect("D3.2", "D1.2")]},
-            {"day": 4, "defects": [defect("D4.1", "D1.1"), defect("D4.2")]},
+            {
+                "day": 3,
+                "defects": [
+                    defect("D3.1", "D2.1", "track-reviewer"),
+                    defect("D3.2", "D1.2", "Track A"),
+                ],
+            },
+            {"day": 4, "defects": [defect("D4.1", "D1.1", "auditor"), defect("D4.2")]},
             {"day": 5, "defects": []},
         ],
         "defect_recurrence": {"recurrences": [{"id": i, "same_as": s} for i, s in reps]},
@@ -3163,6 +3184,74 @@ class LearningTest(unittest.TestCase):
         )
         self.assertEqual((got["repeats"], got["past_fix"]), (4, 3))
 
+    def test_a_day_says_what_share_of_its_defects_came_back(self):
+        got = self.learn()
+        self.assertEqual(keys_in(got["days"], ("defects", "share")), [True] * 4)
+        self.assertEqual(
+            [(r["day"], r["defects"], r["share"]) for r in got["days"]],
+            [(1, 2, 0), (2, 2, 50), (3, 2, 100), (4, 2, 50)],
+        )
+
+    def test_a_repeat_past_a_fix_is_split_by_whether_a_gate_caught_it(self):
+        got = self.learn()
+        self.assertEqual(keys_in(got["days"], ("gated", "leaked")), [True] * 4)
+        self.assertIn("past_gated", sorted(got))
+        self.assertIn("past_leaked", sorted(got))
+        # one short line per Day, "day:gated/leaked", so a failure prints it whole
+        said = " ".join(
+            f"{r['day']}:{','.join(r['gated'])}/{','.join(r['leaked'])}" for r in got["days"]
+        )
+        self.assertEqual(said, "1:/ 2:/ 3:D3.1/D3.2 4:D4.1/")
+        self.assertEqual((got["past_gated"], got["past_leaked"]), (2, 1))
+        fixes = {f["pr"]: f for f in got["fixes"]}
+        self.assertEqual(sorted(fixes), [10, 11, 12, 14])
+        self.assertEqual(keys_in(list(fixes.values()), ("gated", "leaked")), [True] * 4)
+        self.assertEqual((fixes[10]["gated"], fixes[10]["leaked"]), (["D3.1", "D4.1"], []))
+        self.assertEqual((fixes[12]["gated"], fixes[12]["leaked"]), ([], ["D3.2"]))
+
+    def test_a_fix_is_rated_by_the_day_before_and_after(self):
+        got = self.learn()
+        self.assertEqual(
+            keys_in(got["fixes"], ("first_day", "days_before", "rate_before", "rate_after")),
+            [True] * 4,
+        )
+        self.assertEqual(
+            [
+                (f["pr"], f["first_day"], f["days_before"], f["rate_before"], f["rate_after"])
+                for f in got["fixes"]
+            ],
+            [
+                (12, 1, 1, 1.0, 0.33),
+                (10, 1, 2, 1.0, 1.0),
+                (11, 2, 2, 0.5, 0.0),
+                (14, 4, 1, 1.0, None),
+            ],
+        )
+
+    def test_a_verdict_waits_for_enough_days(self):
+        got = self.learn()
+        self.assertIn("wait", sorted(got))
+        self.assertEqual(got["wait"], 5)
+        self.assertEqual(keys_in(got["fixes"], ("verdict",)), [True] * 4)
+        self.assertEqual([f["verdict"] for f in got["fixes"]], [None] * 4)
+        # the module's own LRN_WAIT, read when learning() is called: one Day is enough here
+        module = load("spec_drift_views", "spec_drift_views.py")
+        module.LRN_WAIT = 1
+        got = module.learning(learn_data())
+        self.assertEqual(
+            [f["verdict"] for f in got["fixes"]], ["reduced", "not reduced", "gone", None]
+        )
+
+    def test_a_repeat_under_two_fixes_is_named(self):
+        got = self.learn()
+        self.assertIn("shared", sorted(got))
+        self.assertEqual(got["shared"], [])
+        data = learn_data()
+        data["fixes"]["fixes"].append(
+            {"pr": 13, "title": "fix 13", "merged": "2026-01-02T19:00:00Z", "stops": ["D1.1"]}
+        )
+        self.assertEqual(self.learn(data)["shared"], ["D3.1", "D4.1"])
+
     def test_a_stop_no_day_has_is_a_problem_beside_the_records(self):
         got = self.learn()
         self.assertEqual(
@@ -3220,6 +3309,184 @@ class LearningTest(unittest.TestCase):
                     ids |= {x["id"] for x in specs.defect_lines(f.read(), int(m.group(1)))}
         self.assertEqual(len({r["pr"] for r in rows}), len(rows))
         self.assertEqual([s for r in rows for s in r["stops"] if s not in ids], [])
+
+
+# lrnDraw() on a hand-built learning, on a document that keeps every node: the first picture's segments by class, the
+# second's dots by row, and the words of its figures.
+LRN = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {} };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  const is = (root, c) => all(root).filter(e => has(e, c)).length;
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
+  const days = [], e = $("lrn-epi"), d = $("lrn-dmb");
+  lrnDraw(model(DATA).lrn, $, days);
+  days.forEach(f => f(8));
+  const rows = all(d).filter(x => x.attrs && /^p\\d+$/.test(x.attrs["data-k"] || ""));
+  ({ gate: is(e, "l-gate"), gateh: is(e, "l-gateh"), past: is(e, "l-past"), pasth: is(e, "l-pasth"),
+     held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"),
+     rows: rows.map(r => [r.attrs["data-k"], all(r).filter(x => has(x, "l-dot-before")).map(x => x.attrs.cy), all(r).filter(x => x.attrs.transform).map(x => x.attrs.transform)]),
+     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim() })`, ctx)));
+"""
+
+
+def lrn_node(data):
+    reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+    out = subprocess.run(
+        ["node", "-e", LRN, reconcile.SCRIPT],
+        input=json.dumps(data),
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if out.returncode:
+        raise AssertionError(out.stderr[:800])
+    return json.loads(out.stdout)
+
+
+class LearnDrawTest(unittest.TestCase):
+    """lrnDraw(): a repeat past a fix is drawn caught by a gate or past the gates, and a fix's before and after rates."""
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_gate_and_a_leak_are_drawn_apart_and_a_rate_equal_before_and_after_is_drawn_apart(
+        self,
+    ):
+        # one fix gone, one not reduced, one too young to judge whose two rates are both 0; the repeats each fix
+        # names are on the Day they fall on, so the first picture and the fixes agree
+        fixes = [
+            {
+                "pr": 21,
+                "title": "fix 21",
+                "merged": "2026-11-10T08:00:00Z",
+                "from_day": 8,
+                "stops": ["D07.1"],
+                "before": 4,
+                "after": 0,
+                "after_ids": [],
+                "days_since": 2,
+                "first_day": 7,
+                "days_before": 1,
+                "rate_before": 4.0,
+                "rate_after": 0.0,
+                "verdict": "gone",
+                "gated": [],
+                "leaked": [],
+            },
+            {
+                "pr": 22,
+                "title": "fix 22",
+                "merged": "2026-11-10T08:00:00Z",
+                "from_day": 8,
+                "stops": ["D07.2"],
+                "before": 2,
+                "after": 3,
+                "after_ids": ["D08.2", "D08.3", "D08.4"],
+                "days_since": 2,
+                "first_day": 7,
+                "days_before": 1,
+                "rate_before": 2.0,
+                "rate_after": 1.5,
+                "verdict": "not reduced",
+                "gated": ["D08.2"],
+                "leaked": ["D08.3", "D08.4"],
+            },
+            {
+                "pr": 23,
+                "title": "fix 23",
+                "merged": "2026-11-10T08:00:00Z",
+                "from_day": 9,
+                "stops": ["D07.3"],
+                "before": 0,
+                "after": 0,
+                "after_ids": [],
+                "days_since": 1,
+                "first_day": 7,
+                "days_before": 2,
+                "rate_before": 0.0,
+                "rate_after": 0.0,
+                "verdict": None,
+                "gated": [],
+                "leaked": [],
+            },
+        ]
+        days = [
+            {
+                "day": 7,
+                "n": 1,
+                "before": ["D07.1"],
+                "past_fix": [],
+                "gated": [],
+                "leaked": [],
+                "defects": 3,
+                "share": 33,
+                "fixes": [],
+            },
+            {
+                "day": 8,
+                "n": 3,
+                "before": [],
+                "past_fix": ["D08.2", "D08.3", "D08.4"],
+                "gated": ["D08.2"],
+                "leaked": ["D08.3", "D08.4"],
+                "defects": 4,
+                "share": 75,
+                "fixes": [21, 22],
+            },
+            {
+                "day": 9,
+                "n": 0,
+                "before": [],
+                "past_fix": [],
+                "gated": [],
+                "leaked": [],
+                "defects": 2,
+                "share": 0,
+                "fixes": [23],
+            },
+        ]
+        learning = {
+            "head": "abc1234",
+            "last_pr": 30,
+            "generated": "2026-11-25",
+            "repeats": 4,
+            "past_fix": 3,
+            "past_gated": 1,
+            "past_leaked": 2,
+            "held": 0,
+            "wait": 5,
+            "shared": [],
+            "problems": [],
+            "days": days,
+            "fixes": fixes,
+        }
+        out = lrn_node(
+            {
+                "now": {"generated": "2026-11-25", "head": "abc1234", "last_pr": 30},
+                "days": [],
+                "learning": learning,
+            }
+        )
+        self.assertEqual((out["gate"], out["gateh"], out["past"], out["pasth"]), (1, 1, 1, 1))
+        self.assertEqual((out["held"], out["back"], out["early"]), (1, 1, 1))
+        self.assertEqual([r[0] for r in out["rows"]], ["p21", "p22", "p23"])
+        self.assertEqual([len(r[1]) for r in out["rows"]], [1, 1, 1])
+        self.assertEqual([len(r[2]) for r in out["rows"]], [1, 1, 1])
+        # the row whose two rates are equal: the after dot sits below the before dot, not on top of it
+        before = float(out["rows"][2][1][0])
+        after = float(re.findall(r"[\d.]+", out["rows"][2][2][0])[1])
+        self.assertNotEqual(before, after)
+        self.assertIn("a gate caught 1 before the close, 2 got past the gates", out["figs"])
+        self.assertIn("2 fixes old enough to judge", out["figs"])
 
 
 if __name__ == "__main__":
