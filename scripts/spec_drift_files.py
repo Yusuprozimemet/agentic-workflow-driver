@@ -6,6 +6,11 @@ is read on every build beside the file list: a new file under a placed folder ap
 the table does not place is drawn in the ring "on no station", never dropped. The picture's geometry is
 worked out here, so the page only draws: a dot's radius is 0.36 x sqrt(lines), at least 1.8; within a group
 the longest file comes first, in rows centred under the group's column.
+
+One thing on the picture is no station: the improve loop, which runs only when the maintainer asks. The table
+marks its files' group "loop", and a line goes back from that group's column to the column of every brief that
+has known cases (specs/agent-cases/<agent>.json, which names the brief), read from git on every build: a new
+case set gets its arrow by itself.
 """
 
 import json
@@ -38,10 +43,12 @@ ZONES = (("doc", "written down first", "in the nucleus"), ("try", "tried on the 
 KINDS = (("spec", "written text"), ("code", "the app's code"), ("test", "a test of the app"),
          ("tool", "tooling and docs"), ("tooltest", "a test of the tooling"))
 RING_AT = "on no station"
+CASES = "specs/agent-cases/"
 UNPLACED = f"Not in the table yet: {TABLE_NAME} names no station for it."
 
 WIDTH, GAP, FIRST_Y, LABEL_PAD, GROUP_GAP, RING_GAP = 92.0, 1.6, 242.0, 6.0, 20.0, 28.0
 NUC_TOP, CELL_TOP, VIEW_TOP = 130.0, 112.0, 100.0
+LOOP_Y, LOOP_TOP = 92.0, 74.0  # the improve loop's line, over the cell, and where the picture then opens
 
 
 def radius(lines):
@@ -149,8 +156,39 @@ def tracked(head, run):
     return {p: n or 0 for p, n in counts.items()}
 
 
-def file_map(counts, groups, head=None, why=None):
-    """The page's model: every file once, in `files`, and each group's dots where they are drawn."""
+def case_briefs(counts, head, run):
+    """{agent: its brief} for every case set tracked at head: the brief the set names, .claude/agents/<agent>.md
+    when it names none (as scripts/agent-cases.py reads it). A set that cannot be read names no brief."""
+    out = {}
+    for path in sorted(counts):
+        agent = path[len(CASES):-len(".json")]
+        if not (path.startswith(CASES) and path.endswith(".json")) or "/" in agent:
+            continue
+        try:
+            out[agent] = json.loads(run("git", "show", f"{head}:{path}")).get("brief", f".claude/agents/{agent}.md")
+        except Exception:  # noqa: BLE001  one torn case set costs its own arrow, not the picture
+            continue
+    return out
+
+
+def loop_of(groups, members, briefs, home):
+    """The improve loop's line: from the column its files hang at, back to each column where a brief with known
+    cases hangs, left to right. None when the table marks no group "loop", it holds no file, or no such brief
+    is placed. `home` is {path: the group's index, or None in the ring}."""
+    start = next((g for i, g in enumerate(groups) if g.get("loop") and members[i]), None)
+    to = {}
+    for agent, brief in sorted((briefs or {}).items()):
+        if home.get(brief) is not None and not groups[home[brief]].get("ring"):
+            to.setdefault(groups[home[brief]]["at"], []).append(agent)
+    if not start or not to:
+        return None
+    return dict(label=start["label"], x=COLUMNS[start["at"]]["x"], y=LOOP_Y, at=COLUMNS[start["at"]]["at"],
+                to=[dict(col=k, x=COLUMNS[k]["x"], at=COLUMNS[k]["at"], agents=to[k]) for k in COLUMNS if k in to])
+
+
+def file_map(counts, groups, head=None, why=None, briefs=None):
+    """The page's model: every file once, in `files`, and each group's dots where they are drawn; `briefs` is
+    {agent: brief} for the agents with known cases, which the improve loop's line lands on."""
     if groups is None or not counts:
         return dict(empty=why or "The file list could not be read from git, so there is no file to draw.")
     groups = [dict(g) for g in groups]
@@ -158,9 +196,9 @@ def file_map(counts, groups, head=None, why=None):
         groups.append(dict(at="defect-rater", ring=True, label="unplaced", kind="tool", what=UNPLACED))
     ring_i = next(i for i, g in enumerate(groups) if g.get("ring"))
     kinds = [k for k, _ in KINDS]
-    files, members = [], [[] for _ in groups]
+    files, members, home = [], [[] for _ in groups], {}
     for path in sorted(counts):
-        i = place(path, groups)
+        i = home[path] = place(path, groups)
         lost = i is None
         kind = kind_of(path, None if lost else groups[i])
         members[ring_i if lost else i].append(len(files))
@@ -195,15 +233,17 @@ def file_map(counts, groups, head=None, why=None):
 
     def lowest(zone):
         return max([b for k, b in bottoms.items() if b is not None and COLUMNS[k]["zone"] == zone], default=FIRST_Y)
+    loop = loop_of(groups, members, briefs, home)
+    top = LOOP_TOP if loop else VIEW_TOP
     nuc = lowest("doc") + 17
     cyto = max(lowest("try"), nuc + 17 + 4) + 19
     after = lowest("after") + 22
     geo = dict(nuc_label=round(nuc, 1), nuc_h=round(nuc + 17 - NUC_TOP, 1), cyto_label=round(cyto, 1),
-               cell_h=round(cyto + 17 - CELL_TOP, 1), after_label=round(after, 1), top=VIEW_TOP,
-               height=round(max(after + 18.3, cyto + 17 + 12) - VIEW_TOP, 1), plasmid=plasmid)
+               cell_h=round(cyto + 17 - CELL_TOP, 1), after_label=round(after, 1), top=top,
+               height=round(max(after + 18.3, cyto + 17 + 12) - top, 1), plasmid=plasmid)
     zones = [dict(key=k, name=name, where=where, files=sum(g["files"] for g in out if g["zone"] == k),
                   lines=sum(g["lines"] for g in out if g["zone"] == k)) for k, name, where in ZONES]
-    return dict(head=head, files=files, lines=sum(counts.values()), groups=out, geo=geo, zones=zones,
+    return dict(head=head, files=files, lines=sum(counts.values()), groups=out, geo=geo, zones=zones, loop=loop,
                 kinds=[dict(key=k, name=name, n=sum(f[2] == n for f in files)) for n, (k, name) in enumerate(KINDS)],
                 unplaced=[f[0] for f in files if f[4]], unplaced_what=UNPLACED, table=TABLE_NAME,
                 scripts=sum(f[0].startswith(SCRIPTS) and not f[0].rsplit("/", 1)[-1].startswith("test_") for f in files))
@@ -216,4 +256,4 @@ def build_file_map(head, run):
         counts = tracked(head, run)
     except Exception as e:  # noqa: BLE001  the page says so; the rest of the build goes on
         return dict(empty=f"The file list could not be read from git ({type(e).__name__}), so there is no file to draw.")
-    return file_map(counts, groups, head, why)
+    return file_map(counts, groups, head, why, case_briefs(counts, head, run))
