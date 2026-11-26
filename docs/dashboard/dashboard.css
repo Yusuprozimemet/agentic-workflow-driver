@@ -1257,6 +1257,76 @@ footer { font-size: 12.5px; color: var(--muted); }
 #prf #prf-tip .l{margin-top:4px}
 @media (prefers-reduced-motion:reduce){#prf .fig .d{transition:none}}
 
+/* Graph 7's two views, every Day as one stream or one Day opened, and the One Day view: its steps as rings or as a flat
+   strand. Every rule is under #prf or #one; the colours are the dashboard's tokens, and the two words on a step's fill. */
+#prf .vsw{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 4px}
+#prf .mseg{display:inline-flex;border:1px solid var(--axis);border-radius:7px;overflow:hidden}
+#prf .mseg button{font:500 13px var(--sans);color:var(--ink-2);background:var(--card);border:0;padding:7px 12px;cursor:pointer}
+#prf .mseg button+button{border-left:1px solid var(--axis)}
+#prf .mseg button[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+#prf .mseg button:disabled{opacity:.45;cursor:default}
+#prf .mseg button:focus-visible{outline:2px solid var(--link);outline-offset:-3px}
+#prf-all{display:contents}
+#prf-all[hidden]{display:none}
+#one{--on-spec:#fff;--on-code:#0b0b0b;display:flex;flex-direction:column;gap:14px}
+#one .octl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:13px;color:var(--muted)}
+#one .octl select{font:500 13px var(--sans);color:var(--ink);background:var(--card);border:1px solid var(--axis);border-radius:7px;padding:6px 8px;min-width:0;max-width:100%}
+#one .octl select:focus-visible{outline:2px solid var(--link);outline-offset:1px}
+#one .t-row{font:600 12.5px var(--sans);fill:var(--ink)}
+#one .t-sec{font:400 10px var(--sans);fill:var(--muted)}
+#one .t-num{font:500 10.5px var(--mono);fill:var(--muted);font-variant-numeric:tabular-nums}
+#one .t-count{font:600 12px var(--sans);fill:var(--ink)}
+#one .t-lane{font:400 11.5px var(--sans);fill:var(--ink-2)}
+#one .rfig .t-lane{font-size:10.5px}
+#one .t-step{font:600 12px var(--sans);fill:var(--ink);pointer-events:none}
+#one .t-step.spec,#one .t-arc.spec{fill:var(--on-spec)}
+#one .t-step.code,#one .t-arc.code{fill:var(--on-code)}
+#one .t-arc{font:500 9.5px var(--sans);fill:var(--ink);pointer-events:none}
+#one .t-big{font:700 28px var(--display);fill:var(--ink)}
+#one .tube{fill:var(--s1);stroke:var(--s2);stroke-width:1}
+#one .tube-end{fill:var(--s2)}
+#one .st.audit{fill:var(--s1);stroke:var(--s3);stroke-width:1.2;stroke-dasharray:4 3}
+#one .st.spec{fill:var(--spec)}
+#one .st.code{fill:var(--code)}
+#one .st.close{fill:var(--card);stroke:var(--ink);stroke-width:1.8}
+#one .st.none,#one .st.after{fill:var(--card);stroke:var(--s2);stroke-width:1.2;stroke-dasharray:2 3}
+#one .notch{stroke:var(--card);stroke-width:1.5;opacity:.7}
+#one .notch.audit,#one .notch.close{stroke:var(--s3);opacity:1}
+#one .step:hover .st,#one .step:focus .st{filter:brightness(1.08)}
+#one .df{stroke:var(--card);stroke-width:1}
+#one .pip{fill:var(--card);pointer-events:none}
+#one .lane{stroke:var(--line);stroke-width:1}
+#one .band{fill:var(--s3)}
+#one .band.main{fill:var(--s2)}
+#one .band:hover,#one .band:focus{fill:var(--ink)}
+#one .track{fill:none;stroke:var(--line);stroke-width:1}
+#one .arcband{fill:none;stroke:var(--s3);stroke-width:8}
+#one .arcband.main{stroke:var(--s2)}
+#one .arcband:hover,#one .arcband:focus{stroke:var(--ink)}
+#one .ct{fill:var(--proven)}
+#one .ct.unproven{fill:var(--unproven);stroke:var(--proven);stroke-width:1.4}
+#one .ct.building,#one .ct.open,#one .ct.unchecked{fill:var(--card);stroke:var(--pending);stroke-width:1.4;stroke-dasharray:2.5 2}
+#one .ct.skipped{fill:var(--s2)}
+#one .ct.replaced{fill:var(--card);stroke:var(--s3);stroke-width:1.4}
+#one .ct.repair{fill:var(--repair)}
+#one .ct.broken{fill:var(--broken)}
+#one .ct.rw{stroke:var(--ink);stroke-width:2}
+#one .duo{display:grid;grid-template-columns:minmax(0,700px) minmax(260px,1fr);gap:24px;align-items:start}
+#one .duo .side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:12px}
+#one .duo .note{font-size:12.5px;color:var(--muted);margin:0}
+#one .scroll{overflow-x:auto;min-width:0}
+#one .rfig{display:block;width:100%;min-width:520px;height:auto}
+#one .sfig{display:block;width:100%;min-width:1000px;height:auto}
+#one .rfig text,#one .sfig text{font-family:var(--sans)}
+#one [tabindex]{cursor:pointer}
+#one [tabindex]:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+#one .who{display:table;border-collapse:collapse;font-size:12.5px;color:var(--ink);width:100%}
+#one .who th,#one .who td{text-align:left;padding:4px 10px 4px 0;border-bottom:1px solid var(--line)}
+#one .who th{font-weight:600;color:var(--muted)}
+#one .who .r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;padding-right:0}
+@media (max-width:900px){#one .duo{grid-template-columns:minmax(0,1fr)}#one .duo .side{position:static}}
+#one[hidden],#one [hidden]{display:none}
+
 /* Graph 8 as an energy budget: one bead per fixed number of dollars, coloured by where they went. Every rule is under #atp; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
 #atp{--atp-day:var(--l5);--atp-dash:var(--code);--atp-tool:var(--l4);--atp-other:var(--l7);--atp-main:var(--bar);--shadow:rgba(14,17,22,.16)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #atp{--shadow:rgba(0,0,0,.5)}}
