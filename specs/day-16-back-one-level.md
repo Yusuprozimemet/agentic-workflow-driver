@@ -91,7 +91,9 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
   kit lets Days run out of number order, `spec_drift_specs.out_of_order`); a finished Day not
   in `order` is not read. When the switch log has an `escapes` line, every finished Day after
   the latest-placed Day such a line names is read, in `order`, so two Days finished between
-  reads both count; when it has none (the first read), only the last-placed finished Day is. Each Day read has its escapes: its `defects` whose `found`, lowered and
+  reads both count; when it has none (the first read), only the last-placed finished Day is. A
+  named Day not in `order` (the kit can cut a Day out of it, `spec_drift_specs.run_order`) is
+  passed over; when no named Day is in `order`, the read is as with no `escapes` line. Each Day read has its escapes: its `defects` whose `found`, lowered and
   stripped, is `close`, `dashboard` or `evidence replay`, or fullmatches `day \d+ review`. For
   each, the driver appends `{"event": "escapes", "day": <n>, "found": [<ids>]}` (`at` aside;
   `found` may be empty), after the run's `on` line when the run writes one, so a Day is read
@@ -262,7 +264,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: none — level 1 has no lower level; this keeps level 1's start unchanged.
 - [ ] C16.7 **new** — `on` at level 2, set up as follows:
       - before the close, the fake project's `--out` JSON has `order` [23, 24] and `days[]`
-        Day 23 `active` and Day 24 `planned`, both of one phase, so no Day is finished and the
+        Day 23 `active` and Day 24 `ready`, both of one phase, so no Day is finished and the
         first step reads nothing (not `tests/test_dry_run.py`'s `drift_of`, whose `order` [1]
         parks Day 24's spec, `steps.py:95-96`);
       - the step is `day-23/close-the-day`'s, and the driver merges its pull request;
@@ -372,7 +374,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       close (one `gh pr merge`), and Track B lowers from 2 only, so no lowering line is written.
       Test: `EscapeTest.test_level_three_lowers_to_two`.
       Its break, in Track C: level 3 run as level 1 again (Track C's `>= 2` put back to `== 2` in
-      the merge's test; the brief names the find).
+      the merge's test; the brief names the find), and a second: the failed-evidence lowering's
+      guard put back to 2 only, which the first does not reach.
       Plan: P54 "The driver goes back one level on an escape"
 - [ ] C16.16 **new** — `agent-cases.py reviewer --record`, on a fake runner built as
       `scripts/test_agent_cases.py`'s `ReviewRunTest` builds it, keeps `recorded.cases`, one entry
@@ -429,7 +432,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       - with `order` [22, 23, 24, 25], a switch log whose `escapes` line names Day 22, and Days
         23 and 24 both `done` in the JSON, Day 23's escapes D23.4 and Day 24's D24.2 (found
         `close`), the next `on` appends `escapes` lines for Day 23 then Day 24 and one lowering
-        line with `"escapes": ["D23.4", "D24.2"]`;
+        line with `"escapes": ["D23.4", "D24.2"]`; in this case and the next, all four Days are
+        of one phase and the next step is Day 25 Track A's (`steps.phase_end` never parks a
+        track step);
       - with `order` [22, 24, 23, 25], a switch log whose `escapes` line names Day 24, and Day 23
         then `done` with D23.4 (found `close`), the next `on` reads Day 23 (it is placed after
         Day 24) and lowers on D23.4.
@@ -526,3 +531,8 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.34 — found: auditor · cause: spec · made: Day 16 · Track C's In scope did not say it lifts Track B's two 2-only lowering guards, and no criterion had a level 3 failed evidence run (fixed in this PR: Track C's In scope, a case in C16.15, Notes).
 - **Defect** D16.35 — found: auditor · cause: spec · made: Day 16 · C16.20's hand-merge case said a fake gives `changed`, which the driver computes, and left open who writes the line before `level_2_refusals` reads it (fixed in this PR: the test writes it before the `on`).
 - **Defect** D16.36 — found: auditor · cause: spec · made: Day 16 · C16.11 said "writes no switch log line", false at every level since `on` writes its `on` line (fixed in this PR: no `escapes` or `level` line).
+- The spec-auditor's third recheck (2026-11-26, of a6e5b0c) made 2 findings and 2 notes, all taken in its own wording and not rechecked again (D16.37 to D16.40).
+- **Defect** D16.37 — found: auditor · cause: spec · made: Day 16 · C16.20's two `order` cases left the Days' phases and the next step unsaid, so a Day 25 spec step could park at `steps.phase_end` before any read (fixed in this PR: one phase, the next step Day 25 Track A's).
+- **Defect** D16.38 — found: auditor · cause: spec · made: Day 16 · the read gave no result when no Day an `escapes` line names is still in `order` (fixed in this PR: such a Day is passed over, and with none in `order` the read is a first read).
+- **Defect** D16.39 — found: auditor · cause: spec · made: Day 16 · C16.7 gave Day 24 `planned`, a status the kit never writes (fixed in this PR: `ready`).
+- **Defect** D16.40 — found: auditor · cause: spec · made: Day 16 · C16.15's named break did not reach its failed-evidence half (fixed in this PR: a second break, that guard put back to 2 only).
