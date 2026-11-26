@@ -2095,8 +2095,8 @@ class RewritesPageTest(unittest.TestCase):
         self.assertTrue("rew" in m, "the model has no rew key")
         self.assertIn("empty", m["rew"])
         out = boot(data())
-        self.assertIsNone(out["error"])
-        self.assertEqual([e for e in out["logged"] if e.startswith("rew:")], [])
+        # one assertion, worded as the boot tests': a page that cannot boot fails here last, and reads the same
+        self.assertEqual((out["error"], [e for e in out["logged"] if e.startswith("rew:")]), (None, []))
 
 
 class PageFilesTest(unittest.TestCase):
