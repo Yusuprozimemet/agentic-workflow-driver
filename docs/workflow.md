@@ -14,7 +14,7 @@ flowchart LR
     S["Main session (Opus 5.5)<br/>specs, briefs, review,<br/>commits and PRs"]
     PA["plan-auditor<br/>big picture:<br/>plan ↔ specs ↔ code"]
     SA["spec-auditor<br/>one day:<br/>spec ↔ code"]
-    I["implementer (Haiku)<br/>code and tests<br/>from a brief"]
+    I["implementer (Opus)<br/>code and tests<br/>from a brief"]
     CI["CI on GitHub<br/>tests, checks,<br/>400-line gate"]
     D["Dashboard<br/>scripts/spec-drift.py"]
 
