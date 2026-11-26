@@ -687,7 +687,7 @@ function model(DATA) {
       C: crit.map(c => ({ id: c.id, day: c.day, tag: c.tag, what: cut(plain(c.plain || c.claim || "")),
         kind: { first: "ref", added: "later" }[kindOf(c)] || kindOf(c), links: links[c.id].map((p, k) => ({ p, quote: (quoteOf[c.id] || [])[k] || "" })) })),
       rw: [...after].map(a => dayList.findIndex(d => d > a)).filter(i => i > 0).sort((a, b) => a - b), un };
-    return { chart, say:`One stripe per commitment of \`plan.md\`, in the plan's order, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
+    return { chart, say:`One stripe per commitment of \`plan.md\`, in the plan's order, those added later chapter by chapter, and one row per Day: a mark means a criterion of that Day names the commitment under it in its Plan: line.`,
       all, arms: [["p", `The plan as approved · ${P0.length}`], ["n", `Added later · ${N0.length}`], ["o", `Criteria no commitment asks for · ${off.length}`]].filter(([a]) => all.some(c => c.arm === a)),
       sections: groups("p"), added_sections: groups("n"), rows, filters, quotes, read, ladder,
       table: { head: ["Commitment", "Section", "Owner Day", "Criteria", "Days", "State"],
@@ -948,7 +948,9 @@ function planBar(m, box, tip, panel, forDays, resets) {
     slots.push({ arm, id: p.id, short: p.short, p, per, fill, n: Object.values(per).flat().length });
   };
   G.ref.forEach(p => mk("ref", p, "var(--c-in)"));
-  G.added.forEach(p => mk("add", p, "var(--c-out)"));
+  // chapter by chapter, as the gene draws them: in the order added, a chapter comes back and its slanted name with it
+  const firstAt = {}; G.added.forEach((p, i) => { if (!(p.sec in firstAt)) firstAt[p.sec] = i; });
+  G.added.map((p, i) => ({ p, i })).sort((a, b) => firstAt[a.p.sec] - firstAt[b.p.sec] || a.i - b.i).forEach(({ p }) => mk("add", p, "var(--c-out)"));
   ["unplanned", "guard"].forEach(k => C.filter(c => c.kind === k).forEach(c => slots.push({ arm: "off", id: c.id, short: c.what, c, per: { [c.day]: [{ c }] }, fill: KFILL[k], n: 0 })));
 
   const X0 = 62, U = 5, CEN = 12, GAP = 20, T0 = 26, RH = 13, CH = 26, RW = G.rw,
@@ -1015,7 +1017,7 @@ function planBar(m, box, tip, panel, forDays, resets) {
       // A commitment no criterion names yet, owned by a later Day: white with a dotted outline, not the empty grey.
       if (k === "later") { fill = "var(--card)"; op = 1; }
     }
-    s.band = el("rect", { class: "band", x: s.x, y: CY, width: U, height: CH, fill, "fill-opacity": op, stroke: "var(--card)", "stroke-width": .6 }, null, gb[s.arm]);
+    s.band = el("rect", { class: "band", "data-slot": s.id, x: s.x, y: CY, width: U, height: CH, fill, "fill-opacity": op, stroke: "var(--card)", "stroke-width": .6 }, null, gb[s.arm]);
     if (s.u && s.u.kind === "later") el("rect", { x: s.x + .5, y: CY + .5, width: U - 1, height: CH - 1, fill: "none", stroke: "var(--muted)", "stroke-width": .7, "stroke-dasharray": "1 1.2" }, null, gb[s.arm]);
     const cx = s.x + U / 2;
     if (s.arm === "ref" && s.p.status === "changed") el("path", { d: `M${cx} ${CY + CH + 2} l-3 5.5 h6 z`, fill: "var(--c-out)" });
@@ -1790,7 +1792,8 @@ function readingDraw(R, get, onDay) {
   if (stop) {
     el("rect", { class: "term shut", x: f(termX), y: 73, width: 6, height: 34, rx: 2 });
     el("path", { class: "termcap", d: `M${f(termX - 6)} 73 h18` });
-    tops.unshift({ t: `the next stop, after Day ${stop.day}: the maintainer decides`, cls: "t-top strong", px: termX + 3, to: 32, anchor: "end", x: VW - 2, rows: [8], lead: "lead" });
+    // the label ends with the cap when the cap stands at the picture's right end, so it does not run past the sign
+    tops.unshift({ t: `the next stop, after Day ${stop.day}: the maintainer decides`, cls: "t-top strong", px: termX + 3, to: 32, anchor: "end", x: VW - 2 - (termX + 12) <= 12 ? termX + 12 : VW - 2, rows: [8], lead: "lead" });
   }
   tops.splice(stop ? 1 : 0, 0, { t: `today${lastPr ? ` · after #${lastPr.pr}` : ""}`, cls: "t-top strong", px: T, to: 78, anchor: "end", x: T + 6, lead: "lead today" });
   // their words, on two rows over the phases: each nearest its own place, on the lower row first, sliding along it or

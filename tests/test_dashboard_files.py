@@ -558,6 +558,17 @@ class FilePageTest(unittest.TestCase):
         )
         self.assertIn("track-reviewer", got["figure"])
 
+    def test_no_columns_row_can_reach_its_neighbours(self):
+        # the widest row of two neighbouring columns keeps 6 px between them; unittest shortens a long list, so the
+        # count and the first pair
+        cols = sorted(files.COLUMNS.items(), key=lambda kv: kv[1]["x"])
+        pairs = [
+            [ka, kb]
+            for (ka, a), (kb, b) in itertools.pairwise(cols)
+            if a["x"] + a.get("w", files.WIDTH) / 2 + 6 > b["x"] - b.get("w", files.WIDTH) / 2
+        ]
+        self.assertEqual((len(pairs), pairs[:1]), (0, []))
+
     def test_a_file_the_table_does_not_place_is_named_on_the_page(self):
         got = page(drawn(dict(FILES, **{"scripts/brand-new.py": 77})))
         self.assertEqual(got["dots"], len(FILES) + 1)
