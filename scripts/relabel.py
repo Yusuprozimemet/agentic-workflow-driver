@@ -7,7 +7,7 @@ The session that tags a defect also wrote the code, the spec or the review it is
 paper found that tags then follow the session's own reading (docs/paper, the tagger-bias lesson):
 on Days 21-28 a fresh rater, given the text alone, disagreed on 11 of 82 causes and 16 stages,
 mostly defects made on one day and found on a later one. So at a phase's last close, `blind`
-strips the `found:`, `cause:`, `made:`, `catchable:` and `same-as:` fields from the entries of
+strips the `found:`, `at:`, `cause:`, `made:`, `catchable:` and `same-as:` fields from the entries of
 the phase's Days (a `same-as:` names an earlier defect, whose tags the rater could look up), the
 defect-rater agent labels the text alone, and `compare` prints each Day's counts and each
 disagreement for the closing PR to decide.
@@ -23,7 +23,7 @@ import sys
 from collections import Counter
 
 ENTRY = re.compile(r"^- \*\*Defect\*\*(?:\s+D[\w.]+)?\s*[—-]\s*(.*)$")  # D28.1, the line's ID, is optional
-FIELD = re.compile(r"^(found|cause|made|catchable|same-as):\s*(.*)$")
+FIELD = re.compile(r"^(found|at|cause|made|catchable|same-as):\s*(.*)$")
 BEFORE_CODE = ("auditor", "spec-change pr")
 BEFORE_MERGE = ("review", "track-reviewer", "seen red", "break on purpose", "self", "ci", "driver reviewer")
 ESCAPE = ("close", "evidence replay", "dashboard")
@@ -53,7 +53,7 @@ def entries(path):
             else:
                 text.append(p)
         rows.append(dict(id=f"D{day}-{len(rows) + 1}", day=day, line=i + 1, text=" · ".join(text),
-                         **{k: tags.get(k, "") for k in ("found", "cause", "made", "catchable", "same-as")}))
+                         **{k: tags.get(k, "") for k in ("found", "at", "cause", "made", "catchable", "same-as")}))
     return rows
 
 

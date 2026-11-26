@@ -14,7 +14,8 @@ The closing PR, `day-NN/close-the-day` (`CLAUDE.md`, "A day, in order", step 3):
   [`docs/lab-notebook.md`](lab-notebook.md) (the README keeps only its Findings).
 - Its defect counts and the PR's "## Defects" section are printed from the Notes by
   `python scripts/close-views.py specs/day-NN-slug.md`: paste them unchanged. Each Defect line
-  carries `catchable:`, the earliest layer that could have caught it (`specs/README.md`).
+  carries `catchable:`, the earliest layer that could have caught it, and from Day 16 may say
+  the step it was caught at, `at:`, which these views do not print (`specs/README.md`).
 - The close commits no counts: the session hooks push them to the `dashboard-data` branch
   ("Where the counts live", below). For the notebook's figures, run
   `python scripts/publish-counts.py` and read them from that branch

@@ -2,7 +2,7 @@
 name: implementer
 description: Writes the code and tests for one track from a brief the main session gives it, runs the targeted tests, and reports what it changed. Use for a track's implementation once its spec has been audited and merged. Never commits, pushes or opens pull requests; the main session reviews, runs the full checks and the breaks on purpose, and writes the PR.
 tools: Read, Edit, Write, Grep, Glob, Bash
-model: claude-haiku-5-5
+model: claude-opus-5-5
 ---
 
 You implement one track of one day in this repository, from a brief. The session that sent you

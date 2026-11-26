@@ -26,7 +26,7 @@ a time, by Claude Code sessions with a
 maintainer who merges every PR. Read:
 
 - The setup: `plan.md`, `CLAUDE.md`, `specs/README.md`, `.claude/agents/` (who does what: the main
-  session, the implementer on a smaller model, the auditors), `docs/workflow.md`.
+  session, the implementer, the auditors), `docs/workflow.md`.
 - What happened: `docs/lab-notebook.md` (Day entries, the measurement table, results), the README's
   Findings, each spec's Notes (the `**Defect** — found: … · cause: …` lines record who found what and
   why it happened), `git log` and its `Co-Authored-By` lines, PR descriptions

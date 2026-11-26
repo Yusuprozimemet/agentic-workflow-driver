@@ -29,7 +29,7 @@ says what a day must make true; the kit's question is whether each claim of "don
   before starting the next day and stops for a failed, stale or missing replay; CI cannot block
   the merge it replays.
 - **Separate agents with fresh contexts.** A plan-auditor and a spec-auditor read the specs
-  against the code before any work, an implementer on a smaller model writes the code, a
+  against the code before any work, an implementer writes the code from a brief, a
   defect-rater relabels a phase's defects blind at its last close (`scripts/relabel.py`), and three end-of-phase
   auditors judge the whole. Auditors only read: a hook blocks their writing git and `gh`
   commands (`scripts/auditor-guard.py`), but reads commands rather than what programs do and is

@@ -177,7 +177,8 @@ Their findings are advice to the maintainer. What becomes a PR is the maintainer
 
 ## The implementer
 
-`.claude/agents/implementer.md`, on Haiku (`claude-haiku-5-5`), the maintainer's choice. For each
+`.claude/agents/implementer.md`, on Opus (`claude-opus-5-5`), the maintainer's choice from
+26 Nov 2026 (on Haiku, `claude-haiku-5-5`, before). For each
 track, the main session writes the brief (files, changes, tests, the spec's exact expected
 outputs), sends it, and then does what the implementer does not: reviews the diff, runs the full
 checks in "Before pushing", breaks the code on purpose, commits, and writes the PR. Specs,

@@ -965,6 +965,16 @@ class DefectCountTest(unittest.TestCase):
         self.assertEqual(c["days"][0]["catchable"], dict(earlier=1, not_earlier=2, not_given=1, off_list=1))
         self.assertEqual((c["catchable_earlier"], c["off_list"]), (1, ["D16.4 catchable"]))
 
+    def test_at_is_a_field_and_the_text_is_what_follows_the_fields(self):
+        text = ("- **Defect** D16.1 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · "
+                "catchable: auditor · the brief named the wrong file (#1).\n"
+                "- **Defect** D16.2 — found: auditor · cause: spec · made: Day 16 · a count was off · by one.\n")
+        lines = sd.defect_lines(text, 16)
+        self.assertEqual([("at" in x, "text" in x) for x in lines], [(True, True)] * 2)
+        self.assertEqual([(x["at"], x["cause"], x["catchable"], x["text"]) for x in lines], [
+            ("Track A brief", "process", "auditor", "the brief named the wrong file (#1)."),
+            (None, "spec", None, "a count was off · by one.")])
+
     def test_the_main_sessions_diff_review_is_a_stage_of_its_own_and_a_late_one(self):
         self.assertEqual([sd.found_stage(f, 11) for f in ("review", "Review", "self", "Track C1", "Day 12 review")],
                          ["review", "review", "work", "work", "Day review"])

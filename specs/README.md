@@ -258,6 +258,21 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     (`defect_counts`). The dashboard sets the defects each gate found (`auditor`, `seen red`,
     `break on purpose`, `evidence replay` with `rehearsal`, and the hooks' refusals) beside the
     tokens it cost (`gates.json`).
+  - `at:`, from Day 16, right after `found:`: the step of the Day the defect was caught at,
+    exactly one of `audit`, `recheck` (the spec-auditor's first reading of the Day, and its
+    rechecks); `spec-change PR`; `Track <X> brief`, `Track <X> build`, `Track <X> diff`,
+    `Track <X> PR` (the brief before the implementer starts; the work and its tests; the
+    reading of the diff and the breaks; the open pull request, where `CI` and
+    `driver reviewer` catch); `close`, `rehearsal`, `replay`. `found:` says who or what caught
+    it and `at:` when: `found: track-reviewer · at: Track B brief`. A line without one is
+    placed from `found:` where that names the step (`auditor`, `spec-change PR`, `Track <X>`,
+    `close`, `rehearsal`, `evidence replay`); `dashboard` and `Day <NN> review` are after the
+    Day; any other value takes no step. `spec-drift.py` prints how many lines from Day 16
+    take no step, a count and not a gate. It prints an `at:` it does not use, and places that
+    line from `found:`: one off the list or empty, one naming a step the Day has not (a track,
+    or a spec change before any merged), and one on a Day before 16, whose lines have none
+    and are not given it. Nothing checks that `at:` and `found:` agree, nor where among the
+    fields `at:` stands. `relabel.py` strips it with the tags.
   - `cause:` exactly one of `spec` (wrong, missing a case, or not meetable as written),
     `implementation` (the spec was right, the code did not do it), `process` (the workflow and
     the record around the code: branch names, Jira keys, a break run wrong, a track announced
