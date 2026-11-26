@@ -520,7 +520,7 @@ footer { font-size: 12.5px; color: var(--muted); }
 /* the quality score, under the "Now" line */
 .quality { padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; }
 .q-top { display: flex; flex-wrap: wrap; gap: 14px 36px; align-items: center; }
-.q-num { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.q-num { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .q-num b { font: 700 64px/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .q-num small { font-size: 12px; color: var(--muted); }
 .q-rows { flex: 1 1 420px; min-width: 0; display: grid; gap: 2px; }

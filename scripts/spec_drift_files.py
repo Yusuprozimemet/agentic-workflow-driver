@@ -24,21 +24,23 @@ SCRIPTS = "scripts/"
 
 # Where a group may hang: the seven stations and the six checks between them, by x on the picture.
 # `w` is the widest a row of dots may be there; `at` is what a reader is told. The cytoplasm holds five
-# columns between the nucleus (478) and the gate (917), so the two that hold one brief each are narrow.
+# columns between the nucleus (478) and the gate (917), so the two that hold one brief each are narrow; the
+# nucleus's columns and those out of the cell stand 83 to 86 px apart, so their rows are 76 px wide and two
+# neighbours' rows keep at least 6 px between them (7 at the closest).
 COLUMNS = {
-    "s1": dict(x=76, zone="doc", at="station 1, the goal"),
-    "plan-auditor": dict(x=159, zone="doc", at="the plan-auditor's check, after station 1"),
-    "s2": dict(x=242, zone="doc", at="station 2, a Day's spec"),
-    "spec-auditor": dict(x=328, zone="doc", at="the spec-auditor's check, after station 2"),
-    "s3": dict(x=414, zone="doc", at="station 3, a promise"),
+    "s1": dict(x=76, zone="doc", at="station 1, the goal", w=76),
+    "plan-auditor": dict(x=159, zone="doc", at="the plan-auditor's check, after station 1", w=76),
+    "s2": dict(x=242, zone="doc", at="station 2, a Day's spec", w=76),
+    "spec-auditor": dict(x=328, zone="doc", at="the spec-auditor's check, after station 2", w=76),
+    "s3": dict(x=414, zone="doc", at="station 3, a promise", w=76),
     "s4": dict(x=540, zone="try", at="station 4, a test that fails first"),
     "implementer": dict(x=624, zone="try", at="the implementer, between stations 4 and 5", w=60),
     "s5": dict(x=708, zone="try", at="station 5, the code, then a planted bug"),
     "track-reviewer": dict(x=772, zone="try", at="the track-reviewer's check, after station 5", w=24),
     "ci": dict(x=868, zone="try", at="CI's checks, after station 5", w=80),
-    "s6": dict(x=1016, zone="after", at="station 6, the Day closes"),
-    "defect-rater": dict(x=1099, zone="after", at="the defect-rater's check, after station 6"),
-    "s7": dict(x=1182, zone="after", at="station 7, the re-check"),
+    "s6": dict(x=1016, zone="after", at="station 6, the Day closes", w=76),
+    "defect-rater": dict(x=1099, zone="after", at="the defect-rater's check, after station 6", w=76),
+    "s7": dict(x=1182, zone="after", at="station 7, the re-check", w=76),
 }
 ZONES = (("doc", "written down first", "in the nucleus"), ("try", "tried on the code", "in the cytoplasm"),
          ("after", "checked afterwards", "out of the cell"))

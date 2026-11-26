@@ -844,6 +844,22 @@ class PageTest(unittest.TestCase):
         self.assertEqual((len(got), got == want), (len(want), True))
         self.assertEqual(closer_than(secs, SEC_GAP), [])
 
+    def test_graph_12_draws_each_chapter_once_under_added_later(self):
+        # commitments added later in an order that comes back to chapter B: the bar draws them chapter by chapter,
+        # each chapter in the order it first comes up, as the gene does
+        def p(pid, section):
+            return {"id": pid, "short": pid, "section": section, "owner_day": None, "rule": False,
+                    "change": None, "text": "t."}  # fmt: skip
+
+        data = plan_bar_data()
+        order = [("P01", "A"), ("P02", "B"), ("N01", "B"), ("N02", "A"), ("N03", "C"), ("N04", "B")]
+        data["plan"]["commitments"] = [p(pid, s) for pid, s in order]
+        got = self.plan_bar(data)
+        self.assertEqual([s[0] for s in got["secs"]], ["A", "B", "B", "A", "C"])
+        # and inside a chapter in the order added: the stripes left to right
+        added = [i for i, _ in sorted(got["bands"], key=lambda b: b[1]) if i.startswith("N")]
+        self.assertEqual(added, ["N01", "N04", "N02", "N03"])
+
     def test_graph_12_holds_its_names_title_and_bends_inside_its_picture(self):
         # every slanted name's box and the right column's title lie inside the viewBox; a name moved off its
         # bracket's middle has a bent tick from that middle to its foot
@@ -919,7 +935,8 @@ console.log(JSON.stringify({ secs: made.filter(named).map(n => [n.textContent, n
   view: (made.find(n => n.tag === "svg" && n.attrs.class === "pc-svg") || { attrs: {} }).attrs.viewBox || "",
   texts: made.filter(n => n.tag === "text" && !named(n) && n.attrs.x != null).map(n => [String(n.textContent), +n.attrs.x, +n.attrs.y, n.attrs["text-anchor"] || "start"]),
   brackets: made.filter(n => n.tag === "line" && n.attrs["stroke-width"] === "1.5").map(n => [+n.attrs.x1, +n.attrs.x2]),
-  bends: made.filter(n => n.tag === "path" && n.attrs["stroke-width"] === "0.75").map(n => n.attrs.d) }));
+  bends: made.filter(n => n.tag === "path" && n.attrs["stroke-width"] === "0.75").map(n => n.attrs.d),
+  bands: made.filter(n => n.tag === "rect" && n.attrs.class === "band").map(n => [n.attrs["data-slot"], +n.attrs.x]) }));
 """
 
 
@@ -1006,7 +1023,8 @@ RING_DAY = (
 
 # ringDraw() or readingDraw() alone on the same document, for working out where each text's box falls: every text
 # it drew, as [class, x, y, anchor, words with a tspan's own, whether it holds a tspan]; every lead, as [class, d];
-# each stop's gate on the ring, as [its key, the angle it is turned to]; and the words of the ring's facts.
+# each stop's gate on the ring, as [its key, the angle it is turned to]; the words of the ring's facts; and the d of
+# each stop sign's cap on the reading.
 TEXTS = (
     RING[: RING.index("console.log(")]
     + r"""console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
@@ -1018,7 +1036,8 @@ TEXTS = (
        e.attrs["text-anchor"] || "start", words(e), e.kids.some(k => k && k.tag === "tspan")]),
      leads: all(fig).filter(e => e.tag === "path" && has(e, "lead")).map(e => [e.attrs.class, e.attrs.d]),
      gates: all(fig).filter(e => /^s\\d+$/.test(e.attrs["data-k"] || "")).map(e => [e.attrs["data-k"], parseFloat(/rotate\\(([-\\d.]+)/.exec(e.attrs.transform)[1])]),
-     facts: words($("whr-facts")).replace(/\\s+/g, " ") })`, ctx)));
+     facts: words($("whr-facts")).replace(/\\s+/g, " "),
+     caps: all(fig).filter(e => e.tag === "path" && has(e, "termcap")).map(e => e.attrs.d) })`, ctx)));
 """
 )
 
@@ -1603,6 +1622,38 @@ class RingAndReadingPageTest(unittest.TestCase):
         far = sorted(w for w, pts in near if abs(pts[0][0] - pts[-1][0]) > 170)
         rows = sorted({round(b[2]) for b, w in boxes if not w.startswith("the next stop")})
         self.assertEqual((far, len(rows)), ([], 2))
+
+    def full_strand(self, later_phase):
+        # ring_data with 40 more merges of Day 2, so the strand fills the picture; [the cap's right end, the next
+        # stop's label]. Without the phase that has no number yet the cap ends 4 px short of the picture's right
+        # edge, as on the real page; with it, that phase's 56 px stand between the cap and the edge.
+        data = ring_data()
+        if not later_phase:
+            data["meta"]["where"]["rows"] = data["meta"]["where"]["rows"][:2]
+        last = data["look_ahead"]["columns"][-1]
+        for i in range(len(data["rows"]), len(data["rows"]) + 40):
+            data["rows"].append(
+                dict(data["rows"][-1], i=i, pr=i, title=f"PR {i}", kind="code", own_day=2)
+            )
+            data["look_ahead"]["columns"].append(dict(last, pr=i, got=[]))
+        views = load("spec_drift_views", "spec_drift_views.py")
+        data["where_ring"], data["reading"] = views.where_ring(data), views.reading(data)
+        got = self.drawn(dict(data, draw="rdg"), TEXTS)
+        self.assertEqual(len(got["caps"]), 1)
+        stop = [t for t in got["texts"] if t[4].startswith("the next stop")]
+        self.assertEqual(len(stop), 1)
+        return float(re.match(r"M([-\d.]+)", got["caps"][0]).group(1)) + 18, stop[0]
+
+    def test_the_next_stops_label_ends_with_its_sign_at_the_pictures_right_end(self):
+        cap_end, stop = self.full_strand(later_phase=False)
+        self.assertEqual(cap_end, 1234.0)
+        self.assertEqual((stop[3], float(stop[1])), ("end", cap_end))
+
+    def test_the_next_stops_label_stays_at_the_edge_when_a_later_phase_stands_past_its_sign(self):
+        # the sign is 60 px from the edge, the later phase between them: the label keeps the edge, over that phase
+        cap_end, stop = self.full_strand(later_phase=True)
+        self.assertEqual(cap_end, 1178.0)
+        self.assertEqual((stop[3], float(stop[1])), ("end", 1238.0))
 
     def test_a_hand_off_quoting_a_script_tag_stays_text_in_the_page_and_in_the_pointer_box(self):
         data = ring_data()

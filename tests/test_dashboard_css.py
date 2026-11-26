@@ -65,6 +65,18 @@ class StylesheetTest(unittest.TestCase):
         self.assertIn("class: `lane-bar ${b.cls}`", self.script)
         self.assertNotIn("class: `bar ${b.cls}`", self.script)
 
+    def test_the_quality_panels_number_may_shrink_on_a_narrow_screen(self):
+        # at 390 px the line under the score did not wrap and made the page 600 px wide
+        css = re.sub(r"/\*.*?\*/", "", self.css, flags=re.DOTALL)
+        body = re.findall(r"(?:^|\})\s*\.q-num\s*\{([^}]*)\}", css)
+        self.assertEqual(len(body), 1)
+        decl = {
+            k.strip(): v.strip()
+            for k, _, v in (d.partition(":") for d in body[0].split(";"))
+            if k.strip()
+        }
+        self.assertEqual((decl.get("flex"), decl.get("min-width")), ("0 1 auto", "0"))
+
 
 if __name__ == "__main__":
     unittest.main()
