@@ -750,14 +750,15 @@ function model(DATA) {
         s.the = s.kind === "audit" ? "the audit" : s.kind === "close" ? "the close" : s.kind === "spec" ? (specs > 1 ? s.name.toLowerCase() : "the spec change") : s.name;
         s.short = s.kind === "code" ? s.key : s.kind === "spec" ? `Spec${s.key.slice(4) ? ` ${s.key.slice(4)}` : ""}` : s.kind === "none" ? "No step" : s.kind === "after" ? "After" : s.name;
         s.caught = mine.length;
-        s.note = mine.length ? `${mine.length} caught` : pending ? "not started" : s.kind === "none" ? "" : "none caught";
+        s.note = mine.length ? `${mine.length} caught` : pending ? (finished(day) ? "no pull request" : "not started") : s.kind === "none" ? "" : "none caught";
         s.head = list([s.name, s.prs.map(p => `#${p}`).join(", "), s.date && shortDate(s.date)]).join(" · ");
-        s.lines = list([WHAT[s.kind] || s.title || (pending ? "Not started: no pull request yet." : ""),
+        s.lines = list([(s.kind === "none" && !mine.length ? "No track and no pull request names these promises." : WHAT[s.kind]) || s.title
+            || (pending ? (finished(day) ? "No pull request: the Day closed without one." : "Not started: no pull request yet.") : ""),
           s.kind === "none" ? (mine.length ? `${n(mine.length, "defect")} of this Day with no step to stand at.` : "")
             : mine.length ? `${n(mine.length, "defect")} caught ${s.kind === "after" ? "after the Day" : "here"}${split.length ? `: ${split.join(", ")}` : ""}.`
               : pending ? "" : "No defect was caught at this step.",
           again ? `${again} of them ${again === 1 ? "repeats" : "repeat"} an earlier defect.` : "",
-          crit.length ? `${n(crit.length, "promise")} of the spec ${s.kind === "none" ? "that no track or pull request names" : "built here"}, ${crit.filter(c => c.state === "proven").length} proved: ${crit.map(c => c.id).join(", ")}.` : ""]);
+          crit.length ? `${n(crit.length, "promise")} of the spec ${s.kind === "none" ? "that no track or pull request names" : pending ? "to build here" : "built here"}, ${crit.filter(c => c.state === "proven").length} proved: ${crit.map(c => c.id).join(", ")}.` : ""]);
       });
       defects.forEach(f => {
         const s = by[f.step], u = s.subs.find(q => q.key === f.sub), placed = s.kind !== "none" && s.kind !== "after";
@@ -783,14 +784,14 @@ function model(DATA) {
       const specPrs = merged("spec").reduce((a, s) => a + s.prs.length, 0), coming = list([todo("code") && n(todo("code"), "track"), todo("close") && "the close"]).join(" and ");
       const figs = [
         [String(T.prs || 0), T.prs === 1 ? "pull request merged" : "pull requests merged",
-          list([list([specPrs && n(specPrs, "spec change"), merged("code").length && n(merged("code").length, "track"), merged("close").length && "the close"]).join(", "), coming && `${coming} still to come`]).join("; ")],
+          list([list([specPrs && n(specPrs, "spec change"), merged("code").length && n(merged("code").length, "track"), merged("close").length && "the close"]).join(", "), coming && `${coming} ${finished(day) ? "with no pull request" : "still to come"}`]).join("; ")],
         [String(defects.length), defects.length === 1 ? "defect caught" : "defects caught",
           list([`${count("audit")} by the audit, before any code`, merged("close").length && `${count("close")} at the close`, count("none") && `${count("none")} at no recorded step`, count("after") && `${count("after")} after the Day`]).join("; ")],
         [String(proved), proved === 1 ? "promise proved" : "promises proved", `of ${criteria.length} in the spec: ${T.new || 0} new, ${T.hold || 0} that already held`],
         [money(T.cost || 0), `across ${n(agents.length, "kind")} of session`, "API list prices, not a bill"]].map(([num, what, sub]) => ({ num, what, sub }));
-      return { day: day.day, title: plain(day.title), open: day.status !== "done", when, steps, defects, criteria, agents, figs,
+      return { day: day.day, title: plain(day.title), open: !finished(day), when, steps, defects, criteria, agents, figs,
         centre: [`Day ${day.day}`, when, `${defects.length} caught · ${proved} proved`],
-        start: { head: list([`Day ${day.day}`, dates.length && when, day.status !== "done" && (dates.length ? "still open" : "not started")]).join(" · "),
+        start: { head: list([`Day ${day.day}`, dates.length && when, !finished(day) && (dates.length ? "still open" : "not started")]).join(" · "),
           lines: [`${n(T.prs || 0, "pull request")}, ${n(defects.length, "defect")} caught, ${n(proved, "promise")} proved, ${money(T.cost || 0)} at list price.`, "Point at a step, a dot, a band or a square."] } };
     });
     return { head: O.head, last_pr: O.last_pr, generated: O.generated, from_day: O.from_day, pick: days.some(d => d.day === current) ? current : days[days.length - 1].day, days };
@@ -3113,7 +3114,7 @@ function oneDraw(O, get, onDay) {
       a = a0 + w + GA;
       return { s, a0, a1: a0 + w, us, st: stack(day, s, us, room, PITCH) };
     });
-    const far = Math.max(...at.map(x => R + x.st.rows * PITCH)) + 14, W = 2 * (far + 104), H = 2 * (far + 58), cx = W / 2, cy = H / 2, labels = [];
+    const far = Math.max(...at.map(x => R + x.st.rows * PITCH)) + 14, W = 2 * (far + 118), H = 2 * (far + 58), cx = W / 2, cy = H / 2, labels = [];
     const Q = onePolar(cx, cy), f1 = Q.f1, defs = el("defs", {});
     svg.setAttribute("viewBox", `0 0 ${f1(W)} ${f1(H)}`);
     svg.setAttribute("aria-label", `Day ${day.day} as rings`);

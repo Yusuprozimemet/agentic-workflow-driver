@@ -1776,6 +1776,24 @@ class OneDayPageTest(unittest.TestCase):
                           ("$3.10", "across 3 kinds of session", "API list prices, not a bill")])
         self.assertEqual(day["start"]["head"], "Day 7 · 2 Nov to 3 Nov · still open")
 
+    def test_one_day_opens_on_the_current_day_and_a_closed_day_is_neither_open_nor_to_come(self):
+        shut = one_day_key()
+        shut["days"][1]["status"] = "closed"
+        one = model(data(one_day=shut, now=dict(data()["now"], current_day=6)))["one"]
+        self.assertEqual(one["pick"], 6)
+        day = one["days"][1]
+        self.assertEqual(day["start"]["head"], "Day 7 · 2 Nov to 3 Nov")
+        self.assertEqual(day["figs"][0]["sub"], "1 spec change, 1 track; the close with no pull request")
+        close = next(s for s in day["steps"] if s["key"] == "close")
+        self.assertEqual((close["note"], close["lines"][0]), ("no pull request", "No pull request: the Day closed without one."))
+        # an open Day's step with no pull request has its promises still to build; the arc of no step says what it holds
+        key = one_day_key()
+        key["days"][1]["criteria"][0]["step"] = "close"
+        key["days"][1]["defects"] = [f for f in key["days"][1]["defects"] if f["step"] is not None]
+        steps = {s["key"]: s for s in model(data(one_day=key))["one"]["days"][1]["steps"]}
+        self.assertEqual(steps["close"]["lines"][-1], "1 promise of the spec to build here, 1 proved: C07.1.")
+        self.assertEqual(steps["none"]["lines"][0], "No track and no pull request names these promises.")
+
     def test_one_day_draws_the_same_marks_as_rings_and_as_a_strand_and_turns_to_a_pressed_day(self):
         out = self.drawn(ONE, data(one_day=one_day_key()))
         # six steps (the four of the Day, an arc for no step and one for after the Day), six defects, one a repeat, and
@@ -2026,6 +2044,9 @@ class PageFilesTest(unittest.TestCase):
                 'id="one-out" aria-live="polite"', 'id="one-who"']
         # the first one missing, so that the failure stays short
         self.assertEqual([w for w in want if w not in html][:1], [])
+        # the page wires the switch and draws the view when it boots: the drawing tests call both by hand
+        wired = ["prfViews($);", '[["one", oneDraw]]']
+        self.assertEqual([w for w in wired if w not in read("dashboard.js")][:1], [])
         section = re.search(r'<section class="graph" id="prf"[ >].*?</section>', html, re.S)
         self.assertIsNotNone(section)
         self.assertTrue('<div id="one" hidden>' in section.group(0), "#one stands inside graph 7's section")

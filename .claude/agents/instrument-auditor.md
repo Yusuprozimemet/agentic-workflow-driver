@@ -223,6 +223,7 @@ a box that is cut off or overlaps is a finding.
 | 18 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
 | 19 | What these figures cannot see; Not measured yet | `page-NN` |
 | 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
+| 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 
