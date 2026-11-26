@@ -2,7 +2,9 @@
 criterion's state, and the gene, which every commitment of the plan sits in once. Needs node for the page's model."""
 
 import importlib.util
+import itertools
 import json
+import math
 import os
 import re
 import shutil
@@ -64,7 +66,8 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   ({ bands: is("b"), quotes: is("rd") - is("rg"), cells: is("tc"), beads: is("bead"), ring: is("rg"), inner: is("rk"),
      dated: drawn.length, names: is("t-row"), box: made[0].attrs.viewBox.split(" ").length, secdiv: is("secdiv"),
      sizes: [...new Set(made.filter(e => (e.attrs.class || "").split(" ").includes("b")).map(e => e.attrs.width + "x" + e.attrs.height))],
-     free: is("free"), free_say: made.filter(e => / no criterion cites$/.test(e.textContent || "")).map(e => e.textContent) })`, ctx)));
+     free: is("free"), free_say: made.filter(e => / no criterion cites$/.test(e.textContent || "")).map(e => e.textContent),
+     secs: made.filter(e => e.attrs.class === "t-sec").map(e => [e.textContent, e.attrs.transform || ""]) })`, ctx)));
 """
 
 
@@ -93,6 +96,9 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
   const days = [];
   mergeDraw(model(DATA).mrg, $, days);
   const out = { all: count() };
+  // where the by-Day view put its counts of merges drawn for a stop and its Days' names: [class, words, x, y, anchor]
+  out.at = all($("mrg-g")).filter(e => e.tag === "text" && ["nc", "day"].includes(e.attrs.class))
+    .map(e => [e.attrs.class, e.textContent, +e.attrs.x, +e.attrs.y, e.attrs["text-anchor"] || "start"]);
   days.forEach(f => f(DATA.merge_graph.days[0].day));
   out.day = count();
   out`, ctx)));
@@ -169,6 +175,27 @@ class SeenTest(unittest.TestCase):
         self.assertEqual([(s["pr"], s["held"]) for s in stops], [(102, 104), (105, None)])
         self.assertEqual([s["state"] for s in stops], ["code broken", "break no longer applies"])
         self.assertEqual((seen["merges"], seen["last"]), (5, 105))
+
+
+# The least distance, in px along the plan, between the feet of two slanted section names (the gene's and graph
+# 12's): at 52 degrees a 10.5 px line of text needs about 15 px across its slant, so 19 px along the plan.
+SEC_GAP = 19
+
+
+def cut(name):
+    """A section name as the gene cuts it: at 38 characters."""
+    return name if len(name) <= 38 else name[:37] + "…"
+
+
+def closer_than(secs, gap):
+    """The pairs of neighbouring slanted names whose feet are closer than `gap`, as their words: `secs` is
+    [[words, "translate(x y) rotate(a)"]] as drawn."""
+    feet = []
+    for words, transform in secs:
+        m = re.match(r"translate\(([-\d.]+)[ ,]", transform)
+        feet.append((float(m.group(1)) if m else 0.0, words))
+    feet.sort()
+    return [[a[1], b[1]] for a, b in itertools.pairwise(feet) if b[0] - a[0] < gap - 0.05]
 
 
 def commitment(pid, owner=1, rule=False):
@@ -667,6 +694,32 @@ class PageTest(unittest.TestCase):
         # one size for every band; a line in each of the five section gaps inside an arm, none at the arm break
         self.assertEqual((drawn["sizes"], drawn["secdiv"]), (["6.4x24"], 5))
 
+    def test_the_genes_section_names_keep_apart_where_sections_are_narrow(self):
+        # the demo plan's added arm holds three sections one commitment wide, side by side: Payment, The cart,
+        # Delivery. A slanted name is clear of the next when their feet are SEC_GAP px apart or more. One section
+        # gets a name of 46 characters, which the gene cuts at 38.
+        data = demo_data.demo()
+        for c in data["gene"]["commitments"]:
+            if c["section"] == "Who does what":
+                c["section"] = "Who does what, and who decides when it is done"
+        self.assertEqual(len("Who does what, and who decides when it is done"), 46)
+        out = subprocess.run(
+            ["node", "-e", DRAWN, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        secs = json.loads(out.stdout)["secs"]
+        runs = []
+        for c in data["gene"]["commitments"]:
+            if not runs or runs[-1] != (c["arm"], c["section"]):
+                runs.append((c["arm"], c["section"]))
+        got, want = [s[0] for s in secs], [cut(name) for _, name in runs]
+        self.assertEqual((len(got), got == want), (len(want), True))
+        self.assertEqual(closer_than(secs, SEC_GAP), [])
+
     def test_the_gene_draws_a_bead_for_each_merge_no_criterion_cites_and_none_without_one(self):
         data = demo_data.demo()
         none = dict(data, merge_graph=dict(data["merge_graph"], uncited=[]))
@@ -682,7 +735,7 @@ class PageTest(unittest.TestCase):
             self.assertEqual(out.returncode, 0, out.stderr[:600])
             drawn = json.loads(out.stdout)
             got.append((drawn["free"], drawn["free_say"]))
-        self.assertEqual(got, [(1, ["1 merge no criterion cites"]), (0, [])])
+        self.assertEqual(got, [(1, ["1 merge of product code no criterion cites"]), (0, [])])
 
     def test_the_merge_graph_draws_a_mark_for_every_criterion_stop_loose_merge_and_finding_on_demo_data(
         self,
@@ -709,7 +762,7 @@ class PageTest(unittest.TestCase):
                 "tiles": 6,
                 "events": len(g["events"]),
                 "nocite": 0,
-                "nc": [f"{r['nocite']} uncited" for r in g["all"]["rows"] if r["nocite"]],
+                "nc": [f"{r['nocite']} drawn for a stop" for r in g["all"]["rows"] if r["nocite"]],
             },
         )
         day = g["days"][0]["day"]
@@ -740,8 +793,29 @@ class PageTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr[:600])
         drawn = json.loads(out.stdout)
         # one Day row, its count beside "ran of drawn"; zoomed to the Day, one dashed row per merge
-        self.assertEqual(drawn["all"]["nc"], [f"{len(g['all']['nocite'])} uncited"])
+        self.assertEqual(drawn["all"]["nc"], [f"{len(g['all']['nocite'])} drawn for a stop"])
         self.assertEqual(drawn["day"]["nocite"], len(g["by_day"]["1"]["nocite"]))
+
+    def test_a_days_count_of_merges_drawn_for_a_stop_ends_before_its_name(self):
+        # by Day: the count at the row's left edge, 8 px italic, about 4.6 px a letter; the Day's name ends 54 px
+        # before the row's marks, 11.5 px, about 6.6 px a letter. The count ends before the name begins.
+        g = MergeGraphTest().fixture()
+        out = subprocess.run(
+            ["node", "-e", MRG, reconcile.SCRIPT],
+            input=json.dumps({"merge_graph": g}),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        at = json.loads(out.stdout)["at"]
+        counts = [t for t in at if t[0] == "nc"]
+        self.assertEqual(len(counts), 1)
+        _, words, x, y, _ = counts[0]
+        name = [t for t in at if t[0] == "day" and abs(t[3] - y) < 1 and t[4] == "end"]
+        self.assertEqual(len(name), 1)
+        _, day, end, _, _ = name[0]
+        self.assertEqual((words, x + len(words) * 4.6 < end - len(day) * 6.6), (words, True))
 
     def test_the_merge_graphs_verdict_reconciles_with_the_promise_tiles_on_demo_data(self):
         agree, line = reconcile.merge_line(reconcile.model(demo_data.demo()))
@@ -750,10 +824,143 @@ class PageTest(unittest.TestCase):
             line, r"^merge graph: \d+ criteria \(.*\) \| promise tiles: \d+ \(.*\): agree$"
         )
 
+    def plan_bar(self, data):
+        out = subprocess.run(
+            ["node", "-e", PLANBAR, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr[:600])
+        return json.loads(out.stdout)
+
+    def test_graph_12_draws_every_section_name_slanted_whole_and_apart(self):
+        # each name is drawn, cut only where the gene cuts; the last of the original plan and the first added
+        # later share a name and stay two; none sits on its neighbour
+        secs = self.plan_bar(plan_bar_data())["secs"]
+        names = [PLAN_LONG, "Narrow", "Tiny", "Thin", "Recovery", "Recovery", "Added later on"]
+        got, want = [s[0] for s in secs], [cut(n) for n in names]
+        self.assertEqual((len(got), got == want), (len(want), True))
+        self.assertEqual(closer_than(secs, SEC_GAP), [])
+
+    def test_graph_12_holds_its_names_title_and_bends_inside_its_picture(self):
+        # every slanted name's box and the right column's title lie inside the viewBox; a name moved off its
+        # bracket's middle has a bent tick from that middle to its foot
+        got = self.plan_bar(plan_bar_data())
+        vx, vy, vw, vh = (float(v) for v in got["view"].split())
+        out = [
+            w
+            for w, t in got["secs"]
+            for x, y in slanted_corners(w, t)
+            if not (vx <= x <= vx + vw and vy <= y <= vy + vh)
+        ]
+        title = [t for t in got["texts"] if t[0] == "Criteria in force per Day"]
+        self.assertEqual(len(title), 1)
+        self.assertEqual((len(set(out)), title[0][1] + 25 * 6.8 <= vx + vw), (0, True))
+        self.assertEqual(len(got["brackets"]), len(got["secs"]))
+        bends = [path_points(d) for d in got["bends"] if "L" in d]
+        unbent = []
+        for (w, t), (x1, x2) in zip(got["secs"], got["brackets"]):
+            c, foot = (x1 + x2) / 2, float(re.match(r"translate\(([-\d.]+)", t).group(1))
+            if abs(foot - c) > 0.5 and not any(
+                abs(b[0][0] - c) < 0.2 and abs(b[-1][0] - foot) < 0.2 for b in bends
+            ):
+                unbent.append(w)
+        moved = sum(
+            abs(float(re.match(r"translate\(([-\d.]+)", t).group(1)) - (x1 + x2) / 2) > 0.5
+            for (_, t), (x1, x2) in zip(got["secs"], got["brackets"])
+        )
+        self.assertEqual((moved > 0, len(unbent)), (True, 0))
+
+    def test_graph_12_keeps_its_names_clear_of_the_quotes_lines(self):
+        # twelve more sections added later, one commitment wide each, push names out under the quotes' three lines
+        # at the right; each name's slanted box, sampled along its two long sides, stays out of their boxes
+        got = self.plan_bar(plan_bar_data(12))
+        quotes = [
+            t
+            for t in got["texts"]
+            if t[0].startswith(("Quotes checked", "each one found", "checked again"))
+        ]
+        self.assertEqual(len(quotes), 3)
+        boxes = [(x - len(w) * 6.2, x, y - 10, y + 4) for w, x, y, _ in quotes]
+        hit = set()
+        for w, t in got["secs"]:
+            foot, start, foot_up, start_up = slanted_corners(w, t)
+            for a, b in ((foot, start), (foot_up, start_up)):
+                for k in range(41):
+                    px, py = a[0] + (b[0] - a[0]) * k / 40, a[1] + (b[1] - a[1]) * k / 40
+                    if any(x0 < px < x1 and y0 < py < y1 for x0, x1, y0, y1 in boxes):
+                        hit.add(w)
+        self.assertEqual(len(hit), 0)
+
     def test_graph_12_counts_only_criteria_in_force(self):
         m = reconcile.model(demo_data.demo())
         due = [c["key"] for c in m["g12"]["all"] if c["is"].get("due")]
         self.assertIn("P02", due, "C1.2 named P02 and was replaced by C5.2, which names none")
+
+
+# planBar() from dashboard.js on graph 12's model of the data from stdin, as scripts/test_dashboard_page.py's
+# PLAN_BAR runs it: the section names under the plan, as [words, transform], in the order drawn; the svg's viewBox;
+# every other text, as [words, x, y, anchor]; each section's bracket, as [x1, x2]; and each bent tick, as its d.
+PLANBAR = r"""
+const fs = require("fs"), vm = require("vm");
+const node = tag => { const n = { tag, attrs: {}, kids: [], textContent: "", hidden: false,
+  setAttribute(k, v) { this.attrs[k] = String(v); }, appendChild(c) { this.kids.push(c); return c; }, append(...c) { c.forEach(x => this.kids.push(x)); },
+  replaceChildren(...c) { this.kids = c.flat(); }, addEventListener() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 }) };
+  n.style = { set cssText(v) { n.attrs.style = v; } }; Object.defineProperty(n, "className", { set(v) { this.attrs.class = v; }, get() { return this.attrs.class || ""; } });
+  return n; };
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document: { createElementNS: (ns, tag) => node(tag), createElement: tag => node(tag) },
+  window: {}, console, box: node("div"), tip: node("div"), panel: node("div"), forDays: el => el, resets: [] });
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nplanBar(model(DATA).g12, box, tip, panel, forDays, resets);", ctx);
+const all = n => typeof n === "object" && n ? [n, ...n.kids.flatMap(all)] : [];
+const made = all(ctx.box), named = n => n.tag === "text" && n.attrs.style === "font-size:10.5px";
+console.log(JSON.stringify({ secs: made.filter(named).map(n => [n.textContent, n.attrs.transform || ""]),
+  view: (made.find(n => n.tag === "svg" && n.attrs.class === "pc-svg") || { attrs: {} }).attrs.viewBox || "",
+  texts: made.filter(n => n.tag === "text" && !named(n) && n.attrs.x != null).map(n => [String(n.textContent), +n.attrs.x, +n.attrs.y, n.attrs["text-anchor"] || "start"]),
+  brackets: made.filter(n => n.tag === "line" && n.attrs["stroke-width"] === "1.5").map(n => [+n.attrs.x1, +n.attrs.x2]),
+  bends: made.filter(n => n.tag === "path" && n.attrs["stroke-width"] === "0.75").map(n => n.attrs.d) }));
+"""
+
+
+def plan_bar_data(added_singles=0):
+    """Graph 12's plan: a name over 38 characters, three sections one commitment wide side by side, a wide one, and
+    after it an added section of the same name (the arms keep apart), then one more; `added_singles` more added
+    sections one commitment wide each, after those."""
+
+    def p(pid, section):
+        return {"id": pid, "short": pid, "section": section, "owner_day": None, "rule": False,
+                "change": None, "text": "t."}  # fmt: skip
+
+    sections = [PLAN_LONG] * 4 + ["Narrow", "Tiny", "Thin"] + ["Recovery"] * 6
+    commitments = [p(f"P{i + 1:02d}", s) for i, s in enumerate(sections)]
+    commitments += [p("N01", "Recovery"), p("N02", "Added later on"), p("N03", "Added later on")]
+    commitments += [p(f"N{k + 4:02d}", f"Single {k}") for k in range(added_singles)]
+    plan = {"reference": "x", "quotes": 0, "unlined": [], "rewrites": [], "said": {}, "links": {},
+            "commitments": commitments}  # fmt: skip
+    return {
+        "now": {"generated": "2026-01-03T09:30+00:00", "head": "abcdef1234", "last_pr": 9,
+                "current_day": 3, "next_step": "x", "stop_after": 3, "open_prs": []},
+        "days": [{"day": n, "title": f"Day {n}", "status": "done" if n < 3 else "active",
+                  "defects": [], "relabel": None, "worked": None} for n in (1, 2, 3)],
+        "meta": {"project": "toy", "caveats": []},
+        "plan": plan,
+    }  # fmt: skip
+
+
+PLAN_LONG = "What the driver needs from the kit, and what it reads"
+SLANT = math.radians(52)
+
+
+def slanted_corners(words, transform):
+    """The four corners of a slanted section name's box: it ends at its foot and runs down to the left, 5.8 px a
+    letter, 8 px tall across its slant, as the page estimates it."""
+    m = re.match(r"translate\(([-\d.]+) ([-\d.]+)\)", transform)
+    fx, fy = float(m.group(1)), float(m.group(2))
+    n = len(words) * 5.8
+    sx, sy = fx - n * math.cos(SLANT), fy + n * math.sin(SLANT)
+    ux, uy = -8 * math.sin(SLANT), -8 * math.cos(SLANT)
+    return [(fx, fy), (sx, sy), (fx + ux, fy + uy), (sx + ux, sy + uy)]
 
 
 # ringDraw() and readingDraw() from dashboard.js on the data from stdin, on a document that keeps what is made: the
@@ -796,6 +1003,139 @@ RING_DAY = (
   out`, ctx)));
 """
 )
+
+# ringDraw() or readingDraw() alone on the same document, for working out where each text's box falls: every text
+# it drew, as [class, x, y, anchor, words with a tspan's own, whether it holds a tspan]; every lead, as [class, d];
+# each stop's gate on the ring, as [its key, the angle it is turned to]; and the words of the ring's facts.
+TEXTS = (
+    RING[: RING.index("console.log(")]
+    + r"""console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join("");
+  const M = model(DATA), which = DATA.draw, fig = $(which + "-fig"), has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  if (which === "whr") ringDraw(M.whr, $, [], () => {}); else readingDraw(M.rdg, $, []);
+  ({ texts: all(fig).filter(e => e.tag === "text").map(e => [e.attrs.class || "", +e.attrs.x, +e.attrs.y,
+       e.attrs["text-anchor"] || "start", words(e), e.kids.some(k => k && k.tag === "tspan")]),
+     leads: all(fig).filter(e => e.tag === "path" && has(e, "lead")).map(e => [e.attrs.class, e.attrs.d]),
+     gates: all(fig).filter(e => /^s\\d+$/.test(e.attrs["data-k"] || "")).map(e => [e.attrs["data-k"], parseFloat(/rotate\\(([-\\d.]+)/.exec(e.attrs.transform)[1])]),
+     facts: words($("whr-facts")).replace(/\\s+/g, " ") })`, ctx)));
+"""
+)
+
+
+def path_points(d):
+    """The corners of a path of M, L, H and V steps, absolute, as [(x, y)]."""
+    out, x, y = [], 0.0, 0.0
+    for cmd, args in re.findall(r"([MLHV])\s*([-\d.\s,]*)", d):
+        nums = [float(v) for v in re.findall(r"-?[\d.]+", args)]
+        if cmd in "ML":
+            x, y = nums[0], nums[1]
+        elif cmd == "H":
+            x = nums[0]
+        else:
+            y = nums[0]
+        out.append((x, y))
+    return out
+
+
+def through(points, box):
+    """Whether the polyline runs inside the box (its edges shrunk by half a pixel), sampled every half pixel."""
+    x0, x1, y0, y1 = box[0] + 0.5, box[1] - 0.5, box[2] + 0.5, box[3] - 0.5
+    for (ax, ay), (bx, by) in itertools.pairwise(points):
+        n = max(1, int(max(abs(bx - ax), abs(by - ay)) * 2))
+        for k in range(n + 1):
+            px, py = ax + (bx - ax) * k / n, ay + (by - ay) * k / n
+            if x0 < px < x1 and y0 < py < y1:
+                return True
+    return False
+
+
+def crossing(a, b):
+    """Whether two polylines cross."""
+
+    def turn(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    for p1, p2 in itertools.pairwise(a):
+        for q1, q2 in itertools.pairwise(b):
+            d1, d2 = turn(q1, q2, p1), turn(q1, q2, p2)
+            d3, d4 = turn(p1, p2, q1), turn(p1, p2, q2)
+            if d1 * d2 < 0 and d3 * d4 < 0:
+                return True
+    return False
+
+
+def ring_nothing_closed():
+    """ring_data_left with no Day closed: the work stands before Day 1, at the top of the ring, beside the first
+    phase's name."""
+    data = ring_data_left()
+    for d in data["days"]:
+        d["status"] = "ready"
+    data["score"]["days"] = {}
+    data["where_ring"] = load("spec_drift_views", "spec_drift_views.py").where_ring(data)
+    return data
+
+
+def text_box(t, per):
+    """A text's box, by a rough width of `per` px a character, as the page estimates it: (x0, x1, y0, y1)."""
+    _, x, y, anchor, words, _ = t
+    w = len(words) * per
+    x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
+    return (x0, x0 + w, y - 10, y + 4)
+
+
+def overlapping(boxes):
+    """The pairs of boxes that overlap, as their words, sorted."""
+    out = []
+    for i, (a, wa) in enumerate(boxes):
+        for b, wb in boxes[i + 1 :]:
+            if a[0] < b[1] and b[0] < a[1] and a[2] < b[3] and b[2] < a[3]:
+                out.append(sorted([wa, wb]))
+    return sorted(out)
+
+
+def ring_data_left():
+    """The live plan's shape: twenty Days in five phases, stops after Days 2, 8 and 14 lifted and after Day 18 ahead,
+    Days 1 to 15 closed and the work between Days 15 and 16. The stop after Day 14 then falls on the ring's left
+    side, just under where the work stands."""
+    data = ring_data()
+    phases = [([1, 2], 2, True), (list(range(3, 9)), 8, True), (list(range(9, 15)), 14, True)]
+    phases += [([15, 16, 17, 18], 18, False)]
+    rows = [
+        {"phase": p, "days": ds, "stop": s, "lifted": up, "from_day": None, "cut": False}
+        for p, (ds, s, up) in enumerate(phases)
+    ]
+    rows.append(
+        {"phase": 4, "days": [], "stop": None, "lifted": False, "from_day": 19, "cut": False}
+    )
+    kinds = [
+        {"number": n, "kind": k, "title": "t"} for n, k in enumerate(("spec", "code", "close"))
+    ]
+    data["days"] = [
+        {
+            "day": n,
+            "status": "done",
+            "phase": next(p for p, (ds, _, _) in enumerate(phases) if n in ds),
+            "title": f"Day {n}",
+            "criteria": {"total": 2, "ticked": 2},
+            "prs": kinds,
+        }
+        for n in range(1, 16)
+    ]
+    data["order"] = list(range(1, 19))
+    data["criteria_index"] = []
+    data["now"]["stop_after"] = 18
+    data["now"]["next_step"] = "Day 16: write its day spec (plan.md lists it, specs/ has none)"
+    names = ["The dry run", "Level 1: the driver starts steps, the maintainer merges"]
+    names += ["Level 2: the driver merges", "Level 3: phases chain", "The Telegram remote"]
+    data["meta"]["phases"] = names
+    data["meta"]["where"] = {"rows": rows, "names": {}}
+    data["score"]["days"] = {
+        str(n): {"score": 90.0, "low": "proof", "parts": [{"key": "proof", "name": "Proven"}]}
+        for n in range(1, 16)
+    }
+    data["where_ring"] = load("spec_drift_views", "spec_drift_views.py").where_ring(data)
+    return data
 
 
 def ring_data():
@@ -1146,6 +1486,123 @@ class RingAndReadingPageTest(unittest.TestCase):
             r"^reading: \d+ arcs, \d+ open, \d+ numbered \| "
             r"look-ahead \d+ hand-offs, \d+ open, \d+ numbered: agree$",
         )
+
+    def test_no_label_beside_the_ring_overlaps_another_or_the_ring(self):
+        # the ring's labels at its sides (each line of them) clear of the disc, of each other and of the phase names
+        # along its top (the texts with a tspan); the disc runs out to the outer edge of the phase arcs: radius 146,
+        # half of a 3.5 px stroke more. With nothing closed the work stands at the top, beside the first phase's name.
+        for name, data in (("left", ring_data_left()), ("top", ring_nothing_closed())):
+            texts = self.drawn(dict(data, draw="whr"), TEXTS)["texts"]
+            classes = ("t-gate", "t-now", "t-ph", "t-sub")
+            side = [t for t in texts if t[0] in classes and t[3] in ("start", "end") and not t[5]]
+            self.assertGreater(len(side), 6)
+            boxes = [(text_box(t, 6.3), t[4]) for t in side]
+            inside = []
+            for (x0, x1, y0, y1), words in boxes:
+                dx, dy = max(x0 - 280, 0, 280 - x1), max(y0 - 168, 0, 168 - y1)
+                if dx * dx + dy * dy < 148 * 148:
+                    inside.append(words)
+            tops = [(text_box(t, 6.3), t[4]) for t in texts if t[5]]
+            self.assertEqual(len(tops), 2)
+            near = [
+                p
+                for p in overlapping(boxes + tops)
+                if not all(w in [t[4] for t in texts if t[5]] for w in p)
+            ]
+            self.assertEqual((name, sorted(inside), near), (name, [], []))
+
+    def test_a_stops_label_keeps_a_lead_to_its_gate_wherever_it_went(self):
+        # a gate stands turned to its angle, its label's lead ends 155 px out from the ring's middle along it
+        got = self.drawn(dict(ring_data_left(), draw="whr"), TEXTS)
+        self.assertEqual(sorted(k for k, _ in got["gates"]), ["s14", "s18", "s2", "s8"])
+        ends = [path_points(d)[-1] for _, d in got["leads"]]
+        missing = []
+        for k, a in got["gates"]:
+            px, py = 280 + 155 * math.sin(math.radians(a)), 168 - 155 * math.cos(math.radians(a))
+            if not any(abs(x - px) < 0.2 and abs(y - py) < 0.2 for x, y in ends):
+                missing.append(k)
+        self.assertEqual((len(got["leads"]), sorted(missing)), (4, []))
+
+    def test_the_rings_score_says_the_days_own_scores_average_apart(self):
+        data = dict(ring_data_left(), draw="whr")
+        data["score"] = dict(data["score"], days_mean=87)
+        facts = self.drawn(data, TEXTS)["facts"]
+        said = "Score so far90 of 100, the finished Days together; their own scores average 87"
+        self.assertEqual((facts.count("average"), said in facts), (1, True))
+        del data["score"]["days_mean"]
+        facts = self.drawn(data, TEXTS)["facts"]
+        said = "Score so far90 of 100, the finished Days together"
+        self.assertEqual((facts.count("average"), said in facts), (0, True))
+
+    def test_the_labels_over_the_readings_right_end_do_not_overlap(self):
+        # ring_data's stop after Day 2 was lifted at the merge just before today's
+        data = ring_data()
+        views = load("spec_drift_views", "spec_drift_views.py")
+        data["where_ring"], data["reading"] = views.where_ring(data), views.reading(data)
+        self.assertEqual(data["reading"]["lifted"][0]["at"], len(data["rows"]) - 2)
+        self.assertEqual(overlapping(self.top_labels(data)[0]), [])
+
+    def top_labels(self, data):
+        """The reading's top labels as [(box, words)], and its leads as [(words of the label it starts at, its
+        corners)]: a lead belongs to the label whose box its first corner touches."""
+        got = self.drawn(dict(data, draw="rdg"), TEXTS)
+        top = [t for t in got["texts"] if "t-top" in t[0].split()]
+        boxes = [(text_box(t, 6.4 if "strong" in t[0] else 6.0), t[4]) for t in top]
+        leads = []
+        for _, d in got["leads"]:
+            pts = path_points(d)
+            (x, y), whose = pts[0], None
+            for (x0, x1, y0, y1), words in boxes:
+                if x0 - 3 <= x <= x1 + 3 and y0 - 1 <= y <= y1 + 6:
+                    whose = words
+            leads.append((whose, pts))
+        return boxes, leads
+
+    def reading_data(self, lifted=()):
+        """ring_data's reading, with more stops lifted at the merges given (a Day each, counted down from 9)."""
+        data = ring_data()
+        views = load("spec_drift_views", "spec_drift_views.py")
+        data["where_ring"], data["reading"] = views.where_ring(data), views.reading(data)
+        data["reading"]["lifted"] += [
+            {"day": 9 - k, "at": at, "between": 0} for k, at in enumerate(lifted)
+        ]
+        return data
+
+    def test_every_label_over_the_reading_keeps_a_lead_and_none_runs_through_another(self):
+        # ring_data's stop after Day 2 lifted at the merge before today's, and a crowded one: one more lifted two
+        # merges before that. Each label has one lead from its own box; no lead runs through another label or
+        # crosses another lead; the next stop's label stands on the upper row, at the right edge, over today's.
+        for name, data in (("plain", self.reading_data()), ("crowded", self.reading_data([9]))):
+            boxes, leads = self.top_labels(data)
+            mine = sorted(w for w, _ in leads)
+            self.assertEqual(
+                (name, len(mine), mine == sorted(w for _, w in boxes)), (name, len(boxes), True)
+            )
+            through_other = sorted(
+                [w, words]
+                for w, pts in leads
+                for box, words in boxes
+                if words != w and through(pts, box)
+            )
+            crossed = sorted(
+                sorted([a[0], b[0]])
+                for i, a in enumerate(leads)
+                for b in leads[i + 1 :]
+                if crossing(a[1], b[1])
+            )
+            self.assertEqual((name, through_other, crossed), (name, [], []))
+            stop = next(b for b, w in boxes if w.startswith("the next stop"))
+            today = next(b for b, w in boxes if w.startswith("today"))
+            self.assertEqual((name, stop[3] <= today[2], round(stop[1])), (name, True, 1238))
+
+    def test_crowded_labels_over_the_reading_stay_near_their_marks(self):
+        # two lifted stops and today within three merges: one goes up a row rather than far along one; each label's
+        # lead runs at most 170 px along, but the next stop's, whose label ends at the right edge
+        boxes, leads = self.top_labels(self.reading_data([9]))
+        near = [(w, p) for w, p in leads if not w.startswith("the next stop")]
+        far = sorted(w for w, pts in near if abs(pts[0][0] - pts[-1][0]) > 170)
+        rows = sorted({round(b[2]) for b, w in boxes if not w.startswith("the next stop")})
+        self.assertEqual((far, len(rows)), ([], 2))
 
     def test_a_hand_off_quoting_a_script_tag_stays_text_in_the_page_and_in_the_pointer_box(self):
         data = ring_data()
@@ -1686,7 +2143,7 @@ class ProofreadingTest(unittest.TestCase):
             self.assertEqual(
                 (out["prf"]["dots"], out["prf"]["grps"], out["prf"]["drops"]), (0, 0, 0)
             )
-            self.assertIn("The proofreading stream is not drawn.", out["missing"])
+            self.assertIn("The error-correction stream is not drawn.", out["missing"])
             # graph 7 still puts each defect at its gate, with no gate's cost
             self.assertEqual(out["g7"]["phases"], OLD_FIXTURE["layers"])
             self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 12)
@@ -3379,7 +3836,11 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
      held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"),
      rows: rows.map(r => [r.attrs["data-k"], all(r).filter(x => has(x, "l-dot-before")).map(x => x.attrs.cy), all(r).filter(x => x.attrs.transform).map(x => x.attrs.transform)]),
      figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(),
-     texts: all(e).filter(x => x.tag === "text").map(x => x.textContent) })`, ctx)));
+     texts: all(e).filter(x => x.tag === "text").map(x => x.textContent),
+     names: all(d).filter(x => has(x, "l-name")).map(x => [x.textContent, +x.attrs.y]),
+     rowsAt: rows.map(r => ({ names: all(r).filter(x => has(x, "l-name")).map(x => [x.textContent, +x.attrs.y]),
+       sub: all(r).filter(x => has(x, "l-sub") && x.attrs.x === "12").map(x => +x.attrs.y),
+       height: all(r).filter(x => has(x, "hit")).map(x => +x.attrs.height) })) })`, ctx)));
 """
 
 
@@ -3534,6 +3995,54 @@ class LearnDrawTest(unittest.TestCase):
         self.assertIn("2 fixes old enough to judge", out["figs"])
         # under each Day with repeats its share of the Day's defects; Day 9, with none, has no share label
         self.assertEqual([t for t in out["texts"] if t.endswith("%")], ["33%", "75%"])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_long_fix_title_wraps_onto_a_second_line_before_it_is_cut(self):
+        # a title of 92 characters: two lines, whole, the second under the first; a short one stays one line
+        title = "Workflow: the spec-auditor walks the tracks, traces values and checks the hand-offs it reads"
+        self.assertEqual(len(title), 92)
+
+        def fix(pr, words):
+            return {
+                "pr": pr, "title": words, "merged": "2026-11-10T08:00:00Z", "from_day": 8,
+                "stops": ["D07.1"], "before": 2, "after": 0, "after_ids": [], "days_since": 2,
+                "first_day": 7, "days_before": 1, "rate_before": 2.0, "rate_after": 0.0,
+                "verdict": None, "gated": [], "leaked": [],
+            }  # fmt: skip
+
+        day = {"day": 8, "n": 0, "before": [], "past_fix": [], "gated": [], "leaked": [],
+               "defects": 1, "share": 0, "fixes": [21, 22]}  # fmt: skip
+        learning = {"head": "abc1234", "last_pr": 30, "generated": "2026-11-25", "repeats": 0,
+                    "past_fix": 0, "past_gated": 0, "past_leaked": 0, "held": 0, "wait": 5,
+                    "shared": [], "problems": [], "days": [day],
+                    "fixes": [fix(21, title), fix(22, "A short fix")]}  # fmt: skip
+        long = " ".join(["a fix whose title runs on and on"] * 6)  # 197 characters: over two lines
+        self.assertEqual(len(long), 197)
+        learning["fixes"].append(fix(23, long))
+        day["fixes"].append(23)
+        now = {"generated": "2026-11-25", "head": "abc1234", "last_pr": 30}
+        out = lrn_node({"now": now, "days": [], "learning": learning})
+        names = out["names"]
+        self.assertEqual(len(names), 5)
+        first, second, short = names[:3]
+        self.assertEqual(
+            (first[0] + " " + second[0] == title, second[0].endswith("…"), short[0]),
+            (True, False, "A short fix"),
+        )
+        self.assertGreater(second[1], first[1])
+        # each row: its title's lines, the line under them at least a line lower, and a row of two lines taller
+        rows = out["rowsAt"]
+        self.assertEqual(
+            [(len(r["names"]), len(r["sub"]), len(r["height"])) for r in rows],
+            [(2, 1, 1), (1, 1, 1), (2, 1, 1)],
+        )
+        clear = [r["sub"][0] - r["names"][-1][1] >= 12 for r in rows]
+        self.assertEqual(clear, [True, True, True])
+        self.assertGreater(rows[0]["height"][0], rows[1]["height"][0])
+        # only a title over two lines is cut, at the end of its second line
+        self.assertEqual(
+            (rows[2]["names"][1][0][-1], len(rows[2]["names"][1][0]) <= 62), ("…", True)
+        )
 
 
 if __name__ == "__main__":

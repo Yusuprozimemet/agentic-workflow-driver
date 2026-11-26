@@ -75,6 +75,58 @@ class QualityScoreTest(unittest.TestCase):
         got = combine([("x", "X", "g1", [count("a", 1, 1)]), ("y", "Y", "g2", [count("b", 1, 4), None]), ("z", "Z", "g3", [None])])
         self.assertEqual((got["score"], got["low"], [p["key"] for p in got["parts"]]), (50.0, "y", ["x", "y"]))
 
+    def test_the_days_own_scores_have_a_mean_apart_from_the_whole(self):
+        # each Day's score rounded half up as the page shows it, then their mean rounded half up; a Day with
+        # nothing to count has no score and is left out
+        score = quality_score(DATA)
+        self.assertIn("days_mean", sorted(score))
+        shown = [int(d["score"] + 0.5) for d in score["days"].values() if d]
+        self.assertEqual(score["days_mean"], int(sum(shown) / len(shown) + 0.5))
+        bare = dict(DATA, days=DATA["days"] + [dict(day=4, status="done", relabel=None, defects=[])])
+        bare_score = quality_score(bare)
+        self.assertEqual((bare_score["days"]["4"], bare_score["days_mean"]), (None, score["days_mean"]))
+
+    def test_a_day_with_many_more_checks_weighs_more_in_the_whole_than_in_the_mean(self):
+        # Day 1 gets twenty proven criteria more; Day 2 keeps its one broken one: the whole leans to Day 1
+        many = [crit(f"C1.{n}", 1) for n in range(3, 23)]
+        cells = [dict(criterion=c["id"], n=1, state="holds") for c in many]
+        heavy = dict(DATA, criteria_index=DATA["criteria_index"] + many,
+                     replay=dict(cells=DATA["replay"]["cells"] + cells))
+        score = quality_score(heavy)
+        self.assertIn("days_mean", sorted(score))
+        whole = int(score["all"]["score"] + 0.5)
+        self.assertNotEqual(whole, score["days_mean"])
+
+    def test_the_mean_of_the_days_rounds_half_up_twice(self):
+        # Day 1 scores 100; Day 2 found 1 of its 4 defects before the close, so 62.5, shown as 63; the mean of
+        # 100 and 63 is 81.5, shown as 82 (Python's round would give 62, then 81)
+        def defect(i, found):
+            return dict(id=i, found=found)
+        days = [dict(day=1, status="done", relabel=None, defects=[defect("D1.1", "Track A")]),
+                dict(day=2, status="done", relabel=None,
+                     defects=[defect("D2.1", "close"), defect("D2.2", "close"), defect("D2.3", "close"),
+                              defect("D2.4", "Track A")])]
+        score = quality_score(dict(days=days))
+        self.assertIn("days_mean", sorted(score))
+        self.assertEqual(([score["days"][d]["score"] for d in ("1", "2")], score["days_mean"]), ([100.0, 62.5], 82))
+
+    def test_a_mean_half_way_over_an_even_number_rounds_up(self):
+        # Day 1 scores 100; Day 2 found 11 of its 50 defects before the close, so (22 + 100) / 2 = 61; the mean of
+        # 100 and 61 is 80.5, shown as 81 (Python's round would give the even 80)
+        early = [dict(id=f"D2.{n}", found="Track A") for n in range(11)]
+        late = [dict(id=f"D2.{n}", found="close") for n in range(11, 50)]
+        days = [dict(day=1, status="done", relabel=None, defects=[dict(id="D1.1", found="Track A")]),
+                dict(day=2, status="done", relabel=None, defects=early + late)]
+        score = quality_score(dict(days=days))
+        self.assertIn("days_mean", sorted(score))
+        self.assertEqual(([score["days"][d]["score"] for d in ("1", "2")], score["days_mean"]), ([100.0, 61.0], 81))
+
+    def test_no_day_with_a_score_means_no_mean(self):
+        # a finished Day with nothing to count has no score of its own, so there is nothing to average
+        score = quality_score(dict(days=[dict(day=1, status="done", relabel=None, defects=[])]))
+        self.assertIn("days_mean", sorted(score))
+        self.assertEqual((score["days"], score["days_mean"]), ({"1": None}, None))
+
     def test_no_finished_day_means_no_score(self):
         self.assertIsNone(quality_score(dict(DATA, days=[dict(day=1, status="active")])))
         self.assertIsNone(quality_score({}))

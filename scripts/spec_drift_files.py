@@ -22,18 +22,20 @@ TABLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "
 TABLE_NAME = "docs/dashboard/file-stations.json"
 SCRIPTS = "scripts/"
 
-# Where a group may hang: the seven stations and the five checks between them, by x on the picture.
-# `w` is the widest a row of dots may be there; `at` is what a reader is told.
+# Where a group may hang: the seven stations and the six checks between them, by x on the picture.
+# `w` is the widest a row of dots may be there; `at` is what a reader is told. The cytoplasm holds five
+# columns between the nucleus (478) and the gate (917), so the two that hold one brief each are narrow.
 COLUMNS = {
     "s1": dict(x=76, zone="doc", at="station 1, the goal"),
     "plan-auditor": dict(x=159, zone="doc", at="the plan-auditor's check, after station 1"),
     "s2": dict(x=242, zone="doc", at="station 2, a Day's spec"),
     "spec-auditor": dict(x=328, zone="doc", at="the spec-auditor's check, after station 2"),
     "s3": dict(x=414, zone="doc", at="station 3, a promise"),
-    "s4": dict(x=552, zone="try", at="station 4, a test that fails first"),
-    "implementer": dict(x=640, zone="try", at="the implementer, between stations 4 and 5"),
-    "s5": dict(x=728, zone="try", at="station 5, the code, then a planted bug"),
-    "ci": dict(x=836, zone="try", at="CI's checks, after station 5", w=88),
+    "s4": dict(x=540, zone="try", at="station 4, a test that fails first"),
+    "implementer": dict(x=624, zone="try", at="the implementer, between stations 4 and 5", w=60),
+    "s5": dict(x=708, zone="try", at="station 5, the code, then a planted bug"),
+    "track-reviewer": dict(x=772, zone="try", at="the track-reviewer's check, after station 5", w=24),
+    "ci": dict(x=868, zone="try", at="CI's checks, after station 5", w=80),
     "s6": dict(x=1016, zone="after", at="station 6, the Day closes"),
     "defect-rater": dict(x=1099, zone="after", at="the defect-rater's check, after station 6"),
     "s7": dict(x=1182, zone="after", at="station 7, the re-check"),
@@ -46,7 +48,7 @@ RING_AT = "on no station"
 CASES = "specs/agent-cases/"
 UNPLACED = f"Not in the table yet: {TABLE_NAME} names no station for it."
 
-WIDTH, GAP, FIRST_Y, LABEL_PAD, GROUP_GAP, RING_GAP = 92.0, 1.6, 242.0, 6.0, 20.0, 28.0
+WIDTH, GAP, FIRST_Y, LABEL_PAD, GROUP_GAP, RING_GAP = 92.0, 1.6, 272.0, 6.0, 20.0, 28.0
 NUC_TOP, CELL_TOP, VIEW_TOP = 130.0, 112.0, 100.0
 LOOP_Y, LOOP_TOP = 92.0, 74.0  # the improve loop's line, over the cell, and where the picture then opens
 

@@ -151,7 +151,7 @@ function model(DATA) {
     const what = names => andList(names.map(n => DATA_WHAT[n] || n));
     // Without the gates' runs and cost, the proofreading stream (spec_drift_views.proofreading) is not drawn at all;
     // without the dollars, the energy budget (spec_drift_views.budget) is not.
-    const stream = " The proofreading stream is not drawn.", beads = " The energy budget is not drawn.";
+    const stream = " The error-correction stream is not drawn.", beads = " The energy budget is not drawn.";
     if (!D.commit) return `The ${D.branch} branch is missing, so this page leaves out ${what(Object.keys(DATA_WHAT))}.${stream}${beads}`;
     if (!(D.absent || []).length) return null;
     return `The ${D.branch} branch has no ${andList(D.absent)}, so this page leaves out ${what(D.absent)}.${D.absent.includes("gates.json") ? stream : ""}`
@@ -693,11 +693,11 @@ function model(DATA) {
   }
 
   /* The merge graph: counted in scripts/spec_drift_views.py (merge_graph), drawn by mergeDraw as it stands. */
-  /* "Where we are" as a ring, and graph 1 read as a gene: counted in scripts/spec_drift_views.py (where_ring, reading);
+  /* "Where we are" as a ring, and graph 1 as the plan being read: counted in scripts/spec_drift_views.py (where_ring, reading);
      the reading carries what dashboard-reconcile.py holds it to, the look-ahead's own ledger and last column. */
   function whrGraph() {
-    const W = DATA.where_ring;
-    return W && (W.slots || []).length ? W : { empty: (W && W.empty) || "plan.md lists no phase with its Days, so there is no plan to draw as a ring." };
+    const W = DATA.where_ring, mean = (DATA.score || {}).days_mean;
+    return W && (W.slots || []).length ? Object.assign({}, W, { days_mean: typeof mean === "number" ? mean : null }) : { empty: (W && W.empty) || "plan.md lists no phase with its Days, so there is no plan to draw as a ring." };
   }
   function rdgGraph() {
     const R = DATA.reading, L = DATA.look_ahead || {}, C = L.columns || [], last = C[C.length - 1] || {};
@@ -882,7 +882,8 @@ function model(DATA) {
     const view = (x, label) => x && { label, n: Math.round(x.score),
       parts: x.parts.map(p => ({ key: p.key, name: p.name, graph: p.graph, n: Math.round(p.pct), low: p.key === x.low })),
       rows: x.parts.flatMap(p => p.counts.map(c => [p.name, c.name, c.m ? `${c.n} of ${c.m}${c.note ? `, ${c.note}` : ""}` : c.note, Math.round(c.pct)])) };
-    return { all: view(S.all, "the finished Days"),
+    // the Days' own scores average apart from the whole, which is counted over all of them at once
+    return { all: view(S.all, "the finished Days"), mean: typeof S.days_mean === "number" ? S.days_mean : null,
       days: Object.fromEntries(Object.entries(S.days || {}).map(([d, x]) => [d, view(x, `Day ${d}`)])),
       abilities: Object.fromEntries(Object.entries(S.abilities || {}).filter(([, x]) => x)
         .map(([k, x]) => [k, { n: Math.round(x.score), parts: x.parts.map(p => `${p.name.toLowerCase()} ${Math.round(p.pct)}`).join(" · ") }])) };
@@ -956,16 +957,14 @@ function planBar(m, box, tip, panel, forDays, resets) {
     if (!arms[s.arm]) arms[s.arm] = { x0: x, n: 0 };
     s.x = x; x += U; arms[s.arm].x1 = x; arms[s.arm].n++; prev = s.arm;
   });
-  const SW = 2.5, W = x + 128, SX = x + 40, maxN = Math.max(1, ...slots.filter(s => s.arm === "ref").map(s => s.n));
+  // the right column's title is wider than its bars: the picture is as wide as the title needs
+  const PER = "Criteria in force per Day", SX = x + 40, W = Math.max(x + 128, SX - 18 + PER.length * 6.8 + 6), SW = 2.5, maxN = Math.max(1, ...slots.filter(s => s.arm === "ref").map(s => s.n));
   const mid = a => (arms[a].x0 + arms[a].x1) / 2;
   if (arms.ref) el("text", { x: mid("ref"), y: 14, "text-anchor": "middle", class: "strong" }, `The original plan · ${arms.ref.n} commitments`);
   if (arms.add) el("text", { x: mid("add"), y: 14, "text-anchor": "middle", class: "strong" }, `Added later · ${arms.add.n}`);
   if (arms.off) el("text", { x: mid("off"), y: 14, "text-anchor": "middle", class: "strong" }, `Criteria no commitment asks for · ${arms.off.n}`);
-  el("text", { x: SX - 18, y: 14, class: "strong" }, "Criteria per Day");
+  el("text", { x: SX - 18, y: 14, class: "strong" }, PER);
   RW.forEach(d => el("line", { x1: X0, x2: SX + 84, y1: rowY(d) - 3, y2: rowY(d) - 3, stroke: "var(--c-out)", "stroke-width": 1, "stroke-dasharray": "4 3" }));
-  el("text", { x: W - 6, y: CY + CH + 20, "text-anchor": "end", class: "strong" }, `Quotes checked · ${comma(G.quotes)}`);
-  el("text", { x: W - 6, y: CY + CH + 34, "text-anchor": "end", class: "faint" }, "each one found in its commitment's text");
-  el("text", { x: W - 6, y: CY + CH + 47, "text-anchor": "end", class: "faint" }, "checked again on every pull request");
 
   let sel = null;
   const rowEls = {}, KORD = [["ref", "var(--c-in)"], ["later", "var(--c-out)"], ["unplanned", "var(--c-unpl)"], ["guard", "var(--c-guard)"]];
@@ -1026,23 +1025,31 @@ function planBar(m, box, tip, panel, forDays, resets) {
     el("polygon", { points: `${ca},${CY + 5} ${cm},${cy - 2} ${cb},${CY + 5} ${cb},${CY + CH - 5} ${cm},${cy + 2} ${ca},${CY + CH - 5}`, fill: "var(--muted)" });
   }
 
-  // the plan's sections under each arm: a tick per group, and a horizontal label cut to the group's width with its whole
-  // name in a title; a group narrower than 24 px gets its tick only
-  const by = CY + CH + 21, ly = by + 12, SECW = 5.8;  // a 10.5 px label's letter, a little over its average; fit() keeps 5 px between labels
-  const fit = (name, w) => name.length * SECW <= w - 5 ? name : `${name.slice(0, Math.max(1, Math.floor((w - 5) / SECW) - 1))}…`;
-  ["ref", "add"].forEach(arm => {
-    const secs = [];
-    slots.filter(s => s.arm === arm).forEach(s => { const l = secs[secs.length - 1]; if (l && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ name: s.p.sec, x0: s.x, x1: s.x + U }); });
-    for (let i = secs.length - 1; i > 0; i--) if (secs[i].x1 - secs[i].x0 === U && secs[i - 1].x1 - secs[i - 1].x0 === U) { secs[i - 1].name += " · " + secs[i].name; secs[i - 1].x1 = secs[i].x1; secs.splice(i, 1); }
-    secs.forEach(s => {
-      const c = (s.x0 + s.x1) / 2, w = s.x1 - s.x0;
-      el("line", { x1: s.x0 + 1, x2: s.x1 - 1, y1: by, y2: by, stroke: "var(--muted)", "stroke-width": 1.5 });
-      el("line", { x1: c, x2: c, y1: by + 1, y2: ly - 5, stroke: "var(--muted)", "stroke-width": .75 });
-      if (w >= 24) el("title", {}, s.name, el("text", { x: s.x0, y: ly, class: "faint", style: "font-size:10.5px" }, fit(s.name, w)));
-    });
+  // the plan's sections under each arm: a bracket and a tick per section, and its name slanted as the gene slants its
+  // own, hanging down to the left of its foot and cut where the gene cuts it, its whole name in a title. Where narrow
+  // sections stand side by side the names move apart (spreadNames), and the tick bends over to the name it points at.
+  const by = CY + CH + 21, SECW = 5.8, SLANT = 52 * Math.PI / 180;  // a 10.5 px label's letter, a little over its average
+  const secs = [];
+  ["ref", "add"].forEach(arm => slots.filter(s => s.arm === arm).forEach(s => { const l = secs[secs.length - 1];
+    if (l && l.arm === arm && l.name === s.p.sec) l.x1 = s.x + U; else secs.push({ arm, name: s.p.sec, x0: s.x, x1: s.x + U }); }));
+  let left = 0, low = by, right = 0;
+  spreadNames(secs.map(s => (s.x0 + s.x1) / 2), SEC_GAP).forEach((p, i) => {
+    const s = secs[i], c = (s.x0 + s.x1) / 2, words = secCut(s.name), len = words.length * SECW;
+    el("line", { x1: s.x0 + 1, x2: s.x1 - 1, y1: by, y2: by, stroke: "var(--muted)", "stroke-width": 1.5 });
+    el("line", { x1: c, x2: c, y1: by + 1, y2: by + 5, stroke: "var(--muted)", "stroke-width": .75 });
+    if (Math.abs(p - c) > 0.5) el("path", { d: `M${c} ${by + 5} L${p.toFixed(1)} ${by + 14}`, fill: "none", stroke: "var(--muted)", "stroke-width": .75 });
+    el("title", {}, s.name, el("text", { transform: `translate(${p.toFixed(1)} ${by + 17}) rotate(-52)`, "text-anchor": "end", class: "faint", style: "font-size:10.5px" }, words));
+    // a name's letters stand up-left of its line, about 8 px across the slant
+    left = Math.min(left, p - len * Math.cos(SLANT) - 8 * Math.sin(SLANT) - 2); low = Math.max(low, by + 17 + len * Math.sin(SLANT)); right = Math.max(right, p + 4);
   });
-  const H = Math.ceil(Math.max(ly, CY + CH + 47) + 8);  // the quotes' last line sits inside the box too
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  // the quotes' three lines at the right, under the loose piece; a name hangs down to the left of its foot, so only a
+  // foot right of the lines' left edge can reach them: then they go under the lowest name instead
+  const QUOTES = [["strong", `Quotes checked · ${comma(G.quotes)}`], ["faint", "each one found in its commitment's text"], ["faint", "checked again on every pull request"]];
+  const qx0 = W - 6 - Math.max(...QUOTES.map(([, t]) => t.length)) * 6.2, qy = right > qx0 ? low + 20 : CY + CH + 20;
+  QUOTES.forEach(([cls, t], j) => el("text", { x: W - 6, y: qy + [0, 14, 27][j], "text-anchor": "end", class: cls }, t));
+  const H = Math.ceil(Math.max(low, qy + 27) + 8);  // the longest name and the quotes' last line sit inside the box too
+  const wide = Math.ceil(Math.max(W, right));
+  svg.setAttribute("viewBox", `${Math.floor(left)} 0 ${wide - Math.floor(left)} ${H}`);
 
   // what needs a look: each chip is a set of bands
   const FILT = [
@@ -1208,6 +1215,24 @@ function planLadder(G, box, tip) {
    the commitments still named closed up, a cell per criterion in force, and the code as a row of beads; the criteria
    off the plan as a ring beside it. Layout only: every class, state and count comes from the model. The marks carry
    data-p (a commitment) and data-c (a criterion), which the pointer follows. Colours are in dashboard.css, under #gene. */
+/* Where slanted names stand along a line: each moved as little as it can be (least squares) so that each foot is at
+   least `gap` past the one before, by pooling neighbours that would run into each other. `xs` is in order. At 52
+   degrees a 10.5 px line of text needs about 15 px across its slant, so SEC_GAP px along the line. */
+const SEC_GAP = 19, SEC_CUT = 38;
+function spreadNames(xs, gap) {
+  const pools = [];
+  xs.forEach((x, i) => {
+    pools.push({ sum: x - i * gap, n: 1, i });
+    while (pools.length > 1) {
+      const b = pools[pools.length - 1], a = pools[pools.length - 2];
+      if (a.sum / a.n <= b.sum / b.n) break;
+      a.sum += b.sum; a.n += b.n; pools.pop();
+    }
+  });
+  return pools.flatMap(p => Array.from({ length: p.n }, (_, k) => p.sum / p.n + (p.i + k) * gap));
+}
+const secCut = name => name.length > SEC_CUT ? `${name.slice(0, SEC_CUT - 1)}…` : name;
+
 const GENE_CELL = { proven: "proved", unproven: "unproved", skipped: "norun", repair: "stale", broken: "broken" };
 const GENE_BEAD = { unproved: "unproved", unreplayable: "norun", repair: "stale", fails: "broken", unbuilt: "unbuilt" };
 function geneDraw(m, box, tip, forDays) {
@@ -1229,6 +1254,7 @@ function geneDraw(m, box, tip, forDays) {
   // the plan: each arm's name, its sections above it, and its bands inside a rounded cap
   const arms = ["first", "added"].map(a => [...cols.keys()].filter(i => cols[i].arm === a)).filter(a => a.length);
   let titled = 0;   // where the last arm's name ends, by a rough width: a short arm's name must not run into the next
+  const secs = [];  // each section's name and the middle of its bracket, drawn once all are known
   arms.forEach((a, k) => {
     const x0 = X[a[0]], x1 = X[a[a.length - 1]] + U, cap = { x: r1(x0 - 3), y: Y.band, width: r1(x1 - x0 + 6), height: 24, rx: 12 };
     const title = cols[a[0]].arm === "first" ? `The original plan · ${plural(a.length, "commitment", "commitments")}` : `Added later · ${a.length}`;
@@ -1238,8 +1264,7 @@ function geneDraw(m, box, tip, forDays) {
       const next = a[j + 1], name = cols[i].section;
       if (next != null && cols[next].section === name) return;
       const s0 = X[from], s1 = X[i] + U, c = (s0 + s1) / 2;
-      el("path", { class: "brk", d: `M${r1(s0)} 172 H${r1(s1)} M${r1(c)} 172 V168` });
-      el("text", { class: "t-sec", transform: `translate(${r1(c + 2)} 166) rotate(-52)` }, name.length > 38 ? `${name.slice(0, 37)}…` : name);
+      secs.push({ name, c, s0, s1 });
       from = next;
     });
     el("rect", cap, null, el("clipPath", { id: `gene-cap${k}` }));
@@ -1254,6 +1279,11 @@ function geneDraw(m, box, tip, forDays) {
     });
     el("rect", { ...cap, class: "cap" });
   });
+  // the sections' names, slanted over their brackets; where narrow sections stand side by side the names move apart,
+  // and the tick bends over to the name it points at
+  spreadNames(secs.map(s => s.c), SEC_GAP).forEach((p, i) => { const { name, c, s0, s1 } = secs[i], moved = Math.abs(p - c) > 0.5;
+    el("path", { class: "brk", d: `M${r1(s0)} 172 H${r1(s1)} M${r1(c)} 172 V168${moved ? ` L${r1(p + 1)} 165` : ""}` });
+    el("text", { class: "t-sec", transform: `translate(${r1(p + 2)} 166) rotate(-52)` }, secCut(name)); });
   if (arms.length === 2) { const c = r1((X[arms[0][arms[0].length - 1]] + U + X[arms[1][0]]) / 2), y = Y.band;
     el("path", { class: "pinch", d: `M${r1(c - 9.55)} ${y + 5} L${c} ${y + 10} L${r1(c + 9.55)} ${y + 5} V${y + 19} L${c} ${y + 14} L${r1(c - 9.55)} ${y + 19} Z` }); }
   cols.forEach((c, i) => { if (c.change) el("path", { class: `tri ${c.change}`, "data-p": c.id, d: `M${r1(mid(i))} ${Y.band - 3} l4 -6.5 h-8 z` }); });
@@ -1330,7 +1360,7 @@ function geneDraw(m, box, tip, forDays) {
     // under the ring, as the mockup has them: a bead for each merge that changed product code and that no criterion cites
     const U2 = m.uncited || [];
     if (U2.length) {
-      const say = `${U2.length} ${U2.length === 1 ? "merge" : "merges"} no criterion cites`, x0 = RX - (12 * U2.length + 2 + 5.6 * say.length) / 2 + 4.4;
+      const say = `${U2.length} ${U2.length === 1 ? "merge" : "merges"} of product code no criterion cites`, x0 = RX - (12 * U2.length + 2 + 5.6 * say.length) / 2 + 4.4;
       U2.forEach((u, i) => el("circle", { class: "free", "data-m": u.pr, cx: r1(x0 + 12 * i), cy: RY + 146, r: 4.4 }));
       el("text", { class: "t-n", x: r1(x0 + 12 * (U2.length - 1) + 14), y: RY + 150 }, say);
     }
@@ -1471,7 +1501,7 @@ function ringDraw(W, get, onDay, press) {
     else el("rect", { class: "gate ahead", x: f(CX - 3), y: "15.0", width: 6, height: "62.0", rx: 3 }, null, g);
     const [px, py] = pt(a, 155), left = a > 180, below = py > CY, x = left ? px - 58 : px + 58, y = below ? py - 22 : py + 19;
     labels.push({ x, anchor: left ? "end" : "start", gate: true, lines: [gt.passed ? `stop after Day ${gt.day}, passed:` : `stop after Day ${gt.day}:`,
-      gt.passed ? "the maintainer said go on" : "the maintainer says go on"], y, lead: [left ? 4 : -4, below ? 10 : -4, px, py] });
+      gt.passed ? "the maintainer said go on" : "the maintainer says go on"], y, lead: [px, py] });
   });
   // where the work stands: in the middle of the Day in progress, or before the first Day not finished
   const na = W.now.day != null ? mid(W.now.slot) : gateAt(W.now.slot), ng = group("now", { transform: `rotate(${na.toFixed(2)} ${CX} ${CY})` });
@@ -1480,17 +1510,37 @@ function ringDraw(W, get, onDay, press) {
   el("path", { class: "pin", d: `M${CX - 6.5} 5.0 h13 l-6.5 11 z` }, null, ng);
   { const [px, py] = pt(na, 172), left = na > 180;
     labels.push({ x: left ? px - 9 : px + 9, anchor: left ? "end" : "start", now: true, lines: ["now", W.now.day != null ? `in Day ${W.now.day}` : "between Days"], y: py }); }
-  // the labels at the sides, pushed down until none overlaps another on its side
-  const side = labels.filter(l => !l.top).sort((a, b) => a.y - b.y);
-  side.forEach((l, i) => side.slice(0, i).forEach(o => {
-    if (o.anchor === l.anchor && Math.abs(o.x - l.x) < 120 && l.y < o.y + 14 * o.lines.length + 4) l.y = o.y + 14 * o.lines.length + 4; }));
+  // the labels at the sides, each as near its own place as it fits: outside the ring (out to the outer edge of the
+  // phase arcs), inside the picture, and clear of every label placed before it. Its box is worked out from its
+  // length, 6.3 px a letter, a little over the average; a label pushed along keeps sliding away from the ring.
+  const DISC = RP + 4, box = (l, x, y, w) => ({ x0: l.anchor === "start" ? x : x - w, x1: l.anchor === "start" ? x + w : x, y0: y - 10, y1: y + 14 * (l.lines.length - 1) + 4 });
+  const hits = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const taken = labels.filter(l => l.top).map(l => { const w = (l.name.length + l.sub.length + 3) * 6.3;
+    return { x0: l.anchor === "start" ? l.x : l.x - w, x1: l.anchor === "start" ? l.x + w : l.x, y0: 3, y1: 17 }; });
+  const fit = (l, w, y) => {
+    let x = l.anchor === "start" ? Math.min(l.x, VW - w - 2) : Math.max(l.x, w + 2);
+    const b = box(l, x, y, w), dy = Math.max(b.y0 - CY, 0, CY - b.y1);
+    if (dy < DISC) { const half = Math.sqrt(DISC * DISC - dy * dy); x = l.anchor === "start" ? Math.max(x, CX + half + 1) : Math.min(x, CX - half - 1); }
+    if (l.anchor === "start" ? x + w > VW - 2 : x - w < 2) return null;
+    const at = box(l, x, y, w);
+    return taken.some(o => hits(o, at)) ? null : { x, at };
+  };
+  labels.filter(l => !l.top).sort((a, b) => a.y - b.y).forEach(l => {
+    const w = Math.max(...l.lines.map(s => s.length)) * 6.3, lo = 13, hi = VH - 14 * l.lines.length + 10, want = Math.max(lo, Math.min(hi, l.y));
+    let got = null;
+    for (let k = 0; !got && k <= 2 * VH; k++) {  // nearest first: its own place, then 2 px lower, 2 px higher, and on
+      const y = want + (k % 2 ? 1 : -1) * 2 * Math.ceil(k / 2);
+      if (y >= lo && y <= hi) { const p = fit(l, w, y); if (p) got = { x: p.x, y, at: p.at }; }
+    }
+    if (!got) got = { x: l.anchor === "start" ? Math.min(l.x, VW - w - 2) : Math.max(l.x, w + 2), y: want };  // no room anywhere: where it wanted
+    l.x = got.x; l.y = got.y; if (got.at) taken.push(got.at);
+  });
   labels.forEach(l => {
     if (l.top) { const t = el("text", { class: "t-ph", x: l.x, y: 13, "text-anchor": l.anchor }, l.name); el("tspan", { class: "t-sub" }, ` · ${l.sub}`, t); return; }
-    l.y = Math.max(13, Math.min(VH - 14 * l.lines.length, l.y));
-    const wide = Math.max(...l.lines.map(s => s.length)) * 6.3;  // kept inside the picture, as the mockup keeps them
-    l.x = l.anchor === "start" ? Math.min(l.x, VW - wide - 2) : Math.max(l.x, wide + 2);
     l.lines.forEach((line, j) => el("text", { class: j === l.lines.length - 1 ? "t-sub" : l.now ? "t-now" : l.gate ? "t-gate" : "t-ph", x: f(l.x), y: f(l.y + 14 * j), "text-anchor": l.anchor }, line));
-    if (l.lead) el("path", { class: "lead", d: `M${f(l.x + l.lead[0])} ${f(l.y + l.lead[1])} L${f(l.lead[2])} ${f(l.lead[3])}` });
+    // a stop's lead runs from the end of its label nearest the gate, wherever the label had to go
+    if (l.lead) { const [px, py] = l.lead, sy = Math.max(l.y - 8, Math.min(l.y + 14 * (l.lines.length - 1) + 2, py));
+      el("path", { class: "lead", d: `M${f(l.x + (l.anchor === "start" ? -4 : 4))} ${f(sy)} L${f(px)} ${f(py)}` }); }
   });
   // the middle: the next step in the page's own words, and how far the next stop is
   const steps = wrap(W.next_step, 23), shown = steps.slice(0, 4);
@@ -1520,7 +1570,8 @@ function ringDraw(W, get, onDay, press) {
     if (last.sha) { dd.append(" at "); h("code", "", last.sha, dd); }
     dd.append(`, ${last.date || ""}`); h("br", "", null, dd); dd.append(last.title); }
   { const dd = fact("Open pull requests"); if (!W.open_prs.length) h("b", "", "None", dd); else W.open_prs.forEach((p, i) => { if (i) h("br", "", null, dd); h("b", "", `#${p.pr}`, dd); dd.append(` ${p.title}`); }); }
-  if (W.score != null) { const dd = fact("Score so far"); h("b", "", String(W.score), dd); dd.append(" of 100, the finished Days together"); }
+  if (W.score != null) { const dd = fact("Score so far"); h("b", "", String(W.score), dd);
+    dd.append(` of 100, the finished Days together${W.days_mean != null ? `; their own scores average ${W.days_mean}` : ""}`); }
   if (W.stop != null) { const dd = fact("Stop ahead", true); h("b", "", `Day ${W.stop}`, dd);
     dd.append(`${W.stop_name ? `, ${W.stop_name}` : ""}, ${W.left.length ? `${n(W.left.length, "Day", "Days")} to go` : "reached"}. The work halts there until the maintainer lifts it.`); }
 
@@ -1643,7 +1694,7 @@ function rdgTip(R, k, v) {
   return null;
 }
 
-/* Graph 1 read as a gene, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
+/* Graph 1 as the plan being read, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
    merges between Days as thin stretches, the promises built under each merge, today as the polymerase, the Days with
    no spec ahead and the stop, and the hand-offs as arcs. Layout only, as the mockup at #228 drew it: every count it
    prints is in DATA.reading, counted by scripts/spec_drift_views.py (reading). Every hand-off's arc is drawn, closed or open;
@@ -1680,7 +1731,7 @@ function readingDraw(R, get, onDay) {
 
   // the rows' names on the left
   const how = R.how || {}, closedN = (how.picked || 0) + (how.lapsed || 0) + (how.withdrawn || 0);
-  [["t-row", 43, "The plan's phases"], ["t-row", 78, "Merges, in order"], ["t-bio", 90, "THE GENE, AS READ"], ["t-sec", 101, `${R.merges}, ${R.between} between Days`],
+  [["t-row", 43, "The plan's phases"], ["t-row", 78, "Merges, in order"], ["t-bio", 90, "THE READING, SO FAR"], ["t-sec", 101, `${R.merges}, ${R.between} between Days`],
     ["t-row", 125, "Promises built"], ["t-bio", 137, "THE TRANSCRIPT"], ["t-sec", 148, `${R.built} of ${R.written} written`],
     ["t-row", 180, "Hand-offs, closed"], ["t-sec", 192, `${closedN}: ${how.picked || 0} picked up,`], ["t-sec", 203, `${how.lapsed || 0} lapsed, ${how.withdrawn || 0} withdrawn`]]
     .forEach(([cls, y, t]) => el("text", { class: cls, x: 0, y }, t));
@@ -1730,22 +1781,43 @@ function readingDraw(R, get, onDay) {
   }));
   R.gap.forEach(g => el("rect", { class: "b q gap", tabindex: 0, "data-k": "gap", "data-v": g.id, x: f(X[g.at] - 3.55), y: f(104 + 4.4 * m[g.at].g.length), width: 7.1, height: 3.4, rx: 1.2 }));
   // the stops: one the maintainer lifted, after its Day; the next, after the Days ahead
+  const lastPr = [...m].reverse().find(x => x.pr), tops = [];
   R.lifted.forEach(s => { const x = cellEnd(s.at);
-    el("path", { class: "lead", d: `M${f(x + 1.5)} 26 V73` });
     el("rect", { class: "term lifted", x: f(x), y: 74, width: 3, height: 32, rx: 1.5 });
-    el("text", { class: "t-top", x: f(x + 1.5), y: 22, "text-anchor": "middle" }, `stop after Day ${s.day}: lifted`); });
+    tops.push({ t: `stop after Day ${s.day}: lifted`, cls: "t-top", px: x + 1.5, to: 73, anchor: "middle", x: x + 1.5, lead: "lead" }); });
   if (stop) {
-    el("path", { class: "lead", d: `M${f(termX + 3)} 14 V32` });
     el("rect", { class: "term shut", x: f(termX), y: 73, width: 6, height: 34, rx: 2 });
     el("path", { class: "termcap", d: `M${f(termX - 6)} 73 h18` });
-    el("text", { class: "t-top strong", x: VW - 2, y: 10, "text-anchor": "end" }, `the next stop, after Day ${stop.day}: the maintainer decides`);
+    tops.unshift({ t: `the next stop, after Day ${stop.day}: the maintainer decides`, cls: "t-top strong", px: termX + 3, to: 32, anchor: "end", x: VW - 2, rows: [8], lead: "lead" });
   }
+  tops.splice(stop ? 1 : 0, 0, { t: `today${lastPr ? ` · after #${lastPr.pr}` : ""}`, cls: "t-top strong", px: T, to: 78, anchor: "end", x: T + 6, lead: "lead today" });
+  // their words, on two rows over the phases: each nearest its own place, on the lower row first, sliding along it or
+  // up to the higher one so that none overlaps another or sits on another's lead, and each keeps a lead down to what
+  // it names. A box is worked out from the words' length, 6 px a letter and 6.4 in bold, a little over the average.
+  const ROWS = [22, 8], taken = [], free = b => !taken.some(o => o.x0 < b.x1 && b.x0 < o.x1 && o.y0 < b.y1 && b.y0 < o.y1);
+  tops.forEach(l => {
+    const w = l.t.length * (l.cls.includes("strong") ? 6.4 : 6), x0 = l.anchor === "end" ? l.x - w : l.x - w / 2;
+    let best = null;
+    (l.rows || ROWS).forEach(y => [x0, ...taken.flatMap(o => [o.x0 - 6 - w, o.x1 + 6])].forEach(s => {
+      if (s < 2 || s + w > VW - 2) return;
+      // a label moved off its mark leads down from its nearer end, then along under the words to the mark
+      const ex = l.px < s ? s - 2 : l.px > s + w ? s + w + 2 : l.px;
+      const b = { x0: s, x1: s + w, y0: y - 10, y1: y + 4 }, lane = y < ROWS[0] ? { x0: ex - 2, x1: ex + 2, y0: y + 4, y1: ROWS[0] + 4 } : null;
+      // a lead that would cross another's costs more than a longer slide that does not
+      const crosses = tops.filter(o => o.at && (o.px - l.px) * (o.px - ex) < 0).length;
+      const cost = Math.abs(s - x0) + (y < ROWS[0] ? 40 : 0) + 200 * crosses;
+      if (free(b) && (!lane || free(lane)) && (!best || cost < best.cost)) best = { cost, b, y, lane, ex };
+    }));
+    if (!best) best = { b: { x0, x1: x0 + w, y0: ROWS[0] - 10, y1: ROWS[0] + 4 }, y: ROWS[0], ex: l.px };  // no room anywhere: where it wanted
+    taken.push(best.b); if (best.lane) taken.push(best.lane);
+    l.at = best;
+    const { b, y, ex } = best, tx = l.anchor === "end" ? b.x1 : (b.x0 + b.x1) / 2;
+    el("path", { class: l.lead, d: ex === l.px ? `M${f(l.px)} ${y + 4} V${l.to}` : `M${f(ex)} ${y + 2} V29 H${f(l.px)} V${l.to}` });
+    el("text", { class: l.cls, x: f(tx), y, "text-anchor": l.anchor }, l.t);
+  });
   L.forEach(x => { if (x.iv && x.iv.length >= 4) el("text", { class: "t-iv", x: f(x.x + x.w / 2), y: 84, "text-anchor": "middle" }, String(x.iv.length)); });
   // today, and the Days the plan lists with no spec yet
-  const lastPr = [...m].reverse().find(x => x.pr);
-  el("path", { class: "lead today", d: `M${f(T)} 26 V78` });
   el("ellipse", { class: "pol", cx: f(T), cy: 90, rx: 7, ry: 11.5 });
-  el("text", { class: "t-top strong", x: f(T + 6), y: 22, "text-anchor": "end" }, `today${lastPr ? ` · after #${lastPr.pr}` : ""}`);
   if (nA || stop) el("path", { class: "strand todo", d: `M${f(T + 7)} 90 H${f(stop ? termX : AE)}` });
   const boxX = {};
   R.ahead.forEach((a, k) => { const x = TX + 52 * k; boxX[a.day] = x + 23;
@@ -1784,7 +1856,7 @@ function readingDraw(R, get, onDay) {
   Object.keys(waits).forEach(day => { const ys = waits[day];
     el("path", { class: "guide", d: `M${f(boxX[day])} 101 V${f(ys[0] - 3)}` });
     el("text", { class: "t-n", x: f(boxX[day]), y: f(lastY + 16), "text-anchor": "middle" }, `${ys.length} wait`); });
-  fig.setAttribute("aria-label", `Every merge in order, drawn as a gene being read: Days as blocks, the work between Days as thin lines, the promises built under them, today's place, the Days ahead and the stop, and the hand-offs as arcs`);
+  fig.setAttribute("aria-label", `Every merge in order, drawn as the plan being read: Days as blocks, the work between Days as thin lines, the promises built under them, today's place, the Days ahead and the stop, and the hand-offs as arcs`);
 
   // the figures over it, and the key's counts
   const fig4 = (num, of, what, sub) => { const d = h("div"); const v = h("div", "num", String(num), d); if (of != null) h("small", "", ` ${of}`, v); h("div", "what", what, d); h("div", "sub", sub, d); return d; };
@@ -1825,7 +1897,7 @@ function readingDraw(R, get, onDay) {
   const bends = $("bends"); bends.replaceChildren();
   const cutAll = R.days.filter(d => d.frags > 1).length, whole = R.unbroken;
   [["An intron is cut out; this work is not.", " In a cell an intron is removed from the transcript. The merges between Days are tooling, the dashboard and plan changes: they build no promise, and the Days run on them."],
-    ["A gene's exons do not interleave.", ` Here ${R.strayed.length ? `${dayList(R.strayed)} ${R.strayed.length === 1 ? "has a fragment" : "have fragments"} away from ${R.strayed.length === 1 ? "its span" : "their spans"}, and ` : ""}${cutAll ? (whole.length ? `every Day but ${andList(whole.map(String))} was cut by merges between Days` : "every Day was cut by merges between Days") : "no Day was cut"}. The picture keeps the true order; the bracket is the Day's main span.`],
+    ["Exons do not interleave.", ` Here ${R.strayed.length ? `${dayList(R.strayed)} ${R.strayed.length === 1 ? "has a fragment" : "have fragments"} away from ${R.strayed.length === 1 ? "its span" : "their spans"}, and ` : ""}${cutAll ? (whole.length ? `every Day but ${andList(whole.map(String))} was cut by merges between Days` : "every Day was cut by merges between Days") : "no Day was cut"}. The picture keeps the true order; the bracket is the Day's main span.`],
     ...(nA ? [["The Days ahead have no width.", ` ${dayList(R.ahead.map(a => a.day))} ${nA === 1 ? "has" : "have"} no spec, so nothing says how many merges or promises they hold. Their boxes are one size and mean nothing by it.`]] : []),
     ["Between Days is squeezed.", ` A cell of a Day is ${PC.toFixed(1)} px wide; a stretch between Days is 6 px and half a pixel for each merge, so its length understates it. The number over it is the count.`],
     ["No dates.", " The strand is in merge order. A long stretch may be one afternoon; graph 10 has the clock."]].forEach(([b, t]) => li(bends, b, t));
@@ -1926,7 +1998,8 @@ function mergeDraw(D, get, onDay) {
     let rows;
     if (byMerge) rows = ms.map(m => ({ day: m.day, label: "#" + m.pr, ms: [m], ran: m.rp ? 1 : 0, drawn: 1, stopped: V.stopped[m.pr] || 0, nocite: m.nocite.length ? 1 : 0 }));
     else { const by = new Map(); ms.forEach(m => { if (!by.has(m.day)) by.set(m.day, []); by.get(m.day).push(m); }); rows = [...by.keys()].sort((a, b) => a - b).map(d => Object.assign({ day: d, label: dayName(d), ms: by.get(d) }, V.rows.find(q => q.day === d))); }
-    const X0 = big ? 326 : 160, U = big ? Math.max(22, Math.min(46, Math.floor(640 / cs.length))) : 5, DG = 6, T0 = 50;
+    // a Day's row that says how many merges it draws for a stop needs a wider left margin than its name alone
+    const X0 = big ? 326 : !byMerge && rows.some(r => r.nocite) ? 214 : 160, U = big ? Math.max(22, Math.min(46, Math.floor(640 / cs.length))) : 5, DG = 6, T0 = 50;
     const RH = big ? 16 : byMerge ? 11 : 17, RG = byMerge ? 5 : 0, CH = big ? 30 : 26, UL = big ? 20 : 12, BW = 96, SH = 9, BR = big ? 8.5 : 7.5;
     let y = T0; rows.forEach((r, i) => { if (i && rows[i - 1].day !== r.day) y += RG; r.y = y; r.i = i; y += RH; });
     const CY = y + 8, SY = CY + CH + 4, TY = SY + SH + 2, BY = SY + SH + 21 + BR;
@@ -1983,7 +2056,7 @@ function mergeDraw(D, get, onDay) {
         el("text", { x: X0 - 40, y: r.y + RH - 2.2, "text-anchor": "end", class: r.nocite ? "pr ncl" : "pr" }, r.label);
       } else {
         el("text", { x: X0 - 54, y: r.y + RH - 4.6, "text-anchor": "end", class: "day" }, r.label);
-        if (r.nocite) el("text", { x: 6, y: r.y + RH - 4.8, class: "nc" }, `${r.nocite} uncited`);
+        if (r.nocite) el("text", { x: 6, y: r.y + RH - 4.8, class: "nc" }, `${r.nocite} drawn for a stop`);
       }
       if (byMerge) el("circle", { cx: X0 - 24, cy: r.y + RH / 2, r: big ? 3.2 : 2.4, fill: r.ran ? "var(--ink-2)" : "var(--card)", stroke: "var(--ink-2)", "stroke-width": 1 });
       else el("text", { x: X0 - 24, y: r.y + RH - 5, "text-anchor": "middle", class: "num" }, `${r.ran} of ${r.drawn}`);
@@ -3498,6 +3571,9 @@ const lrnRate = v => v == null ? "–" : v === 0 ? "0" : v < 0.1 ? v.toFixed(2) 
 const lrnDays = n => `${n} ${n === 1 ? "Day" : "Days"}`;
 const lrnIds = (ids, most) => ids.length > most ? `${ids.slice(0, most).join(", ")} and ${ids.length - most} more` : ids.join(", ");
 const lrnCut = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+// a title on one line, or on two broken at a space; only one longer than two lines is cut, and the pointer box gives it whole
+const lrnLines = (s, n) => { if (s.length <= n) return [s]; const at = s.lastIndexOf(" ", n); const k = at > 0 ? at : n;
+  return [s.slice(0, k), lrnCut(s.slice(k).trimStart(), n)]; };
 function lrnDraw(L, get, onDay) {
   const $ = id => get("lrn-" + id), tip = $("tip"), days = L.days, fixes = L.fixes || [], tips = {}, groups = [];
   const wait = L.wait || 5, shared = L.shared || [], pastGated = L.past_gated || 0, pastLeaked = "past_leaked" in L ? L.past_leaked : L.past_fix;
@@ -3556,7 +3632,10 @@ function lrnDraw(L, get, onDay) {
   const dmb = $("dmb"), D = { w: 1160, x0: 470, x1: 860, vx: 892, t: 46, rh: 50 };
   const dm = (n, a, txt, parent) => svgEl(dmb, n, a, txt, parent);
   dmb.replaceChildren();
-  const H = D.t + Math.max(1, fixes.length) * D.rh + 8;
+  // a row grows by a line when its title needs two
+  const titles = fixes.map(f => lrnLines(f.title, 62)), RH = titles.map(t => D.rh + 16 * (t.length - 1));
+  const tops = RH.reduce((a, h) => [...a, a[a.length - 1] + h], [D.t]);
+  const H = (fixes.length ? tops[fixes.length] : D.t + D.rh) + 8;
   dmb.setAttribute("viewBox", `0 0 ${D.w} ${H}`);
   const most2 = Math.max(1, ...fixes.flatMap(f => [f.rate_before || 0, f.rate_after || 0])), step2 = most2 > 5 ? 2 : 1, top2 = Math.ceil((most2 + .5) / step2) * step2, U2 = (D.x1 - D.x0) / top2;
   dm("text", { class: "l-axis", x: D.x0, y: 14 }, "times a Day the problems it names happened");
@@ -3566,13 +3645,13 @@ function lrnDraw(L, get, onDay) {
   }
   if (!fixes.length) dm("text", { class: "l-sub", x: 12, y: D.t + 26 }, "specs/fixes.json names no fix yet.");
   fixes.forEach((f, i) => {
-    const y = D.t + i * D.rh, cy = y + D.rh / 2, rb = f.rate_before || 0, ra = f.rate_after || 0, xb = D.x0 + rb * U2, xa = D.x0 + ra * U2, on = f.from_day != null;
+    const y = tops[i], rh = RH[i], more = 8 * (titles[i].length - 1), cy = y + rh / 2, rb = f.rate_before || 0, ra = f.rate_after || 0, xb = D.x0 + rb * U2, xa = D.x0 + ra * U2, on = f.from_day != null;
     // the two dots of a fix whose rates are as near as this sit one above the other, not on each other
     const near = on && Math.abs(xa - xb) < 16, leftOf = on && !near && xa > xb;
     const g = mark(dmb, `p${f.pr}`, f.from_day, `#${f.pr}: ${lrnRate(f.rate_before)} a Day before, ${on ? `${lrnRate(f.rate_after)} a Day after, ${f.verdict || "too early to say"}` : "counts from no Day yet"}`);
-    dm("rect", { class: "hit", x: 0, y: y + 1, width: D.w, height: D.rh - 2, rx: 4 }, null, g);
-    dm("text", { class: "l-name", x: 12, y: cy - 2 }, lrnCut(f.title, 62), g);
-    dm("text", { class: "l-sub", x: 12, y: cy + 14 }, `#${f.pr} · merged ${lrnDate(f.merged)} · ${on ? `counts from Day ${f.from_day}` : "counts from no Day yet"}`, g);
+    dm("rect", { class: "hit", x: 0, y: y + 1, width: D.w, height: rh - 2, rx: 4 }, null, g);
+    titles[i].forEach((t, j) => dm("text", { class: "l-name", x: 12, y: cy - 2 - more + 16 * j }, t, g));
+    dm("text", { class: "l-sub", x: 12, y: cy + 14 + more }, `#${f.pr} · merged ${lrnDate(f.merged)} · ${on ? `counts from Day ${f.from_day}` : "counts from no Day yet"}`, g);
     if (on && !near) dm("path", { class: "l-link", d: `M${Math.min(xa, xb)} ${cy}H${Math.max(xa, xb)}` }, null, g);
     dm("circle", { class: "l-dot-before", cx: xb, cy: near ? cy - 8 : cy, r: 6.5 }, null, g);
     dm("text", { class: "l-n", x: xb + (leftOf ? -13 : 13), y: (near ? cy - 8 : cy) + 4, "text-anchor": leftOf ? "end" : "start" }, lrnRate(f.rate_before), g);
@@ -3590,7 +3669,7 @@ function lrnDraw(L, get, onDay) {
       : f.rate_before == null ? `${lrnDays(f.days_since)} since` : `${f.days_since} of ${wait} Days since · ${f.after ? `back ${lrnTimes(f.after)} so far` : "nothing back so far"}`;
     dm("text", { class: "l-verdict", x: D.vx, y: cy - 1 }, verdict, g);
     dm("text", { class: "l-sub", x: D.vx, y: cy + 14 }, sub, g);
-    dm("path", { class: "l-row", d: `M0 ${y + D.rh}H${D.w}` });
+    dm("path", { class: "l-row", d: `M0 ${y + rh}H${D.w}` });
     tips[`p${f.pr}`] = { t: `#${f.pr} · merged ${lrnDate(f.merged)}${on ? ` · counts from Day ${f.from_day}` : ""}`, l: [
       f.days_before == null ? `Before: ${f.before}.` : `Before: ${f.before} in ${lrnDays(f.days_before)}, ${lrnRate(f.rate_before)} a Day, counted from Day ${f.first_day}.`,
       on ? `After: ${f.after} in ${lrnDays(f.days_since)}, ${lrnRate(f.rate_after)} a Day.` : "After: nothing yet to count.",
@@ -3742,7 +3821,8 @@ function draw(M, DATA) {
     if (!Q) return;
     const v = day == null ? Q.all : Q.days[day];
     put("q-n", v ? String(v.n) : "–");
-    put("q-of", v ? `quality of ${v.label}, out of 100` : `Day ${day} has no score: it is not finished`);
+    put("q-of", v ? `quality of ${v.label}, out of 100${day == null && Q.mean != null ? `, counted over all of them at once; the Days' own scores average ${Q.mean}` : ""}`
+      : `Day ${day} has no score: it is not finished`);
     put("q-rows", v ? v.parts.map(p => h("a", { class: "q-row", href: `#${p.graph}` }, h("span", { class: "q-name" }, p.name, p.low && h("span", { class: "q-low" }, "lowest")),
       bar(p.n), h("b", null, String(p.n)), h("span", { class: "q-where" }, `graph ${p.graph.slice(1)}`))) : []);
     table("q-table", { head: ["Part", "What is counted", "Count", "Share"], rows: v ? v.rows : [] });
@@ -3774,7 +3854,7 @@ function draw(M, DATA) {
     else if (!w.empty) try { ringDraw(w, $, onDay, press); $("now").hidden = true; } catch (e) { failed(String((e && e.message) || e)); }
   }
 
-  /* Graph 1 read as a gene, in graph 1's place; graph 1 is folded under it, its level cards drawn in it */
+  /* Graph 1 as the plan being read, in graph 1's place; graph 1 is folded under it, its level cards drawn in it */
   {
     const r = M.rdg, failed = e => { put("rdg-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`rdg: ${e}`); };
     if (r.error) failed(r.error);
@@ -4060,10 +4140,14 @@ function themeToggle() {
    serves. Placed and laid out in Python (spec_drift_files.file_map) from git's file list and
    docs/dashboard/file-stations.json on every build; this draws the cell, its seven stations and the checks between
    them, then the dots where the model put them. `get` finds an element by its id. Colours are in dashboard.css, under #fil. */
-const FIL_STATIONS = [ // the pill's x, its zone, its name in one or two lines, and what it is in the cell
-  [30, "doc", ["The goal"], "the gene"], [196, "doc", ["A Day's spec"], "transcription"], [368, "doc", ["A promise"], "the transcript"],
-  [506, "try", ["A test that", "fails first"], "folding check"], [682, "try", ["The code, then", "a planted bug"], "the protein"],
-  [970, "after", ["The Day", "closes"], "delivered, labelled"], [1136, "after", ["The re-check"], "still working?"]];
+// the pill's x (its column's x in spec_drift_files.COLUMNS, less 46), its zone, its name in one or two lines, and what
+// it is in the cell in one or two lines
+const FIL_STATIONS = [
+  [30, "doc", ["The goal"], ["the gene"]], [196, "doc", ["A Day's spec"], ["transcription"]], [368, "doc", ["A promise"], ["the transcript"]],
+  [494, "try", ["A test that", "fails first"], ["negative control"]], [662, "try", ["The code, then", "a planted bug"], ["the protein,", "then a knock-out"]],
+  [970, "after", ["The Day", "closes"], ["delivered, labelled"]], [1136, "after", ["The re-check"], ["still working?"]]];
+// the checks between the stations: each one's x is its column's, and its name and small word go on the second row of words
+const FIL_ROW_A = 204, FIL_ROW_B = 234;
 const FIL_REGION = { doc: "the nucleus", try: "the cytoplasm", after: "out of the cell, on main" };
 function filDraw(F, get) {
   const $ = id => get("fil-" + id), fig = $("fig"), tip = $("tip");
@@ -4100,16 +4184,20 @@ function filDraw(F, get) {
   }
   // the way, left to right, and on it the checks by someone else: a diamond an AI reviewer, a square a script, the gate a person
   el("line", { class: "way", x1: 76, y1: 168, x2: 1182, y2: 168 });
-  [188, 360, 498, 674, 962, 1128].forEach(x => el("polygon", { class: "head", points: `${x},164 ${x + 7},168 ${x},172` }));
-  const name = (x, t, bio) => { el("text", { class: "t-g", x, y: 204, "text-anchor": "middle" }, t); if (bio) el("text", { class: "t-bio", x, y: 216, "text-anchor": "middle" }, bio); };
+  FIL_STATIONS.forEach(([x], i) => { if (i) el("polygon", { class: "head", points: `${x - 8},164 ${x - 1},168 ${x - 8},172` }); });
+  const name = (x, t, bio, anchor) => { el("text", { class: "t-g", x, y: FIL_ROW_B, "text-anchor": anchor || "middle" }, t);
+    if (bio) el("text", { class: "t-bio", x, y: FIL_ROW_B + 12, "text-anchor": anchor || "middle" }, bio); };
   const diamond = x => el("path", { class: "chk", d: `M${x},158 l10,10 l-10,10 l-10,-10 z` });
-  diamond(159); name(159, "plan-auditor");
-  diamond(328); name(328, "spec-auditor", "proofreading");
-  el("ellipse", { class: "ribo", cx: 640, cy: 157, rx: 27, ry: 14 }); el("ellipse", { class: "ribo", cx: 640, cy: 179, rx: 20, ry: 8.5 });
-  el("line", { class: "way", x1: 610, y1: 168, x2: 670, y2: 168 }); name(640, "implementer", "the ribosome");
-  el("rect", { class: "chk", x: 834, y: 160, width: 16, height: 16, rx: 2 }); name(842, "CI's checks", "quality control");
-  [144, 175].forEach(y => el("rect", { class: "chk", x: 917, y, width: 14, height: 17, rx: 4 })); name(924, "the maintainer", "membrane gate");
-  diamond(1100); name(1100, "defect-rater");
+  const C = { plan: 159, spec: 328, writer: 624, track: 772, ci: 868, rater: 1099 };  // the checks' columns
+  diamond(C.plan); name(C.plan, "plan-auditor");
+  diamond(C.spec); name(C.spec, "spec-auditor", "reading the template");
+  el("ellipse", { class: "ribo", cx: C.writer, cy: 157, rx: 27, ry: 14 }); el("ellipse", { class: "ribo", cx: C.writer, cy: 179, rx: 20, ry: 8.5 });
+  el("line", { class: "way", x1: C.writer - 30, y1: 168, x2: C.writer + 30, y2: 168 }); name(C.writer, "implementer", "the ribosome");
+  diamond(C.track); name(C.track, "track-reviewer", "folding check");
+  el("rect", { class: "chk", x: C.ci - 8, y: 160, width: 16, height: 16, rx: 2 }); name(C.ci, "CI's checks", "quality control");
+  // the gate is the cell's wall, not a column: its name starts just outside it, clear of the wall and of CI's words
+  [144, 175].forEach(y => el("rect", { class: "chk", x: 917, y, width: 14, height: 17, rx: 4 })); name(934, "the maintainer", "membrane gate", "start");
+  diamond(C.rater); name(C.rater, "defect-rater");
   FIL_STATIONS.forEach(([x, zone, words, bio], i) => {
     const g = el("g", { class: `k-${zone}` });
     el("rect", { class: "pill", x, y: 149, width: 92, height: 38, rx: 19 }, null, g);
@@ -4117,7 +4205,7 @@ function filDraw(F, get) {
     el("circle", { class: "no", cx: x + 5, cy: 150, r: 9.5 }, null, g);
     el("text", { class: "t-no", x: x + 5, y: 153.6, "text-anchor": "middle" }, i + 1, g);
     if (i === 6) el("rect", { class: "chk", x: x + 78, y: 143, width: 11, height: 11, rx: 1.5 }, null, g); // the re-check is itself a script's check
-    el("text", { class: "t-bio", x: x + 46, y: 204, "text-anchor": "middle" }, bio, g);
+    bio.forEach((t, j) => el("text", { class: "t-bio", x: x + 46, y: FIL_ROW_A + 11 * j, "text-anchor": "middle" }, t, g));
   });
   // the files: a label and a count over each group, then its dots; the ring holds what hangs on no station
   if (G.plasmid) {

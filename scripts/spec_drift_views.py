@@ -553,7 +553,7 @@ def where_ring(d):
 
 
 def reading(d):
-    """Graph 1 read as a gene: every merge in order on one strand, a Day's merges as a block (its main span, and any
+    """Graph 1 as the plan being read: every merge in order on one strand, a Day's merges as a block (its main span, and any
     fragment away from it), the merges no Day owns as stretches between the blocks, the promises each merge built
     under it, the hand-offs as arcs from the merge that opened them to the one that closed them (or on to the Day ahead
     they wait for), and the Days plan.md lists with no spec yet, up to the stop."""
