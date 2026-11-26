@@ -932,6 +932,7 @@ def protein(d):
 # Graph 7's gates, in the order work passes them: `key` is the found: value a Defect line names, `name` graph 7's
 # name for it and `at` how a sentence names it (they moved here from dashboard.js's GATES unchanged). `label`, `sub`
 # and `does` are the proofreading stream's words for it, as the mockup at #228 has them.
+PRF_FROM = 16  # the metrics module's PR_LAYERS_FROM: the Day from which CI and the driver's reviewer are gates
 PRF_GATES = (
     dict(key="auditor", name="Auditors, before any code", at="the auditors", label="The auditors",
          sub="plan-auditor, spec-auditor",
@@ -956,6 +957,14 @@ PRF_GATES = (
     dict(key="review", name="The main session's diff review", at="the diff review", label="The diff review",
          sub="the main session",
          does="The main session reads the implementer's diff before it runs the checks and commits."),
+    dict(key="CI", name="CI on the pull request", at="CI", label="CI", sub=f"required checks, from Day {PRF_FROM}",
+         does="The required checks on the open pull request. A defect a failed check showed is caught here. Counted "
+         f"from Day {PRF_FROM}: before it the Notes had no value for CI, and such a catch sits where the Notes put it."),
+    dict(key="driver reviewer", name="The driver's reviewer", at="the driver's reviewer", label="The driver's reviewer",
+         sub=f"on driver runs, from Day {PRF_FROM}", none="none yet: on driver runs only",
+         does="A session with a fresh context reads the pull request once it is open, when the driver runs the step. "
+         f"Counted from Day {PRF_FROM}. It reads only what the driver runs: where a person's session runs the Days, its "
+         "tray stays empty."),
     dict(key="work", name="Noticed during the work", at="the work", label="Noticed in the work", sub="no gate: a leak",
          does="No gate: a defect someone noticed while working, in a track or the session. A catch by a gate the "
          "Notes do not name is counted here too."),
@@ -980,9 +989,10 @@ PRF_GATES = (
 PRF_LAYERS = (
     dict(name="Before any code", bio="reading the template", gates=("auditor", "spec-change PR"),
          what="The auditors read the spec against the code before anything is copied from it."),
-    dict(name="While writing", bio="proofreading", gates=("track-reviewer", "seen red", "break on purpose", "review", "work"),
+    dict(name="While writing", bio="proofreading",
+         gates=("track-reviewer", "seen red", "break on purpose", "review", "CI", "driver reviewer", "work"),
          what="Checks run as each track is written: the track-reviewer on the brief and the diff, the test seen "
-         "failing, the break on purpose, the diff review."),
+         "failing, the break on purpose, the diff review; then, on the open pull request, CI and the driver's reviewer."),
     dict(name="At the close", bio="repair after the copy", gates=("close", "rehearsal"),
          what="The Day is finished and read again: every criterion is ticked with its evidence."),
     dict(name="After the merge", bio="surveillance", gates=("evidence replay", "dashboard", "Day review"),
@@ -999,16 +1009,17 @@ def _tag(value):
     return re.sub(r" \(.*\)$", "", re.sub(r"^the ", "", v.strip().lower()))
 
 
-def gate_of(value):
+def gate_of(value, day=None):
     """The gate a found: value names, by graph 7's rule (dashboard.js's gateOf up to #237): "Day N review" is a later
     Day's review; a gate's key, in any case; anything else (a track, a review nobody named, the session) was noticed
-    during the work."""
+    during the work. On a Day before PRF_FROM, CI and the driver's reviewer were no value, and read as the work."""
     f = _tag(value)
     if re.fullmatch(r"day \d+ review", f):
         return "Day review"
-    return next(
+    key = next(
         (g["key"] for g in PRF_GATES if g["key"].lower() == f and g["key"] not in ("work", "Day review")), "work"
     )
+    return "work" if key in ("CI", "driver reviewer") and day is not None and day < PRF_FROM else key
 
 
 def _when(stamp):
@@ -1043,7 +1054,7 @@ def _prf_defects(d):
     for day in sorted(d.get("days") or [], key=lambda x: x.get("day")):
         n = day.get("day")
         for i, x in enumerate(day.get("defects") or []):
-            gate, cause, f, said = gate_of(x.get("found")), _tag(x.get("cause")), _tag(x.get("found")), x.get("made") or ""
+            gate, cause, f, said = gate_of(x.get("found"), n), _tag(x.get("cause")), _tag(x.get("found")), x.get("made") or ""
             m = re.fullmatch(r"Day 0*(\d+)", said, re.I)
             made = int(m.group(1)) if m else "none" if re.fullmatch(r"none", said, re.I) else None
             xid = x.get("id")
@@ -1179,7 +1190,9 @@ def proofreading(d):
         _stamp(d), counted_at=(d.get("counted") or {}).get("at"), total=total, causes=list(PRF_CAUSES),
         cause_counts={c: sum(1 for o in defects if o["cause"] == c) for c in PRF_CAUSES},
         days=sorted({o["day"] for o in defects}), gates=gates, layers=layers, leak="work", defects=defects, late=late,
-        marks=marks, hooks=None if missing else _prf_hooks(d), ci=_prf_ci(d), reader=_prf_reader(d.get("days") or []),
+        marks=marks, hooks=None if missing else _prf_hooks(d),
+        ci=dict(_prf_ci(d), from_day=PRF_FROM, caught=next(g["caught"] for g in gates if g["key"] == "CI")),
+        reader=_prf_reader(d.get("days") or []), never=d.get("never_found"),
     )
     if missing or not total:
         out["empty"] = missing or "no defect is recorded in any Day's Notes yet, so there is no stream to draw."
@@ -2204,7 +2217,7 @@ def learning(d):
     row_of = {x["day"]: x for x in d.get("days") or [] if isinstance(x.get("day"), int)}
     ids = {x["id"]: day for day, x in lines}
     count = collections.Counter(day for day, _ in lines)
-    gated_ids = {x["id"] for _, x in lines if gate_of(x.get("found")) in LRN_GATED}
+    gated_ids = {x["id"] for day, x in lines if gate_of(x.get("found"), day) in LRN_GATED}
     reps = [r for r in (d.get("defect_recurrence") or {}).get("recurrences") or [] if r.get("id") in ids]
     root = {}
 

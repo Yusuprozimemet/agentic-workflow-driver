@@ -976,6 +976,109 @@ class DefectCountTest(unittest.TestCase):
                          ["track-reviewer", "track-reviewer", "work", "review"])
         self.assertNotIn("track-reviewer", sd.EARLY)
 
+    def test_ci_and_the_drivers_reviewer_are_stages_from_day_16_and_off_the_list_before(self):
+        self.assertEqual([sd.found_stage(f, 16) for f in ("CI", "ci", "driver reviewer", "Driver reviewer")],
+                         ["CI", "CI", "driver reviewer", "driver reviewer"])
+        self.assertEqual([sd.found_stage(f, 15) for f in ("CI", "driver reviewer")], [None, None])
+        self.assertIsNone(sd.found_stage("reviewer", 16))
+        self.assertEqual([s in sd.STAGES and s not in sd.EARLY for s in ("CI", "driver reviewer")], [True, True])
+
+    def test_a_day_16_line_found_by_ci_is_counted_late_and_a_day_15_one_is_off_the_list(self):
+        line = lambda i, rest: f"- **Defect** D{i} — found: {rest} · x.\n"
+        day15 = line("15.1", "CI · cause: process · made: Day 15")
+        day16 = "".join(line(f"16.{n}", r) for n, r in enumerate([
+            "CI · cause: process · made: Day 16",
+            "driver reviewer · cause: process · made: Day 16",
+            "close · cause: process · made: Day 16 · catchable: CI",
+            "review · cause: process · made: Day 16 · catchable: CI",
+            "CI · cause: process · made: Day 16 · catchable: track-reviewer",
+            "driver reviewer · cause: process · made: Day 16 · catchable: review",  # both rank after the track's layers
+            "CI · cause: process · made: Day 16 · catchable: break on purpose"], 1))
+        c = sd.defect_counts([dict(day=15, criteria=dict(total=1), defects=sd.defect_lines(day15, 15)),
+                              dict(day=16, criteria=dict(total=5), defects=sd.defect_lines(day16, 16))])
+        self.assertEqual(c["off_list"], ["D15.1"])
+        self.assertEqual([r["day"] for r in c["days"]], [15, 16])
+        row = c["days"][1]
+        self.assertEqual(row["stages"], {"review": 1, "CI": 3, "driver reviewer": 2, "close": 1})
+        self.assertEqual(row["late"], 7)
+        self.assertEqual(row["catchable"], dict(earlier=4, not_earlier=1, not_given=2, off_list=0))
+
+    def never_found_days(self):
+        """Day 12's and 13's lines, whose miss is read from their cause and stage, and Day 16's, from catchable:."""
+        def day(n, rows):
+            text = "".join(f"- **Defect** D{n}.{i} — found: {r} · made: Day {n} · x.\n"
+                           for i, r in enumerate((r for k, r in rows for _ in range(k)), 1))
+            return dict(day=n, criteria=dict(total=1), defects=sd.defect_lines(text, n))
+        return [day(12, [(30, "auditor · cause: spec"), (2, "close · cause: spec"), (1, "review · cause: implementation")]),
+                day(13, [(3, "track-reviewer · cause: process"), (1, "review · cause: implementation"),
+                         (1, "close · cause: spec"), (1, "seen red · cause: process")]),
+                day(16, [(1, "auditor · cause: spec · catchable: auditor"),
+                         (1, "close · cause: spec · catchable: track-reviewer"),
+                         (1, "CI · cause: spec · catchable: CI"),
+                         (1, "track-reviewer · cause: process · catchable: auditor"),
+                         (1, "close · cause: process · catchable: lunch")])]
+
+    CASES = {"spec-auditor": dict(named=30, of=44, runs=3, brief="19c1a5e"),
+             "track-reviewer": dict(named=9, of=21, runs=3, brief="a004055")}
+
+    def test_never_found_scales_each_agents_catches_by_its_misses_less_what_later_checks_found(self):
+        n = sd.never_found(self.never_found_days(), self.CASES)
+        self.assertEqual((n["found"], n["exact"], n["estimated"]), (44, 2, 2))
+        self.assertEqual([a["agent"] for a in n["agents"]], ["spec-auditor", "track-reviewer"])
+        keys = ("caught", "later", "hit_pct", "missed", "left", "low", "high")
+        self.assertEqual([[a[k] for k in keys] for a in n["agents"]], [[31, 4, 68, 14, 10, 4, 23], [4, 3, 43, 5, 2, 0, 9]])
+        self.assertEqual((n["left"], n["low"], n["high"]), (12, 4, 32))
+        self.assertEqual(sd.never_found_line(n), "never found: about 12 (4 to 32), spec-auditor 10, track-reviewer 2")
+
+    def test_never_found_is_not_estimated_without_a_recorded_count(self):
+        days = self.never_found_days()
+        n = sd.never_found(days, {})
+        self.assertEqual((n["left"], n["low"], n["high"], n["estimated"]), (None, None, None, 0))
+        self.assertEqual([(a["estimated"], a["why"], a["caught"]) for a in n["agents"]],
+                         [(False, "no recorded count on known cases", 31), (False, "no recorded count on known cases", 4)])
+        self.assertEqual(sd.never_found_line(n), "never found: not estimated (spec-auditor: no recorded count on known "
+                         "cases; track-reviewer: no recorded count on known cases)")
+        n = sd.never_found(days, dict(self.CASES, **{"track-reviewer": dict(self.CASES["track-reviewer"], named=0)}))
+        self.assertEqual(n["agents"][1]["why"], "it names none of its known faults")
+        self.assertEqual((n["left"], n["low"], n["high"]), (10, 4, 23))
+        self.assertEqual(sd.never_found_line(n), "never found: about 10 (4 to 23), spec-auditor 10")
+        n = sd.never_found(days, dict(self.CASES, **{"track-reviewer": dict(self.CASES["track-reviewer"], of=0)}))
+        self.assertEqual(n["agents"][1]["why"], "it has no known fault")
+
+    def test_never_found_is_never_below_zero_and_skips_a_line_off_the_list(self):
+        day13 = "".join(f"- **Defect** D13.{i} — found: {r} · made: Day 13 · x.\n" for i, r in enumerate(
+            ["track-reviewer · cause: process"] + ["review · cause: implementation"] * 5, 1))
+        day15 = "- **Defect** D15.1 — found: CI · cause: spec · made: Day 15 · x.\n"  # off the list before Day 16
+        n = sd.never_found([dict(day=13, defects=sd.defect_lines(day13, 13)),
+                            dict(day=15, defects=sd.defect_lines(day15, 15))], self.CASES)
+        self.assertEqual(n["found"], 6)
+        keys = ("caught", "later", "left", "low", "high")
+        self.assertEqual([tuple(a[k] for k in keys) for a in n["agents"]], [(0, 0, 0, 0, 0), (1, 5, 0, 0, 0)])
+
+    def test_the_repositorys_own_case_sets_are_read_with_a_recorded_count(self):
+        root, texts = os.path.dirname(os.path.dirname(os.path.abspath(__file__))), {}
+        for agent, _ in sd.CASE_AGENTS:
+            with open(os.path.join(root, sd.CASES_DIR + agent + ".json"), encoding="utf-8") as f:
+                texts[agent] = f.read()
+        counts = sd.case_counts(texts)
+        self.assertEqual(sorted(counts), ["spec-auditor", "track-reviewer"])
+        self.assertTrue(all(0 < c["named"] <= c["of"] for c in counts.values()), counts)
+
+    def test_case_counts_reads_named_and_the_known_faults_and_skips_a_torn_set(self):
+        texts = {"spec-auditor": '{"cases": [{"known": [{"id": "a"}, {"id": "b"}]}, {"known": []}], '
+                                 '"recorded": {"named": 1, "runs": 3, "brief": "the brief"}}',
+                 "track-reviewer": "{not json", "defect-rater": None}
+        self.assertEqual(sd.case_counts(texts), {"spec-auditor": dict(named=1, of=2, runs=3, brief="the brief")})
+
+    def test_wilson_gives_the_interval_of_a_count(self):
+        self.assertEqual([round(x, 3) for x in sd.wilson(30, 44)], [0.534, 0.8])
+        self.assertEqual([round(x, 3) for x in sd.wilson(9, 21)], [0.245, 0.635])
+        self.assertEqual(sd.wilson(0, 0), (0.0, 1.0))
+
+    def test_the_page_and_the_counts_start_ci_and_the_drivers_reviewer_on_the_same_day(self):
+        import spec_drift_views
+        self.assertEqual((spec_drift_views.PRF_FROM, sd.PR_LAYERS_FROM), (16, 16))
+
 
 class RepoUrlTest(unittest.TestCase):
     """The page's source links name the repository it was built from, not a fixed one."""

@@ -1989,6 +1989,8 @@ GATE_KEYS = [
     "seen red",
     "break on purpose",
     "review",
+    "CI",
+    "driver reviewer",
     "work",
     "close",
     "rehearsal",
@@ -1997,7 +1999,8 @@ GATE_KEYS = [
     "Day review",
 ]
 OLD_DEMO = {
-    "caught": [1] * 12,
+    # the demo's Days end before Day 16, so CI and the driver's reviewer catch none of its defects
+    "caught": [1] * 6 + [0, 0] + [1] * 6,
     "layers": [2, 5, 2, 3],
     "per": {
         "auditor": "$2.40",
@@ -2007,9 +2010,45 @@ OLD_DEMO = {
     },
 }
 OLD_FIXTURE = {
-    "caught": [3, 0, 0, 1, 0, 0, 2, 0, 0, 1, 0, 1],
+    "caught": [3, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 1, 0, 1],
     "layers": [3, 3, 0, 2],
     "per": {"auditor": "$1.50"},
+}
+# never_found's figures for the metrics test's Days, written by hand with the keys the page reads
+PRF_NEVER = {
+    "left": 12,
+    "low": 4,
+    "high": 32,
+    "estimated": 2,
+    "exact": 2,
+    "catchable_from": 16,
+    "reviewer_from": 13,
+    "agents": [
+        {
+            "agent": "spec-auditor",
+            "estimated": True,
+            "caught": 31,
+            "named": 30,
+            "of": 44,
+            "hit_pct": 68,
+            "missed": 14,
+            "later": 4,
+            "left": 10,
+            "why": None,
+        },
+        {
+            "agent": "track-reviewer",
+            "estimated": True,
+            "caught": 4,
+            "named": 9,
+            "of": 21,
+            "hit_pct": 43,
+            "missed": 5,
+            "later": 3,
+            "left": 2,
+            "why": None,
+        },
+    ],
 }
 
 
@@ -2077,6 +2116,68 @@ class ProofreadingTest(unittest.TestCase):
         for k, want in cases.items():
             self.assertEqual(gate_of(k), want, f"found: {k}")
 
+    def test_ci_and_the_drivers_reviewer_are_gates_from_day_16_and_the_work_before(self):
+        gate_of = load("spec_drift_views", "spec_drift_views.py").gate_of
+        self.assertEqual(gate_of("CI"), "CI")
+        self.assertEqual(gate_of("driver reviewer"), "driver reviewer")
+        self.assertEqual(gate_of("ci", 16), "CI")
+        self.assertEqual(gate_of("Driver reviewer", 16), "driver reviewer")
+        self.assertEqual(gate_of("CI", 15), "work")
+        self.assertEqual(gate_of("driver reviewer", 15), "work")
+        self.assertEqual(gate_of("reviewer", 16), "work")
+
+    def test_the_stream_counts_ci_and_the_drivers_reviewer_as_gates_of_the_second_layer(self):
+        def defect(i, found):
+            return {
+                "id": i,
+                "found": found,
+                "cause": "process",
+                "made": None,
+                "same_as": None,
+                "problem": None,
+            }
+
+        data = prf_data()
+        data["days"] = [
+            {"day": 15, "status": "done", "defects": [defect("D15.1", "CI")]},
+            {
+                "day": 16,
+                "status": "done",
+                "defects": [
+                    defect("D16.1", "CI"),
+                    defect("D16.2", "driver reviewer"),
+                    defect("D16.3", "self"),
+                ],
+            },
+        ]
+        p = self.prf(data)
+        keys = [g["key"] for g in p["gates"]]
+        self.assertIn("CI", keys)
+        at = keys.index("CI")
+        self.assertEqual(keys[at - 1 : at + 3], ["review", "CI", "driver reviewer", "work"])
+        gates = {g["key"]: g for g in p["gates"]}
+        self.assertEqual(
+            [(gates[k]["layer"], gates[k]["caught"]) for k in ("CI", "driver reviewer")],
+            [(1, 1), (1, 1)],
+        )
+        self.assertEqual(gates["work"]["caught"], 2)
+        layer = next(x for x in p["layers"] if x["name"] == "While writing")
+        self.assertEqual((layer["caught"], layer["leak"], layer["gated"]), (4, 2, 2))
+        self.assertEqual((p["ci"]["from_day"], p["ci"]["caught"]), (16, 1))
+        self.assertEqual(gates["driver reviewer"]["none"], "none yet: on driver runs only")
+
+    def test_a_repeat_caught_by_ci_or_the_drivers_reviewer_is_caught_by_a_gate_before_the_close(
+        self,
+    ):
+        views = load("spec_drift_views", "spec_drift_views.py")
+        new = ["CI", "driver reviewer"]
+        self.assertEqual([k for k in new if k in views.LRN_GATED], new)
+
+    def test_the_stream_carries_the_estimate_of_defects_never_found(self):
+        never = {"left": 12, "low": 4, "high": 32}
+        self.assertEqual(self.prf(dict(prf_data(), never_found=never)).get("never"), never)
+        self.assertIsNone(self.prf(prf_data()).get("never"))
+
     def test_came_back_and_after_the_merge_are_two_sets_and_what_they_share_is_counted(self):
         m = self.prf(prf_data())["marks"]
         self.assertEqual((m["back"]["n"], m["after_merge"], m["shared"]), (2, 2, 1))
@@ -2087,7 +2188,7 @@ class ProofreadingTest(unittest.TestCase):
         for data in (prf_data(commit=None), prf_data(absent=["gates.json"])):
             p = self.prf(data)
             self.assertTrue("empty" in p, "the stream would be drawn")
-            self.assertEqual([g["cost"] for g in p["gates"]], [None] * 12)
+            self.assertEqual([g["cost"] for g in p["gates"]], [None] * 14)
             self.assertIsNone(p["hooks"])
         self.assertNotIn("empty", self.prf(prf_data(absent=["sessions.json"])))
 
@@ -2110,10 +2211,66 @@ class ProofreadingTest(unittest.TestCase):
         data = demo_data.demo()
         out, p = prf_node(data), data["proofreading"]
         guards = {r["guard"] for r in data["refusals"] if r["refused"]}
-        want = {"dots": p["total"], "grps": 12, "lays": 4, "hooks": len(guards), "marks": 2}
+        want = {"dots": p["total"], "grps": 14, "lays": 4, "hooks": len(guards), "marks": 2}
         self.assertEqual({k: out["prf"][k] for k in want}, want)
         self.assertEqual(p["total"], 12)
         self.assertEqual(out["onDay"], 1)  # it hooks into the page's Day buttons
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_past_every_layer_the_stream_says_the_estimate_and_its_range(self):
+        out = {
+            "agent": "plan-auditor",
+            "estimated": False,
+            "why": "no recorded count on known cases",
+        }
+        never = dict(PRF_NEVER, agents=[*PRF_NEVER["agents"], out])
+        words = prf_node(with_prf(dict(prf_data(), never_found=never)))["prf"]["words"]
+        for s in (
+            "about 12 never found",
+            "an estimate: 4 to 32",
+            "agents miss on faults known",
+            "About 12 were never found.",
+            "between 4 and 32",
+            "names 30 of 44 known faults at worst (68%)",
+            "missed about 14",
+            "later checks found 4 of them, which leaves about 10",
+            "names 9 of 21",
+            "The plan-auditor is not in it: no recorded count on known cases.",
+            "It leans high",
+            "is counted under each",
+            "(every line from Day 16), 2 so far",
+            "from Day 13 is the track-reviewer's",
+        ):
+            self.assertTrue(
+                s in words, s
+            )  # the words are 6,000 characters: the message names the one missing
+        self.assertNotIn("left in the count", words)
+        words = prf_node(
+            with_prf(dict(prf_data(), never_found=dict(PRF_NEVER, left=None, agents=[out])))
+        )["prf"]["words"]
+        for s in (
+            "never found: not estimated",
+            "What nobody found is not estimated.",
+            "The plan-auditor: no recorded count on known cases.",
+        ):
+            self.assertTrue(s in words, s)
+        self.assertNotIn("were never found.", words)
+        words = prf_node(with_prf(prf_data()))["prf"]["words"]
+        self.assertIn("never found: not estimated", words)
+        self.assertNotIn("What nobody found is not estimated.", words)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_stream_says_ci_is_a_gate_from_day_16(self):
+        words = prf_node(with_prf(prf_data()))["prf"]["words"]
+        said = "From Day 16 CI is a gate in the stream (found: CI in the Notes), with 0 so far"
+        self.assertTrue(said in words, said)
+        self.assertNotIn("CI is not in the stream", words)
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_an_empty_tray_of_the_drivers_reviewer_says_why(self):
+        words = prf_node(with_prf(prf_data()))["prf"]["words"]
+        for s in ("none yet: on driver runs only", "none in the Notes yet"):
+            self.assertTrue(s in words, s)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
     def test_the_stream_labels_came_back_and_after_the_merge_apart_and_says_what_they_share(self):
@@ -2146,7 +2303,7 @@ class ProofreadingTest(unittest.TestCase):
             self.assertIn("The error-correction stream is not drawn.", out["missing"])
             # graph 7 still puts each defect at its gate, with no gate's cost
             self.assertEqual(out["g7"]["phases"], OLD_FIXTURE["layers"])
-            self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 12)
+            self.assertEqual([g[2] for g in out["g7"]["gates"]], [None] * 14)
             self.assertFalse(any("run" in s for s in out["g7"]["subs"]), out["g7"]["subs"])
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")

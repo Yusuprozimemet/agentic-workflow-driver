@@ -199,7 +199,9 @@ again yourself before the PR. Before the breaks, send the track-reviewer again, 
 [Reviewing a track's diff](specs/README.md#reviewing-a-tracks-diff) and checks each claim of the
 PR against the diff (D11.30, D11.31). Then read the diff yourself: what it found is
 `found: track-reviewer`, what you find after it `found: review`. It is not the driver's reviewer
-(`rules/reviewer.md`), which reads the pull request once it is open.
+(`rules/reviewer.md`), which reads the pull request once it is open. From Day 16, a real fault a
+required check showed on the open pull request is `found: CI`, and a finding of the driver's
+reviewer you take is `found: driver reviewer`.
 
 Re-count any number the implementer reports (lines, tests, entries in a file) before it goes in
 a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.

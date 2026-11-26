@@ -729,10 +729,11 @@ def gate_report(days, gates, refused):
 # agent's reading of a track's brief and diff. Before the twelfth Day (specs/README.md), evidence replay named both
 # the close's rehearsal and the replay after its merge: those lines are read as "unsplit", not
 # rewritten. A value off the list is in no stage, and reported.
-STAGES = ("auditor", "spec-change PR", "track-reviewer", "seen red", "break on purpose", "review", "work", "close", "rehearsal",
-          "evidence replay", "unsplit", "dashboard", "Day review")
+STAGES = ("auditor", "spec-change PR", "track-reviewer", "seen red", "break on purpose", "review", "work", "CI",
+          "driver reviewer", "close", "rehearsal", "evidence replay", "unsplit", "dashboard", "Day review")
 EARLY = ("auditor", "spec-change PR")  # before any code: every other stage is a late catch
 SPLIT_FROM = 12
+PR_LAYERS_FROM = 16  # the Day from which CI and driver reviewer are found: values
 
 
 def found_stage(value, day):
@@ -744,14 +745,16 @@ def found_stage(value, day):
         return "Day review"
     if f == "evidence replay" and day < SPLIT_FROM:
         return "unsplit"
+    if f in ("ci", "driver reviewer") and day < PR_LAYERS_FROM:
+        return None
     return next((s for s in STAGES if s.lower() == f and s not in ("work", "unsplit", "Day review")), None)
 
 
 # The order a Day's layers run in, for catchable: (the earliest layer that could have caught a defect):
 # one rank for layers that run side by side.
 LAYER_RANK = {"auditor": 0, "spec-change PR": 0, "track-reviewer": 1, "seen red": 2, "work": 3, "review": 4,
-              "break on purpose": 4, "close": 5, "rehearsal": 6, "evidence replay": 7, "unsplit": 7,
-              "dashboard": 8, "Day review": 8}
+              "break on purpose": 4, "CI": 5, "driver reviewer": 5, "close": 6, "rehearsal": 7, "evidence replay": 8,
+              "unsplit": 8, "dashboard": 9, "Day review": 9}
 
 
 def catchable_counts(lines, day, stages):
@@ -803,6 +806,99 @@ def defect_count_line(c):
     return (f"defect counts: {c['defects']} over {c['criteria']} criteria ({c['per_criterion']} each), "
             f"{c['late']} caught late, {c['escapes']} escaped"
             + (f", rater agreed on cause {cause[0]} of {cause[1]}" if cause else ""))
+
+
+CASE_AGENTS = (("spec-auditor", "auditor"), ("track-reviewer", "track-reviewer"))  # the agent, and its stage
+CASES_DIR = "specs/agent-cases/"
+TRACK_REVIEWER_FROM = 13
+CATCHABLE_FROM = 16
+
+
+def wilson(k, n, z=1.96):
+    """The 95% Wilson interval of k of n, as (low, high), unrounded; (0.0, 1.0) when n is 0."""
+    if not n:
+        return 0.0, 1.0
+    p = k / n
+    den = 1 + z * z / n
+    mid = (p + z * z / (2 * n)) / den
+    half = z * (p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5 / den
+    return max(0.0, mid - half), min(1.0, mid + half)
+
+
+def case_counts(texts):
+    """{agent: dict(named, of, runs, brief)} from {agent: the text of its case set, or None}: `named`
+    is recorded.named, `of` the known faults over all its cases. An agent whose set is missing, is not
+    JSON, or has no recorded count is left out."""
+    out = {}
+    for agent, text in texts.items():
+        try:
+            data = json.loads(text) if text else None
+        except ValueError:
+            continue
+        rec = (data or {}).get("recorded") if isinstance(data, dict) else None
+        if not rec:
+            continue
+        out[agent] = dict(named=rec.get("named"), of=sum(len(c.get("known") or []) for c in data.get("cases") or []),
+                          runs=rec.get("runs"), brief=rec.get("brief"))
+    return out
+
+
+def never_found(days, cases):
+    """An estimate of the defects nobody found, from what each agent of CASE_AGENTS misses on its
+    known cases (`cases`, from case_counts)."""
+    half = lambda x: int(x + 0.5)  # noqa: E731
+    stage_of = dict((s, a) for a, s in CASE_AGENTS)
+    caught, later = collections.Counter(), collections.Counter()
+    found = exact = 0
+    for d in days:
+        for x in d.get("defects", []):
+            s = found_stage(x.get("found"), d["day"])
+            if s is None:
+                continue
+            found += 1
+            caught[s] += 1
+            whose = None
+            if x.get("catchable"):
+                could = found_stage(x["catchable"], d["day"])
+                agent = stage_of.get(could)  # matched first: a value off the list is nobody's, and no look-up
+                if agent and LAYER_RANK[could] < LAYER_RANK[s]:
+                    whose = agent
+                    exact += 1
+            elif s in EARLY:
+                pass
+            elif found_tag(x.get("cause")) == "spec":
+                whose = "spec-auditor"
+            elif d["day"] >= TRACK_REVIEWER_FROM and s != "track-reviewer":
+                whose = "track-reviewer"
+            later[whose] += 1
+    agents = []
+    for agent, stage in CASE_AGENTS:
+        a = dict(agent=agent, stage=stage, caught=caught[stage], later=later[agent])
+        c = cases.get(agent)
+        if c and c["named"] and c["of"]:
+            hit, (lo, hi) = c["named"] / c["of"], wilson(c["named"], c["of"])
+            scaled = lambda h: a["caught"] * (1 - h) / h  # noqa: E731
+            a.update(estimated=True, why=None, named=c["named"], of=c["of"], runs=c["runs"], brief=c["brief"],
+                     hit_pct=half(100 * hit), missed=half(scaled(hit)), left=half(max(0, scaled(hit) - a["later"])),
+                     low=half(max(0, scaled(hi) - a["later"])), high=half(max(0, scaled(lo) - a["later"])))
+        else:
+            why = ("no recorded count on known cases" if not c else "it has no known fault" if not c["of"]
+                   else "it names none of its known faults")
+            a.update(estimated=False, why=why, **dict.fromkeys(
+                ("named", "of", "runs", "brief", "hit_pct", "missed", "left", "low", "high")))
+        agents.append(a)
+    est = [a for a in agents if a["estimated"]]
+    total = {k: sum(a[k] for a in est) if est else None for k in ("left", "low", "high")}
+    return dict(agents=agents, found=found, exact=exact, **total, estimated=len(est),
+                catchable_from=CATCHABLE_FROM, reviewer_from=TRACK_REVIEWER_FROM)
+
+
+def never_found_line(n):
+    """The estimate's line on the console: the total, its range, and each estimated agent's part."""
+    if n["left"] is None:
+        return "never found: not estimated (" + "; ".join(f"{a['agent']}: {a['why']}" for a in n["agents"]) + ")"
+    return (f"never found: about {n['left']} ({n['low']} to {n['high']}), "
+            + ", ".join(f"{a['agent']} {a['left']}" for a in n["agents"] if a["estimated"]))
 
 
 # The phase-end table (scripts/phase-table.py): the gates it asks whether each found anything, and the
