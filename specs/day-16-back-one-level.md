@@ -34,7 +34,7 @@ Decided by the maintainer on 2026-11-25, on the spec-auditor's findings:
   without its entry check (P53). Track C makes it run as level 2 once the count is met.
 - Track A stays one pull request, with an `Oversized:` line.
 - The reviewer's new brief must meet a bar on `scripts/agent-cases.py`'s ten cases:
-  driver#214 and driver#250 each `blocker` with a blocker line naming the fault in at least 2 of 3
+  agentic-workflow-driver#214 and agentic-workflow-driver#250 each `blocker` with a blocker line naming the fault in at least 2 of 3
   runs, and bearing#153 and bearing#154 each `none` in at least 2 of 3.
 
 Chosen by the writer, for the spec-auditor and the maintainer to read:
@@ -74,6 +74,9 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
 - `level_2_refusals`, the level 2 merge and the waived checks go by the level in force, not
   `driver.json`'s, and apply when it is 2. A level in force of 3 runs as level 1 until Track C
   (`loop.py`'s three `config.get("level") == 2` tests become a test of the level in force `== 2`).
+  Until Track C, then, Track B lowers only from a level in force of 2: a level 3 run as level 1
+  lowered to 2 would merge without level 2's start checks. Track C extends the lowering to 3, so
+  C16.15's lowering halves stay red at Track C's start.
 - `tests/test_level_config.py`'s `BAD` message and `test_level_values` (C13.1's test, which
   expects 3 refused) are edited to C16.1's, and Day 13's break "C13.1: a level of 2.0 or True
   taken", whose find Track A rewrites, is retired in `specs/breaks/day-13.json`
@@ -81,19 +84,24 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
 
 **The escape (Track B; P54, N41).**
 - Only when `driver.json`'s level is 2 or 3: before each step, the run's first included, the
-  loop reads the `--out` JSON (`kit_lines`, as today) and takes its newest `days[]` entry whose
-  `status` is `done`. When no switch log `escapes` line names that Day, it is read: its escapes
-  are its `defects` whose `found`, lowered and stripped, is `close`, `dashboard` or
-  `evidence replay`, or fullmatches `day \d+ review`. The driver appends
-  `{"event": "escapes", "day": <n>, "found": [<ids>]}` (`at` aside; `found` may be empty), so a
-  Day is read once, whether its close was the night's last step, merged by the driver or merged
-  by hand. At `driver.json`'s level 1 nothing is read or written (C16.11).
-- When there is at least one and the level in force is 2 or 3, the driver appends, after the
-  `escapes` line, the lowering line with `level` one less, `from` the level in force and
-  `escapes` their `id`s in the JSON's order. It prints
+  loop reads the `--out` JSON (`kit_lines`, as today) and takes its finished `days[]` entries:
+  those whose `status` is `done` or `closed` (`spec_drift_specs.py:297` gives `closed` to a Day
+  closed with a box unticked, as this repository's Day 8). When the switch log has an `escapes`
+  line, every finished Day newer than the newest Day such a line names is read, oldest first, so
+  two Days finished between reads both count; when it has none (the first read), only the newest
+  finished Day is. Each Day read has its escapes: its `defects` whose `found`, lowered and
+  stripped, is `close`, `dashboard` or `evidence replay`, or fullmatches `day \d+ review`. For
+  each, the driver appends `{"event": "escapes", "day": <n>, "found": [<ids>]}` (`at` aside;
+  `found` may be empty), after the run's `on` line when the run writes one, so a Day is read
+  once, whether its close was the night's last step, merged by the driver or merged by hand. At
+  `driver.json`'s level 1 nothing is read or written (C16.11).
+- When the Days read hold at least one escape and the level in force is 2 or 3 (2 only, until
+  Track C), the driver appends, after the last `escapes` line, one lowering line with `level` one
+  less, `from` the level in force and `escapes` their `id`s in the JSON's order. It prints
   `level: lowered to <n> from <m> on an escape: <id>, <id>`, and runs that step at the new level.
-- A failed evidence run after a merge (`wait_evidence`'s `ended` line) at level 2 or 3 appends the
-  lowering line with `evidence` the commit, then prints
+- A failed evidence run after a merge (`wait_evidence`'s `ended` line), when the level in force
+  is 2 or 3 (2 only, until Track C), appends the lowering line with `evidence` the commit, then
+  prints
   `level: lowered to <n> from <m> on a failed evidence run of <sha7>` before the park line it
   prints today.
 - At `driver.json`'s level 2 or 3, a Day read whose Defect line has no `found` (the key absent
@@ -113,8 +121,8 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
 - `status.level_3_run(records, switches)` counts phases back from the run log's newest phase-end
   park. A phase-end park is a `park` record whose `line` matches
   `park: the end of Phase (.+?): Day \d+ starts Phase`; a phase-end park whose `line` equals the
-  previous phase-end park's (`on` run twice before the maintainer answers) is the same park and
-  is skipped. Its span runs from after the previous phase-end park (or the log's first record)
+  previous phase-end park's (written again when its issue could not be opened: `once.py:528-530`
+  writes no second park while the issue is open) is the same park and is skipped. Its span runs from after the previous phase-end park (or the log's first record)
   to it. A step start is a `start` record whose `prefix` is not `review`. A span counts when:
   - it holds at least one step start;
   - every step start in it has `level` 2 or 3 and `phase` whose `str()` equals the ended
@@ -150,7 +158,7 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
 - Track D records the count on the new brief with `agent-cases.py reviewer --record` (3 runs) and
   pastes its lines in the PR (CI's "A changed brief shows its case count"). It adds
   `{"pr": <its number>, "stops": ["D12.38", "D14.68"]}` to `specs/fixes.json`: the new rules are
-  aimed at those two defects (driver#214, driver#250).
+  aimed at those two defects (agentic-workflow-driver#214, agentic-workflow-driver#250).
 
 ## Out of scope
 - Starting the next phase at level 3 on the plan-auditor's verdict, and the verdict line — Day 17
@@ -248,25 +256,30 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track A: the switch log read at level 1 too (the brief names the find).
       Plan: none — level 1 has no lower level; this keeps level 1's start unchanged.
 - [ ] C16.7 **new** — `on` at level 2, set up as follows:
+      - before the close, the fake project's `--out` JSON has no finished Day (Day 1 `active`, as
+        `tests/test_dry_run.py`'s `drift_of` gives it), so the first step reads nothing;
       - the step is `day-23/close-the-day`'s, and the driver merges its pull request;
-      - after the merge, the fake project's `--out` JSON gives Day 23 the Defect lines D23.1
+      - after the merge, the JSON gives Day 23 the Defect lines D23.1
         (found `track-reviewer`), D23.4 (found `close`), D23.5 (found `Day 22 review`), D23.6
         (found `dashboard`) and D23.7 (found `Evidence replay `), and its `status` `done`;
       - the next step is Day 24's spec.
 
       Then `on`:
       - prints `level: lowered to 1 from 2 on an escape: D23.4, D23.5, D23.6, D23.7`;
-      - appends `{"event": "escapes", "day": 23, "found": ["D23.4", "D23.5", "D23.6", "D23.7"]}`,
+      - appends, after its `on` line,
+        `{"event": "escapes", "day": 23, "found": ["D23.4", "D23.5", "D23.6", "D23.7"]}`,
         then `{"event": "level", "level": 1, "from": 2, "escapes": ["D23.4", "D23.5", "D23.6", "D23.7"]}`;
       - starts the next step and does not merge its pull request (one `gh pr merge` in the run).
 
+      The same run with Day 23's `status` `closed` (a box left unticked) lowers the same way.
       Red today: no line, and two merges.
       Test: `EscapeTest.test_close_escape_lowers`.
       Its break, in Track B: `day \d+ review` dropped from the found pattern.
       Plan: P54 "a Defect line found at `close`, by the `dashboard` or in a `Day NN review`"; N41 "read from its `spec-drift.py --out` JSON as the next step is"
 - [ ] C16.8 **hold** — The same run with Day 23's Defect lines found `track-reviewer`, `auditor`,
       `seen red`, `break on purpose`, `review`, `Day 22 review of D23`, `spec-change PR`,
-      `Track A`, `self` and `rehearsal` writes no `level` line, prints no `level: lowered` line and
+      `Track A`, `self`, `rehearsal`, `CI` and `driver reviewer` (`specs/README.md`'s found values
+      since #300 to #302) writes no `level` line, prints no `level: lowered` line and
       merges both pull requests. True today: nothing lowers.
       Test: `EscapeTest.test_no_escape_no_change`.
       Its break, in Track B: `review` added to the escapes' found values.
@@ -279,7 +292,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       - appends `{"event": "level", "level": 1, "from": 2, "evidence": "<sha>"}`;
       - the next `on` prints
         `level: 1, lowered from 2 on a failed evidence run of <sha7>; run-steps.py raise lifts it`.
-      Red today: the park line only.
+
+      With `driver.json`'s level 2 and a level in force of 1 (C16.3's switch log), a merge by
+      hand whose evidence run ends `failure` appends no `level` line and prints only the park
+      line: there is no level 0. Red today: the park line only, in the first case.
       Test: `EscapeTest.test_failed_evidence_lowers`.
       Its break, in Track B: the lowering skipped when the line holds " ended `".
       Plan: P54 "or a failed evidence replay after a merge"
@@ -297,7 +313,8 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       line and prints no `level:` line, and so does the same run with Day 23's Defect lines
       without `found` (bearing's JSON): the run goes on to the next step. True today.
       Test: `EscapeTest.test_level_one_escape_changes_nothing`.
-      Its break, in Track B: the lowering's level-1 guard removed (the brief names the find).
+      Its break, in Track B: the read's guard (only when `driver.json`'s level is 2 or 3) removed,
+      so the JSON is read at level 1 and the run without `found` ends (the brief names the find).
       Plan: P54 "The driver goes back one level on an escape"
 - [ ] C16.12 **new** — At level 2, the step's start line carries `"level": 2` and `"phase"`: the
       Day's `phase` in the fake `--out` JSON. After the C16.7 lowering, the next step's start line
@@ -341,7 +358,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       - the next `on` prints `level: 2, lowered from 3 on an escape: D23.4, D23.5, D23.6, D23.7; run-steps.py raise lifts it`.
 
       Red today (at Track C's start): level 3 runs as level 1, so the driver does not merge the
-      close (one `gh pr merge`).
+      close (one `gh pr merge`), and Track B lowers from 2 only, so no lowering line is written.
       Test: `EscapeTest.test_level_three_lowers_to_two`.
       Its break, in Track C: level 3 run as level 1 again (Track C's `>= 2` put back to `== 2` in
       the merge's test; the brief names the find).
@@ -392,9 +409,15 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
         no `escapes` line; the next `on` prints
         `level: lowered to 1 from 2 on an escape: D23.4, D23.5, D23.6, D23.7` before its session,
         appends C16.7's two lines and does not merge;
-      - the same with the close merged by hand (the fake gives the close's `merged` with no `by`)
-        before an `on`: that `on` lowers the same way;
-      - a further `on` appends no second `escapes` line for Day 23.
+      - the same with the close merged by hand before an `on` (the fake gives the close's
+        `merged` with no `by`, `changed: false` and a pull request the container opened, so that
+        `status.level_2_run`, `status.py:449-452`, still counts it and level 2 starts): that
+        `on` lowers the same way;
+      - a further `on` appends no second `escapes` line for Day 23;
+      - with a switch log whose `escapes` line names Day 22, and Days 23 and 24 both `done` in the
+        JSON, Day 23's escapes D23.4 and Day 24's D24.2 (found `close`), the next `on` appends
+        `escapes` lines for Day 23 then Day 24 and one lowering line with
+        `"escapes": ["D23.4", "D24.2"]`.
 
       Red today: no line, and the `on` after the close merges its step.
       Test: `EscapeTest.test_close_read_at_next_on`.
@@ -420,7 +443,7 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
   replay, P54) is not `specs/README.md`'s escape (a Defect `made:` on an earlier Day, whatever
   its `found:`), nor the JSON's and the dashboard's "Escapes per day". It was the maintainer's
   choice of 2026-11-23: the two counts are not one.
-- The first `on` at level 2 or 3 after Track B reads the newest done Day, which no `escapes`
+- The first `on` at level 2 or 3 after Track B reads the newest finished Day, which no `escapes`
   line names yet, so a project whose last close had an escape starts one level lower.
 - Earlier Days' breaks whose finds the tracks rewrite, each re-recorded or retired in the track
   that rewrites it (`specs/README.md`, "Evidence at the close"):
@@ -430,9 +453,12 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
   - Track A, `driver/config.py`: "C13.1: a level of 2.0 or True taken" (Day 13), retired;
   - Track A, `run-steps.py`, beside the new `raise`: `status_extra["level"] = config.get("level", 1)`
     (C15.10) and `if args.project is None:` (Days 7 and 8);
-  - Track C, `driver/runlog.py`: `record["issue"] = issue` (Day 7);
+  - Track C, `driver/runlog.py`: `record["issue"] = issue` (Day 7's "start dropping the issue
+    it is given") and `"issue"] = issue` (Day 8's "start writing a null issue");
   - Track C, `driver/status.py`: `lines.append(_level_2(records))` (Day 14, and C15.16's
-    "a line put before the level 2 line").
+    "a line put before the level 2 line");
+  - Track C, `driver/loop.py`: its `>= 2` rewrites the finds Track A re-recorded with `== 2`
+    (Day 13's two, C15.9's) and Track A's own C16.3 break; Track C re-records them.
 - This PR retires Day 15's "a driver file outside the six edited (C15.16)" in
   `specs/breaks/day-15.json`, pinned at `8c94ed9`. Its diff against `11206ea` covers
   `driver/switchlog.py`, `driver/once.py`, `driver/switches.py` and `rules/reviewer.md`, which
@@ -466,3 +492,14 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.19 — found: auditor · cause: spec · made: Day 16 · earlier Days' breaks whose finds the tracks rewrite were not listed (fixed in this PR: Notes).
 - **Defect** D16.20 — found: auditor · cause: spec · made: Day 16 · Track D, aimed at D12.38 and D14.68, added no `specs/fixes.json` row (fixed in this PR: Track D's In scope).
 - **Defect** D16.21 — found: auditor · cause: spec · made: Day 16 · the bearing claims named no commit, and "until its kit does" was out of date: the kit writes `found` at `70fe106` (fixed in this PR: Out of scope, Assumed).
+- The spec-auditor's recheck of the 21 fixes (2026-11-26) made 10 findings, all taken (D16.22 to D16.31).
+- **Defect** D16.22 — found: auditor · cause: spec · made: Day 16 · the escape read took only Days with `status` `done`, so a Day closed with a box unticked, which `spec_drift_specs.py:297` gives `closed`, was never read (fixed in this PR: `done` or `closed`, a `closed` case in C16.7).
+- **Defect** D16.23 — found: auditor · cause: spec · made: Day 16 · C16.11's break removed a level-1 guard on the lowering, which cannot bite because nothing is read at level 1 (fixed in this PR: the read's guard is the break).
+- **Defect** D16.24 — found: auditor · cause: spec · made: Day 16 · only the newest finished Day was read, so of two Days finished between reads the older was lost (fixed in this PR: every finished Day newer than the newest one an `escapes` line names, newest only on the first read, a case in C16.20).
+- **Defect** D16.25 — found: auditor · cause: spec · made: Day 16 · C16.7 and C16.20 left the starting JSON open, so the first step could write an `escapes` line for another Day, and the hand-merge case's `merged` line would make `level_2_run` refuse `on` first (fixed in this PR: no finished Day at the start, `changed: false` and a container-opened pull request).
+- **Defect** D16.26 — found: auditor · cause: spec · made: Day 16 · between Tracks A and C a level 3 run as level 1 would be lowered to 2 and merge without level 2's start checks (fixed in this PR: Track B lowers only from 2, Track C extends it to 3, C16.15's red restated).
+- **Defect** D16.27 — found: auditor · cause: spec · made: Day 16 · the failed-evidence lowering said "at level 2 or 3" of `driver.json`, so a level in force of 1 would write level 0 (fixed in this PR: the level in force, a case in C16.9 that writes nothing).
+- **Defect** D16.28 — found: auditor · cause: spec · made: Day 16 · C16.8's non-escapes left out `CI` and `driver reviewer`, found values since #300 to #302 (fixed in this PR).
+- **Defect** D16.29 — found: auditor · cause: spec · made: Day 16 · the Notes' list of rewritten finds left out Track C's `>= 2` over Track A's re-recorded and own breaks, and Day 8's "start writing a null issue" (fixed in this PR: Notes).
+- **Defect** D16.30 — found: auditor · cause: spec · made: Day 16 · the spec did not say where the `escapes` line goes, and `tests/test_level_2_start.py`'s `first_switch` reads line 0 as the `on` line (fixed in this PR: after the `on` line).
+- **Defect** D16.31 — found: auditor · cause: spec · made: Day 16 · a repeated phase-end park was said to come from `on` run twice, which `once.py:528-530` does not do while the issue is open, and two references read `driver#214` (fixed in this PR: the reason restated, `agentic-workflow-driver#214`).
