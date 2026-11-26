@@ -722,6 +722,80 @@ function model(DATA) {
     const P = DATA.proofreading;
     return P && (P.gates || []).length ? P : { empty: "no defect is counted yet, so there is no stream to draw." };
   }
+  /* Graph 7's other view, one Day opened: counted in scripts/spec_drift_views.py (one_day); here the words each mark is
+     read out with. A defect no step can take stands in an arc of its own, and so does one caught after the Day. */
+  function oneGraph() {
+    const O = DATA.one_day;
+    if (!O || !(O.days || []).length) return { empty: "no Day has a spec yet, so there is no Day to open." };
+    const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many || one + "s"}`, list = a => a.filter(Boolean);
+    const rewrites = Object.fromEntries((Array.isArray(DATA.criteria_index) ? DATA.criteria_index : []).map(c => [c.id, c.replaces || []]));
+    const WHAT = { audit: "The auditors read the Day's spec against the code, before any work.",
+      none: `These lines name who found the defect, not the step it was caught at. A Defect line names its step from Day ${O.from_day}.`,
+      after: "Caught after the Day closed, by the dashboard or by a later Day's review." };
+    const days = O.days.map(day => {
+      const T = day.totals || {};
+      const steps = (day.steps || []).map(s => Object.assign({}, s, { prs: s.prs || [], title: plain(s.title),
+        subs: (s.subs || []).map(k => ({ key: k, label: (ONE_SUB[k] || [k])[0], long: (ONE_SUB[k] || [k, k])[1], short: (ONE_SUB[k] || [])[2] || null })) }));
+      const real = new Set(steps.map(s => s.key));
+      const defects = (day.defects || []).map(f => Object.assign({}, f, { step: f.step === "after" ? "after" : real.has(f.step) ? f.step : "none" }));
+      const criteria = (day.criteria || []).map(c => Object.assign({}, c, { step: real.has(c.step) ? c.step : "none" }));
+      const extra = (key, name) => steps.push({ key, name, kind: key, prs: [], date: null, title: "", subs: [] });
+      if (defects.some(f => f.step === "none") || criteria.some(c => c.step === "none")) extra("none", "Step not recorded");
+      if (defects.some(f => f.step === "after")) extra("after", "After the Day");
+      const specs = steps.filter(s => s.kind === "spec").length, by = Object.fromEntries(steps.map(s => [s.key, s]));
+      steps.forEach(s => {
+        const mine = defects.filter(f => f.step === s.key), crit = criteria.filter(c => c.step === s.key), again = mine.filter(f => f.same).length;
+        const split = s.subs.map(u => [mine.filter(f => f.sub === u.key).length, u.long]).filter(([k]) => k).map(([k, l]) => `${k} at ${l}`);
+        const pending = ["spec", "code", "close"].includes(s.kind) && !s.prs.length;
+        s.the = s.kind === "audit" ? "the audit" : s.kind === "close" ? "the close" : s.kind === "spec" ? (specs > 1 ? s.name.toLowerCase() : "the spec change") : s.name;
+        s.short = s.kind === "code" ? s.key : s.kind === "spec" ? `Spec${s.key.slice(4) ? ` ${s.key.slice(4)}` : ""}` : s.kind === "none" ? "No step" : s.kind === "after" ? "After" : s.name;
+        s.caught = mine.length;
+        s.note = mine.length ? `${mine.length} caught` : pending ? (finished(day) ? "no pull request" : "not started") : s.kind === "none" ? "" : "none caught";
+        s.head = list([s.name, s.prs.map(p => `#${p}`).join(", "), s.date && shortDate(s.date)]).join(" · ");
+        s.lines = list([(s.kind === "none" && !mine.length ? "No track and no pull request names these promises." : WHAT[s.kind]) || s.title
+            || (pending ? (finished(day) ? "No pull request: the Day closed without one." : "Not started: no pull request yet.") : ""),
+          s.kind === "none" ? (mine.length ? `${n(mine.length, "defect")} of this Day with no step to stand at.` : "")
+            : mine.length ? `${n(mine.length, "defect")} caught ${s.kind === "after" ? "after the Day" : "here"}${split.length ? `: ${split.join(", ")}` : ""}.`
+              : pending ? "" : "No defect was caught at this step.",
+          again ? `${again} of them ${again === 1 ? "repeats" : "repeat"} an earlier defect.` : "",
+          crit.length ? `${n(crit.length, "promise")} of the spec ${s.kind === "none" ? "that no track or pull request names" : pending ? "to build here" : "built here"}, ${crit.filter(c => c.state === "proven").length} proved: ${crit.map(c => c.id).join(", ")}.` : ""]);
+      });
+      defects.forEach(f => {
+        const s = by[f.step], u = s.subs.find(q => q.key === f.sub), placed = s.kind !== "none" && s.kind !== "after";
+        f.sub = u ? u.key : null;
+        f.mark = CAUSES.includes(f.cause) ? f.cause : "other";
+        f.head = `${f.id} · ${s.kind === "none" ? "step not recorded" : s.kind === "after" ? "caught after the Day" : `caught at ${u && u.key !== s.kind ? `${u.long} of ${s.the}` : s.the}`} · found by ${f.found}`;
+        f.lines = list([`Cause: ${f.cause}${f.same ? ` · it repeats ${f.same}` : ""}`, placed && f.by === "found" ? "Placed by who found it: its line names no step." : "", plain(f.text)]);
+      });
+      criteria.forEach(c => {
+        c.rewrites = rewrites[c.id] || [];
+        c.head = `${c.id} · ${c.tag} · ${PRT_SAYS[c.state] || c.state}`;
+        c.lines = list([c.rewrites.length ? `It rewrites ${c.rewrites.join(", ")}.` : "", c.back ? "It stopped holding once, and holds again." : "", plain(c.quote)]);
+      });
+      const agents = (day.agents || []).map(a => Object.assign({}, a, { covers: a.covers || [],
+        head: `${a.name} · ${n(a.replies, "reply", "replies")} · ${money(a.cost)} over the whole Day`,
+        lines: [`${String(a.does).charAt(0).toUpperCase()}${String(a.does).slice(1)}.`, (a.covers || []).length
+          ? "The band marks the steps this agent works on by its role. Its replies and dollars are not split by step."
+          : "It has no band: its role belongs to no one step of a Day."] }));
+      const dates = [...new Set(steps.map(s => s.date).filter(Boolean))].sort();
+      const when = !dates.length ? "not started" : dates.length === 1 ? shortDate(dates[0]) : `${shortDate(dates[0])} to ${shortDate(dates[dates.length - 1])}`;
+      const proved = criteria.filter(c => c.state === "proven").length, count = k => defects.filter(f => f.step === k).length;
+      const merged = k => steps.filter(s => s.kind === k && s.prs.length), todo = k => steps.filter(s => s.kind === k && !s.prs.length).length;
+      const specPrs = merged("spec").reduce((a, s) => a + s.prs.length, 0), coming = list([todo("code") && n(todo("code"), "track"), todo("close") && "the close"]).join(" and ");
+      const figs = [
+        [String(T.prs || 0), T.prs === 1 ? "pull request merged" : "pull requests merged",
+          list([list([specPrs && n(specPrs, "spec change"), merged("code").length && n(merged("code").length, "track"), merged("close").length && "the close"]).join(", "), coming && `${coming} ${finished(day) ? "with no pull request" : "still to come"}`]).join("; ")],
+        [String(defects.length), defects.length === 1 ? "defect caught" : "defects caught",
+          list([`${count("audit")} by the audit, before any code`, merged("close").length && `${count("close")} at the close`, count("none") && `${count("none")} at no recorded step`, count("after") && `${count("after")} after the Day`]).join("; ")],
+        [String(proved), proved === 1 ? "promise proved" : "promises proved", `of ${criteria.length} in the spec: ${T.new || 0} new, ${T.hold || 0} that already held`],
+        [money(T.cost || 0), `across ${n(agents.length, "kind")} of session`, "API list prices, not a bill"]].map(([num, what, sub]) => ({ num, what, sub }));
+      return { day: day.day, title: plain(day.title), open: !finished(day), when, steps, defects, criteria, agents, figs,
+        centre: [`Day ${day.day}`, when, `${defects.length} caught · ${proved} proved`],
+        start: { head: list([`Day ${day.day}`, dates.length && when, !finished(day) && (dates.length ? "still open" : "not started")]).join(" · "),
+          lines: [`${n(T.prs || 0, "pull request")}, ${n(defects.length, "defect")} caught, ${n(proved, "promise")} proved, ${money(T.cost || 0)} at list price.`, "Point at a step, a dot, a band or a square."] } };
+    });
+    return { head: O.head, last_pr: O.last_pr, generated: O.generated, from_day: O.from_day, pick: days.some(d => d.day === current) ? current : days[days.length - 1].day, days };
+  }
   /* Graph 8 as an energy budget and graph 9 as growth rings: counted in scripts/spec_drift_views.py (budget, rings).
      The budget is `empty` with the data branch or its token-usage.json missing, where no bead is drawn. */
   function atpGraph() {
@@ -893,7 +967,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
+    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -2428,6 +2502,9 @@ const PRT_MARK = { proven: ["proved", 13], unproven: ["unproved", 11.4], skipped
 const PRT_SAYS = { proven: "holds, and a break on purpose proved its test", unproven: "holds, never seen to fail", skipped: "the replay cannot run its check",
   repair: "its recorded break no longer applies", broken: "does not hold", replaced: "replaced by a later promise", open: "written, not built",
   building: "not yet in force: its Day is still being built", unchecked: "in force, not re-checked yet" };
+/* Graph 7's other view, one Day opened. A sub-step's word on the ring, in a sentence, and on an arc too short for the first. */
+const ONE_SUB = { audit: ["audit", "the audit"], recheck: ["recheck", "a recheck"], brief: ["brief", "the brief"], build: ["build", "the build"], diff: ["diff", "the diff"],
+  pr: ["pull request", "the open pull request", "PR"], rehearsal: ["rehearsal", "the rehearsal"], replay: ["replay", "the evidence replay"] };
 // a chain folded into rows `span` wide: each cell's row and its place along the row; a new Day leaves a wider gap
 function prtFold(cells, span) {
   const out = []; let row = 0, u = 0;
@@ -2934,6 +3011,258 @@ function prfDraw(P, get, onDay) {
   // the page's Day buttons dim every other Day's dots
   onDay.push(day => dotEls.forEach(x => x && x.b.classList.toggle("mk-dim", day != null && x.o.day !== day)));
   return fig;
+}
+
+// angles are in degrees, clockwise from the top
+function onePolar(cx, cy) {
+  const f1 = v => v.toFixed(1), pt = (r, a) => { const t = a * Math.PI / 180; return [cx + r * Math.sin(t), cy - r * Math.cos(t)]; };
+  const arc = (r, a, b) => { const p = pt(r, a), q = pt(r, b); return `M${f1(p[0])} ${f1(p[1])}A${r} ${r} 0 ${b - a > 180 ? 1 : 0} 1 ${f1(q[0])} ${f1(q[1])}`; };
+  const cra = (r, a, b) => { const p = pt(r, b), q = pt(r, a); return `M${f1(p[0])} ${f1(p[1])}A${r} ${r} 0 ${b - a > 180 ? 1 : 0} 0 ${f1(q[0])} ${f1(q[1])}`; };
+  const band = (r0, r1, a, b) => { const q = pt(r0, b); return `${arc(r1, a, b)}L${f1(q[0])} ${f1(q[1])}${cra(r0, a, b).replace(/^M[^A]+/, "")}Z`; };
+  return { pt, arc, cra, band, f1 };
+}
+/* How much of the Day's length each step takes, and each sub-step of its step: every sub-step a least width, a step
+   wide enough for its defects in five rows and its promises in two, and what is left shared out by sub-steps. In
+   degrees of the ring (296 less a 3 degree gap between steps); the shares add up to 1, so the strand uses them too. */
+function oneLayout(day) {
+  const T = 296 - 3 * (day.steps.length - 1), UNIT = 9, DOT = 2.64, SQ = 8.2;
+  const need = day.steps.map(s => {
+    const mine = day.defects.filter(f => f.step === s.key), keys = s.subs.length ? s.subs.map(u => u.key) : [null];
+    const subs = keys.map(k => Math.max(UNIT, Math.ceil(mine.filter(f => f.sub === k).length / 5) * DOT + 1));
+    const loose = mine.filter(f => !keys.includes(f.sub)).length, crit = day.criteria.filter(c => c.step === s.key).length;
+    return { subs, all: Math.max(subs.reduce((a, b) => a + b, 0), Math.ceil(loose / 5) * DOT + 1, Math.ceil(crit / 2) * SQ + 2) };
+  });
+  const total = need.reduce((a, x) => a + x.all, 0), units = need.reduce((a, x) => a + x.subs.length, 0), spare = Math.max(0, T - total);
+  return need.map(x => { const sum = x.subs.reduce((a, b) => a + b, 0);
+    return { share: (total > T ? x.all * T / total : x.all + spare * x.subs.length / units) / T, subs: x.subs.map(v => v / sum) }; });
+}
+/* Which of a step's sub-steps an agent works on, by its role (`covers`: pairs of a step's kind and a sub-step, "*" for any).
+   Where the Day records none of the sub-steps the role names, the band takes the whole step. */
+function oneCovers(agent, step) {
+  const units = step.subs.length ? step.subs.map(u => u.key) : [null];
+  if (step.kind === "none" || step.kind === "after") return units.map(() => false);
+  const want = agent.covers.filter(([k]) => k === "*" || k === step.kind).map(([, u]) => u);
+  if (!want.length) return units.map(() => false);
+  const hit = units.map(k => want.includes("*") || want.includes(k));
+  return hit.some(Boolean) ? hit : units.map(() => true);
+}
+// n marks in rows across `room`: each mark's row, and its offset from the middle of its row
+function onePack(n, room, pitch) {
+  const per = Math.max(1, Math.floor(room / pitch));
+  return Array.from({ length: n }, (_, i) => { const row = Math.floor(i / per), inRow = Math.min(per, n - row * per); return { row, off: ((i % per) - (inRow - 1) / 2) * pitch }; });
+}
+
+// Graph 7's two views: every Day as one stream, or one Day opened. The switch works where either cannot be drawn.
+function prfViews(get) {
+  const all = get("prf-v-all"), one = get("prf-v-one");
+  const show = v => { all.setAttribute("aria-pressed", !v); one.setAttribute("aria-pressed", v); get("prf-all").hidden = v; get("one").hidden = !v; };
+  all.addEventListener("click", () => show(false));
+  one.addEventListener("click", () => show(true));
+}
+
+/* Graph 7's other view: one Day as rings, its steps the coloured ring read clockwise from the top, what each caught
+   outside it, who worked and the promises built inside; or the same Day as a flat strand, left to right. Both share
+   their widths out by oneLayout, and every mark reads out its words from the model in the one readout. */
+function oneDraw(O, get, onDay) {
+  const $ = id => get("one-" + id), out = $("out"), pick = $("pick");
+  const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
+  const say = x => out.replaceChildren(h("strong", "", x.head), ...x.lines.map(l => h("span", "", l)));
+  const hot = (node, x, stop) => {
+    node.setAttribute("tabindex", stop ? "0" : "-1"); node.setAttribute("role", "img"); node.setAttribute("aria-label", x.head);
+    ["mouseenter", "focus", "click"].forEach(t => node.addEventListener(t, () => say(x)));
+    return node;
+  };
+  // the arrow keys walk a list of marks; Tab goes from the first of one list to the first of the next
+  const walk = nodes => nodes.forEach((node, i) => node.addEventListener("keydown", e => {
+    const to = e.key === "ArrowRight" || e.key === "ArrowDown" ? i + 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? i - 1 : -1;
+    if (to < 0 || to >= nodes.length) return;
+    e.preventDefault();
+    nodes[to].focus();
+  }));
+  const units = s => s.subs.length ? s.subs : [{ key: null, label: "", long: "", short: null }];
+  // a step's defects in rows over its sub-steps (`us`: each `{ u, lo, hi }`), then those no sub-step takes over the whole step
+  const stack = (day, s, us, room, pitch) => {
+    const mine = day.defects.filter(f => f.step === s.key), dots = [];
+    let rows = 0;
+    us.forEach(({ u, lo, hi }) => {
+      const list = mine.filter(f => f.sub === u.key);
+      onePack(list.length, room(lo, hi), pitch).forEach((p, i) => { dots.push({ f: list[i], row: p.row, mid: (lo + hi) / 2, off: p.off }); rows = Math.max(rows, p.row + 1); });
+    });
+    const keys = us.map(x => x.u.key), loose = mine.filter(f => !keys.includes(f.sub)), lo = us[0].lo, hi = us[us.length - 1].hi, base = rows;
+    onePack(loose.length, room(lo, hi), pitch).forEach((p, i) => { dots.push({ f: loose[i], row: base + p.row, mid: (lo + hi) / 2, off: p.off }); rows = Math.max(rows, base + p.row + 1); });
+    return { dots, rows };
+  };
+  const lanes = day => day.agents.filter(a => a.covers.length);
+  // each agent's runs of covered sub-steps, as [from, to] in the drawing's units; a run goes on across the gap between steps
+  const runs = (ag, at) => {
+    const found = [];
+    let run = null;
+    at.forEach(x => { const hit = oneCovers(ag, x.s); x.us.forEach((v, j) => { if (!hit[j]) run = null; else if (run) run[1] = v.hi; else found.push(run = [v.lo, v.hi]); }); });
+    return found;
+  };
+
+  const ring = day => {
+    const svg = $("rfig"), el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
+    svg.replaceChildren();
+    const A0 = 32, GA = 3, T = 296 - GA * (day.steps.length - 1), R = 250, PITCH = 11.5, RAD = 180 / Math.PI;
+    const lay = oneLayout(day), room = (lo, hi) => (hi - lo - 1) / RAD * R;
+    let a = A0;
+    const at = day.steps.map((s, i) => {
+      const a0 = a, w = lay[i].share * T;
+      let b = a0;
+      const us = units(s).map((u, j) => { const lo = b; b += lay[i].subs[j] * w; return { u, lo, hi: b }; });
+      a = a0 + w + GA;
+      return { s, a0, a1: a0 + w, us, st: stack(day, s, us, room, PITCH) };
+    });
+    const far = Math.max(...at.map(x => R + x.st.rows * PITCH)) + 14, W = 2 * (far + 118), H = 2 * (far + 58), cx = W / 2, cy = H / 2, labels = [];
+    const Q = onePolar(cx, cy), f1 = Q.f1, defs = el("defs", {});
+    svg.setAttribute("viewBox", `0 0 ${f1(W)} ${f1(H)}`);
+    svg.setAttribute("aria-label", `Day ${day.day} as rings`);
+    const name = (r, word, cls) => { const p = Q.pt(r, A0); el("text", { x: f1(p[0] - 8), y: f1(p[1] + 3.5), "text-anchor": "end", class: cls }, word); };
+
+    lanes(day).forEach((ag, i) => {
+      const r = 192 - i * 14;
+      el("path", { d: Q.arc(r, A0, 328), class: "track" });
+      walk(runs(ag, at).map((q, k) => hot(el("path", { d: Q.arc(r, q[0] + .6, q[1] - .6), class: `arcband${ag.agent === "main" ? " main" : ""}` }), ag, !k)));
+      name(r, ag.name, "t-lane");
+    });
+    [[256, "caught"], [222, "the steps"], [98, "promises"]].forEach(([r, word]) => name(r, word, "t-sec"));
+
+    at.forEach(({ s, a0, a1, us, st }, si) => {
+      const mid = (a0 + a1) / 2, g = el("g", { class: "step" });
+      el("path", { d: Q.band(208, 236, a0, a1), class: `st ${s.kind}` }, null, g);
+      us.slice(1).forEach(v => { const p = Q.pt(229, v.lo), q = Q.pt(236, v.lo); el("line", { x1: f1(p[0]), y1: f1(p[1]), x2: f1(q[0]), y2: f1(q[1]), class: `notch ${s.kind}` }, null, g); });
+      us.forEach((v, ui) => {
+        const fits = (v.hi - v.lo) / RAD * 222 - 6, word = [v.u.label, v.u.short].find(w => w && w.length * 5 <= fits);
+        if (!word) return;
+        const m = (v.lo + v.hi) / 2, id = `one-arc-${si}-${ui}`;
+        // below the middle the word runs the other way round, so it is never upside down
+        el("path", { id, d: m > 90 && m < 270 ? Q.cra(225.5, v.lo, v.hi) : Q.arc(218.5, v.lo, v.hi) }, null, defs);
+        el("textPath", { href: `#${id}`, startOffset: "50%", "text-anchor": "middle" }, word, el("text", { class: `t-arc ${s.kind}` }, null, g));
+      });
+      hot(g, s, true);
+      const dots = st.dots.map(({ f, row, mid: m, off }) => {
+        const r = R + row * PITCH, p = Q.pt(r, m + off / r * RAD), c = hot(el("circle", { cx: f1(p[0]), cy: f1(p[1]), r: 4.3, class: `df c-${f.mark}` }), f);
+        if (f.same) el("circle", { cx: f1(p[0]), cy: f1(p[1]), r: 1.7, class: "pip" });
+        return c;
+      });
+      const crit = day.criteria.filter(c => c.step === s.key);
+      const squares = onePack(crit.length, (a1 - a0 - 1) / RAD * 91, 13).map((p, i) => {
+        const c = crit[i], r = 104 - p.row * 13, an = mid + p.off / r * RAD, q = Q.pt(r, an);
+        return hot(el("rect", { x: f1(q[0] - 5.5), y: f1(q[1] - 5.5), width: 11, height: 11, rx: 2.5, transform: `rotate(${f1(an)} ${f1(q[0])} ${f1(q[1])})`,
+          class: `ct ${c.state}${c.rewrites.length ? " rw" : ""}` }), c);
+      });
+      walk([g, ...dots, ...squares]);
+      // the step's name outside its dots; where two names would meet, the later one moves a line further out, twice at most
+      const sn = Math.sin(mid / RAD), cs = Math.cos(mid / RAD), wide = Math.max(s.name.length * 6.3, (s.note || "").length * 5) + 6;
+      const boxAt = (p, how) => { const y = p[1] + (cs < -.5 ? 12 : cs > .5 ? -8 : 2), x0 = how === "start" ? p[0] : how === "end" ? p[0] - wide : p[0] - wide / 2; return [x0, y - 11, x0 + wide, y + 17]; };
+      const meets = b => labels.some(o => b[0] < o[2] && o[0] < b[2] && b[1] < o[3] && o[1] < b[3]), how = sn > .25 ? "start" : sn < -.25 ? "end" : "middle";
+      const out = [0, 13, 26].find(d => !meets(boxAt(Q.pt(R + st.rows * PITCH + 12 + d, mid), how))), lp = Q.pt(R + st.rows * PITCH + 12 + (out == null ? 26 : out), mid);
+      labels.push(boxAt(lp, how));
+      const anchor = sn > .25 ? "start" : sn < -.25 ? "end" : "middle", ly = lp[1] + (cs < -.5 ? 12 : cs > .5 ? -8 : 2);
+      el("text", { x: f1(lp[0]), y: f1(ly), "text-anchor": anchor, class: "t-count" }, s.name);
+      if (s.note) el("text", { x: f1(lp[0]), y: f1(ly + 13), "text-anchor": anchor, class: "t-sec" }, s.note);
+    });
+    [[-2, "t-big"], [16, "t-sec"], [34, "t-num"]].forEach(([dy, cls], i) => el("text", { x: f1(cx), y: f1(cy + dy), "text-anchor": "middle", class: cls }, day.centre[i]));
+  };
+
+  const strand = day => {
+    const svg = $("fig"), el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
+    svg.replaceChildren();
+    const X0 = 190, X1 = 1060, GAP = day.steps.length > 10 ? 8 : 14, W = X1 - X0 - GAP * (day.steps.length - 1), lay = oneLayout(day), room = (lo, hi) => hi - lo - 2;
+    let x = X0;
+    const at = day.steps.map((s, i) => {
+      const x0 = x, w = lay[i].share * W;
+      let b = x0;
+      const us = units(s).map((u, j) => { const lo = b; b += lay[i].subs[j] * w; return { u, lo, hi: b }; });
+      x = x0 + w + GAP;
+      return { s, x0, w, us, st: stack(day, s, us, room, 12) };
+    });
+    const yb = Math.max(104, 44 + Math.max(0, ...at.map(q => q.st.rows)) * 12), band = lanes(day), yc = yb + 120 + band.length * 21;
+    const first = (words, room, per) => words.find(w => w && w.length * per <= room);
+    let deep = 0;
+    [["What each step caught", yb - 30], ["The Day's steps", yb + 18], ["Who worked", yb + 101], ["What came out", yc + 10]].forEach(([t, y]) => el("text", { x: 0, y, class: "t-row" }, t));
+    el("rect", { x: X0 - 12, y: yb + 11, width: X1 - X0 + 24, height: 6, rx: 3, class: "tube" });
+    el("path", { d: `M${X1 + 13} ${yb + 6}l10 8l-10 8z`, class: "tube-end" });
+
+    at.forEach(({ s, x0, w, us, st }) => {
+      const cx = x0 + w / 2, g = el("g", { class: "step" });
+      el("rect", { x: x0.toFixed(1), y: yb, width: w.toFixed(1), height: 28, rx: 6, class: `st ${s.kind}` }, null, g);
+      us.slice(1).forEach(v => el("line", { x1: v.lo.toFixed(1), x2: v.lo.toFixed(1), y1: yb + 21, y2: yb + 28, class: `notch ${s.kind}` }, null, g));
+      const word = first([s.name, s.short], w - 6, 6.8);
+      if (word) el("text", { x: cx.toFixed(1), y: yb + 18, "text-anchor": "middle", class: `t-step ${s.kind}` }, word, g);
+      hot(g, s, true);
+      // a step too narrow for its name inside has it underneath, in its one sub-step's place
+      const under = !word && us.length === 1 ? first([s.short], w + GAP - 2, 5) : null;
+      if (under) el("text", { x: cx.toFixed(1), y: yb + 43, "text-anchor": "middle", class: "t-sec" }, under);
+      else us.forEach(v => { const t = first([v.u.label, v.u.short], v.hi - v.lo, 5); if (t) el("text", { x: ((v.lo + v.hi) / 2).toFixed(1), y: yb + 43, "text-anchor": "middle", class: "t-sec" }, t); });
+      const prs = s.prs.map(p => `#${p}`).join(", "), when = [prs, s.date && shortDate(s.date)].filter(Boolean).join(" · ");
+      const stamp = first([when, prs], w, 6.2);
+      if (stamp) el("text", { x: cx.toFixed(1), y: yb + 59, "text-anchor": "middle", class: "t-num" }, stamp);
+      // the words over a step are left out where they would run into the next step's: the number alone, or nothing
+      const over = s.caught ? first([s.note, String(s.caught)], w + GAP - 2, 6.4) : first([s.note], w + GAP - 2, 5);
+      if (over && s.caught) el("text", { x: cx.toFixed(1), y: yb - 12 - (st.rows - 1) * 12 - 12, "text-anchor": "middle", class: "t-count" }, over);
+      else if (over) el("text", { x: cx.toFixed(1), y: yb - 9, "text-anchor": "middle", class: "t-sec" }, over);
+      const dots = st.dots.map(({ f, row, mid, off }) => {
+        const dx = (mid + off).toFixed(1), dy = yb - 12 - row * 12, c = hot(el("circle", { cx: dx, cy: dy, r: 4.3, class: `df c-${f.mark}` }), f);
+        if (f.same) el("circle", { cx: dx, cy: dy, r: 1.7, class: "pip" });
+        return c;
+      });
+      const crit = day.criteria.filter(c => c.step === s.key), per = Math.max(1, Math.floor(w / 15)), rows = Math.ceil(crit.length / per);
+      const squares = crit.map((c, i) => {
+        const row = Math.floor(i / per), inRow = Math.min(per, crit.length - row * per), sx = cx - (inRow - 1) * 15 / 2 + (i % per) * 15 - 6;
+        return hot(el("rect", { x: sx.toFixed(1), y: yc + row * 15, width: 12, height: 12, rx: 2.5, class: `ct ${c.state}${c.rewrites.length ? " rw" : ""}` }), c);
+      });
+      if (crit.length) {
+        const ok = crit.filter(c => c.state === "proven").length;
+        const said = first(ok === crit.length ? [`${ok} proved`] : [`${ok} of ${crit.length} proved`, `${ok} of ${crit.length}`], w + GAP - 2, 5);
+        if (said) el("text", { x: cx.toFixed(1), y: yc + rows * 15 + 12, "text-anchor": "middle", class: "t-sec" }, said);
+      }
+      deep = Math.max(deep, rows);
+      walk([g, ...dots, ...squares]);
+    });
+
+    el("text", { x: 1078, y: yb + 101, class: "t-sec" }, "the whole Day, at list price");
+    band.forEach((ag, i) => {
+      const y = yb + 120 + i * 21;
+      el("line", { x1: X0, x2: X1, y1: y, y2: y, class: "lane" });
+      el("text", { x: 178, y: y + 4, "text-anchor": "end", class: "t-lane" }, ag.name);
+      walk(runs(ag, at).map((q, k) => hot(el("rect", { x: (q[0] + 1).toFixed(1), y: y - 6, width: Math.max(1, q[1] - q[0] - 2).toFixed(1), height: 12, rx: 3,
+        class: `band${ag.agent === "main" ? " main" : ""}` }), ag, !k)));
+      el("text", { x: 1078, y: y + 4, class: "t-num" }, `${comma(ag.replies)} ${ag.replies === 1 ? "reply" : "replies"} · ${money(ag.cost)}`);
+    });
+    svg.setAttribute("viewBox", `0 0 1250 ${yc + deep * 15 + 34}`);
+    svg.setAttribute("aria-label", `Day ${day.day}, step by step`);
+  };
+
+  let shown = O.pick;
+  const draw = () => {
+    const day = O.days.find(d => d.day === shown) || O.days[O.days.length - 1];
+    $("figs").replaceChildren(...day.figs.map(f => { const d = h("div"); h("div", "num", f.num, d); h("div", "what", f.what, d); h("div", "sub", f.sub, d); return d; }));
+    const row = (cells, tag) => { const tr = h("tr"); cells.forEach((c, i) => h(tag, i ? "r" : "", c, tr)); return tr; };
+    $("who").replaceChildren(row(["Who worked", "replies", "list price"], "th"), ...day.agents.map(a => row([a.name, comma(a.replies), money(a.cost)], "td")));
+    ring(day);
+    strand(day);
+    say(day.start);
+    pick.value = String(day.day);
+  };
+  pick.replaceChildren(...O.days.map(d => {
+    const t = `Day ${d.day}: ${d.title}`, o = h("option", "", t.length > 58 ? `${t.slice(0, 57)}…` : t);
+    o.value = String(d.day);
+    return o;
+  }));
+  pick.addEventListener("change", () => { shown = Number(pick.value); draw(); });
+  // a page Day button that names a Day of the list opens it; "All Days" leaves the Day as it is
+  onDay.push(day => { if (day != null && O.days.some(d => d.day === day)) { shown = day; draw(); } });
+  const as = rings => {
+    $("v-ring").setAttribute("aria-pressed", rings); $("v-strand").setAttribute("aria-pressed", !rings);
+    $("ring").hidden = !rings; $("strand").hidden = rings;
+    $(rings ? "ring-slot" : "strand-slot").appendChild(out);
+  };
+  $("v-ring").addEventListener("click", () => as(true));
+  $("v-strand").addEventListener("click", () => as(false));
+  $("stamp").textContent = `Drawn from the page's data at ${O.head || "?"}${O.last_pr ? ` (#${O.last_pr})` : ""}, generated ${O.generated} · a Defect line names its step from Day ${O.from_day}; on an earlier Day a defect stands where its finder puts it, or at no step`;
+  draw();
 }
 
 /* Graph 8 as an energy budget: one bead for each $2 of tokens at list prices, in a column for each Day beside the
@@ -3891,6 +4220,14 @@ function draw(M, DATA) {
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
     else try { fn(g, $, onDay, onDate); } catch (e) { failed(String((e && e.message) || e)); }
+  });
+  // graph 7's other view, one Day opened; its switch is wired even where one of the two views cannot be drawn
+  prfViews($);
+  [["one", oneDraw]].forEach(([k, fn]) => {
+    const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
+    if (g.error) failed(g.error);
+    else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
+    else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   });
   // graph 11 as reflex arcs: its Days are the driven project's, so it takes no Day button
   [["rfx", rfxDraw]].forEach(([k, fn]) => {

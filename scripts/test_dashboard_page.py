@@ -1650,6 +1650,181 @@ class LearnPageTest(unittest.TestCase):
         self.assertIn("empty", model(data())["lrn"])
 
 
+def one_day_key():
+    """Graph 7's One Day as spec_drift_views.one_day() writes it: Day 6 with one spec change and nothing else, and Day 7
+    still open, its close not started, with a defect at each kind of place and a promise no step names."""
+    def step(key, name, kind, prs=(), date=None, title="", subs=()):
+        return dict(key=key, name=name, kind=kind, prs=list(prs), date=date, title=title, subs=list(subs))
+
+    def defect(n, at, sub=None, by="at", found="auditor", cause="spec", same=None):
+        return dict(id=f"D07.{n}", found=found, cause=cause, same=same, text=f"problem `{n}`", step=at, sub=sub, by=by)
+
+    def criterion(n, at, state, tag):
+        return dict(id=f"C07.{n}", day=7, tag=tag, state=state, back=False, gone=False, quote=f"claim {n}", step=at)
+
+    def agent(key, name, does, covers, replies, cost):
+        return dict(agent=key, name=name, does=does, replies=replies, cost=cost, covers=covers)
+
+    def totals(**t):
+        return dict(dict(prs=0, new=0, hold=0, ticked=0, cost=0, replies=0, defects=0, placed=0, no_step=0, after=0), **t)
+
+    six = dict(day=6, title="Day 6: `thing`", status="done", steps=[step("spec", "Spec change", "spec", [3], "2026-11-01", "Day 06 spec change")],
+               defects=[], criteria=[], agents=[], totals=totals(prs=1))
+    seven = dict(
+        day=7, title="Day 7: `thing`", status="active",
+        steps=[step("audit", "Audit", "audit", subs=["audit", "recheck"]),
+               step("spec", "Spec change", "spec", [5], "2026-11-02", "Day 07 spec change: `x`", ["pr"]),
+               step("A", "Track A", "code", [6], "2026-11-03", "Day 07 track A: it runs", ["brief", "build", "diff", "pr"]),
+               step("close", "Close", "close", subs=["rehearsal", "pr", "replay"])],
+        defects=[defect(1, "audit", "audit"), defect(2, "audit", "audit", same="D03.4"), defect(3, "audit", by="found"),
+                 defect(4, "A", "diff", found="track-reviewer", cause="implementation"),
+                 defect(5, None, by="found", found="self", cause="process"), defect(6, "after", by="found", found="dashboard")],
+        criteria=[criterion(1, "A", "proven", "new"), criterion(2, "A", "unproven", "hold"), criterion(3, None, "building", "new")],
+        agents=[agent("main", "main session", "writes the specs and the briefs", [["*", "*"]], 40, 2.5),
+                agent("track-reviewer", "track-reviewer", "reads each track's brief and diff", [["code", "brief"], ["code", "diff"]], 10, 0.5),
+                agent("Explore", "Explore", "searches the code", [], 3, 0.1)],
+        totals=totals(prs=2, new=2, hold=1, ticked=1, cost=3.1, replies=53, defects=6, placed=4, no_step=1, after=1))
+    return dict(head="abc1234", last_pr=9, generated="2026-11-26", from_day=7, problems=[], no_step=dict(lines=0, of=0, ids=[]),
+                days=[six, seven])
+
+
+# prfViews() and oneDraw() on the model of the data from stdin, on a document that keeps every node and each node's
+# listeners: what Day 7's rings and strand drew, then Day 6's after its page button, then what the two switches show.
+ONE = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", on: {},
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
+  addEventListener(type, fn) { this.on[type] = fn; }, focus() {} };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
+const $ = id => els[id] || (els[id] = node(id));
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `;(() => {
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  const is = (root, c) => all(root).filter(e => has(e, c)).length;
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ").replace(/\\s+/g, " ").trim();
+  const marks = (id, band) => ({ st: is($(id), "st"), df: is($(id), "df"), pip: is($(id), "pip"), ct: is($(id), "ct"), band: is($(id), band) });
+  const days = [];
+  oneDraw(model(DATA).one, $, days);
+  prfViews($);
+  const seven = { ring: marks("one-rfig", "arcband"), strand: marks("one-fig", "band"), who: $("one-who").kids.filter(k => k.tag === "tr").length,
+    figs: words($("one-figs")), out: words($("one-out")), pick: $("one-pick").value };
+  days.forEach(f => f(6));
+  const six = { ring: marks("one-rfig", "arcband"), pick: $("one-pick").value };
+  $("prf-v-one").on.click();
+  const views = { all: $("prf-all").hidden, one: $("one").hidden };
+  $("one-v-strand").on.click();
+  return { seven, six, views, ring: $("one-ring").hidden, strand: $("one-strand").hidden }; })()`, ctx)));
+"""
+
+# oneLayout(), oneCovers() and onePack() on Day 7 of the model of the data from stdin.
+ONE_LAYOUT = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `;(() => {
+  const day = model(DATA).one.days.find(d => d.day === 7), sum = a => a.reduce((x, y) => x + y, 0);
+  const at = k => day.steps.find(s => s.key === k), agent = k => day.agents.find(a => a.agent === k);
+  const more = Object.assign({}, day, { defects: day.defects.concat(Array.from({ length: 60 }, (_, i) => ({ id: "X" + i, step: "audit", sub: "audit" }))) });
+  const lay = oneLayout(day), wide = oneLayout(more);
+  return { total: sum(lay.map(x => x.share)).toFixed(6), subs: lay.map(x => sum(x.subs).toFixed(6)), wider: wide[0].share > lay[0].share,
+     track: oneCovers(agent("track-reviewer"), at("A")), audit: oneCovers(agent("track-reviewer"), at("audit")),
+     build: oneCovers(agent("track-reviewer"), { kind: "code", subs: [{ key: "build" }] }), none: oneCovers(agent("main"), at("none")),
+     rows: onePack(5, 30, 12).map(p => p.row) }; })()`, ctx)));
+"""
+
+
+class OneDayPageTest(unittest.TestCase):
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def drawn(self, harness, data):
+        """node on the harness; a script that throws fails the test with its error's line, not a path or the harness."""
+        run = subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True, encoding="utf-8")
+        self.assertEqual((run.returncode, re.findall(r"(?m)^\w*Error: .*$", run.stderr)[:1]), (0, []))
+        return json.loads(run.stdout)
+
+    def test_one_day_reads_each_step_defect_and_promise_out_in_words(self):
+        one = model(data(one_day=one_day_key(), criteria_index=[promise("C07.1", replaces=["C03.2"])]))["one"]
+        # the data's current Day, 3, is not a Day of the key, so the newest is picked
+        self.assertEqual(one["pick"], 7)
+        self.assertEqual([d["day"] for d in one["days"]], [6, 7])
+        day = one["days"][1]
+        steps = {s["key"]: s for s in day["steps"]}
+        self.assertEqual([s["key"] for s in day["steps"]], ["audit", "spec", "A", "close", "none", "after"])
+        self.assertEqual(steps["A"]["head"], "Track A · #6 · 3 Nov")
+        self.assertEqual(steps["A"]["lines"], ["Day 07 track A: it runs", "1 defect caught here: 1 at the diff.",
+                                               "2 promises of the spec built here, 1 proved: C07.1, C07.2."])
+        self.assertEqual(steps["audit"]["lines"][1:], ["3 defects caught here: 2 at the audit.", "1 of them repeats an earlier defect."])
+        self.assertEqual(steps["close"]["note"], "not started")
+        defects = {f["id"]: f for f in day["defects"]}
+        self.assertEqual([defects[i]["head"] for i in ("D07.4", "D07.1", "D07.5", "D07.6")],
+                         ["D07.4 · caught at the diff of Track A · found by track-reviewer", "D07.1 · caught at the audit · found by auditor",
+                          "D07.5 · step not recorded · found by self", "D07.6 · caught after the Day · found by dashboard"])
+        self.assertEqual(defects["D07.3"]["lines"], ["Cause: spec", "Placed by who found it: its line names no step.", "problem 3"])
+        criteria = {c["id"]: c for c in day["criteria"]}
+        self.assertEqual(criteria["C07.1"]["head"], "C07.1 · new · holds, and a break on purpose proved its test")
+        self.assertEqual(criteria["C07.1"]["lines"], ["It rewrites C03.2.", "claim 1"])
+        self.assertEqual([(f["num"], f["what"], f["sub"]) for f in day["figs"]],
+                         [("2", "pull requests merged", "1 spec change, 1 track; the close still to come"),
+                          ("6", "defects caught", "3 by the audit, before any code; 1 at no recorded step; 1 after the Day"),
+                          ("1", "promise proved", "of 3 in the spec: 2 new, 1 that already held"),
+                          ("$3.10", "across 3 kinds of session", "API list prices, not a bill")])
+        self.assertEqual(day["start"]["head"], "Day 7 · 2 Nov to 3 Nov · still open")
+
+    def test_one_day_opens_on_the_current_day_and_a_closed_day_is_neither_open_nor_to_come(self):
+        shut = one_day_key()
+        shut["days"][1]["status"] = "closed"
+        one = model(data(one_day=shut, now=dict(data()["now"], current_day=6)))["one"]
+        self.assertEqual(one["pick"], 6)
+        day = one["days"][1]
+        self.assertEqual(day["start"]["head"], "Day 7 · 2 Nov to 3 Nov")
+        self.assertEqual(day["figs"][0]["sub"], "1 spec change, 1 track; the close with no pull request")
+        close = next(s for s in day["steps"] if s["key"] == "close")
+        self.assertEqual((close["note"], close["lines"][0]), ("no pull request", "No pull request: the Day closed without one."))
+        # an open Day's step with no pull request has its promises still to build; the arc of no step says what it holds
+        key = one_day_key()
+        key["days"][1]["criteria"][0]["step"] = "close"
+        key["days"][1]["defects"] = [f for f in key["days"][1]["defects"] if f["step"] is not None]
+        steps = {s["key"]: s for s in model(data(one_day=key))["one"]["days"][1]["steps"]}
+        self.assertEqual(steps["close"]["lines"][-1], "1 promise of the spec to build here, 1 proved: C07.1.")
+        self.assertEqual(steps["none"]["lines"][0], "No track and no pull request names these promises.")
+
+    def test_one_day_draws_the_same_marks_as_rings_and_as_a_strand_and_turns_to_a_pressed_day(self):
+        out = self.drawn(ONE, data(one_day=one_day_key()))
+        # six steps (the four of the Day, an arc for no step and one for after the Day), six defects, one a repeat, and
+        # three promises; main's band is one run over the four real steps, the track-reviewer's two (brief, diff), and
+        # Explore, whose role belongs to no step, gets no lane
+        self.assertEqual(out["seven"]["ring"], dict(st=6, df=6, pip=1, ct=3, band=3))
+        self.assertEqual(out["seven"]["strand"], dict(st=6, df=6, pip=1, ct=3, band=3))
+        self.assertEqual(out["seven"]["who"], 4)
+        self.assertIn("6 defects caught 3 by the audit, before any code", out["seven"]["figs"])
+        self.assertIn("Day 7 · 2 Nov to 3 Nov · still open", out["seven"]["out"])
+        self.assertEqual(out["seven"]["pick"], "7")
+        self.assertEqual(out["six"], dict(ring=dict(st=1, df=0, pip=0, ct=0, band=0), pick="6"))
+        self.assertEqual((out["views"], out["ring"], out["strand"]), (dict(all=True, one=False), True, False))
+
+    def test_one_day_shares_the_ring_by_what_each_step_holds_and_bands_an_agent_by_its_role(self):
+        out = self.drawn(ONE_LAYOUT, data(one_day=one_day_key()))
+        self.assertEqual(out["total"], "1.000000")
+        self.assertEqual(out["subs"], ["1.000000"] * 6)
+        self.assertTrue(out["wider"], "sixty more defects on the audit widen its arc")
+        self.assertEqual((out["track"], out["audit"]), ([True, False, True, False], [False, False]))
+        # the Day records neither the brief nor the diff of this track, so the track-reviewer's band takes all of it
+        self.assertEqual((out["build"], out["none"]), ([True], [False]))
+        self.assertEqual(out["rows"], [0, 0, 1, 1, 2])
+
+    def test_one_day_without_the_key_says_so_under_not_measured(self):
+        self.assertIn("empty", model(data())["one"])
+        out = boot(data())
+        self.assertIsNone(out["error"])
+        self.assertEqual([e for e in out["logged"] if e.startswith("one:")], [])
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
@@ -1862,6 +2037,25 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r'<script src="([^"]+)"', html), ["dashboard.js"])
         self.assertEqual([h for h in re.findall(r'<link rel="stylesheet" href="([^"]+)"', html) if not h.startswith("https://fonts.googleapis.com/")],
                          ["dashboard.css"])
+
+    def test_graph_7_opens_one_day_beside_its_stream_from_a_key_the_page_data_holds(self):
+        html = read("index.html")
+        want = ['id="prf-v-all"', 'id="prf-v-one"', 'id="prf-all"', 'id="one" hidden', 'id="one-pick"', 'id="one-rfig"', 'id="one-fig"',
+                'id="one-out" aria-live="polite"', 'id="one-who"']
+        # the first one missing, so that the failure stays short
+        self.assertEqual([w for w in want if w not in html][:1], [])
+        # the page wires the switch and draws the view when it boots: the drawing tests call both by hand
+        wired = ["prfViews($);", '[["one", oneDraw]]']
+        self.assertEqual([w for w in wired if w not in read("dashboard.js")][:1], [])
+        section = re.search(r'<section class="graph" id="prf"[ >].*?</section>', html, re.S)
+        self.assertIsNotNone(section)
+        self.assertTrue('<div id="one" hidden>' in section.group(0), "#one stands inside graph 7's section")
+        # the key is written into the page's data, by the real build and by the demo's
+        written = []
+        for name in ("spec-drift.py", "demo-data.py"):
+            with open(os.path.join(HERE, name), encoding="utf-8") as f:
+                written.append('["one_day"] = one_day(' in f.read())
+        self.assertEqual(written, [True, True])
 
 
 if __name__ == "__main__":

@@ -519,8 +519,15 @@
     <div class="graph-head">
       <p class="graph-n">Graph 7 · drawn as error correction; the old graph 7 is folded below</p>
       <h2>Does the checking work, and is it worth it?</h2>
-      <p class="graph-say">One stream of defects, thinning left to right at each layer of checking; a dot under a layer is one defect caught there.</p>
     </div>
+    <div class="vsw">
+      <div class="mseg" role="group" aria-label="Which Days">
+        <button type="button" id="prf-v-all" aria-pressed="true">All Days</button>
+        <button type="button" id="prf-v-one" aria-pressed="false">One Day</button>
+      </div>
+    </div>
+    <div id="prf-all">
+      <p class="graph-say">One stream of defects, thinning left to right at each layer of checking; a dot under a layer is one defect caught there.</p>
     <div class="figs" id="prf-figs"></div>
     <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="9" height="9" viewBox="-4.5 -4.5 9 9" aria-hidden="true"><circle class="c-spec" r="4"/></svg>A defect</span><span><svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true"><circle class="rg" r="5.6"/><circle class="c-other" r="3.4"/></svg>Its marks</span><span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect class="flow" width="26" height="12"/></svg>The stream</span><span><svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true"><rect class="hbar" width="26" height="8" rx="1.5"/></svg>Beside the stream</span></p>
     <details class="exact mock-key"><summary>Key, and how to read it</summary>
@@ -546,6 +553,59 @@
         <div><h3>Where the model bends</h3><ul class="plain" id="prf-bends"></ul></div>
       </div></div>
     </details>
+    </div>
+    <div id="one" hidden>
+      <p class="graph-say">One Day, from its audit to its close. The coloured ring is the Day's steps, read clockwise from the top. Outside it is what each step caught. Inside it is who worked on each step and, innermost, the promises the step built. The strand draws the same Day flat.</p>
+      <div class="octl">
+        <label for="one-pick">Day</label>
+        <select id="one-pick"></select>
+        <span>Draw it as</span>
+        <div class="mseg" role="group" aria-label="How to draw the Day">
+          <button type="button" id="one-v-ring" aria-pressed="true">Rings</button>
+          <button type="button" id="one-v-strand" aria-pressed="false">Strand</button>
+        </div>
+      </div>
+      <div class="figs" id="one-figs"></div>
+      <details class="exact mock-key"><summary>Key, and how to read it</summary>
+      <div><dl class="lg">
+        <dt>The steps</dt>
+        <dd><span><svg width="22" height="12" aria-hidden="true"><rect class="st audit" x=".6" y=".6" width="20.8" height="10.8" rx="3"/></svg>reading only, no pull request</span>
+          <span><svg width="22" height="12" aria-hidden="true"><rect class="st spec" width="22" height="12" rx="3"/></svg>a spec pull request</span>
+          <span><svg width="22" height="12" aria-hidden="true"><rect class="st code" width="22" height="12" rx="3"/></svg>a code pull request</span>
+          <span><svg width="22" height="12" aria-hidden="true"><rect class="st close" x="1" y="1" width="20" height="10" rx="3"/></svg>the close</span>
+          <span><svg width="22" height="12" aria-hidden="true"><rect class="st none" x=".6" y=".6" width="20.8" height="10.8" rx="3"/></svg>no step: the Notes do not say where a defect was caught, or it was caught after the Day; a promise no track names stands here too</span></dd>
+        <dt>Defects</dt>
+        <dd><span><svg width="10" height="10" aria-hidden="true"><circle class="df c-spec" cx="5" cy="5" r="4.3"/></svg>the spec was wrong</span>
+          <span><svg width="10" height="10" aria-hidden="true"><circle class="df c-process" cx="5" cy="5" r="4.3"/></svg>the way of working was wrong</span>
+          <span><svg width="10" height="10" aria-hidden="true"><circle class="df c-implementation" cx="5" cy="5" r="4.3"/></svg>the code was wrong</span>
+          <span><svg width="10" height="10" aria-hidden="true"><circle class="df c-environment" cx="5" cy="5" r="4.3"/></svg>the machine or a tool was wrong</span>
+          <span><svg width="10" height="10" aria-hidden="true"><circle class="df c-process" cx="5" cy="5" r="4.3"/><circle class="pip" cx="5" cy="5" r="1.7"/></svg>pale centre: it repeats an earlier defect</span></dd>
+        <dt>Who worked</dt>
+        <dd><span><svg width="26" height="12" aria-hidden="true"><rect class="band" width="26" height="12" rx="3"/></svg>the steps that agent works on, placed by its role, not by the clock</span></dd>
+        <dt>Promises</dt>
+        <dd><span><svg width="12" height="12" aria-hidden="true"><rect class="ct proven" width="12" height="12" rx="2.5"/></svg>holds, its test proved by a break on purpose</span>
+          <span><svg width="14" height="14" aria-hidden="true"><rect class="ct unproven" x="1" y="1" width="12" height="12" rx="2.5"/></svg>holds, never seen to fail</span>
+          <span><svg width="14" height="14" aria-hidden="true"><rect class="ct building" x="1" y="1" width="12" height="12" rx="2.5"/></svg>not built yet</span>
+          <span><svg width="14" height="14" aria-hidden="true"><rect class="ct replaced" x="1" y="1" width="12" height="12" rx="2.5"/></svg>replaced by a later promise</span>
+          <span><svg width="12" height="12" aria-hidden="true"><rect class="ct skipped" width="12" height="12" rx="2.5"/></svg>the replay cannot run its check</span>
+          <span><svg width="14" height="14" aria-hidden="true"><rect class="ct proven rw" x="1" y="1" width="12" height="12" rx="2.5"/></svg>dark edge: it rewrites an earlier promise</span></dd>
+      </dl>
+      <p class="hint">Point at a step, a dot, a band or a square. With the keyboard, Tab moves from step to step and the arrow keys walk a step's dots and squares.</p>
+      <p class="stamp" id="one-stamp"></p></div>
+      </details>
+      <div class="duo" id="one-ring">
+        <div class="scroll" id="one-scroll"><svg class="rfig" id="one-rfig" role="group"></svg></div>
+        <div class="side">
+          <div id="one-ring-slot"><div class="readout tall" id="one-out" aria-live="polite"></div></div>
+          <table class="who" id="one-who"></table>
+          <p class="note">Replies and dollars are each agent's total for the Day, at API list prices. A band places an agent by its role, not by the clock.</p>
+        </div>
+      </div>
+      <div id="one-strand" hidden>
+        <div class="scroll"><svg class="sfig" id="one-fig" role="group"></svg></div>
+        <div id="one-strand-slot"></div>
+      </div>
+    </div>
     <div id="prf-tip" hidden></div>
   </section>
 

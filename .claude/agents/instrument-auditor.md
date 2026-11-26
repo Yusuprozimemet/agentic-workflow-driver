@@ -135,6 +135,16 @@ with sync_playwright() as p:
         click(page, page.query_selector("#g8-key button:has-text('By who')"))
     else:
         views.append("g8-byday: NOT FOUND")
+    one_day = page.query_selector("#prf-v-one")
+    if one_day:
+        click(page, one_day)
+        shot(page, "#one", "g7-one-ring", "(One Day, rings)")
+        click(page, page.query_selector("#one-v-strand"))
+        shot(page, "#one", "g7-one-strand", "(One Day, strand)")
+        click(page, page.query_selector("#one-v-ring"))
+        click(page, page.query_selector("#prf-v-all"))
+    else:
+        views.append("g7-one: NOT FOUND")
     for i in range(len(page.query_selector_all("#g12 .pc-chip"))):
         chip = page.query_selector_all("#g12 .pc-chip")[i]
         label = chip.inner_text().strip().replace("\n", " ")
@@ -213,6 +223,7 @@ a box that is cut off or overlaps is a finding.
 | 18 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
 | 19 | What these figures cannot see; Not measured yet | `page-NN` |
 | 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
+| 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 
