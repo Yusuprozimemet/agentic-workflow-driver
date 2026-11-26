@@ -98,6 +98,20 @@ class CloseViewsTest(unittest.TestCase):
         self.assertIn("\n0: all 2 are `made: Day 45`\n", out)
         self.assertIn("- Escapes: none\n", out)
 
+    def test_an_at_field_keeps_the_cause_after_it(self):
+        text = """## Notes
+
+- **Defect** D46.1 — found: track-reviewer · at: Track A brief · cause: process · made: Day 46 ·
+  catchable: auditor · the brief named the wrong file (#1).
+"""
+        rows = close_views.read(text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0].get("cause"), rows[0].get("catchable")), ("process", "auditor"))
+        self.assertEqual(rows[0]["text"], "the brief named the wrong file (#1).")
+        code, out = self.run_on(text, "day-46-c.md")
+        self.assertEqual(code, 0)
+        self.assertIn("  Causes: process 1.", out)
+
     def test_no_defect_line(self):
         code, out = self.run_on("## Notes\n\n- nothing found.\n", "day-46-c.md")
         self.assertEqual(code, 1)

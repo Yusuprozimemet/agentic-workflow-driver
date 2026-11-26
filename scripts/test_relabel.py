@@ -127,6 +127,18 @@ class EntriesTest(unittest.TestCase):
                          open(os.path.join(out, "blind.md"), encoding="utf-8").read())
         self.assertEqual(("close", "auditor"), (rows[0]["found"], rows[0]["catchable"]))
 
+    def test_the_blind_file_holds_no_at(self):
+        # at: names the step the defect was caught at, which the rater would read as its stage.
+        _, path = write_spec("## Notes\n- **Defect** D16.1 — found: track-reviewer · at: Track A brief · "
+                             "cause: process · made: Day 16 · catchable: auditor · the brief named the wrong "
+                             "file (#1).\n")
+        out = tempfile.mkdtemp()
+        rows = relabel.blind([path], out)
+        text = open(os.path.join(out, "blind.md"), encoding="utf-8").read()
+        self.assertEqual(1, len(rows))
+        self.assertEqual(("Track A brief", "process"), (rows[0].get("at", "<no at>"), rows[0]["cause"]))
+        self.assertEqual((False, False), ("at:" in text, "Track A brief" in text))
+
 
 class CompareTest(unittest.TestCase):
     def setUp(self):

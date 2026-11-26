@@ -41,7 +41,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 - **Assumed** — <what the spec takes `gh`, `git`, the CLI or the system to do>: `<the command
   that shows it>` → <what it printed, and the version> | not run: <who runs it, before which track>.
 - **Defect** DNN.1 — found: <auditor | spec-change PR | track-reviewer | review | seen red | break on purpose | self |
-  Track X | CI | driver reviewer | close | evidence replay | dashboard | Day NN review> · cause: <spec | implementation | process | environment> ·
+  Track X | CI | driver reviewer | close | evidence replay | dashboard | Day NN review> ·
+  at: <audit | recheck | spec-change PR | Track X brief | Track X build | Track X diff | Track X PR | close | rehearsal | replay> ·
+  cause: <spec | implementation | process | environment> ·
   made: <Day NN | none> · catchable: <the earliest found: value that could have caught it> ·
   [same-as: <the earlier Defect's ID, e.g. D21.2> ·] <one problem: what
   was wrong, and the PR that fixed it>.

@@ -4018,6 +4018,249 @@ class LearningTest(unittest.TestCase):
         self.assertEqual([s for r in rows for s in r["stops"] if s not in ids], [])
 
 
+def one_day_data():
+    """Four Days. Day 11, before the split, has only a close. Day 15 has a spec, Track A, a close and a
+    late spec, ten lines found as older Notes write them and one at: before Day 16. Day 16 has a spec,
+    Track A in two parts, Track B with no PR and no close yet, and lines placed by at:. Day 17 has no
+    PR, one at: naming a step it lacks, and a plan-auditor's row."""
+
+    def row(pr, day, branch, kind):
+        return {"pr": pr, "own_day": day, "branch": branch, "kind": kind, "date": f"d{pr}"}
+
+    def defect(i, found, at=None, text=""):
+        return {"id": i, "found": found, "at": at, "cause": "spec", "same_as": None, "text": text}
+
+    def crit(i, day, tag, ticked, track=None, prs=()):
+        return {"id": i, "day": day, "tag": tag, "ticked": ticked, "track": track, "prs": list(prs),
+                "plain": f"plain {i}"}  # fmt: skip
+
+    def tokens(agent, day, replies, cost, part="day"):
+        return {"agent": agent, "part": part, "part_day": day, "replies": replies, "cost": cost}
+
+    found15 = ["auditor", "The auditor (spec-auditor)", "spec-change PR", "Track A1", "track-reviewer",
+               "evidence replay", "Day 16 review", "dashboard", "Track B"]  # fmt: skip
+    day16 = [("auditor", None), ("auditor", "recheck"), ("track-reviewer", "Track A1 brief"),
+             ("CI", "Track A PR"), ("review", "Track B diff"), ("self", None), ("review", "lunch"),
+             ("seen red", "Track C build"), ("rehearsal", "rehearsal"), ("close", "replay"),
+             ("dashboard", None)]  # fmt: skip
+    defects16 = [defect(f"D16.{n}", f, a) for n, (f, a) in enumerate(day16, 1)]
+    defects16[5]["text"] = "x" * 300
+    return {
+        "now": {"head": "ghijklmnop", "last_pr": 62},
+        "days": [
+            {"day": "x", "defects": [defect("DX.1", "auditor")]},
+            {
+                "day": 11,
+                "title": "eleven",
+                "status": "done",
+                "tracks": [],
+                "defects": [defect("D11.1", "evidence replay"), defect("D11.2", "close")],
+            },
+            {
+                "day": 15,
+                "title": "fifteen",
+                "status": "done",
+                "tracks": ["A"],
+                "defects": [defect(f"D15.{n}", f) for n, f in enumerate(found15, 1)]
+                + [defect("D15.10", "auditor", "recheck")],
+            },
+            {
+                "day": 16,
+                "title": "sixteen",
+                "status": "active",
+                "tracks": ["A", "B"],
+                "defects": defects16,
+            },
+            {
+                "day": 17,
+                "title": "seventeen",
+                "status": "pending",
+                "tracks": ["A"],
+                "defects": [defect("D17.1", "self", "spec-change PR")],
+            },
+        ],
+        "rows": [
+            row(40, 11, "day-11/close-the-day", "close"),
+            row(50, 15, "day-15/spec-x", "spec"),
+            row(51, 15, "day-15/track-a-x", "code"),
+            row(52, 15, "day-15/close-the-day", "close"),
+            row(53, 15, "day-15/spec-late", "spec"),
+            row(60, 16, "day-16/spec-y", "spec"),
+            row(61, 16, "day-16/track-a1-y", "code"),
+            row(62, 16, "day-16/track-a2-y", "code"),
+            row(70, None, "dashboard/x", "other"),
+        ],
+        "criteria_index": [
+            crit("C15.1", 15, "new", True, "A", [50]),
+            crit("C15.2", 15, "hold", True, None, [50]),
+            crit("C15.3", 15, "hold", True, None, [53]),
+            crit("C15.4", 15, "new", False),
+            crit("C16.1", 16, "new", False, "A"),
+            crit("C16.2", 16, "hold", False, "B"),
+        ],
+        "tokens": [
+            tokens("main", 15, 10, 1.0),
+            tokens("main", 15, 5, 0.5),
+            tokens("spec-auditor", 15, 4, 0.25),
+            tokens("general-purpose", 15, 2, 0.25),
+            tokens("main", None, 99, 9.0, "dashboard"),
+            tokens("plan-auditor", 17, 3, 0.5),
+        ],
+    }
+
+
+class OneDayTest(unittest.TestCase):
+    """one_day(): each Day's steps, its Defect lines placed on them, its criteria, agents and totals."""
+
+    def view(self, data=None):
+        return load("spec_drift_views", "spec_drift_views.py").one_day(data or one_day_data())
+
+    def days(self, data=None):
+        return {x["day"]: x for x in self.view(data)["days"]}
+
+    def placed(self, day):
+        # one short line per Defect line, "id:step/sub/by", so a failure prints it whole
+        return " ".join(f"{x['id']}:{x['step']}/{x['sub']}/{x['by']}" for x in day["defects"])
+
+    def test_a_days_steps_are_its_audit_pr_groups_tracks_with_no_pr_and_close(self):
+        got = self.days()
+        self.assertEqual(sorted(got), [11, 15, 16, 17])
+        said = " ".join(f"{d}:{','.join(s['key'] for s in got[d]['steps'])}" for d in sorted(got))
+        self.assertEqual(
+            said, "11:close 15:audit,spec,A,close,spec2 16:audit,spec,A,B,close 17:audit,A,close"
+        )
+        data = one_day_data()
+        data["tokens"] = [t for t in data["tokens"] if t["agent"] != "plan-auditor"]
+        self.assertEqual([s["key"] for s in self.days(data)[17]["steps"]], ["A", "close"])
+
+    def test_a_step_holds_its_prs_and_the_subs_of_its_days_era(self):
+        got = self.days()
+
+        def prs(d):
+            return " ".join(f"{s['key']}:{','.join(map(str, s['prs']))}" for s in got[d]["steps"])
+
+        def subs(d):
+            return " ".join(f"{s['key']}:{','.join(s['subs'])}" for s in got[d]["steps"])
+
+        self.assertEqual(prs(15), "audit: spec:50 A:51 close:52 spec2:53")
+        self.assertEqual(prs(16), "audit: spec:60 A:61,62 B: close:")
+        self.assertEqual(subs(11), "close:")
+        self.assertEqual(subs(15), "audit: spec:pr A:build close:rehearsal,pr,replay spec2:pr")
+        self.assertEqual(
+            subs(16),
+            "audit:audit,recheck spec:pr A:brief,build,diff,pr B:brief,build,diff,pr close:rehearsal,pr,replay",
+        )
+        names = " ".join(f"{s['name']}/{s['kind']}/{s['date']}" for s in got[15]["steps"])
+        self.assertEqual(names, "Audit/audit/None Spec change/spec/d50 Track A/code/d51 Close/close/d52 "
+                                "Spec change 2/spec/d53")  # fmt: skip
+
+    def test_a_line_before_day_16_is_placed_from_found(self):
+        got = self.days()
+        self.assertEqual(self.placed(got[11]), "D11.1:close/None/found D11.2:close/None/found")
+        self.assertEqual(
+            self.placed(got[15]),
+            "D15.1:audit/None/found D15.2:audit/None/found D15.3:spec/pr/found D15.4:A/build/found "
+            "D15.5:None/None/None D15.6:close/replay/found D15.7:after/None/found D15.8:after/None/found "
+            "D15.9:None/None/None D15.10:audit/None/found",
+        )
+
+    def test_a_line_from_day_16_is_placed_from_at(self):
+        got = self.days()
+        self.assertEqual(
+            self.placed(got[16]),
+            "D16.1:audit/None/found D16.2:audit/recheck/at D16.3:A/brief/at D16.4:A/pr/at D16.5:B/diff/at "
+            "D16.6:None/None/None D16.7:None/None/None D16.8:None/None/None D16.9:close/rehearsal/at "
+            "D16.10:close/replay/at D16.11:after/None/found",
+        )
+        self.assertEqual(self.placed(got[17]), "D17.1:None/None/None")
+
+    def test_an_at_off_the_steps_or_before_day_16_is_a_problem(self):
+        got = self.view()
+        self.assertEqual(
+            got["problems"],
+            [
+                "Day 15: D15.10 has at: before Day 16",
+                'Day 16: D16.7 at: "lunch" is not a step of the Day',
+                'Day 16: D16.8 at: "Track C build" is not a step of the Day',
+                'Day 17: D17.1 at: "spec-change PR" is not a step of the Day',
+            ],
+        )
+
+    def test_the_lines_from_day_16_with_no_step_are_counted(self):
+        module = load("spec_drift_views", "spec_drift_views.py")
+        got = module.one_day(one_day_data())
+        self.assertEqual(got["from_day"], 16)
+        self.assertEqual(
+            got["no_step"], {"lines": 4, "of": 12, "ids": ["D16.6", "D16.7", "D16.8", "D17.1"]}
+        )
+        self.assertEqual(
+            module.one_day_line(got), "defect steps: 4 of 12 Defect lines from Day 16 take no step"
+        )
+
+    def test_a_long_text_is_cut(self):
+        six = [x for x in self.days()[16]["defects"] if x["id"] == "D16.6"]
+        self.assertEqual(len(six), 1)
+        self.assertEqual((len(six[0]["text"]), six[0]["text"][-1]), (260, "…"))
+
+    def test_a_criterion_takes_its_tracks_step_or_its_first_prs(self):
+        got = self.days()
+        said = " ".join(f"{c['id']}:{c['step']}" for d in (15, 16) for c in got[d]["criteria"])
+        self.assertEqual(said, "C15.1:A C15.2:spec C15.3:spec2 C15.4:None C16.1:A C16.2:B")
+        self.assertEqual(got[15]["criteria"][0]["quote"], "plain C15.1")
+
+    def test_agents_are_summed_in_the_role_maps_order(self):
+        got = self.days()
+        self.assertEqual(
+            [(a["agent"], a["replies"], a["cost"], a["covers"]) for a in got[15]["agents"]],
+            [
+                ("main", 15, 1.5, [["*", "*"]]),
+                ("spec-auditor", 4, 0.25, [["audit", "*"]]),
+                ("general-purpose", 2, 0.25, []),
+            ],
+        )
+        self.assertEqual(
+            [(a["name"], a["does"]) for a in got[15]["agents"]][2], ("general-purpose", "")
+        )
+        self.assertEqual(got[16]["agents"], [])
+
+    def test_totals_add_up(self):
+        got = self.days()
+        keys = ["prs", "new", "hold", "ticked", "cost", "replies"]
+        keys += ["defects", "placed", "no_step", "after"]
+        self.assertEqual(keys_in([got[d]["totals"] for d in sorted(got)], keys), [True] * 4)
+        t = {d: got[d]["totals"] for d in got}
+        self.assertEqual(
+            [t[11][k] for k in ("prs", "defects", "placed", "no_step", "after")], [1, 2, 2, 0, 0]
+        )
+        self.assertEqual([t[15][k] for k in keys], [4, 2, 2, 3, 2.0, 21, 10, 6, 2, 2])
+        self.assertEqual([t[16][k] for k in keys], [3, 1, 1, 0, 0, 0, 11, 7, 3, 1])
+        self.assertEqual(
+            [t[17][k] for k in ("defects", "placed", "no_step", "after")], [1, 0, 1, 0]
+        )
+        self.assertEqual(
+            [
+                t[d]["placed"] + t[d]["no_step"] + t[d]["after"] == t[d]["defects"]
+                for d in sorted(t)
+            ],
+            [True] * 4,
+        )
+        subs = {(d, s["key"]): s["subs"] for d in got for s in got[d]["steps"]}
+        stray = [x["id"] for d in got for x in got[d]["defects"]
+                 if x["step"] not in (None, "after") and x["sub"] is not None
+                 and x["sub"] not in subs.get((d, x["step"]), [])]  # fmt: skip
+        self.assertEqual(stray, [])
+
+    def test_the_split_is_the_metrics_one(self):
+        views = load("spec_drift_views", "spec_drift_views.py")
+        metrics = load("spec_drift_metrics", "spec_drift_metrics.py")
+        self.assertEqual(views.ONE_DAY_SPLIT, metrics.SPLIT_FROM)
+
+    def test_the_view_is_plain_json_and_reads_no_data(self):
+        got = self.view()
+        self.assertEqual(json.loads(json.dumps(got)), got)
+        self.assertEqual(self.view({"now": {}})["days"], [])
+
+
 # lrnDraw() on a hand-built learning, on a document that keeps every node: the first picture's segments by class, the
 # second's dots by row, and the words of its figures.
 LRN = r"""

@@ -121,13 +121,14 @@ def relabel(text, bodies=(), day=None, others=()):
 # A Defect line (specs/README.md): "- **Defect** D28.1 — found: … · same-as: D21.2 · <text>". The
 # ID, catchable: and same-as: are optional; they are fields before the text, as relabel.py reads them.
 DEFECT_LINE = re.compile(r"^- \*\*Defect\*\*(?:[ \t]+(\S+))?\s*[—-]\s*(.*)$")
-DEFECT_FIELD = re.compile(r"^(found|cause|made|catchable|same-as):\s*(.*)$")
+DEFECT_FIELD = re.compile(r"^(found|at|cause|made|catchable|same-as):\s*(.*)$")
 DEFECT_ID = re.compile(r"D(\d+)\.(\d+)")
 
 
 def defect_lines(text, day):
     """Each Defect line in a spec: its ID and the ID its same-as: names, as written (None if absent),
-    and a problem when its own ID is not one of this day's."""
+    its fields, its text (the parts after the last field), and a problem when its own ID is not one
+    of this day's."""
     lines, out = text.splitlines(), []
     for i, line in enumerate(lines):
         m = DEFECT_LINE.match(line)
@@ -138,16 +139,16 @@ def defect_lines(text, day):
             if not more.startswith("  ") or not more.strip():
                 break
             rest.append(more.strip())
-        fields = {}
-        for part in (p.strip() for p in " ".join(rest).split(" · ")):
-            f = DEFECT_FIELD.match(part)
-            if not f or f.group(1) in fields:
-                break
+        fields, parts = {}, [p.strip() for p in " ".join(rest).split(" · ")]
+        while parts and (f := DEFECT_FIELD.match(parts[0])) and f.group(1) not in fields:
             fields[f.group(1)] = f.group(2)
+            parts.pop(0)
         ok = DEFECT_ID.fullmatch(m.group(1) or "")
         out.append(dict(id=m.group(1), same_as=fields.get("same-as"), found=fields.get("found"), cause=fields.get("cause"),
                         made=fields.get("made"),  # as written: "Day 04", or "none" for one made outside any day
                         catchable=fields.get("catchable"),  # the earliest found: value that could have caught it
+                        at=fields.get("at"),  # the step it was caught at, as written (from Day 16)
+                        text=" · ".join(parts),
                         problem=None if m.group(1) is None or ok and int(ok.group(1)) == day
                         else f"Day {day}: Defect ID {m.group(1)} is not D{day}.<n>"))
     return out
