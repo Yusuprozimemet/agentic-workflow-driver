@@ -4261,6 +4261,189 @@ class OneDayTest(unittest.TestCase):
         self.assertEqual(self.view({"now": {}})["days"], [])
 
 
+def rewrites_data():
+    """Six Days and eight criteria: one line of four wordings (C03.1 folded in), one from a short spec's two, one of
+    two, and C06.2, replacing nothing."""
+
+    def crit(cid, day, state, replaces=(), replaced_by=()):
+        return {"id": cid, "day": day, "state": state, "plain": f"{cid} in plain words.", "claim": "",
+                "replaces": list(replaces), "replaced_by": list(replaced_by)}  # fmt: skip
+
+    return {
+        "now": {"head": "abcdef1234", "last_pr": 9, "generated": "2026-11-26T00:00:00Z"},
+        "days": [{"day": n, "phase": p} for n, p in zip(range(1, 7), [0, 0, 1, 1, 1, 2])],
+        "criteria_index": [
+            crit("C01.1", 1, "replaced", replaced_by=["C02.1"]),
+            crit("C02.1", 2, "replaced", ["C01.1"], ["C04.1"]),
+            crit("C03.1", 3, "replaced", replaced_by=["C04.1"]),
+            # the shallow one first: the main chain takes the deeper C02.1, not the first named
+            crit("C04.1", 4, "proven", ["C03.1", "C02.1"]),
+            crit("C03.2", 3, "replaced", replaced_by=["C05.1"]),
+            crit("C05.1", 5, "unproven", ["C03.2"]),
+            crit("C06.1", 6, "building", ["S-pick-a-day.1", "S-pick-a-day.2"]),
+            crit("C06.2", 6, "proven"),
+        ],
+    }
+
+
+class RewritesTest(unittest.TestCase):
+    """rewrites(): each promise in force that replaced others, as a line of its wordings joined to their successors."""
+
+    def module(self):
+        views = load("spec_drift_views", "spec_drift_views.py")
+        self.assertTrue(hasattr(views, "rewrites"), "spec_drift_views has no rewrites view yet")
+        return views
+
+    def view(self, data=None):
+        return self.module().rewrites(rewrites_data() if data is None else data)
+
+    def line(self, got, sink):
+        sinks = [x["sink"] for x in got["lines"]]
+        self.assertIn(sink, sinks)
+        return got["lines"][sinks.index(sink)]
+
+    def test_lines_are_ordered_by_rewrites_and_walk_their_longest_chain(self):
+        got = self.view()
+        # one short line per line, "sink rewrites n first main", so a failure prints it whole
+        said = [
+            f"{x['sink']} {x['rewrites']} {x['n']} {x['first']} {'>'.join(x['main'])}"
+            for x in got["lines"]
+        ]
+        self.assertEqual(len(said), 3)
+        self.assertEqual(said[0], "C04.1 2 4 1 C01.1>C02.1>C04.1")
+        self.assertEqual(said[1], "C06.1 1 3 5.5 S-pick-a-day.1>C06.1")
+        self.assertEqual(said[2], "C05.1 1 2 3 C03.2>C05.1")
+        self.assertEqual(
+            got["stats"],
+            {
+                "replaced": 6,
+                "lines": 3,
+                "multi": 1,
+                "longest": 2,
+                "states": {"proven": 1, "unproven": 1, "building": 1},
+            },
+        )
+        self.assertEqual(got["problems"], [])
+        self.assertEqual([x["day"] for x in got["days"]], [1, 2, 3, 4, 5, 6])
+        on = {n["id"] for x in got["lines"] for n in x["nodes"]}
+        self.assertNotIn("C06.2", on)
+
+    def test_a_lines_nodes_and_edges_in_full(self):
+        line = self.line(self.view(), "C04.1")
+
+        def node(cid, day, state, by, main):
+            return {"id": cid, "label": cid, "day": day, "state": state, "short": False,
+                    "text": f"{cid} in plain words.", "by": by, "main": main}  # fmt: skip
+
+        self.assertEqual(
+            line["nodes"],
+            [
+                node("C01.1", 1, "replaced", ["C02.1"], True),
+                node("C02.1", 2, "replaced", ["C04.1"], True),
+                node("C03.1", 3, "replaced", ["C04.1"], False),
+                node("C04.1", 4, "proven", [], True),
+            ],
+        )
+        self.assertEqual(
+            line["edges"],
+            [["C01.1", "C02.1"], ["C03.1", "C04.1"], ["C02.1", "C04.1"]],
+        )
+        self.assertEqual(
+            (line["text"], line["state"], line["day"]),
+            ("C04.1 in plain words.", "proven", 4),
+        )
+
+    def test_a_short_specs_promises_are_nodes_between_the_days(self):
+        line = self.line(self.view(), "C06.1")
+        short = [n for n in line["nodes"] if n["short"]]
+        self.assertEqual(
+            [(n["id"], n["label"], n["day"], n["state"]) for n in short],
+            [
+                ("S-pick-a-day.1", "S.1", 5.5, "replaced"),
+                ("S-pick-a-day.2", "S.2", 5.5, "replaced"),
+            ],
+        )
+        self.assertEqual(
+            short[0]["text"],
+            'A promise of the short spec "pick-a-day". Its words are in '
+            "specs/changes/pick-a-day.md, not in the page's data.",
+        )
+
+    def test_an_absent_id_and_a_replaced_promise_on_no_line_are_problems(self):
+        data = rewrites_data()
+        index = data["criteria_index"]
+        # C03.2 named twice: one edge
+        index[5]["replaces"] = ["C03.2", "C00.7", "C03.2"]
+        index.append(
+            {"id": "C02.9", "day": 2, "state": "replaced", "plain": "C02.9 in plain words.",
+             "claim": "", "replaces": [], "replaced_by": ["C09.9"]}
+        )  # fmt: skip
+        got = self.view(data)
+        self.assertEqual(len(got["problems"]), 2)
+        self.assertEqual(
+            got["problems"][0], "C00.7, named by C05.1's Replaces: line, is not in the index"
+        )
+        self.assertEqual(got["problems"][1], "C02.9 is replaced by C09.9 and stands on no line")
+        line = self.line(got, "C05.1")
+        self.assertEqual((line["n"], line["edges"]), (2, [["C03.2", "C05.1"]]))
+        on = {n["id"] for x in got["lines"] for n in x["nodes"]}
+        self.assertNotIn("C02.9", on)
+
+    def test_a_cycle_returns_and_no_data_draws_no_line(self):
+        data = rewrites_data()
+        data["criteria_index"][0]["replaces"] = ["C04.1"]
+        line = self.line(self.view(data), "C04.1")
+        self.assertEqual((line["n"], len(line["edges"])), (4, 4))
+        self.assertEqual(len(line["main"]), len(set(line["main"])))
+        got = self.view({})
+        self.assertEqual((got["lines"], got["stats"]["longest"]), ([], 0))
+
+    def test_a_sink_naming_only_absent_ids_makes_no_line_only_problems(self):
+        data = rewrites_data()
+        index = data["criteria_index"]
+        index[5]["replaces"] = ["C03.2", "C00.7"]
+        index.append(
+            {"id": "C07.1", "day": 6, "state": "proven", "plain": "C07.1 in plain words.",
+             "claim": "", "replaces": ["C00.8", "C00.9"], "replaced_by": []}
+        )  # fmt: skip
+        got = self.view(data)
+        self.assertEqual([x["sink"] for x in got["lines"]], ["C04.1", "C06.1", "C05.1"])
+        # an absent id's problem in line order, then the sink's that made no line
+        self.assertEqual(len(got["problems"]), 3)
+        self.assertEqual(
+            got["problems"][0], "C00.7, named by C05.1's Replaces: line, is not in the index"
+        )
+        self.assertEqual(
+            got["problems"][1], "C00.8, named by C07.1's Replaces: line, is not in the index"
+        )
+        self.assertEqual(
+            got["problems"][2], "C00.9, named by C07.1's Replaces: line, is not in the index"
+        )
+
+    def test_lines_alike_in_rewrites_and_wordings_go_by_their_sinks_number(self):
+        data = rewrites_data()
+        index = data["criteria_index"]
+        # C05.1's twin, listed first and later in number: C05.1's line comes first all the same
+        index.insert(
+            0,
+            {"id": "C05.9", "day": 5, "state": "proven", "plain": "C05.9 in plain words.",
+             "claim": "", "replaces": ["C03.9"], "replaced_by": []},
+        )  # fmt: skip
+        index.append(
+            {"id": "C03.9", "day": 3, "state": "replaced", "plain": "C03.9 in plain words.",
+             "claim": "", "replaces": [], "replaced_by": ["C05.9"]}
+        )  # fmt: skip
+        got = self.view(data)
+        self.assertEqual([x["sink"] for x in got["lines"]], ["C04.1", "C06.1", "C05.1", "C05.9"])
+
+    def test_the_build_line_counts_the_rewrites(self):
+        views = self.module()
+        self.assertEqual(
+            views.rewrites_line(views.rewrites(rewrites_data())),
+            "rewrites: 6 promises replaced, on 3 lines; the longest was rewritten 2 times",
+        )
+
+
 # lrnDraw() on a hand-built learning, on a document that keeps every node: the first picture's segments by class, the
 # second's dots by row, and the words of its figures.
 LRN = r"""

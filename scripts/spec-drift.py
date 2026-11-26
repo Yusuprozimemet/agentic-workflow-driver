@@ -76,7 +76,7 @@ from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
 from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention, proofreading, protein,
-                               one_day, one_day_line, reading, reflex, rings, where_ring)
+                               one_day, one_day_line, reading, reflex, rewrites, rewrites_line, rings, where_ring)
 from spec_drift_score import quality_score
 from spec_drift_files import build_file_map
 
@@ -281,6 +281,7 @@ def main():
         real["budget"], real["rings"], real["actogram"], real["reflex"] = budget(real), rings(real), actogram(real), reflex(real)
         real["learning"] = learning(real)
         real["one_day"] = one_day(real)
+        real["rewrites"] = rewrites(real)
         real["needs_attention"] = needs_attention(real)  # after the graphs: it reads their verdicts, and `attention` above
         real["file_map"] = build_file_map(head, run)  # every tracked file at its station: read from git, not from the specs
     payload = page_data(real, spec_days) if args.build else real
@@ -309,6 +310,9 @@ def main():
     for p in real["one_day"]["problems"]:
         print(f"defect at: not used: {p}")
     print(one_day_line(real["one_day"]))
+    for p in real["rewrites"]["problems"]:
+        print(f"rewrites: {p}")
+    print(rewrites_line(real["rewrites"]))
 
 
 def gate_line(g):

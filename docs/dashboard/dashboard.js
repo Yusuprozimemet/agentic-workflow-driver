@@ -828,6 +828,49 @@ function model(DATA) {
     const G = DATA.merge_graph;
     return G && (G.crit || []).length ? G : { empty: "no criterion is on record yet, so no merge can be drawn against one." };
   }
+  /* Graph 6's other view, the promises rewritten: every line, node and count is spec_drift_views.rewrites'; this words
+     them. A line is a promise in force and every wording it replaced; its main chain is the longest way back. */
+  function rewGraph() {
+    const W = DATA.rewrites;
+    if (!W || !(W.lines || []).length) return { empty: "no promise has been replaced yet, so there is no rewrite to draw." };
+    const n = (k, one, many) => `${comma(k)} ${k === 1 ? one : many || one + "s"}`, S = W.stats || {};
+    const LONG = { proven: "holds, and a break on purpose proved its test", unproven: "holds; its test was never seen to fail",
+      building: "written, not built yet", skipped: "the replay cannot run this check", open: "left unticked" };
+    const SHORT = { proven: "proved", unproven: "never seen to fail", building: "not built yet", skipped: "the replay cannot run", open: "left unticked" };
+    const said = s => LONG[s] || s;
+    const states = S.states || {}, order = ["proven", "unproven", "building", ...Object.keys(states).filter(s => !["proven", "unproven", "building"].includes(s))];
+    const other = (S.lines || 0) - (S.multi || 0);
+    const top = W.lines[0];
+    const figs = [
+      [S.replaced, S.replaced === 1 ? "promise replaced" : "promises replaced", "each by a later Day's wording"],
+      [S.lines, `${S.lines === 1 ? "promise" : "promises"} in force that replaced ${S.replaced === 1 ? "it" : "them"}`,
+        order.filter(s => states[s]).map(s => `${comma(states[s])} ${SHORT[s] || s}`).join(", ")],
+      [S.multi, "rewritten more than once", !other ? "every line more than once" : !S.multi ? (other === 1 ? "it changed once" : "every line changed once")
+        : other === 1 ? "the other one changed once" : `the other ${comma(other)} changed once`],
+      [S.longest, S.longest === 1 ? "rewrite on the longest line" : "rewrites on the longest line", `it ends at ${top.sink}`]]
+      .map(([num, what, sub]) => ({ num: String(num || 0), what, sub }));
+    const lines = W.lines.map(ln => {
+      const nodes = ln.nodes || [], by = Object.fromEntries(nodes.map(x => [x.id, x]));
+      const label = id => (by[id] || { label: id }).label, off = nodes.filter(x => !x.main);
+      return Object.assign({}, ln, {
+        head: `${label(ln.sink)} · in force since Day ${ln.day} · rewritten ${n(ln.rewrites, "time")}`,
+        say: [`Its line: ${(ln.main || []).map(id => by[id] && !by[id].short ? `${label(id)} (Day ${by[id].day})` : label(id)).join(" → ")}.`
+          + (off.length ? ` Folded in on the way: ${off.map(x => x.label).join(", ")}.` : ""), `Today: ${said(ln.state)}.`, plain(ln.text)],
+        nodes: nodes.map(x => Object.assign({}, x, {
+          head: x.short ? `${x.label} · written between Days ${Math.floor(x.day)} and ${Math.ceil(x.day)}, in a short spec` : `${x.label} · written on Day ${x.day}`,
+          say: [x.id === ln.sink ? `In force today: ${said(x.state)}.`
+            : `Replaced by ${(x.by || []).map(id => by[id] && !by[id].short ? `${label(id)} on Day ${by[id].day}` : label(id)).join(", ")}.`, plain(x.text)] })) });
+    });
+    // the whole Day holding the most wordings, the earliest on a tie; a short spec's wordings are no Day's
+    const held = {};
+    W.lines.forEach(ln => (ln.nodes || []).filter(x => !x.short).forEach(x => { held[x.day] = (held[x.day] || 0) + 1; }));
+    const most = Object.keys(held).map(Number).sort((a, b) => held[b] - held[a] || a - b)[0];
+    return { head: W.head, last_pr: W.last_pr, generated: W.generated, days: W.days || [], lines, stats: S, figs,
+      start: { head: `${n(S.replaced || 0, "promise")} replaced, on ${n(S.lines || 0, "line")}`,
+        say: [`The longest line ends at ${top.sink}: ${n(top.n, "wording")}, rewritten ${n(top.rewrites, "time")}.`,
+          "Point at a line for its history, or at a mark for that wording."] },
+      note: most == null ? "A Day's arc is as long as the wordings it holds." : `A Day's arc is as long as the wordings it holds. Day ${most} holds the most: ${held[most]}.` };
+  }
 
   /* The gene: the plan read down to proved code. Every figure is counted in scripts/spec_drift_views.py (gene);
      this only words it and hands the drawing its columns, its labels and what the pointer says. */
@@ -967,7 +1010,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
+    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -2362,11 +2405,13 @@ function mergeDraw(D, get, onDay) {
   zs.replaceChildren();
   h("option", "", "All Days", zs).value = "";
   D.days.forEach(d => { const t = `${dayName(d.day)}: ${d.title}`; h("option", "", t.length > 58 ? t.slice(0, 57) + "…" : t, zs).value = d.day; });
-  const sync = () => { const z = state.day != null; bm.disabled = bd.disabled = z; bm.setAttribute("aria-pressed", z || state.view === "merge"); bd.setAttribute("aria-pressed", !z && state.view === "day"); tip.hidden = true; draw(); };
+  // while the promises rewritten are showing (mrg-all hidden), both row buttons stay free and un-pressed, whatever the zoom
+  const sync = () => { const a = get("mrg-all"), on = !!a && a.hidden === true, z = !on && state.day != null; bm.disabled = bd.disabled = z; bm.setAttribute("aria-pressed", !on && (z || state.view === "merge")); bd.setAttribute("aria-pressed", !on && !z && state.view === "day"); tip.hidden = true; draw(); };
   // a view can be linked (#mrg-day-10, #mrg-merges); the page's address is only read, never written, so the dashboard's own anchors and scroll stay as they are
-  const readHash = () => { const where = typeof location !== "undefined" ? location.hash : ""; const m = /^#mrg-day-(\d+)$/.exec(where), mg = where === "#mrg-merges"; if (!m && !mg) return false; const d = m && +m[1] in dayTitle ? +m[1] : null; state.day = d; state.view = mg ? "merge" : state.view; zs.value = d == null ? "" : d; sync(); return true; };
-  bm.addEventListener("click", () => { state.view = "merge"; sync(); });
-  bd.addEventListener("click", () => { state.view = "day"; sync(); });
+  const readHash = () => { const where = typeof location !== "undefined" ? location.hash : ""; const m = /^#mrg-day-(\d+)$/.exec(where), mg = where === "#mrg-merges"; if (!m && !mg) return false; const d = m && +m[1] in dayTitle ? +m[1] : null; state.day = d; state.view = mg ? "merge" : state.view; zs.value = d == null ? "" : d; mrgShow(get, false); sync(); return true; };
+  // a row button pressed while a Day is zoomed leaves the rows that come back after the zoom as they were
+  bm.addEventListener("click", () => { if (state.day == null) state.view = "merge"; mrgShow(get, false); sync(); });
+  bd.addEventListener("click", () => { if (state.day == null) state.view = "day"; mrgShow(get, false); sync(); });
   zs.addEventListener("change", () => { state.day = zs.value === "" ? null : +zs.value; sync(); });
   // the page's Day buttons zoom the graph to that Day, and "All Days" back out
   onDay.push(day => { state.day = day != null && day in dayTitle ? day : null; zs.value = state.day == null ? "" : state.day; sync(); });
@@ -3263,6 +3308,94 @@ function oneDraw(O, get, onDay) {
   $("v-strand").addEventListener("click", () => as(false));
   $("stamp").textContent = `Drawn from the page's data at ${O.head || "?"}${O.last_pr ? ` (#${O.last_pr})` : ""}, generated ${O.generated} · a Defect line names its step from Day ${O.from_day}; on an earlier Day a defect stands where its finder puts it, or at no step`;
   draw();
+}
+
+/* Graph 6's switch between the merges and the promises rewritten. Any element may be missing, so each is looked up
+   with a guard; under the rewrites both row buttons stay free, so a reader can always go back to the rows. */
+function mrgShow(get, on) {
+  const set = (id, f) => { const e = get(id); if (e) f(e); };
+  set("rew", e => { e.hidden = !on; });
+  set("mrg-all", e => { e.hidden = on; });
+  set("rew-frame-h", e => { e.hidden = !on; });
+  set("mrg-frame-h", e => { e.hidden = on; });
+  set("mrg-zoom-wrap", e => { e.hidden = on; });
+  set("mrg-say", e => { e.hidden = on; });
+  set("mrg-v-rew", e => e.setAttribute("aria-pressed", on));
+  if (on) ["mrg-v-day", "mrg-v-merge"].forEach(id => set(id, e => { e.setAttribute("aria-pressed", false); e.disabled = false; }));
+}
+// wired before mergeDraw, whose own listeners then set the rows' truth; alone, it is what works when the merges cannot be drawn
+function mrgViews(get) {
+  const rew = get("mrg-v-rew"), day = get("mrg-v-day"), merge = get("mrg-v-merge");
+  if (rew) rew.addEventListener("click", () => mrgShow(get, true));
+  [[day, merge], [merge, day]].forEach(([b, other]) => {
+    if (b) b.addEventListener("click", () => { mrgShow(get, false); b.setAttribute("aria-pressed", true); if (other) other.setAttribute("aria-pressed", false); });
+  });
+}
+
+/* The promises rewritten as a ring of Days: an arc for each Day that holds a wording, and one for each short spec's,
+   as long as the wordings it holds; a mark per wording, and a chord from each wording to the one that replaced it. */
+function rewDraw(R, get, onDay) {
+  const $ = id => get("rew-" + id), out = $("out"), svg = $("rfig"), el = (n, a, txt, parent) => svgEl(svg, n, a, txt, parent);
+  const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
+  const say = x => out.replaceChildren(h("strong", "", x.head), ...x.say.map(l => h("span", "", l)));
+  const hot = (node, x, stop) => {
+    node.setAttribute("tabindex", stop ? "0" : "-1"); node.setAttribute("role", "img"); node.setAttribute("aria-label", x.head);
+    ["mouseenter", "focus", "click"].forEach(t => node.addEventListener(t, () => say(x)));
+    return node;
+  };
+  // the arrow keys walk a line's marks; Tab goes from one line's sink to the next
+  const walk = nodes => nodes.forEach((node, i) => node.addEventListener("keydown", e => {
+    const to = e.key === "ArrowRight" || e.key === "ArrowDown" ? i + 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? i - 1 : -1;
+    if (to < 0 || to >= nodes.length) return;
+    e.preventDefault();
+    nodes[to].focus();
+  }));
+  const RR = 214, RC = 194, A0 = 16, A1 = 344, G = 2, Q = onePolar(310, 304), f1 = Q.f1;
+  svg.replaceChildren();
+  svg.setAttribute("viewBox", "0 0 620 600");
+  // within an arc, the number after the id's last dot, then the id
+  const num = id => parseFloat(String(id).split(".").pop()) || 0;
+  const all = R.lines.flatMap((ln, li) => ln.nodes.map(x => ({ x, key: `${li}:${x.id}` })));
+  const keys = [...new Set(all.map(o => o.x.day))].sort((a, b) => a - b);
+  const per = (A1 - A0 - G * (keys.length - 1)) / all.length, ang = {}, dims = [];
+  let a = A0;
+  keys.forEach(k => {
+    const mine = all.filter(o => o.x.day === k).sort((p, q) => num(p.x.id) - num(q.x.id) || (p.x.id < q.x.id ? -1 : p.x.id > q.x.id ? 1 : 0));
+    const a0 = a, whole = Number.isInteger(k);
+    mine.forEach((o, i) => { ang[o.key] = a0 + (i + 0.5) * per; });
+    a += mine.length * per;
+    const ph = (R.days.find(d => d.day === Math.ceil(k)) || {}).phase || 0, lp = Q.pt(RR + (whole ? 25 : 44), (a0 + a) / 2);
+    dims.push([el("path", { d: Q.band(RR, RR + 10, a0, a), class: `dayarc p${ph % 2}` }), [k]]);
+    el("text", { x: f1(lp[0]), y: f1(lp[1] + 4), "text-anchor": "middle", class: whole ? "t-num strong" : "t-sec" }, whole ? String(k) : "short spec");
+    a += G;
+  });
+  el("text", { x: 310, y: 304 - RR - 22, "text-anchor": "middle", class: "t-sec" }, "Days, clockwise");
+
+  const wrap = el("g", { class: "chords" });
+  R.lines.forEach((ln, li) => {
+    const g = el("g", { class: `lin${li === 0 ? " most" : ""}` }, null, wrap), day = Object.fromEntries(ln.nodes.map(x => [x.id, x.day]));
+    ln.edges.forEach(([o, nw]) => {
+      const x = ang[`${li}:${o}`], y = ang[`${li}:${nw}`], p = Q.pt(RC, x), q = Q.pt(RC, y), c = Q.pt(RC * Math.max(0, 1 - Math.abs(y - x) / 120) * 0.85, (x + y) / 2);
+      const d = `M${f1(p[0])} ${f1(p[1])}Q${f1(c[0])} ${f1(c[1])} ${f1(q[0])} ${f1(q[1])}`;
+      dims.push([el("path", { d, class: "chord" }, null, g), [day[o], day[nw]]]);
+      hot(el("path", { d, class: "hit" }, null, g), ln, false);
+    });
+    const marks = ln.nodes.map(x => {
+      const p = Q.pt(RR - 10, ang[`${li}:${x.id}`]), live = x.id === ln.sink;
+      const e = x.short ? el("rect", { x: f1(p[0] - 4), y: f1(p[1] - 4), width: 8, height: 8, rx: 1.5, class: "nd old" }, null, g)
+        : el("circle", { cx: f1(p[0]), cy: f1(p[1]), r: live ? (x.state === "proven" ? 5.5 : 4.8) : 4, class: `nd ${live ? x.state : "old"}` }, null, g);
+      dims.push([e, [x.day]]);
+      return hot(e, x, live);
+    });
+    walk(marks);
+  });
+
+  $("figs").replaceChildren(...R.figs.map(f => { const d = h("div"); h("div", "num", f.num, d); h("div", "what", f.what, d); h("div", "sub", f.sub, d); return d; }));
+  $("note").textContent = R.note;
+  $("stamp").textContent = `Drawn from the page's data at ${R.head || "?"}${R.last_pr ? ` (#${R.last_pr})` : ""}, generated ${R.generated}`;
+  say(R.start);
+  // the page's Day buttons dim every mark and arc of another Day, and every chord with no end on that Day
+  onDay.push(d => dims.forEach(([e, on]) => e.classList.toggle("mk-dim", d != null && !on.includes(d))));
 }
 
 /* Graph 8 as an energy budget: one bead for each $2 of tokens at list prices, in a column for each Day beside the
@@ -4437,13 +4570,21 @@ function draw(M, DATA) {
     put("gene-expected", plain(m.expected)); put("gene-bends", plain(m.bends));
   });
 
-  /* The merge graph, in graph 6's place: the merges against the criteria they give evidence to */
+  /* The merge graph, in graph 6's place: the merges against the criteria they give evidence to. Its switch to the
+     promises rewritten is wired first, so that in a browser mergeDraw's own listeners run after it and set the rows. */
+  mrgViews($);
   {
     const m = M.mrg, failed = e => { put("mrg-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`mrg: ${e}`); };
     if (m.error) failed(m.error);
     else if (m.empty) put("mrg-scroll", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty)));
     else try { mergeDraw(m, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   }
+  [["rew", rewDraw]].forEach(([k, fn]) => {
+    const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
+    if (g.error) failed(g.error);
+    else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
+    else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
+  });
 
   graph("g12", m => {
     if (m.empty) { put("g12-plot", h("p", { class: "load-error" }, "Not measured yet: ", rich(m.empty))); return; }

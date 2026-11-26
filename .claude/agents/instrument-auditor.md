@@ -145,6 +145,13 @@ with sync_playwright() as p:
         click(page, page.query_selector("#prf-v-all"))
     else:
         views.append("g7-one: NOT FOUND")
+    rewritten = page.query_selector("#mrg-v-rew")
+    if rewritten:
+        click(page, rewritten)
+        shot(page, "#mrg", "g6-rewrites", "(promises rewritten)")
+        click(page, page.query_selector("#mrg-v-day"))
+    else:
+        views.append("g6-rewrites: NOT FOUND")
     for i in range(len(page.query_selector_all("#g12 .pc-chip"))):
         chip = page.query_selector_all("#g12 .pc-chip")[i]
         label = chip.inner_text().strip().replace("\n", " ")
@@ -224,6 +231,7 @@ a box that is cut off or overlaps is a finding.
 | 19 | What these figures cannot see; Not measured yet | `page-NN` |
 | 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
 | 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |
+| 22 | Graph 6, Promises rewritten: the ring of Days, each replaced promise joined to what replaced it | `g6-rewrites` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 

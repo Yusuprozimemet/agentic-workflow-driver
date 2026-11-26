@@ -1327,6 +1327,48 @@ footer { font-size: 12.5px; color: var(--muted); }
 @media (max-width:900px){#one .duo{grid-template-columns:minmax(0,1fr)}#one .duo .side{position:static}}
 #one[hidden],#one [hidden]{display:none}
 
+/* Graph 6's other view, the promises rewritten: a ring of Days, a mark per wording, a chord to what replaced it.
+   Its parts take the colours of #one's promises; the merges' half and the zoom are hidden while it shows. */
+#mrg-all,#mrg-zoom-wrap{display:contents}
+#mrg-all[hidden],#mrg-zoom-wrap[hidden]{display:none}
+#rew{display:flex;flex-direction:column;gap:14px}
+#rew .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 26px;border-block:1px solid var(--line);padding:14px 0}
+#rew .figs>div{min-width:0}
+#rew .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink)}
+#rew .figs .what{font-weight:600;margin-top:6px;color:var(--ink)}
+#rew .figs .sub{display:block;font:400 12.5px/1.4 var(--sans);color:var(--muted);margin:0}
+#rew .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:0;font-size:12.5px;color:var(--ink-2)}
+#rew .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+#rew .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
+#rew .lg dd span{display:inline-flex;align-items:center;gap:7px}
+#rew .lg svg{flex:none;overflow:visible}
+@media (max-width:640px){#rew .lg{grid-template-columns:1fr;gap:2px 0}#rew .lg dd{margin-bottom:10px}}
+#rew .hint{font-size:12.5px;color:var(--muted);margin:0}
+#rew .t-sec{font:400 10px var(--sans);fill:var(--muted)}
+#rew .t-num{font:500 10.5px var(--mono);fill:var(--muted);font-variant-numeric:tabular-nums}
+#rew .t-num.strong{fill:var(--ink)}
+#rew .dayarc.p0{fill:var(--s2)}
+#rew .dayarc.p1{fill:var(--s3)}
+#rew .nd.old{fill:var(--card);stroke:var(--s3);stroke-width:1.4}
+#rew .nd.proven{fill:var(--proven)}
+#rew .nd.unproven{fill:var(--unproven);stroke:var(--proven);stroke-width:1.4}
+#rew .nd.building,#rew .nd.open{fill:var(--card);stroke:var(--pending);stroke-width:1.4;stroke-dasharray:2.5 2}
+#rew .nd.skipped{fill:var(--s2)}
+#rew .chord{fill:none;stroke:var(--s2);stroke-width:1.6;pointer-events:none}
+#rew .hit{fill:none;stroke:transparent;stroke-width:10;pointer-events:stroke}
+#rew .lin.most .chord{stroke:var(--ink);stroke-width:2.4}
+#rew .chords .lin:hover .chord,#rew .chords .lin:focus-within .chord{stroke:var(--ink);stroke-width:2.8}
+#rew .duo{display:grid;grid-template-columns:minmax(0,700px) minmax(260px,1fr);gap:24px;align-items:start}
+#rew .duo .side{display:flex;flex-direction:column;gap:12px;min-width:0;position:sticky;top:12px}
+#rew .duo .note{font-size:12.5px;color:var(--muted);margin:0}
+#rew .scroll{overflow-x:auto;min-width:0}
+#rew .rfig{display:block;width:100%;min-width:520px;height:auto}
+#rew .rfig text{font-family:var(--sans)}
+#rew [tabindex]{cursor:pointer}
+#rew [tabindex]:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+@media (max-width:900px){#rew .duo{grid-template-columns:minmax(0,1fr)}#rew .duo .side{position:static}}
+#rew[hidden],#rew [hidden]{display:none}
+
 /* Graph 8 as an energy budget: one bead per fixed number of dollars, coloured by where they went. Every rule is under #atp; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
 #atp{--atp-day:var(--l5);--atp-dash:var(--code);--atp-tool:var(--l4);--atp-other:var(--l7);--atp-main:var(--bar);--shadow:rgba(14,17,22,.16)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #atp{--shadow:rgba(0,0,0,.5)}}
