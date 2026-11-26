@@ -242,11 +242,16 @@ Ticked short-spec criteria join the behaviour index; a later day replaces one wi
     are written (`- **Defect** D28.1 — found: …`). A short spec's Defect lines take none.
   - `found:` where, exactly one of `auditor`, `spec-change PR` (before any code);
     `track-reviewer` (the agent's reading of a track's brief or diff, from Day 13), `review`,
-    `seen red` (a new test that passed on `main`'s code), `break on purpose`, `self`, `Track <X>`
-    (before merge); `close`, `rehearsal` (the close's rehearsal failed, before its merge),
-    `evidence replay` (the replay after its merge failed), `dashboard`, `Day <NN> review` (after
-    the track merged: an escape). The list is closed: `spec-drift.py` prints any other value as
-    "not on the list". It reads `self` and `Track <X>` as one stage, the work, and
+    `seen red` (a new test that passed on `main`'s code), `break on purpose`, `self`, `Track <X>`,
+    `CI` (a required check that failed on the open pull request and showed a real fault; the
+    close's rehearsal failing stays `rehearsal`) and
+    `driver reviewer` (the driver's reviewer, `rules/reviewer.md`, on a pull request it read),
+    both from Day 16 (before merge); `close`, `rehearsal` (the close's rehearsal failed, before
+    its merge), `evidence replay` (the replay after its merge failed), `dashboard`,
+    `Day <NN> review` (after the track merged: an escape). The list is closed: `spec-drift.py`
+    prints any other value as "not on the list", and `CI` or `driver reviewer` on a Day before
+    16, whose Notes had no such value. `driver reviewer` is not `review`, the main session's own
+    reading, nor `track-reviewer`. `spec-drift.py` reads `self` and `Track <X>` as one stage, the work, and
     before Day 12, when `evidence replay` named both replays, reads that value as "unsplit". It
     counts, per Day, the Defect lines per criterion, the late ones (any stage after the two
     before any code) and the escapes, and the blind rater's agreement per tag

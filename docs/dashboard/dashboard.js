@@ -65,6 +65,8 @@ const PIPE = [
     { names: ["relabel.py + defect-rater"], relabel: true, does: "A reader who did not write the Day tags its defects blind; each disagreement is decided in the closing pull request." },
     { names: ["break-lines.py --spec"], nc: true, does: "Checks the spec's broken: lines against the Day's break record: every line has its entry, and no two breaks share a name." }] },
   { name: "CI on every pull request", gates: [
+    { names: ["A required check failed"], pile: "CI", subs: ["counted from Day 16"], does: "A defect a failed required check showed on the open pull request, from Day 16 (found: CI)." },
+    { names: ["The driver's reviewer"], pile: "driver reviewer", subs: ["on driver runs, from Day 16"], does: "A defect the driver's reviewer named on the pull request it read, from Day 16 (found: driver reviewer)." },
     { names: ["Description uses the template"], inPr: true, does: "The pull request's description has the template's sections." },
     { names: ["Diff stays reviewable"], subs: ["400 lines"], inPr: true, does: "No pull request over 400 changed lines; an Oversized: line turns the failure into a warning." },
     { names: ["Frozen files stay unedited"], inPr: true, does: "Files a Day froze are not edited, and the Verify lists of the holds in force do not change." },
@@ -2693,7 +2695,7 @@ function prfDraw(P, get, onDay) {
   const index = new Map(P.defects.map((o, i) => [o, i])), ix = new Map(P.defects.map((o, i) => [o.id, i]));
   const dotEls = [], dotsOf = {}, grpOf = {}, perOf = {};
   const cost = g => [g.runs != null ? `${n(g.runs, "run", "runs")} · ${money(g.cost)}` : "", g.per != null ? `about ${money(g.per)} a catch` : "",
-    g.by ? `by: tracks ${g.by.track} · self ${g.by.self} · other ${g.by.other}` : "", g.caught ? "" : "none in the Notes yet"].filter(Boolean);
+    g.by ? `by: tracks ${g.by.track} · self ${g.by.self} · other ${g.by.other}` : "", g.caught ? "" : (g.none || "none in the Notes yet")].filter(Boolean);
   let deepest = 0;
   trays.forEach(t => {
     const [x, w] = t.xw, per = Math.floor((w - 23) / 13), hx = x + 6.5, hw = w - 13, tx = hx + 5, rx = hx + hw - 5;
@@ -2767,8 +2769,17 @@ function prfDraw(P, get, onDay) {
   const out = el("rect", { class: "bin out", x: PRF_TRAY.out[0], y: 240.5, width: PRF_TRAY.out[1], height: 275, rx: 6 });
   el("text", { x: 1084, y: 20, class: "t-name" }, "Past every layer");
   el("text", { x: 1084, y: 33, class: "t-bio" }, "WHAT SURVIVES IS A MUTATION");
-  el("text", { x: 1084, y: 48, class: "t-sec" }, `${L[last].went_on} left in the count`);
-  ["The count ends at zero: a", "defect is counted only once", "somebody found it. What nobody", "found is not here."].forEach((s, j) => el("text", { x: 1084, y: 91 + 13 * j, class: "t-note" }, s));
+  const N = P.never;
+  if (N && N.left != null) {
+    const k = N.estimated;
+    el("text", { x: 1084, y: 48, class: "t-sec" }, `about ${comma(N.left)} never found`);
+    el("text", { x: 1084, y: 61, class: "t-sec" }, `an estimate: ${comma(N.low)} to ${comma(N.high)}`);
+    ["The count itself ends at zero:", "a defect is counted only once", "somebody found it. The", `estimate is from what ${PRF_WORD[k] || k}`,
+      k === 1 ? "agent misses on faults known" : "agents miss on faults known", "to be there."].forEach((s, j) => el("text", { x: 1084, y: 91 + 13 * j, class: "t-note" }, s));
+  } else {
+    el("text", { x: 1084, y: 48, class: "t-sec" }, "never found: not estimated");
+    ["The count ends at zero: a", "defect is counted only once", "somebody found it. What nobody", "found is not here."].forEach((s, j) => el("text", { x: 1084, y: 91 + 13 * j, class: "t-note" }, s));
+  }
   el("text", { x: 1096, y: 267, class: "t-g" }, "Let through by a Day's");
   el("text", { x: 1096, y: 280, class: "t-g" }, "own checks");
   const M = P.marks, perLayer = m => m.layers.map((c, i) => c ? `${layerWord(i)} ${c}` : "").filter(Boolean);
@@ -2832,8 +2843,8 @@ function prfDraw(P, get, onDay) {
   $("k-back").textContent = comma(M.back.n); $("k-esc").textContent = comma(M.escaped.n); $("k-leak").textContent = comma(leak ? leak.caught : 0);
   const CI = P.ci, ciName = w => w === "Evidence replay" ? "Evidence replay (the close's rehearsal)" : w, rehearsal = G.find(g => g.key === "rehearsal");
   $("ci").replaceChildren(h("span", { class: "h" }, "CI on every pull request"), ...CI.workflows.map(w => h("span", null, h("b", null, comma(w.failed)), ciName(w.name))),
-    h("span", { class: "rest" }, CI.counted ? `Pull requests each workflow failed on, of ${comma(CI.merged)} merged; ${comma(CI.failed_any)} had at least one failed workflow. CI is not in the stream: the Notes credit it no defect, except through the close's rehearsal, which has ${rehearsal ? rehearsal.caught : 0} so far.`
-      : "No workflow run is counted yet. CI is not in the stream: the Notes credit it no defect, except through the close's rehearsal."));
+    h("span", { class: "rest" }, CI.counted ? `Pull requests each workflow failed on, of ${comma(CI.merged)} merged; ${comma(CI.failed_any)} had at least one failed workflow. From Day ${CI.from_day} CI is a gate in the stream (found: CI in the Notes), with ${comma(CI.caught)} so far; before it the Notes credit it no defect, except through the close's rehearsal, which has ${rehearsal ? rehearsal.caught : 0} so far.`
+      : `No workflow run is counted yet. From Day ${CI.from_day} CI is a gate in the stream (found: CI in the Notes); before it the Notes credit it no defect, except through the close's rehearsal.`));
   const at = P.counted_at ? ` · the gates' runs and dollars are counted up to ${String(P.counted_at).slice(0, 16).replace("T", " ")}` : "";
   $("stamp").textContent = `Drawn from the page's data at ${P.head || "?"}${P.last_pr ? ` (#${P.last_pr})` : ""}, generated ${P.generated}${at}`;
 
@@ -2848,6 +2859,12 @@ function prfDraw(P, get, onDay) {
     const above = G.filter(g => g !== leak && g.caught > leak.caught);
     const rank = !above.length ? "more than any gate caught" : above.length <= 2 ? `more than any gate caught except ${andList(above.map(g => g.at))}` : `fewer than ${above.length} of the gates caught`;
     li(finds, `The leak is ${comma(leak.caught)}.`, ` Of the ${comma(Lk.caught)} that left the stream ${lower1(Lk.name)}, the ${PRF_WORD[gated.length] || gated.length} gates caught ${comma(Lk.caught - leak.caught)} and ${comma(leak.caught)} ${leak.caught === 1 ? "was" : "were"} only noticed in the work (tracks ${by.track}, the session itself ${by.self}${by.other ? `, other ${by.other}` : ""}). That is ${T ? Math.round(100 * leak.caught / T) : 0}% of all defects, ${rank}.`); }
+  if (N && N.left != null) li(finds, `About ${comma(N.left)} were never found.`, ` An estimate, between ${comma(N.low)} and ${comma(N.high)}.`
+    + N.agents.map(a => a.estimated
+      ? ` The ${a.agent}'s gate caught ${comma(a.caught)}; it names ${a.named} of ${a.of} known faults at worst (${a.hit_pct}%), so it missed about ${comma(a.missed)}; later checks found ${comma(a.later)} of them, which leaves about ${comma(a.left)}.`
+      : ` The ${a.agent} is not in it: ${a.why}.`).join("")
+    + ` It leans high: the known faults are ones that got past an agent once, and each count is the worst of its runs. A spec fault both agents missed is counted under each. A gate with no known cases adds nothing to it, so what only such a gate could catch is not counted. Whose miss a defect was: the Notes say where a line has catchable: (every line from Day ${N.catchable_from}), ${N.exact} so far; a line without it is read by a rule: a spec defect found after the spec-change pull request is the spec-auditor's, and any other found past the track-reviewer from Day ${N.reviewer_from} is the track-reviewer's.`);
+  else if (N) li(finds, "What nobody found is not estimated.", N.agents.filter(a => !a.estimated).map(a => ` The ${a.agent}: ${a.why}.`).join(""));
   const unpriced = G.filter(g => g.per == null && g !== leak).map(g => g.at);
   li(finds, "A catch costs", priced.length ? `, cheapest first, over the catches of the Days merged by the count: ${priced.map(g => `about ${money(g.per)} at ${g.at} (${money(g.cost)} over ${n(g.in_count, "catch", "catches")})`).join("; ")}.`
     + (P.late.length ? ` ${daySpan(P.late)} had a pull request merge after the count, so ${P.late.length === 1 ? "its" : "their"} catches share none of the dollars.` : "")
@@ -2862,7 +2879,7 @@ function prfDraw(P, get, onDay) {
   li(finds, "A second reader", R ? ` gave ${comma(R.differ)} of ${comma(R.tags)} tags differently.` + (R.stage ? ` For the tag that decides the tray, the gate that caught it, that is ${comma(R.stage[0])} of ${comma(R.stage[1])} defects (${R.stage[1] ? Math.round(100 * R.stage[0] / R.stage[1]) : 0}%).` : "")
     : " has read no Day's tags yet.");
   if (P.hooks) li(finds, "The hooks", ` refused ${n(P.hooks.refused, "call", "calls")}${P.hooks.guards.length ? ` (${P.hooks.guards.map(g => `${g.guard} ${g.refused}`).join(", ")})` : ""}${P.hooks.cost != null ? ` for ${money(P.hooks.cost)}` : ""}. No defect in the Notes is credited to them.`);
-  [["Only what was found.", " A defect here is one somebody found and wrote in a Day's Notes. So the stream ends at zero, and it says nothing of what nobody found. In a cell, what survives is exactly what is not seen."],
+  [["Only what was found.", " A defect here is one somebody found and wrote in a Day's Notes. So the stream itself ends at zero; what nobody found is an estimate, written past the last layer. In a cell, what survives is exactly what is not seen."],
     ["The checks are not fixed machinery.", " A cell's three checks do not change. Here a gate is added or changed between Days: the close's rehearsal is counted only from Day 12, and before that its catches sit with the evidence replay."],
     [`${n(P.days.length, "Day", "Days")} in one stream.`, " Each Day passes the layers once; the picture pools them. A square dot in \"while writing\" passed all four layers of the Day that made it and is drawn where a later Day noticed it."],
     ["Later is drawn further right,", " not lower as on the pipe below. Inside a layer the order means nothing: the leak is drawn before the gates only to keep it apart."],

@@ -85,6 +85,10 @@ class EntriesTest(unittest.TestCase):
     def test_the_track_reviewers_catch_is_before_the_merge(self):
         self.assertEqual("before_merge", relabel.stage(dict(self.rows[1], found="track-reviewer")))
 
+    def test_ci_and_the_drivers_reviewer_catch_before_the_merge(self):
+        self.assertEqual(["before_merge", "before_merge"],
+                         [relabel.stage(dict(self.rows[1], found=f)) for f in ("CI", "driver reviewer")])
+
     def test_seen_red_is_before_the_merge_and_the_evidence_replay_an_escape(self):
         self.assertEqual(["before_merge", "escape"], [relabel.stage(dict(found=f, made="Day 44", day=44))
                                                       for f in ("seen red", "evidence replay")])

@@ -260,6 +260,8 @@ def main():
                     user_stories=stories, plan=planned, gene=gene(planned, index, days),
                     gate_report=gate_report(days, refusals("gates.json"), refusals()),
                     defect_counts=defect_counts(days),
+                    never_found=never_found(days, case_counts({a: blobs.read(head, CASES_DIR + a + ".json") or None
+                                                               for a, _ in CASE_AGENTS})),
                     other_groups=other_groups(rows),
                     vocab_size=vocab, tokens=tokens, refusals=refusals(),
                     verification=verification(prs, runs),
@@ -302,6 +304,7 @@ def main():
     print(defect_count_line(real["defect_counts"]))
     for i in real["defect_counts"]["off_list"]:
         print(f"defect found: not on the list: {i}")
+    print(never_found_line(real["never_found"]))
 
 
 def gate_line(g):

@@ -9,7 +9,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from spec_drift_metrics import defect_counts  # noqa: E402
+from spec_drift_metrics import defect_counts, never_found  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
 from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention,  # noqa: E402
                               proofreading, protein, reading, reflex, rings, where_ring)
@@ -518,6 +518,9 @@ def demo():
                   break_line_from_pr=0, project=PROJECT, repo_url=None, phases=PHASES, stops=[3], where=dict(rows=WHERE, names={})))
     # Counted from the example Days' Defect lines as the real data is, so the two cannot drift apart.
     out["defect_counts"] = defect_counts(out["days"])
+    # Counted from the same lines, with counts two agents might have on known cases.
+    out["never_found"] = never_found(out["days"], {a: dict(named=k, of=n, runs=3, brief="example")
+                                                   for a, k, n in (("spec-auditor", 30, 44), ("track-reviewer", 9, 21))})
     criterion_states(out["criteria_index"], out["days"], out["replay"])
     out["gene"] = gene(out["plan"], out["criteria_index"], out["days"])
     out["merge_graph"] = merge_graph(out)

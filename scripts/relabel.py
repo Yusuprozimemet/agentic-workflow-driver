@@ -25,7 +25,7 @@ from collections import Counter
 ENTRY = re.compile(r"^- \*\*Defect\*\*(?:\s+D[\w.]+)?\s*[—-]\s*(.*)$")  # D28.1, the line's ID, is optional
 FIELD = re.compile(r"^(found|cause|made|catchable|same-as):\s*(.*)$")
 BEFORE_CODE = ("auditor", "spec-change pr")
-BEFORE_MERGE = ("review", "track-reviewer", "seen red", "break on purpose", "self")
+BEFORE_MERGE = ("review", "track-reviewer", "seen red", "break on purpose", "self", "ci", "driver reviewer")
 ESCAPE = ("close", "evidence replay", "dashboard")
 CAUSES = ("spec", "implementation", "process", "environment")
 
