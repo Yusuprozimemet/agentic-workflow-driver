@@ -153,11 +153,25 @@ def ability(I, key):
                     ("check", "Checks passed", "g7", [I.checks(prs)])])
 
 
+def half_up(x):
+    return int(x + 0.5)
+
+
+def days_mean(days):
+    """The mean of the Days' own scores as the page shows them, each rounded half up and the mean too; a Day with
+    no score is left out, and None when none has one. The whole is counted over all the Days at once instead, so
+    a Day with more checks weighs more in it: the two numbers differ."""
+    shown = [half_up(d["score"]) for d in days.values() if d and d.get("score") is not None]
+    return half_up(sum(shown) / len(shown)) if shown else None
+
+
 def quality_score(data):
-    """The score of the finished Days together, of each and of each ability; None before a Day finishes."""
+    """The score of the finished Days together, of each and of each ability, and the mean of the Days' own
+    scores; None before a Day finishes."""
     I = Inputs(data)
     if not I.days:
         return None
     abilities = (data.get("user_stories") or {}).get("abilities") or []
-    return dict(all=scope(I, I.days), days={str(d): scope(I, [d]) for d in I.days},
+    days = {str(d): scope(I, [d]) for d in I.days}
+    return dict(all=scope(I, I.days), days=days, days_mean=days_mean(days),
                 abilities={a["key"]: ability(I, a["key"]) for a in abilities if a.get("key")})

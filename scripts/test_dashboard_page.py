@@ -49,6 +49,25 @@ console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.t
   chips: { prt: shown(els["prt-chips"]), g12: shown(els["g12-chips"]) } }));
 """
 
+# BOOT, then the first Day's button pressed: its document records each element's listeners and every line written
+# under the big score (`qof`, in order), and `pressed` is the error the press threw, if any.
+BOOT_PRESS = r"""
+const fs = require("fs"), vm = require("vm"), els = {}, logged = [], qof = [];
+const stub = () => new Proxy(function () {}, {
+  get: (t, k) => k === Symbol.toPrimitive ? () => "" : k === Symbol.iterator ? [][Symbol.iterator] : k in t ? t[k]
+    : k === "addEventListener" ? (t[k] = (type, fn) => { (t.on = t.on || {})[type] = fn; }) : (t[k] = stub()),
+  apply: () => stub(), construct: () => stub() });
+els["q-of"] = stub(); els["q-of"].replaceChildren = (...k) => { qof.push(k.map(String).join("")); };
+els.days = stub(); els.days.replaceChildren = (...k) => { els.days.kids = k; };
+const document = new Proxy({}, { get: (t, k) => k === "getElementById" ? id => els[id] || (els[id] = stub()) : stub() });
+const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, matchMedia: () => ({ matches: false, addEventListener() {} }),
+  console: { error: e => logged.push(String(e)) }, DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+let error = null, pressed = null;
+try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);", ctx); } catch (e) { error = e.message; }
+try { const chip = (els.days.kids || [])[2]; if (chip && chip.on && chip.on.click) chip.on.click(); } catch (e) { pressed = e.message; }
+console.log(JSON.stringify({ error, pressed, qof }));
+"""
+
 # flipTheme() on each [saved, systemDark] pair of the list from stdin.
 FLIP = r"""
 const fs = require("fs"), vm = require("vm");
@@ -943,16 +962,23 @@ class DrawTest(unittest.TestCase):
         self.assertEqual(len([k for k in key["kids"] if isinstance(k, dict) and k["attrs"].get("class") == "pc-legend"]), 4)
 
     def test_graph_12_draws_the_added_commitments_section_label_under_the_added_arm(self):
-        self.assertEqual([n["text"] for n in self.labels(self.box())], ["A lon…", "Lat…"])  # 5 px kept between labels
-
-    def test_graph_12_draws_section_labels_horizontal_truncated_with_the_full_name_in_a_title_and_none_under_24_px(self):
+        # each section's label in the plan's order, and the added arm's own one stands on that arm's bracket
         box = self.box()
         labels = self.labels(box)
-        self.assertEqual([n["text"] for n in labels], ["A lon…", "Lat…"])  # 5 px kept between labels
+        self.assertEqual([n["text"] for n in labels], ["A long section name that cannot fit", "Narrow", "Later"])
+        brackets = [n["attrs"] for n in nodes(box) if n["tag"] == "line" and n["attrs"].get("stroke-width") == "1.5"]
+        self.assertEqual(len(brackets), 3)
+        foot = float(re.match(r"translate\(([-\d.]+) ", labels[-1]["attrs"]["transform"]).group(1))
+        self.assertEqual(float(brackets[-1]["x1"]) <= foot <= float(brackets[-1]["x2"]), True)
+
+    def test_graph_12_draws_every_section_label_slanted_and_whole_with_its_name_in_a_title(self):
+        box = self.box()
+        labels = self.labels(box)
+        # slanted as the gene slants its own, so a narrow section keeps its name too; none is near the gene's cut at 38
+        self.assertEqual([n["text"] for n in labels], ["A long section name that cannot fit", "Narrow", "Later"])
         self.assertEqual([[k["text"] for k in n["kids"] if isinstance(k, dict) and k["tag"] == "title"] for n in labels],
-                         [["A long section name that cannot fit"], ["Later"]])
-        self.assertEqual([n["attrs"].get("transform") for n in labels], [None, None])
-        self.assertFalse(any("Narrow" in s for s in texts(box)))
+                         [["A long section name that cannot fit"], ["Narrow"], ["Later"]])
+        self.assertEqual([(n["attrs"].get("transform") or "").endswith("rotate(-52)") for n in labels], [True, True, True])
         # Each group still has its tick: the two plan sections and the added one.
         self.assertEqual(len([n for n in nodes(box) if n["tag"] == "line" and n["attrs"].get("stroke-width") == "0.75"]), 3)
 
@@ -989,6 +1015,17 @@ class BootTest(unittest.TestCase):
         out = boot(data(score=ModelTest.SCORE))
         self.assertEqual((out["error"], out["logged"], out["quality"]["hidden"]), (None, [], False))
 
+    def test_the_line_under_the_whole_score_says_the_days_own_scores_average_apart(self):
+        # the whole is counted over all the finished Days at once; the Days' own scores have their own mean
+        out = node(BOOT_PRESS, data(score=dict(ModelTest.SCORE, days_mean=88)))
+        self.assertEqual((out["error"], out["pressed"], len(out["qof"])), (None, None, 2))
+        whole = "quality of the finished Days, out of 100, counted over all of them at once; the Days' own scores average 88"
+        self.assertEqual((out["qof"][0][-30:], out["qof"][0] == whole), (whole[-30:], True))
+        # a chosen Day's line, and the whole's when the data has no mean, read as they did
+        self.assertEqual(out["qof"][1], "quality of Day 1, out of 100")
+        bare = node(BOOT_PRESS, data(score=ModelTest.SCORE))
+        self.assertEqual(bare["qof"][:1], ["quality of the finished Days, out of 100"])
+
     def test_the_now_line_gives_way_to_the_ring_only_when_the_ring_is_drawn(self):
         # The ring's middle says the next step, so the plain Now line hides under it. With no ring (no phase rows in the
         # data, or the plan's rows with no ring counted from them) the Now line is all the page says of where the work is.
@@ -1008,7 +1045,7 @@ class BootTest(unittest.TestCase):
         self.assertFalse(gone["missing"]["hidden"])
         self.assertEqual(gone["missing"]["text"], "The dashboard-data branch is missing, so this page leaves out the dollars, the hooks' refusals, the gates' "
                          "runs and cost, the sessions' times, when the sessions were last counted, the driver's steps and the "
-                         "re-checks of finished promises. The proofreading stream is not drawn. The energy budget is not drawn.")
+                         "re-checks of finished promises. The error-correction stream is not drawn. The energy budget is not drawn.")
         one = boot(data(data=source("abc", ["replay-history.json"])))
         self.assertEqual(one["missing"]["text"], "The dashboard-data branch has no replay-history.json, so this page leaves out "
                          "the re-checks of finished promises.")
@@ -1054,7 +1091,7 @@ class ThemeTest(unittest.TestCase):
 
 
 # The cards with a plot of their own, each folded under the drawing that took its place: graph 6 under the merge graph,
-# graph 1 under its reading as a gene, graph 2 under its gel, graph 7 under its proofreading stream and graph 10 under
+# graph 1 under the plan being read, graph 2 under its gel, graph 7 under its error-correction stream and graph 10 under
 # its actogram. Graphs 3 to 5, 8, 9 and 11 and the "Where we are" tiles have left the page: the proteins, the energy
 # budget, the growth rings, the reflex arcs and the ring stand alone (GONE_IDS, GONE_KEYS, which list everything that left).
 CARDS = (1, 2, 6, 7, 10)
@@ -1065,7 +1102,7 @@ GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist", "
 GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how")
 # Links to the graphs that left still land on the drawing in their place: an empty anchor in its section.
 ANCHORS = (("prt", ("g3", "g4", "g5")), ("atp", ("g8",)), ("rng", ("g9",)))
-EYEBROWS = {"whr": "Where we are · the plan as a ring", "prt": "Graphs 3–5 · drawn as proteins",
+EYEBROWS = {"whr": "Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop", "prt": "Graphs 3–5 · drawn as proteins",
             "atp": "Graph 8 · drawn as an energy budget", "rng": "Graph 9 · drawn as growth rings",
             "rfx": "Graph 11 · drawn as reflex arcs"}
 

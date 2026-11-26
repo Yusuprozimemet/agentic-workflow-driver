@@ -35,7 +35,7 @@
     <p class="now" id="now">Loading the latest data…</p>
     <section class="graph" id="whr" aria-labelledby="whr-h" hidden>
       <div class="graph-head">
-        <p class="graph-n">Where we are · the plan as a ring</p>
+        <p class="graph-n">Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop</p>
         <h2 id="whr-h">Where we are</h2>
         <p class="graph-say">Read the ring clockwise from the top: one segment for each Day, a gate at each stop, a marker where the work is. Click a Day to light it in every graph.</p>
       </div>
@@ -106,18 +106,18 @@
 
   <section class="graph" id="rdg">
     <div class="graph-head">
-      <p class="graph-n">Graph 1 · the merges read as a gene; the old graph 1 is folded below</p>
+      <p class="graph-n">Graph 1 · the plan being read, merge by merge; the old graph 1 is folded below</p>
       <h2>How far to the next stop?</h2>
       <p class="chips" id="rdg-chips" hidden></p>
       <p class="graph-say">Every merge in order, left to right: a block is a Day's work, a thin line the work between Days, the oval is today.</p>
     </div>
     <div class="ladder" id="g1-ladder"></div>
     <div class="figs" id="rdg-figs"></div>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-spec" width="8" height="14" rx="1"/></svg>A Day's work</span><span><svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="strand" d="M0 5H26"/></svg>Between Days</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="q q-new" width="12" height="4" rx="1.6"/></svg>Promises</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><ellipse class="pol" cx="6" cy="9" rx="5" ry="8"/></svg>Today and ahead</span><span><svg class="ho picked" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="v" d="M1 1Q13 17 25 1"/></svg>Hand-offs</span></p>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span>A Day's work:</span><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-spec" width="8" height="14" rx="1"/></svg>a merge of the Day's spec</span><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-code" width="8" height="14" rx="1"/></svg>of its code</span><span><svg width="9" height="15" viewBox="0 0 9 15" aria-hidden="true"><rect class="cell k-close" x=".7" y=".7" width="7.6" height="13.6" rx="1"/></svg>the Day's close</span><span><svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="strand" d="M0 5H26"/></svg>Between Days</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="q q-new" width="12" height="4" rx="1.6"/></svg>Promises</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><ellipse class="pol" cx="6" cy="9" rx="5" ry="8"/></svg>Today and ahead</span><span><svg class="ho picked" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="v" d="M1 1Q13 17 25 1"/></svg>Hand-offs</span></p>
     <details class="exact mock-key">
     <summary>Key, and how to read it</summary>
     <div>
-    <p class="graph-say">Read it left to right, as a gene is read. The strand is every merge in order. A block is a Day's own work, one cell per merge; the thin line between blocks is the work between Days, squeezed. Under each cell hang the promises that merge built. The oval on the strand is today. Right of it are the Days the plan lists and nobody has specified, and then the stop.</p>
+    <p class="graph-say">Read it left to right. The plan is the gene, and each merge is one more step of reading it: the strand is every merge in order. A block is a Day's own work, one cell per merge; the thin line between blocks is the work between Days, squeezed. Under each cell hang the promises that merge built. The oval on the strand is today. Right of it are the Days the plan lists and nobody has specified, and then the stop.</p>
     <dl class="lg">
     <dt>A Day's work <small>an exon</small>
     </dt>
@@ -462,7 +462,7 @@
     </div>
     <p class="stamp" id="mrg-stamp"></p>
     <dl class="verdict" id="mrg-verdict"></dl>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Uncited row</span></p>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Row drawn for a stop</span></p>
     <details class="exact mock-key"><summary>Key, and how to read it</summary>
   <div><p class="graph-say">The long bar is the spec, one stripe per criterion. Each row above it is a Day's merges. A mark says what a merge did to the criterion straight below it: gave it its evidence, or stopped it holding. Everything a reader needs is printed inside the card, so a screenshot of it can be read without the hover.</p>
   <dl class="mlegend">
@@ -477,7 +477,7 @@
         <dt>Numbers</dt>
         <dd><span><i class="bd fix">n</i>not holding, still in force</span><span><i class="bd retired">n</i>not holding when last run, since replaced by one not shown to hold</span><span><i class="bd replaced">n</i>not holding when last run, since replaced by one that holds</span><span><i class="bd">n</i>stopped holding and came back</span><span><i class="bd loose">n</i>a merge no criterion cites</span><span><i class="tri"></i>a later criterion replaced this one</span></dd>
         <dt>Rows</dt>
-        <dd><span><i class="msw own"></i>a Day's own merges over its own criteria</span><span><i class="msw dead"></i>the replay never ran at this merge, so no red can show here</span><span><i class="msw new" style="opacity:.38"></i>faint: a later criterion names an earlier merge</span><span><i class="msw prod"></i>product lines</span><span><i class="msw test"></i>test lines</span><span><b class="stopk">3</b>Stopped: criteria the replay first saw not holding in this row</span><span><i class="msw due"></i>not due: plan.md lists the Day, no spec yet</span><span><i class="msw nocite"></i>dashed, in italics, or "2 uncited" beside a Day: no criterion cites the merge; it is drawn because the replay first noticed a stop, or saw one hold again, there, at a sampled merge</span></dd>
+        <dd><span><i class="msw own"></i>a Day's own merges over its own criteria</span><span><i class="msw dead"></i>the replay never ran at this merge, so no red can show here</span><span><i class="msw new" style="opacity:.38"></i>faint: a later criterion names an earlier merge</span><span><i class="msw prod"></i>product lines</span><span><i class="msw test"></i>test lines</span><span><b class="stopk">3</b>Stopped: criteria the replay first saw not holding in this row</span><span><i class="msw due"></i>not due: plan.md lists the Day, no spec yet</span><span><i class="msw nocite"></i>dashed, in italics, or "2 drawn for a stop" beside a Day: no criterion cites the merge; it is drawn because the replay first noticed a stop, or saw one hold again, there, at a sampled merge</span></dd>
       </dl>
   <p class="vcap">These counts are each criterion's state the last time the replay ran it. The strip under the long bar draws the same state, one cell per criterion.</p></div>
   </details>
@@ -517,7 +517,7 @@
 
   <section class="graph" id="prf">
     <div class="graph-head">
-      <p class="graph-n">Graph 7 · drawn as proofreading; the old graph 7 is folded below</p>
+      <p class="graph-n">Graph 7 · drawn as error correction; the old graph 7 is folded below</p>
       <h2>Does the checking work, and is it worth it?</h2>
       <p class="graph-say">One stream of defects, thinning left to right at each layer of checking; a dot under a layer is one defect caught there.</p>
     </div>
@@ -576,7 +576,7 @@
 
   <section class="graph" id="lrn">
     <div class="graph-head">
-      <p class="graph-n">Graph 13 · two plain pictures, after the checking</p>
+      <p class="graph-n">Graph 13 · read as immunity, after the checking</p>
       <h2>Does it learn from its mistakes?</h2>
       <p class="graph-say">The first picture counts how often an old problem came back, Day by Day. The second takes each fix and sets the times before it beside the times after it.</p>
     </div>
@@ -591,7 +591,7 @@
     </div>
     <p class="hint">Point at a bar for the Day's repeats, at a dashed line for the fixes that count from it, and at a row for its fix. With the keyboard, Tab moves from mark to mark. A Day's button above dims every other Day.</p>
     <details class="exact"><summary>How to read it</summary>
-      <p class="read">A repeat is a defect whose line in a Day's Notes says <code>same-as:</code> an earlier one. The links are followed both ways, so every defect linked to another is one problem. A fix is a pull request that <code>specs/fixes.json</code> names, with the defects it was meant to stop.</p>
+      <p class="read">Read it as immunity: a fix is the memory of a problem met once, and a problem that comes back although its fix was in place is an escape. A repeat is a defect whose line in a Day's Notes says <code>same-as:</code> an earlier one. The links are followed both ways, so every defect linked to another is one problem. A fix is a pull request that <code>specs/fixes.json</code> names, with the defects it was meant to stop.</p>
       <p class="read">A fix counts from the first Day whose spec merged after the fix did. In the first picture its line stands at that Day. A repeat on that Day or later of a problem the fix names is amber and hatched when a gate caught it before the close, and red and hatched when it got past the gates before the close (noticed in the work, or found at the close or later). In the second picture the times a Day before the fix (from the Day the problem was first recorded) are set beside the times a Day after it, and a verdict comes only after 5 Days: gone, reduced (at most half as often) or not reduced.</p>
       <p class="stamp" id="lrn-stamp"></p>
     </details>
@@ -828,7 +828,7 @@
       </div>
       <div>
         <h3>Where the model bends</h3>
-        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
+        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
       </div>
     </div>
   </details>

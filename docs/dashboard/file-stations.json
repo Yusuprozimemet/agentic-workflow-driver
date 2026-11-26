@@ -1,5 +1,5 @@
 {
-  "about": "Where each tracked file hangs on the dashboard's file map (scripts/spec_drift_files.py reads this on every build). A group hangs at one column: a station (s1 to s7) or a check between two (plan-auditor, spec-auditor, implementer, ci, defect-rater). 'paths' places a folder or a file: a name ending in / is everything under that folder, and * stands for any run of characters inside one name. 'scripts' places a script of scripts/ by its name without .py; a script's own test (test_<name>.py) follows its script unless it is named here itself. The first group that fits takes the file. A file no group takes is drawn in the ring, 'on no station': add it here. One group may be marked 'loop': the improve loop's own files. It is no station, since it runs only when the maintainer asks, so the picture draws a dashed line from that group's column back to the column of every brief that has known cases; the build reads those briefs from specs/agent-cases/, not from here.",
+  "about": "Where each tracked file hangs on the dashboard's file map (scripts/spec_drift_files.py reads this on every build). A group hangs at one column: a station (s1 to s7) or a check between two (plan-auditor, spec-auditor, implementer, track-reviewer, ci, defect-rater). 'paths' places a folder or a file: a name ending in / is everything under that folder, and * stands for any run of characters inside one name. 'scripts' places a script of scripts/ by its name without .py; a script's own test (test_<name>.py) follows its script unless it is named here itself. The first group that fits takes the file. A file no group takes is drawn in the ring, 'on no station': add it here. One group may be marked 'loop': the improve loop's own files. It is no station, since it runs only when the maintainer asks, so the picture draws a dashed line from that group's column back to the column of every brief that has known cases; the build reads those briefs from specs/agent-cases/, not from here.",
   "groups": [
     {"at": "s1", "label": "plan.md", "kind": "spec", "what": "The plan: the one text everything else is copied from.",
      "paths": ["plan.md"]},
@@ -21,8 +21,10 @@
      "paths": ["tests/"]},
     {"at": "s4", "label": "scripts/", "kind": "tool", "what": "Scripts that run the tests and prove a new one fails first.",
      "scripts": ["seen-red", "track-red", "test-parallel"]},
-    {"at": "implementer", "label": "agents", "kind": "tool", "what": "Briefs of the implementer, who writes the code, and of the track-reviewer, who reads its brief and its diff.",
-     "paths": [".claude/agents/implementer.md", ".claude/agents/track-reviewer.md"]},
+    {"at": "implementer", "label": "agent", "kind": "tool", "what": "The implementer's brief: it writes the code and the tests of a track.",
+     "paths": [".claude/agents/implementer.md"]},
+    {"at": "track-reviewer", "label": "agent", "kind": "tool", "what": "The track-reviewer's brief: it reads each track's brief before the implementer starts, and its diff before the pull request.",
+     "paths": [".claude/agents/track-reviewer.md"]},
     {"at": "implementer", "label": "scripts/", "kind": "tool", "what": "The script that checks a brief before it is sent.",
      "scripts": ["brief-check"]},
     {"at": "s5", "label": "the driver", "kind": "code", "what": "The app itself: the driver's modules and run-steps.py, its entry point.",

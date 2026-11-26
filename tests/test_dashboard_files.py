@@ -4,6 +4,7 @@ in docs/dashboard/file-stations.json, and a file the table does not place is dra
 The page tests need node."""
 
 import importlib.util
+import itertools
 import json
 import math
 import os
@@ -37,6 +38,7 @@ FILES = {
     "plan.md": 900, "CLAUDE.md": 400, "specs/README.md": 300, "specs/_template.md": 25,
     "specs/day-01-first.md": 500, "specs/day-02-second.md": 250, "specs/plan/promises.json": 100,
     "specs/breaks/day-01.json": 12, ".claude/agents/spec-auditor.md": 208, ".claude/agents/implementer.md": 79,
+    ".claude/agents/track-reviewer.md": 150,
     "tests/test_a.py": 120, "tests/test_b.py": 60, "tests/__init__.py": 0,
     "driver/decide.py": 200, "run-steps.py": 40, "hooks/readonly.py": 30, ".github/workflows/tests.yml": 50,
     "scripts/seen-red.py": 150, "scripts/test_seen_red.py": 90, "scripts/spec-drift.py": 316,
@@ -50,9 +52,13 @@ FILES = {
 LOOP = {
     ".claude/agents/brief-improver.md": 60, "scripts/improve-loop.py": 300, "scripts/test_improve_loop.py": 200,
     "specs/agent-cases/spec-auditor.json": 90, "specs/agent-cases/reviewer.json": 70,
-    "specs/agent-cases/track-reviewer/day-13-a.md": 40, "rules/reviewer.md": 50,
+    "specs/agent-cases/track-reviewer.json": 80, "specs/agent-cases/track-reviewer/day-13-a.md": 40,
+    "rules/reviewer.md": 50,
 }  # fmt: skip
-BRIEFS = {"spec-auditor": ".claude/agents/spec-auditor.md", "reviewer": "rules/reviewer.md"}
+BRIEFS = {
+    "spec-auditor": ".claude/agents/spec-auditor.md", "reviewer": "rules/reviewer.md",
+    "track-reviewer": ".claude/agents/track-reviewer.md",
+}  # fmt: skip
 # What the table did not place when the loop was built (#288 to #297): each has a station now.
 ONCE_UNPLACED = (
     ".claude/agents/brief-improver.md", "scripts/improve-loop.py", "scripts/test_improve_loop.py",
@@ -241,6 +247,27 @@ class FileMapTest(unittest.TestCase):
                 path,
             )
 
+    def test_the_track_reviewers_brief_hangs_at_a_column_of_its_own(self):
+        # the track-reviewer is a check after station 5, not the writer: its brief hangs at its own column, and
+        # the implementer's brief alone at the implementer's
+        self.assertIn("track-reviewer", sorted(files.COLUMNS))
+        col = files.COLUMNS["track-reviewer"]
+        self.assertEqual(
+            (col["zone"], col["at"]), ("try", "the track-reviewer's check, after station 5")
+        )
+        order = list(files.COLUMNS)
+        self.assertEqual(order[order.index("s5") + 1 : order.index("ci")], ["track-reviewer"])
+        m = drawn(FILES)
+        reviewer = home(m, ".claude/agents/track-reviewer.md")[0]
+        writer = home(m, ".claude/agents/implementer.md")[0]
+        self.assertEqual(
+            (reviewer["at"], reviewer["label"], reviewer["files"]), (col["at"], "agent", 1)
+        )
+        self.assertEqual(
+            (writer["at"], writer["label"], writer["files"]),
+            (files.COLUMNS["implementer"]["at"], "agent", 1),
+        )
+
     def test_the_loop_lands_where_each_brief_with_cases_hangs(self):
         counts = dict(FILES, **LOOP)
         m = files.file_map(counts, table(), "abc1234", briefs=BRIEFS)
@@ -250,6 +277,7 @@ class FileMapTest(unittest.TestCase):
             (col["defect-rater"]["x"], files.LOOP_Y),
             "it leaves where its files hang",
         )
+        self.assertIn("track-reviewer", sorted(col))
         self.assertEqual(
             [(t["col"], t["x"], t["at"], t["agents"]) for t in loop["to"]],
             [
@@ -260,6 +288,12 @@ class FileMapTest(unittest.TestCase):
                     ["spec-auditor"],
                 ),
                 ("s5", col["s5"]["x"], col["s5"]["at"], ["reviewer"]),
+                (
+                    "track-reviewer",
+                    col["track-reviewer"]["x"],
+                    col["track-reviewer"]["at"],
+                    ["track-reviewer"],
+                ),
             ],
         )
         # the picture opens higher to hold the line, and ends where it ended
@@ -272,15 +306,21 @@ class FileMapTest(unittest.TestCase):
         self.assertEqual(
             m["geo"]["top"] + m["geo"]["height"], plain["geo"]["top"] + plain["geo"]["height"]
         )
-        # two briefs in one column share an arrow; a brief git does not track gets none
-        more = {"implementer": ".claude/agents/implementer.md", "gone": ".claude/agents/gone.md"}
-        more["track-reviewer"] = ".claude/agents/track-reviewer.md"
-        shared = files.file_map(
-            dict(counts, **{".claude/agents/track-reviewer.md": 100}),
-            table(),
-            "abc1234",
-            briefs=dict(BRIEFS, **more),
+        # two briefs in one column share an arrow; a brief git does not track gets none. The table hangs each
+        # brief at a column of its own, so this one puts two briefs in one group at the implementer's column.
+        both = [".claude/agents/implementer.md", ".claude/agents/track-reviewer.md"]
+        own = [g for g in table() if not set(g.get("paths", ())) & set(both)]
+        own.append(
+            {
+                "at": "implementer",
+                "label": "agents",
+                "kind": "tool",
+                "what": "Two briefs.",
+                "paths": both,
+            }
         )
+        more = {"implementer": ".claude/agents/implementer.md", "gone": ".claude/agents/gone.md"}
+        shared = files.file_map(counts, own, "abc1234", briefs=dict(BRIEFS, **more))
         self.assertEqual(
             [(t["col"], t["agents"]) for t in shared["loop"]["to"]],
             [
@@ -296,6 +336,7 @@ class FileMapTest(unittest.TestCase):
         shown = {
             "abc1234:specs/agent-cases/reviewer.json": '{"agent": "reviewer", "brief": "rules/reviewer.md"}',
             "abc1234:specs/agent-cases/spec-auditor.json": '{"agent": "spec-auditor", "cases": []}',
+            "abc1234:specs/agent-cases/track-reviewer.json": '{"agent": "track-reviewer"}',
             "abc1234:specs/agent-cases/torn.json": '{"agent": ',
         }
         counts = dict(FILES, **LOOP, **{"specs/agent-cases/torn.json": 1})
@@ -314,7 +355,10 @@ class FileMapTest(unittest.TestCase):
         for agent, brief in BRIEFS.items():
             self.assertEqual(got[agent], brief, agent)
         m = files.build_file_map("abc1234", run)
-        self.assertEqual([t["agents"] for t in m["loop"]["to"]], [["spec-auditor"], ["reviewer"]])
+        self.assertEqual(
+            [t["agents"] for t in m["loop"]["to"]],
+            [["spec-auditor"], ["reviewer"], ["track-reviewer"]],
+        )
 
     def test_the_build_puts_it_in_the_data(self):
         wired = real("scripts", "spec-drift.py").count('real["file_map"] = build_file_map(')
@@ -346,8 +390,24 @@ console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf
      keyMarks: [is(key, ["chk"]), is(key, ["ribo"]), is(key, ["f"])], view: f.attrs.viewBox || "", label: f.attrs["aria-label"] || "",
      key: words(key).replace(/\\s+/g, " "), rows: all($("fil-table")).filter(e => e.tag === "tr").length,
      words: ["fil-figs", "fil-key", "fil-hint", "fil-table", "fil-stamp", "fil-how", "fil-scroll"].map(id => words($(id))).join(" ").replace(/\\s+/g, " "),
-     figure: words(f).replace(/\\s+/g, " ") })`, ctx)));
+     figure: words(f).replace(/\\s+/g, " "),
+     chk: all(f).filter(e => ((e.attrs && e.attrs.class) || "").split(" ").includes("chk"))
+       .map(e => [e.tag, e.tag === "path" ? +(/^M([\\d.]+),/.exec(e.attrs.d) || [0, 0])[1] : +e.attrs.x + +e.attrs.width / 2]),
+     at: all(f).filter(e => e.tag === "text").map(e => [e.attrs.class || "", words(e), +e.attrs.x, +e.attrs.y, e.attrs["text-anchor"] || "start"]),
+     pillsAt: all(f).filter(e => e.tag === "rect" && e.attrs.class === "pill").map(e => +e.attrs.x + +e.attrs.width / 2),
+     riboAt: all(f).filter(e => e.attrs && e.attrs.class === "ribo").map(e => +e.attrs.cx) })`, ctx)));
 """
+
+# A text's width on the map, as a rough share of its size: the names (10.5 px, bold) and the small words (9.5 px,
+# monospaced) a little over their average letter.
+PER = {"t-g": 6.0, "t-bio": 5.8}
+
+
+def words_box(t):
+    cls, words, x, y, anchor = t
+    w = len(words) * PER[cls]
+    x0 = x - w if anchor == "end" else x - w / 2 if anchor == "middle" else x
+    return (x0, x0 + w, y - 9, y + 3)
 
 
 def page(model):
@@ -425,18 +485,78 @@ class FilePageTest(unittest.TestCase):
         m = files.file_map(dict(FILES, **LOOP), table(), "abc1234", briefs=BRIEFS)
         got = page(m)
         self.assertEqual(
-            got["loop"], [1, 2, 1], "one line, an arrow for each column it lands on, and its key"
+            got["loop"], [1, 3, 1], "one line, an arrow for each column it lands on, and its key"
         )
         self.assertEqual(got["view"], f"0 {files.LOOP_TOP:g} 1236 {m['geo']['height']:g}")
         self.assertIn("the improve loop", got["figure"])
         self.assertIn("the improve loop, only when the maintainer asks", got["key"])
         self.assertIn(
-            "spec-auditor at the spec-auditor's check and reviewer at station 5", got["words"]
+            "spec-auditor at the spec-auditor's check, reviewer at station 5 and track-reviewer at "
+            "the track-reviewer's check",
+            got["words"],
         )
         # a repository with no case set has no loop: no line, no key for it, no word about it
         plain = page(drawn(FILES))
         self.assertEqual(plain["loop"], [0, 0, 0])
         self.assertNotIn("improve loop", plain["words"] + plain["figure"])
+
+    def test_the_maps_words_and_marks_stand_at_their_columns_in_two_rows(self):
+        # every station's pill, the ribosome and every check's name at its column's x; what each station is in the
+        # cell on row A, under the pills; who checks on row B, below it; on each row no two texts' boxes overlap;
+        # the first group's label below row B's small words; in the cytoplasm each column's dots clear of the next's
+        col, got = files.COLUMNS, page(drawn(FILES))
+        stations = [col[f"s{n}"]["x"] for n in range(1, 8)]
+        self.assertEqual(
+            (got["pillsAt"], sorted(set(got["riboAt"]))), (stations, [col["implementer"]["x"]])
+        )
+        names = {"plan-auditor": "plan-auditor", "spec-auditor": "spec-auditor", "implementer": "implementer",
+                 "track-reviewer": "track-reviewer", "CI's checks": "ci", "defect-rater": "defect-rater"}  # fmt: skip
+        at = {t[1]: t[2] for t in got["at"] if t[0] == "t-g" and t[1] in names}
+        off = sorted(w for w, k in names.items() if at.get(w) != col[k]["x"])
+        self.assertEqual(off, [])
+        rows = [t for t in got["at"] if t[0] in PER and 190 < t[3] < 262]
+        row_a = [
+            t[3]
+            for t in rows
+            if t[0] == "t-bio" and t[1] in ("the gene", "negative control", "the protein,")
+        ]
+        row_b = [t[3] for t in rows if t[0] == "t-g"]
+        self.assertEqual(
+            (len(row_a), len(row_b) >= 7, min(row_b) > max(row_a) + 12), (3, True, True)
+        )
+        clash = sorted(
+            sorted([a[1], b[1]])
+            for i, a in enumerate(rows)
+            for b in rows[i + 1 :]
+            if abs(a[3] - b[3]) < 1
+            and words_box(a)[0] < words_box(b)[1]
+            and words_box(b)[0] < words_box(a)[1]
+        )
+        self.assertEqual(clash, [])
+        below = max(t[3] for t in rows)
+        first = min(g["y"] for g in drawn(FILES)["groups"])
+        self.assertEqual((first - below >= 14, first == files.FIRST_Y), (True, True))
+        tried = sorted(
+            (c["x"], c.get("w", files.WIDTH), k) for k, c in col.items() if c["zone"] == "try"
+        )
+        touching = [
+            [a[2], b[2]] for a, b in itertools.pairwise(tried) if a[0] + a[1] / 2 >= b[0] - b[1] / 2
+        ]
+        self.assertEqual(touching, [])
+
+    def test_every_check_is_drawn_at_its_columns_x(self):
+        # a diamond at the track-reviewer's column, and each check's mark centred where its files hang
+        checks = ("plan-auditor", "spec-auditor", "track-reviewer", "ci", "defect-rater")
+        self.assertEqual([c for c in checks if c not in files.COLUMNS], [])
+        got = page(drawn(FILES))
+        diamonds = sorted(x for tag, x in got["chk"] if tag == "path")
+        marks = [x for _, x in got["chk"]]
+        off = [c for c in checks if not any(abs(x - files.COLUMNS[c]["x"]) < 0.6 for x in marks)]
+        self.assertEqual(off, [])
+        self.assertEqual(
+            len(diamonds), 4, "plan-auditor, spec-auditor, track-reviewer, defect-rater"
+        )
+        self.assertIn("track-reviewer", got["figure"])
 
     def test_a_file_the_table_does_not_place_is_named_on_the_page(self):
         got = page(drawn(dict(FILES, **{"scripts/brand-new.py": 77})))
