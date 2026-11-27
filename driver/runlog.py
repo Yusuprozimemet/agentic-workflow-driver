@@ -22,7 +22,18 @@ def stamp():
     return datetime.datetime.now(datetime.UTC).strftime(STAMP)
 
 
-def start(state, step, prefix, session, claude, issue=None, container=None, pr=None):
+def start(
+    state,
+    step,
+    prefix,
+    session,
+    claude,
+    issue=None,
+    container=None,
+    pr=None,
+    level=None,
+    phase=None,
+):
     record = {
         "event": "start",
         "at": stamp(),
@@ -31,6 +42,11 @@ def start(state, step, prefix, session, claude, issue=None, container=None, pr=N
         "session": session,
         "claude": claude,
     }
+    # The level in force and the step's Day's phase go after claude, and only at level 2 or 3: status
+    # counts level 3's phases in a row by them, and a start line at level 1, or a review's, keeps its keys.
+    if level is not None:
+        record["level"] = level
+        record["phase"] = phase
     # The pull request a review is of goes after claude, and only when there is one: status names the
     # review's row and its progress line by it before the reviewer's verdict is written.
     if pr is not None:

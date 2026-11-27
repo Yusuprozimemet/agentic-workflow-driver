@@ -1,9 +1,9 @@
-"""Day 16's escape in `on` (driver/loop.py, read_escapes): C16.7 to C16.11 and C16.20. At driver.json's level 2,
-before each step the loop reads the finished Days of the --out JSON it has not read yet, writes an escapes line
-for each, and goes back one level when one of them holds a Defect line found at the close, by the dashboard, in
-a Day NN review or by the evidence replay; a failed evidence run after a driver merge lowers too. Each case is
-LevelInForceTest's container set-up, two steps: Day 23's close, whose session writes the JSON after the close,
-then Day 24's spec."""
+"""Day 16's escape in `on` (driver/loop.py, read_escapes): C16.7 to C16.11, C16.15 and C16.20. At driver.json's
+level 2 (or 3), before each step the loop reads the finished Days of the --out JSON it has not read yet, writes an
+escapes line for each, and goes back one level when one of them holds a Defect line found at the close, by the
+dashboard, in a Day NN review or by the evidence replay; a failed evidence run after a driver merge lowers too.
+Each case is LevelInForceTest's container set-up, two steps: Day 23's close, whose session writes the JSON after
+the close, then Day 24's spec."""
 
 import json
 import subprocess
@@ -94,6 +94,60 @@ BEFORE = drift(CLOSE, [day(23, "active"), day(24, "ready")])
 def after(lines=CLOSED, status="done"):
     # The JSON the close's session writes: Day 23 finished with its Defect lines, the next step Day 24's spec.
     return drift(SPEC, [day(23, status, lines), day(24, "ready")])
+
+
+def phase_spans(level=2):
+    # The run log's lines of two phases at `level`, Phase 3's then Phase 4's, each ended by its phase-end
+    # park: a step start with its phase, its end, and a pull request the driver merged. The prefixes are
+    # Day 01's and Day 02's, none of a case's own steps, and every start has its end, so the run passes
+    # them over; the park lines have no pr, so no wait is owed on them.
+    records = []
+    for i, (phase, day_n) in enumerate([(3, 24), (4, 31)], start=1):
+        hour = f"2026-11-20T0{i}"
+        session = f"00000000-0000-4000-8000-{300 + i:012d}"
+        records += [
+            {
+                "event": "start",
+                "at": f"{hour}:00:00Z",
+                "step": f"Day 0{i}: read the spec against the code, then the spec-change PR",
+                "prefix": f"day-0{i}/spec",
+                "session": session,
+                "claude": "2.1.170",
+                "level": level,
+                "phase": phase,
+            },
+            {
+                "event": "end",
+                "at": f"{hour}:01:00Z",
+                "session": session,
+                "outcome": f"opened: #{200 + i} from `day-0{i}/spec-x`",
+                "cost_usd": 0,
+                "denials": 0,
+            },
+            {
+                "event": "merged",
+                "at": f"{hour}:02:00Z",
+                "pr": 200 + i,
+                "changed": False,
+                "by": "driver",
+            },
+            {
+                "event": "park",
+                "at": f"{hour}:03:00Z",
+                "step": f"Day {day_n}: read the spec against the code, then the spec-change PR",
+                "line": f"park: the end of Phase {phase}: Day {day_n} starts Phase {phase + 1}",
+            },
+        ]
+    return records
+
+
+def seed_phases(state, spans):
+    # The run log whole: the phase spans first, then the 15 container merges level 2 counts, so that
+    # level_2_run still counts 15 from the newest line.
+    records = spans + container_merges(101, 15)
+    (state / "run.jsonl").write_bytes(
+        b"".join(json.dumps(record).encode("utf-8") + b"\n" for record in records)
+    )
 
 
 def answer(session, text="done", files=None):
@@ -233,6 +287,46 @@ class EscapeTest(ReviewCase, unittest.TestCase):
             park in lines,
         )
         same(self, found, (False, [without_at(LOWERING)], True))
+
+    def test_level_three_lowers_to_two(self):
+        # C16.15: C16.7's run at driver.json's level 3, the run log counting level 3's two phases: the close
+        # merges, its escapes lower to 2, and Day 24's pull request merges too, at level 2. C16.9's failed
+        # evidence run lowers 3 to 2 as well.
+        escapes = {"event": "level", "level": 2, "from": 3, "escapes": ESCAPED}
+        with self.subTest("escape"):
+            self.case("three_escape", later=after(), level=3)
+            seed_phases(self.state, phase_spans())
+            _, out, _, _ = self.on()
+            line = "level: lowered to 2 from 3 on an escape: D23.4, D23.5, D23.6, D23.7"
+            found = {
+                "lowered line": line in out.splitlines(),
+                "switches": self.switches(),
+                "merges": self.merges(),
+            }
+            _, out, _, _ = self.on()
+            found["said"] = out.splitlines()[:1]
+            said = "level: 2, lowered from 3 on an escape: D23.4, D23.5, D23.6, D23.7; run-steps.py raise lifts it"
+            expected = {
+                "lowered line": True,
+                "switches": [ON, ESCAPES_23, escapes],
+                "merges": 2,
+                "said": [said],
+            }
+            same(self, found, expected)
+        with self.subTest("evidence"):
+            evidence = [run("completed", "success"), run("completed", "failure")]
+            park = "park: the evidence run on `<sha7>` ended `failure`"
+            self.case("three_evidence", steps=1, views=ONE, level=3)
+            seed_phases(self.state, phase_spans())
+            rewrite(self.folder / "gh" / "fake.json", run_steps=evidence)
+            _, out, _, _ = self.on()
+            lines = self.sha(out).splitlines()
+            line = "level: lowered to 2 from 3 on a failed evidence run of <sha7>"
+            k = lines.index(line) if line in lines else len(lines)
+            switches = json.loads(self.sha(json.dumps(self.switches())))
+            level = {"event": "level", "level": 2, "from": 3, "evidence": "<sha>"}
+            found = {"lowered line": lines[k : k + 2], "switches": switches}
+            same(self, found, {"lowered line": [line, park], "switches": [ON, level]})
 
     def test_defect_without_found(self):
         # C16.10: a Defect line of the Day read with no found, absent or null, ends the run after the close;

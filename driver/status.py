@@ -18,6 +18,11 @@ from driver import issues, lock, runlog, switchlog
 BASELINE = 1.86
 # plan.md, "Levels": the pull requests merged in a row without a change asked, for Level 2.
 LEVEL_2_RUN = 15
+# plan.md, "Levels": the phases in a row at level 2, with no escape, no merge by hand and no step at
+# level 1, for Level 3.
+LEVEL_3_RUN = 2
+# The park the driver writes when the next step starts a phase; the ended phase is its first group.
+PHASE_END = re.compile(r"park: the end of Phase (.+?): Day \d+ starts Phase")
 
 
 def run(project, gh, state, watch=None, level=1) -> int:
@@ -69,6 +74,15 @@ def _report(project, gh, state, seen=None, level=1) -> int:
         if reviewer:
             lines.append(reviewer)
         lines.append(_level_2(records))
+        # Level 3's count shows only under a level 2 or 3 config; with a switch log that cannot be read
+        # it is left out, as the level line already says unknown and the report exits 2.
+        if level in (2, 3):
+            switches, switch_reason = switchlog.read(state)
+            if not switch_reason:
+                lines.append(
+                    f"level 3: {level_3_run(records, switches)} of {LEVEL_3_RUN} phases in a row at "
+                    "level 2 with no escape, no merge by hand and no step at level 1"
+                )
     for line in lines:
         print(line)
     if gh_reason:
@@ -467,6 +481,60 @@ def level_2_run(records):
         elif event == "closed" or (event == "park" and _ends_the_run(line)):
             break
     return k
+
+
+def level_3_run(records, switches):
+    # Counts back from the newest phase-end park the phases whose span counts, and stops at the first that
+    # does not. A span is the lines after the phase-end park before (or from the log's first line) up to
+    # its own. A phase-end park written again with the previous one's line is the same park.
+    parks, previous = [], None
+    for i, record in enumerate(records):
+        line = record.get("line")
+        if record.get("event") != "park" or not isinstance(line, str):
+            continue
+        match = PHASE_END.match(line)
+        if match is None:
+            continue
+        if line != previous:
+            parks.append((i, match.group(1), record.get("at")))
+        previous = line
+    # The switch log's lowerings, by when they were written: a raise line has no "from".
+    lowerings = [
+        s["at"]
+        for s in switches
+        if s.get("event") == "level" and "from" in s and isinstance(s.get("at"), str)
+    ]
+    k = 0
+    for n in range(len(parks) - 1, -1, -1):
+        end, phase, upper = parks[n]
+        first, lower = (parks[n - 1][0] + 1, parks[n - 1][2]) if n else (0, None)
+        if not _phase_counts(records[first:end], phase, lower, upper, lowerings):
+            break
+        k += 1
+    return k
+
+
+def _phase_counts(span, phase, lower, upper, lowerings):
+    # A span counts when it holds a step start, every step start ran at level 2 or 3 in the ended phase,
+    # every merge was the driver's, and no lowering falls in it. Stamps are to the second, so they
+    # compare as strings; a park with no stamp cannot place a lowering, and its span does not count.
+    if not isinstance(upper, str) or (lower is not None and not isinstance(lower, str)):
+        return False
+    starts = [r for r in span if r.get("event") == "start" and r.get("prefix") != "review"]
+    if not starts:
+        return False
+    for start in starts:
+        level = start.get("level")
+        if not isinstance(level, int) or isinstance(level, bool) or level not in (2, 3):
+            return False
+        if str(start.get("phase")) != phase:
+            return False
+    for record in span:
+        if record.get("event") != "merged":
+            continue
+        if record.get("by") != "driver":
+            return False
+    return not any((lower is None or lower < at) and at <= upper for at in lowerings)
 
 
 def _ends_the_run(line):
