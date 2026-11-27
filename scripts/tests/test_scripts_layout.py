@@ -5,6 +5,7 @@ scripts/pipeline/ in a folder per concern, and only the held tests stay beside t
 """
 import os
 import re
+import sys
 import unittest
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,6 +122,26 @@ class ScriptsLayoutTest(unittest.TestCase):
                     wrong.append(f"{folder}/{name} imports {other} ({modules.get(other + '.py')})")
         self.assertEqual(wrong, [])
         self.assertGreater(edges, 10, "too few imports read for this to have checked anything")
+
+    def test_a_moved_module_still_finds_what_it_read_from_beside_the_commands(self):
+        # Each module finds the project's files from its own place, and a config or a cache looked for in the
+        # wrong folder is no error, only an empty one: the places are held here.
+        sys.path.insert(0, HERE)
+        self.addCleanup(sys.path.remove, HERE)
+        import pipeline  # noqa: F401
+        import spec_drift_common as common
+        import spec_drift_files as files
+        import spec_drift_plan as plan
+
+        root = os.path.dirname(HERE)
+        found = dict(config=common.CONFIG_FILE, page=common.PAGE, cache=common.CACHE_FILE, table=files.TABLE,
+                     commands=plan.HERE)
+        want = dict(config=os.path.join(root, "spec-drift.config.json"), page=os.path.join(root, "docs", "dashboard"),
+                    cache=os.path.join(root, ".spec-drift-cache.json"),
+                    table=os.path.join(root, "docs", "dashboard", "file-stations.json"), commands=HERE)
+        place = lambda p: os.path.normcase(os.path.normpath(p))  # noqa: E731
+        self.assertEqual([name for name in want if place(found[name]) != place(want[name])], [])
+        self.assertTrue(os.path.isfile(want["config"]) and os.path.isfile(want["table"]))
 
 
 if __name__ == "__main__":
