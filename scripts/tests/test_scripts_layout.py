@@ -69,7 +69,8 @@ class ScriptsLayoutTest(unittest.TestCase):
         self.assertEqual(here, HELD)
         folder = os.path.join(HERE, "tests")
         self.assertTrue(any(n.startswith("test_") and n.endswith(".py") for n in os.listdir(folder)))
-        self.assertFalse(os.path.exists(os.path.join(folder, "__init__.py")))
+        # A package would shadow the driver's tests/, and a script here would have no station and no index row.
+        self.assertEqual(sorted(n for n in os.listdir(folder) if n.endswith(".py") and not n.startswith("test_")), [])
 
 
 if __name__ == "__main__":

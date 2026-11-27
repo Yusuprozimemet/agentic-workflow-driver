@@ -19,7 +19,7 @@ import unittest
 from unittest import mock
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-spec =importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
+spec = importlib.util.spec_from_file_location("spec_drift", os.path.join(HERE, "spec-drift.py"))
 sd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sd)
 

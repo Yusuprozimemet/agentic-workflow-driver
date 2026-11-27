@@ -48,11 +48,15 @@ class PrePushTest(unittest.TestCase):
             ran = [command[1] for command in self.names(files=(changed,))["Drift and gap move when they should"]]
             for test in both:
                 self.assertIn(test, ran, changed)
+        # A change to the index alone runs the test that holds it to the folder.
+        index = [command[1] for command in self.names(files=("scripts/README.md",))["Drift and gap move when they should"]]
+        self.assertIn("scripts/tests/test_scripts_layout.py", index)
         [(_, _, jobs)] = [w for w in workflows() if w[0] == "spec-drift-tests.yml"]
         steps = [s for job in jobs.values() for s in job.get("steps", [])]
         [paths] = [s["env"]["PATHS"] for s in steps if "PATHS" in (s.get("env") or {})]
-        self.assertEqual(paths, pp.DRIFT_PATHS.pattern)
-        self.assertTrue(any("for t in scripts/test_*.py scripts/tests/test_*.py;" in s.get("run", "") for s in steps))
+        self.assertEqual(paths == pp.DRIFT_PATHS.pattern, True, "CI's PATHS filter is not pre-push's DRIFT_PATHS")
+        loops = [s for s in steps if "for t in scripts/test_*.py scripts/tests/test_*.py;" in s.get("run", "")]
+        self.assertEqual(len(loops), 1, "steps of spec-drift-tests.yml that loop over the tests of both places")
 
     def test_the_tests_line_carries_the_runs_count(self):
         # The Tests step is the track's one full run (CLAUDE.md, "Before pushing"), so its line says
