@@ -66,12 +66,22 @@ owns a `new` criterion and passes the rest.
   says so. Its "Tests" line runs the test files the branch changes 5 times each inside the whole
   run (`test-parallel.py --repeat 5 --of <files>`), which CI does not: a test that fails on and off
   under load is met in the PR that wrote it, not in a later track's full run (D12.34 passed 25 of
-  25 alone). The scripts' own tests (`scripts/test_*.py`) are not repeated.
+  25 alone). The scripts' own tests (`scripts/test_*.py`) are not repeated. Its `ok` line carries
+  `test-parallel.py`'s "Ran N tests" line, and that run is the track's one full run: there is no
+  second `test-parallel.py` for the whole of `tests/` beside it. Over Days 13 to 16 (20 tracks),
+  `pre-push.py` ran 32 times at a median of 6.7 minutes, beside 18 more full runs, and 5 calls
+  met the shell's 10-minute limit (the track speed-up, 2026-11-27).
+- Run `pre-push.py` in the background (`run_in_background`, its output to a file in the
+  scratchpad), then print the file's last lines; never a full-suite command in the foreground.
+  Start it as `python -u scripts/pre-push.py ...`: without `-u`, Python holds its output until
+  it exits, and the file stays empty for the whole run, which looks like a hang.
+  A rerun after only the title or the body changed takes `--skip-tests`, which leaves the Tests
+  line a `skip`; any change to the code or the tests needs the full run again.
 - The style check is check-only, `ruff check . && ruff format --check .`: it must fail on
   unformatted code and never rewrite files.
 - While working, run only the test files the change touches
   (`python scripts/test-parallel.py "test_setup*.py"`, a glob under `tests/`), and name them in an
-  implementer's brief; the full run goes once, before pushing. Waiting on commands was 55% of the
+  implementer's brief; the full run goes once, before pushing, as `pre-push.py`'s Tests line. Waiting on commands was 55% of the
   main session's busy time over 6 to 15 Nov, most of it whole-suite runs (#212, S1).
 - `python scripts/test-parallel.py` from the repository root runs the whole of `tests/`, one file
   per process, slowest first, the failures printed whole. It is the same tests as

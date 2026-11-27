@@ -210,10 +210,14 @@ a PR: in wordtally, Day 4's report said a list held 40 words; it held 45.
 ## Before pushing
 
 Run `python scripts/pre-push.py --title "<PR title>" --body <body file>` on the committed branch:
-one line per PR check with a local command, exit 1 on any failure. Then the check-only style
-command `ruff check . && ruff format --check .`, and `python scripts/test-parallel.py` once for the
-whole of `tests/` (while working, only the files the change touches). Read unittest's "Ran N
-tests" and "OK", and that N is the count the change should give. Break each check once with
+one line per PR check with a local command, exit 1 on any failure. Its "Style check" is the
+check-only `ruff check . && ruff format --check .`, and its "Tests" is the track's one full run of
+`tests/` (while working, run only the files the change touches): read the "Ran N tests" on its
+`ok` line, and that N is the count the change should give. Run it in the background
+(`run_in_background`, as `python -u` so each line reaches its output file as its check ends,
+then print the file's tail), never in the foreground: a
+full run takes about 7 minutes and the shell stops at 10. A rerun after only the title or the
+body changed takes `--skip-tests`; after a code change, the full run again. Break each check once with
 `scripts/break.py` and copy the `broken:` line and `manifest:` it prints into the PR's raw body.
 The diff stays under 400 changed lines, or carries an `Oversized:` line. What each step is for,
 and the traps in each, are in [Before pushing](docs/procedure.md#before-pushing) and
