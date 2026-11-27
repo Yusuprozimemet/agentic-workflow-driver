@@ -32,9 +32,8 @@ def shortfall(data, sha):
     for name in BLOCKERS:
         if name not in entries:
             return f"{name}: no entry"
+        # A named run is a blocker run (only blocker lines are matched), so this covers both.
         said, named = entries[name]["said"], entries[name]["named"]
-        if said.count("blocker") < 2:
-            return f"{name}: blocker in {said.count('blocker')} of {len(said)} runs, the bar is 2"
         if named < 2:
             return f"{name}: named in {named} of {len(said)} runs, the bar is 2"
     for name in CLEAN:
@@ -56,6 +55,46 @@ class ReviewerBarTest(unittest.TestCase):
         sha = done.stdout.decode().strip()[:7]
         got = shortfall(data, sha)
         self.assertIsNone(got, got)
+
+
+def good():
+    """A record that meets the bar, for ShortfallTest to spoil one way at a time."""
+    each = [{"case": n, "said": ["blocker"] * 3, "named": 3} for n in BLOCKERS] + [
+        {"case": n, "said": ["none"] * 3, "named": 0} for n in CLEAN
+    ]
+    return {"recorded": {"verdict": 10, "named": 8, "runs": 3, "brief": "abc1234", "cases": each}}
+
+
+class ShortfallTest(unittest.TestCase):
+    """Each way the record can fall short gives its own line; the good record gives none."""
+
+    def test_each_shortfall(self):
+        self.assertIsNone(shortfall(good(), "abc1234"))
+        spoil = {
+            "brief": (
+                lambda r: r.update(brief="def5678"),
+                "recorded on brief def5678, rules/reviewer.md is abc1234",
+            ),
+            "runs": (lambda r: r.update(runs=2), "recorded on 2 runs, the bar is of 3"),
+            "no blocker entry": (
+                lambda r: r["cases"].pop(0),
+                "agentic-workflow-driver#214: no entry",
+            ),
+            "named": (
+                lambda r: r["cases"][1].update(named=1),
+                "agentic-workflow-driver#250: named in 1 of 3 runs, the bar is 2",
+            ),
+            "no clean entry": (lambda r: r["cases"].pop(2), "bearing#153: no entry"),
+            "none": (
+                lambda r: r["cases"][3].update(said=["none", "blocker", "unreadable"]),
+                "bearing#154: none in 1 of 3 runs, the bar is 2",
+            ),
+        }
+        for what, (change, line) in spoil.items():
+            with self.subTest(what=what):
+                data = good()
+                change(data["recorded"])
+                self.assertEqual(line, shortfall(data, "abc1234"))
 
 
 if __name__ == "__main__":
