@@ -95,12 +95,16 @@ class FileMapTest(unittest.TestCase):
         self.assertEqual(m["lines"], sum(FILES.values()))
         self.assertEqual(m["unplaced"], [])
 
-    def test_the_scripts_index_and_the_layout_test_have_a_station_and_are_not_counted_as_scripts(self):
+    def test_the_scripts_index_and_the_layout_test_have_a_station_and_are_not_counted_as_scripts(
+        self,
+    ):
         more = {"scripts/README.md": 30, "scripts/tests/test_scripts_layout.py": 60}
         m = drawn(dict(FILES, **more))
         self.assertEqual(m["unplaced"], [])
         self.assertEqual(home(m, "scripts/README.md")[0]["label"], "guides")
-        self.assertEqual(home(m, "scripts/tests/test_scripts_layout.py")[0]["at"], "CI's checks, after station 5")
+        self.assertEqual(
+            home(m, "scripts/tests/test_scripts_layout.py")[0]["at"], "CI's checks, after station 5"
+        )
         # seen-red.py, spec-drift.py and spec_drift_views.py: the scripts, not their tests or their index
         self.assertEqual(m["scripts"], 3)
 
