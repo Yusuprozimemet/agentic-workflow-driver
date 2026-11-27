@@ -1825,6 +1825,280 @@ class OneDayPageTest(unittest.TestCase):
         self.assertEqual([e for e in out["logged"] if e.startswith("one:")], [])
 
 
+def rewrites_key():
+    """Graph 6's promises rewritten as spec_drift_views.rewrites() writes it, on the index of RewritesTest: C04.1's line
+    of four wordings (C03.1 folded in), C06.1's from a short spec's two, C05.1's of two, and C06.2 on no line."""
+    def crit(cid, day, state, replaces=(), replaced_by=()):
+        return dict(id=cid, day=day, state=state, plain=f"{cid} in plain words.", claim="", replaces=list(replaces),
+                    replaced_by=list(replaced_by))
+
+    index = [crit("C01.1", 1, "replaced", replaced_by=["C02.1"]), crit("C02.1", 2, "replaced", ["C01.1"], ["C04.1"]),
+             crit("C03.1", 3, "replaced", replaced_by=["C04.1"]), crit("C04.1", 4, "proven", ["C03.1", "C02.1"]),
+             crit("C03.2", 3, "replaced", replaced_by=["C05.1"]), crit("C05.1", 5, "unproven", ["C03.2"]),
+             crit("C06.1", 6, "building", ["S-pick-a-day.1", "S-pick-a-day.2"]), crit("C06.2", 6, "proven")]
+    return views.rewrites(dict(now=dict(head="abcdef1234", last_pr=9, generated="2026-11-26"), criteria_index=index,
+                               days=[dict(day=n, phase=p) for n, p in zip(range(1, 7), [0, 0, 1, 1, 1, 2])]))
+
+
+def flat(s):
+    """A page's words with its two non-ASCII marks spelt in ASCII, so that a failure reads the same on every machine."""
+    return s.replace("·", "|").replace("→", "->")
+
+
+# The document of ONE, each node keeping one listener per event; then, after `body`, what the body returns.
+REW_DOC = r"""
+const fs = require("fs"), vm = require("vm"), els = {};
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", on: {},
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
+  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
+  addEventListener(type, fn) { this.on[type] = fn; }, focus() { if (this.on.focus) this.on.focus(); }, getBoundingClientRect() { return { width: 0, height: 0 }; } };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node, addEventListener() {} };
+const $ = id => els[id] || (els[id] = node(id));
+// a page address and a window, handed to the script only where a harness puts MORE in their place
+const winOn = {}, location = { hash: "" }, window = { addEventListener(t, fn) { winOn[t] = fn; } };
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ /*MORE*/ });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `;(() => {
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ").replace(/\\s+/g, " ").trim();
+  const said = () => ($("rew-out").kids[0] || {}).textContent || "";
+  const label = e => (e.attrs["aria-label"] || "").split(" ")[0];
+  const buttons = () => ["mrg-v-day", "mrg-v-merge", "mrg-v-rew"].map(id => id.slice(6) + ":" + $(id).attrs["aria-pressed"] + (($(id).disabled) ? ":off" : ""));
+  const shown = () => ["mrg-all", "rew", "mrg-zoom-wrap", "mrg-frame-h", "rew-frame-h", "mrg-say"].filter(id => !$(id).hidden);
+  BODY })()`, ctx)));
+"""
+
+# rewDraw() on the model's rewrites: the ring's arcs, marks and chords, what pointing reads out, and a pressed Day.
+REW = REW_DOC.replace("BODY", r"""
+  const R = model(DATA).rew, days = [];
+  mrgViews($);
+  rewDraw(R, $, days);
+  const made = all($("rew-rfig")), marks = made.filter(e => has(e, "nd")), arcs = made.filter(e => has(e, "dayarc"));
+  const chords = made.filter(e => has(e, "chord"));
+  const out = { arcs: arcs.length, marks: marks.length, squares: marks.filter(e => e.tag === "rect").length, chords: chords.length,
+    most: made.filter(e => e.tag === "g" && has(e, "lin") && has(e, "most")).length, start: said(),
+    figs: words($("rew-figs")), note: $("rew-note").textContent, stamp: $("rew-stamp").textContent.startsWith("Drawn from the page's data at abcdef1") };
+  out.stops = made.filter(e => e.attrs.tabindex === "0").map(label).sort();
+  out.nan = made.filter(e => Object.values(e.attrs).some(v => /NaN|undefined/.test(v))).length;
+  const cls = e => label(e) + "=" + e.attrs.class;
+  out.sinks = marks.filter(e => !has(e, "old")).map(cls).sort();
+  out.old = marks.filter(e => e.attrs.class === "nd old").map(label).sort();
+  const top = made.filter(e => e.tag === "g" && has(e, "lin"));
+  out.first_most = top.length ? has(top[0], "most") : null;
+  out.most_marks = top.filter(g => has(g, "most")).flatMap(g => all(g).filter(e => has(e, "nd")).map(label)).sort();
+  out.short_label = made.filter(e => e.tag === "text" && e.textContent === "short spec").length;
+  const by = id => marks.find(e => label(e) === id), fire = (e, t, ev) => { if (e && e.on[t]) e.on[t](ev); };
+  fire(by("C01.1"), "mouseenter");
+  fire(by("C01.1"), "keydown", { key: "ArrowRight", preventDefault() {} });
+  out.step = said();
+  fire(by("C01.1"), "mouseenter");
+  fire(by("C02.1"), "focus");
+  out.focus = said();
+  fire(by("C01.1"), "mouseenter");
+  fire(by("C02.1"), "click");
+  out.click = said();
+  marks.find(e => label(e) === "C02.1").on.mouseenter();
+  out.mark = said();
+  made.find(e => has(e, "hit") && label(e) === "C04.1").on.mouseenter();
+  out.chord = said();
+  days.forEach(f => f(3));
+  out.clear = marks.filter(e => !has(e, "mk-dim")).map(label).sort();
+  out.clear_arcs = arcs.filter(e => !has(e, "mk-dim")).length;
+  out.clear_chords = chords.filter(e => !has(e, "mk-dim")).length;
+  days.forEach(f => f(null));
+  out.dimmed = made.filter(e => has(e, "mk-dim")).length;
+  return out;""")
+
+# mrgViews() alone, as where the merge graph cannot be drawn: the rewrites pressed, then the merges.
+REW_SWITCH = REW_DOC.replace("BODY", r"""
+  mrgViews($);
+  $("mrg-v-rew").on.click();
+  const rew = { shown: shown(), buttons: buttons() };
+  $("mrg-v-merge").on.click();
+  return { rew, merge: { shown: shown(), buttons: buttons() } };""")
+
+# mrgViews() then mergeDraw() on the example data: the rewrites pressed, a Day pressed under them, the rows pressed back
+# while that Day is zoomed, then the page's "All Days".
+REW_MERGE = REW_DOC.replace("BODY", r"""
+  const days = [], M = model(DATA);
+  mrgViews($);
+  mergeDraw(M.mrg, $, days);
+  $("mrg-v-rew").on.click();
+  days.forEach(f => f(M.mrg.days[0].day));
+  const zoomed = { shown: shown(), buttons: buttons() };
+  $("mrg-v-day").on.click();
+  const back = { shown: shown(), buttons: buttons() };
+  days.forEach(f => f(null));
+  return { zoomed, back, out: { shown: shown(), buttons: buttons() } };""")
+
+# The other order: a Day zoomed on the rows first, then the rewrites pressed.
+REW_ZOOM_FIRST = REW_DOC.replace("BODY", r"""
+  const days = [], M = model(DATA);
+  mrgViews($);
+  mergeDraw(M.mrg, $, days);
+  days.forEach(f => f(M.mrg.days[0].day));
+  const zoomed = buttons();
+  $("mrg-v-rew").on.click();
+  return { zoomed, rew: buttons() };""")
+
+# Under the rewrites with a Day zoomed, "One row per merge" pressed, then the page's "All Days": the rows that were
+# pressed before the zoom come back.
+REW_MERGE_BACK = REW_DOC.replace("BODY", r"""
+  const days = [], M = model(DATA);
+  mrgViews($);
+  mergeDraw(M.mrg, $, days);
+  $("mrg-v-rew").on.click();
+  days.forEach(f => f(M.mrg.days[0].day));
+  $("mrg-v-merge").on.click();
+  days.forEach(f => f(null));
+  return buttons();""")
+
+# A link to the merges (#mrg-merges) followed while the rewrites show: the page's hashchange brings the rows back.
+REW_HASH = REW_DOC.replace("/*MORE*/", ", location, window, winOn").replace("BODY", r"""
+  const days = [], M = model(DATA);
+  mrgViews($);
+  mergeDraw(M.mrg, $, days);
+  $("mrg-v-rew").on.click();
+  const before = shown();
+  location.hash = "#mrg-merges";
+  if (winOn.hashchange) winOn.hashchange();
+  return { before, shown: shown(), buttons: buttons() };""")
+
+
+class RewritesPageTest(unittest.TestCase):
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def drawn(self, harness, data):
+        """node on the harness; a script that throws fails the test with its error's line, not a path or the harness."""
+        run = subprocess.run(["node", "-e", harness, SCRIPT], input=json.dumps(data), capture_output=True, encoding="utf-8")
+        self.assertEqual((run.returncode, re.findall(r"(?m)^\w*Error: .*$", run.stderr)[:1]), (0, []))
+        return json.loads(run.stdout)
+
+    def test_promises_rewritten_word_each_line_and_wording(self):
+        m = model(data(rewrites=rewrites_key()))
+        self.assertTrue("rew" in m, "the model has no rew key")
+        rew = m["rew"]
+        self.assertNotIn("error", rew)
+        self.assertEqual([(f["num"], f["what"], f["sub"]) for f in rew.get("figs", [])],
+                         [("6", "promises replaced", "each by a later Day's wording"),
+                          ("3", "promises in force that replaced them", "1 proved, 1 never seen to fail, 1 not built yet"),
+                          ("1", "rewritten more than once", "the other 2 changed once"),
+                          ("2", "rewrites on the longest line", "it ends at C04.1")])
+        self.assertEqual((rew["start"]["head"], rew["start"]["say"]),
+                         ("6 promises replaced, on 3 lines", ["The longest line ends at C04.1: 4 wordings, rewritten 2 times.",
+                                                              "Point at a line for its history, or at a mark for that wording."]))
+        lines = {x["sink"]: x for x in rew["lines"]}
+        self.assertEqual(sorted(lines), ["C04.1", "C05.1", "C06.1"])
+        top = lines["C04.1"]
+        self.assertEqual(flat(top["head"]), "C04.1 | in force since Day 4 | rewritten 2 times")
+        self.assertEqual([flat(s) for s in top["say"]],
+                         ["Its line: C01.1 (Day 1) -> C02.1 (Day 2) -> C04.1 (Day 4). Folded in on the way: C03.1.",
+                          "Today: holds, and a break on purpose proved its test.", "C04.1 in plain words."])
+        self.assertEqual(flat(lines["C05.1"]["head"]), "C05.1 | in force since Day 5 | rewritten 1 time")
+        nodes = {n["id"]: n for x in rew["lines"] for n in x["nodes"]}
+        self.assertEqual((flat(nodes["C02.1"]["head"]), nodes["C02.1"]["say"]),
+                         ("C02.1 | written on Day 2", ["Replaced by C04.1 on Day 4.", "C02.1 in plain words."]))
+        self.assertEqual(nodes["C04.1"]["say"][0], "In force today: holds, and a break on purpose proved its test.")
+        short = nodes["S-pick-a-day.1"]
+        self.assertEqual((flat(short["head"]), short["say"][0]),
+                         ("S.1 | written between Days 5 and 6, in a short spec", "Replaced by C06.1 on Day 6."))
+        self.assertEqual(rew["note"], "A Day's arc is as long as the wordings it holds. Day 3 holds the most: 2.")
+
+    def test_promises_rewritten_draw_an_arc_per_day_held_a_mark_per_wording_and_a_chord_per_edge(self):
+        out = self.drawn(REW, data(rewrites=rewrites_key()))
+        # Days 1 to 6 each hold a wording, and the short spec's two stand on an arc of their own between Days 5 and 6
+        self.assertEqual((out["arcs"], out["marks"], out["squares"], out["chords"], out["most"]), (7, 9, 2, 6, 1))
+        self.assertEqual(out["start"], "6 promises replaced, on 3 lines")
+        self.assertIn("6 promises replaced each by a later Day's wording", out["figs"])
+        self.assertEqual(out["note"], "A Day's arc is as long as the wordings it holds. Day 3 holds the most: 2.")
+        self.assertTrue(out["stamp"], "the stamp names the data's head")
+        self.assertEqual(out["nan"], 0)
+        self.assertEqual(len(out["sinks"]), 3)
+        self.assertEqual(out["sinks"], ["C04.1=nd proven", "C05.1=nd unproven", "C06.1=nd building"])
+        self.assertEqual(out["old"], ["C01.1", "C02.1", "C03.1", "C03.2", "S.1", "S.2"])
+        # the dark line is the first line's, C04.1's, the most rewritten
+        self.assertEqual(out["first_most"], True)
+        self.assertEqual(out["most_marks"], ["C01.1", "C02.1", "C03.1", "C04.1"])
+        self.assertEqual(out["short_label"], 1)
+
+    def test_promises_rewritten_read_out_a_mark_and_a_line(self):
+        out = self.drawn(REW, data(rewrites=rewrites_key()))
+        self.assertEqual(flat(out["mark"]), "C02.1 | written on Day 2")
+        self.assertEqual(flat(out["chord"]), "C04.1 | in force since Day 4 | rewritten 2 times")
+        self.assertEqual((flat(out["focus"]), flat(out["click"])), ("C02.1 | written on Day 2", "C02.1 | written on Day 2"))
+
+    def test_promises_rewritten_take_one_tab_stop_a_line_and_walk_its_marks_with_the_arrows(self):
+        out = self.drawn(REW, data(rewrites=rewrites_key()))
+        self.assertEqual(out["stops"], ["C04.1", "C05.1", "C06.1"])
+        # from C01.1 the right arrow goes to C02.1, the next wording of C04.1's line
+        self.assertEqual(flat(out["step"]), "C02.1 | written on Day 2")
+
+    def test_promises_rewritten_word_one_of_each_in_the_singular(self):
+        one = [dict(id="C01.1", day=1, state="replaced", plain="C01.1 in plain words.", claim="", replaces=[], replaced_by=["C02.1"]),
+               dict(id="C02.1", day=2, state="proven", plain="C02.1 in plain words.", claim="", replaces=["C01.1"], replaced_by=[])]
+        key = views.rewrites(dict(now=dict(head="abcdef1234", last_pr=9, generated="2026-11-26"), criteria_index=one,
+                                  days=[dict(day=1, phase=0), dict(day=2, phase=0)]))
+        m = model(data(rewrites=key))
+        self.assertTrue("rew" in m, "the model has no rew key")
+        rew = m["rew"]
+        self.assertNotIn("error", rew)
+        self.assertEqual(rew["start"]["head"], "1 promise replaced, on 1 line")
+        self.assertEqual(rew["start"]["say"][0], "The longest line ends at C02.1: 2 wordings, rewritten 1 time.")
+        self.assertEqual(len(rew["figs"]), 4)
+        self.assertEqual(rew["figs"][0]["what"], "promise replaced")
+        self.assertEqual(rew["figs"][2]["sub"], "it changed once")
+
+    def test_promises_rewritten_dim_every_other_day_when_a_day_is_pressed(self):
+        out = self.drawn(REW, data(rewrites=rewrites_key()))
+        # Day 3: its two wordings clear, its one arc, and the two chords with an end on it
+        self.assertEqual((out["clear"], out["clear_arcs"], out["clear_chords"]), (["C03.1", "C03.2"], 1, 2))
+        self.assertEqual(out["dimmed"], 0)
+
+    def test_the_switch_turns_graph_6_to_the_rewrites_and_back_without_the_merge_graph(self):
+        out = self.drawn(REW_SWITCH, data())
+        self.assertEqual(out["rew"]["shown"], ["rew", "rew-frame-h"])
+        self.assertEqual(out["rew"]["buttons"], ["day:false", "merge:false", "rew:true"])
+        self.assertEqual(out["merge"]["shown"], ["mrg-all", "mrg-zoom-wrap", "mrg-frame-h", "mrg-say"])
+        self.assertEqual(out["merge"]["buttons"], ["day:false", "merge:true", "rew:false"])
+
+    def test_under_the_rewrites_a_pressed_day_leaves_the_row_buttons_free_and_the_rows_come_back_as_they_were(self):
+        out = self.drawn(REW_MERGE, demo_data())
+        self.assertEqual(out["zoomed"]["shown"], ["rew", "rew-frame-h"])
+        self.assertEqual(out["zoomed"]["buttons"], ["day:false", "merge:false", "rew:true"])
+        # back to the rows while the Day is still zoomed: both row buttons off, as the zoom has them
+        self.assertEqual(out["back"]["shown"], ["mrg-all", "mrg-zoom-wrap", "mrg-frame-h", "mrg-say"])
+        self.assertEqual(out["back"]["buttons"], ["day:false:off", "merge:true:off", "rew:false"])
+        self.assertEqual(out["out"]["buttons"], ["day:true", "merge:false", "rew:false"])
+
+    def test_the_rewrites_pressed_while_a_day_is_zoomed_free_both_row_buttons(self):
+        out = self.drawn(REW_ZOOM_FIRST, demo_data())
+        self.assertEqual(out["zoomed"], ["day:false:off", "merge:true:off", "rew:undefined"])
+        self.assertEqual(out["rew"], ["day:false", "merge:false", "rew:true"])
+
+    def test_a_row_button_pressed_under_the_rewrites_and_a_zoom_keeps_the_rows_chosen_before_it(self):
+        out = self.drawn(REW_MERGE_BACK, demo_data())
+        self.assertEqual(out, ["day:true", "merge:false", "rew:false"])
+
+    def test_a_link_to_the_merges_leaves_the_rewrites(self):
+        out = self.drawn(REW_HASH, demo_data())
+        self.assertEqual(out["before"], ["rew", "rew-frame-h"])
+        self.assertEqual(out["shown"], ["mrg-all", "mrg-zoom-wrap", "mrg-frame-h", "mrg-say"])
+        self.assertEqual(out["buttons"], ["day:false", "merge:true", "rew:false"])
+
+    def test_promises_rewritten_without_the_key_say_so_under_not_measured(self):
+        m = model(data())
+        self.assertTrue("rew" in m, "the model has no rew key")
+        self.assertIn("empty", m["rew"])
+        out = boot(data())
+        # one assertion, worded as the boot tests': a page that cannot boot fails here last, and reads the same
+        self.assertEqual((out["error"], [e for e in out["logged"] if e.startswith("rew:")]), (None, []))
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
@@ -2056,6 +2330,28 @@ class PageFilesTest(unittest.TestCase):
             with open(os.path.join(HERE, name), encoding="utf-8") as f:
                 written.append('["one_day"] = one_day(' in f.read())
         self.assertEqual(written, [True, True])
+
+    def test_graph_6_turns_to_the_promises_rewritten_from_a_key_the_page_data_holds(self):
+        html = read("index.html")
+        section = re.search(r'<section class="graph" id="mrg"[ >].*?</section>', html, re.S)
+        self.assertIsNotNone(section)
+        want = ['id="mrg-v-rew"', 'id="mrg-all"', 'id="rew" hidden', 'id="rew-rfig"', 'id="rew-out" aria-live="polite"', 'id="rew-figs"',
+                'id="rew-frame-h"']
+        # the first one missing from graph 6's section, so that the failure stays short
+        self.assertEqual([w for w in want if w not in section.group(0)][:1], [])
+        # the switch is wired before the merge graph's own listeners, and the view is drawn when the page boots
+        script = read("dashboard.js")
+        wired = ["mrgViews($);", '[["rew", rewDraw]]']
+        self.assertEqual([w for w in wired if w not in script][:1], [])
+        self.assertTrue(script.find("mrgViews($);") < script.find("mergeDraw(m, $, onDay)"), "mrgViews($); stands before mergeDraw")
+        written = []
+        for name in ("spec-drift.py", "demo-data.py"):
+            with open(os.path.join(HERE, name), encoding="utf-8") as f:
+                written.append('["rewrites"] = rewrites(' in f.read())
+        self.assertEqual(written, [True, True])
+        # and the real build prints its line for the console
+        with open(os.path.join(HERE, "spec-drift.py"), encoding="utf-8") as f:
+            self.assertTrue("print(rewrites_line(" in f.read(), "spec-drift.py prints no rewrites line")
 
 
 if __name__ == "__main__":

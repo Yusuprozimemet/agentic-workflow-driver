@@ -447,19 +447,22 @@
       <p class="graph-n">Graph 6 · the merges against the spec; the old graph 6 is folded below</p>
       <h2>Does the code still pass the spec?</h2>
       <p class="chips" id="mrg-chips" hidden></p>
-      <p class="graph-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
+      <p class="graph-say" id="mrg-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
     </div>
     <div class="bar-top">
       <h3 class="frame-h" id="mrg-frame-h">Merges against criteria</h3>
+      <h3 class="frame-h" id="rew-frame-h" hidden>Promises rewritten, each joined to what replaced it</h3>
       <div class="ctl">
-        <label for="mrg-zoom">Show</label>
-        <select id="mrg-zoom"></select>
-        <div class="mseg" role="group" aria-label="Rows">
+        <span id="mrg-zoom-wrap"><label for="mrg-zoom">Show</label>
+        <select id="mrg-zoom"></select></span>
+        <div class="mseg" role="group" aria-label="What the graph draws">
           <button type="button" id="mrg-v-day" aria-pressed="true">One row per Day</button>
           <button type="button" id="mrg-v-merge" aria-pressed="false">One row per merge</button>
+          <button type="button" id="mrg-v-rew" aria-pressed="false">Promises rewritten</button>
         </div>
       </div>
     </div>
+    <div id="mrg-all">
     <p class="stamp" id="mrg-stamp"></p>
     <dl class="verdict" id="mrg-verdict"></dl>
     <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Row drawn for a stop</span></p>
@@ -495,6 +498,33 @@
     <details class="exact"><summary>What this graph cannot show</summary>
       <ul class="cannot" id="mrg-cannot"></ul>
     </details>
+    </div>
+    <div id="rew" hidden>
+      <p class="graph-say">Each replaced promise is joined to the promise that replaced it. Every Day that holds a wording is an arc of the ring, as long as the wordings it holds, read clockwise from the top. A mark is one wording, and a line runs from a wording to the one that replaced it. The most rewritten promise is drawn dark.</p>
+      <div class="figs" id="rew-figs"></div>
+      <details class="exact mock-key"><summary>Key, and how to read it</summary>
+      <div><dl class="lg">
+        <dt>A wording</dt>
+        <dd><span><svg width="12" height="12" aria-hidden="true"><circle class="nd old" cx="6" cy="6" r="4"/></svg>a wording replaced</span>
+          <span><svg width="12" height="12" aria-hidden="true"><rect class="nd old" x="2" y="2" width="8" height="8" rx="1.5"/></svg>replaced, from a short spec</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd proven" cx="7" cy="7" r="5.5"/></svg>in force, and proved by a break on purpose</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd unproven" cx="7" cy="7" r="4.8"/></svg>in force, never seen to fail</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd building" cx="7" cy="7" r="4.8"/></svg>in force, not built yet</span></dd>
+        <dt>The line</dt>
+        <dd><span><svg width="26" height="8" aria-hidden="true"><path class="chord" d="M0 4H26"/></svg>replaced by</span>
+          <span><svg width="26" height="8" aria-hidden="true"><g class="lin most"><path class="chord" d="M0 4H26"/></g></svg>the most rewritten promise</span></dd>
+      </dl>
+      <p class="hint">Point at a line for its history, or at a mark for that wording. With the keyboard, Tab moves from line to line and the arrow keys walk a line's marks.</p>
+      <p class="stamp" id="rew-stamp"></p></div>
+      </details>
+      <div class="duo" id="rew-ring">
+        <div class="scroll" id="rew-scroll"><svg class="rfig" id="rew-rfig" role="group" aria-label="Replaced promises as lines across a ring of Days"></svg></div>
+        <div class="side">
+          <div class="readout tall" id="rew-out" aria-live="polite"></div>
+          <p class="note" id="rew-note"></p>
+        </div>
+      </div>
+    </div>
     <div id="mrg-tip" hidden></div>
   </section>
 
