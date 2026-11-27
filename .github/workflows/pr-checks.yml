@@ -175,7 +175,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pyyaml
-      - run: python scripts/test_service_wiring.py
+      - run: python scripts/tests/test_service_wiring.py
       - run: python scripts/service-wiring.py
         if: hashFiles('services/**') != ''  # it lists services/; with none it would fail on every PR
 
@@ -189,7 +189,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install numpy
-      - run: python scripts/test_behaviour_index.py
+      - run: python scripts/tests/test_behaviour_index.py
       - run: python scripts/behaviour-index.py
 
   case-count:
@@ -203,7 +203,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python scripts/test_case_count.py
+      - run: python scripts/tests/test_case_count.py
       - name: Compare the briefs changed with the body
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -222,7 +222,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python scripts/test_plan_links.py
+      - run: python scripts/tests/test_plan_links.py
       - run: python scripts/plan-links.py
 
   names:
@@ -236,7 +236,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python scripts/test_pr_names.py
+      - run: python scripts/tests/test_pr_names.py
       - name: Compare the names
         env:
           PR_BRANCH: ${{ github.head_ref }}

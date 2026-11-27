@@ -13,12 +13,13 @@ which CI replays on the merge commit and this script only names: rehearse it wit
 
 Why: of the checks that failed on a first push, "Frozen files stay unedited" had a local command
 that "Before pushing" did not name (#212 S23, #213 B12). This list is every check CI runs, so a
-check added to CI and not here fails `test_pre_push.py`.
+check added to CI and not here fails `scripts/tests/test_pre_push.py`.
 
 "Tests" does one thing CI does not: the test files the branch changes run 5 times each inside the
 whole run (`test-parallel.py --repeat 5 --of`), the suite being the load. Nine of Days 9 to 12's
 late defects were a test that fails on and off under load, each met in a later track's full run;
-alone, one passed 25 of 25 (D12.34). The scripts' own tests (scripts/test_*.py) are not repeated.
+alone, one passed 25 of 25 (D12.34). The scripts' own tests (scripts/tests/test_*.py,
+and the three scripts/test_*.py held beside the scripts) are not repeated.
 Its `ok` line carries the run's "Ran N tests" line: this is the track's one full run, and a rerun
 for a title or body change only takes --skip-tests (the track speed-up, 2026-11-27).
 """
@@ -37,7 +38,7 @@ REPEAT = 5  # under load D12.36 failed 3 of 5 and D12.39 4 of 10
 SECTIONS = ("## User story", "## What I built", "## Why this approach", "## Contract impact", "## How to run",
             "## Self-check")
 # spec-drift-tests.yml runs the scripts' tests only when the change touches one of these.
-DRIFT_PATHS = re.compile(r"^(scripts/[^/]+\.py$|\.claude/agents/.*\.md$|\.claude/settings\.json$|"
+DRIFT_PATHS = re.compile(r"^(scripts/(tests/)?[^/]+\.py$|\.claude/agents/.*\.md$|\.claude/settings\.json$|"
                          r"spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|"
                          r"kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)")
 EXCLUDED = (":(exclude)**/uv.lock", ":(exclude)**/package-lock.json", ":(exclude)**/poetry.lock",
@@ -74,7 +75,8 @@ def checks(a, base, branch, files):
     size = changed_lines(base)
     oversized = body is not None and re.search(r"(?mi)^\s*Oversized:\s*\S", body)
     md = [f for f in files if f.endswith(".md") and os.path.exists(os.path.join(ROOT, f))]
-    scripts_tests = sorted(f"scripts/{n}" for n in os.listdir(os.path.join(ROOT, "scripts"))
+    # spec-drift-tests.yml runs both: the tests in scripts/tests/ and the three held beside the scripts.
+    scripts_tests = sorted(f"{d}/{n}" for d in ("scripts", "scripts/tests") for n in os.listdir(os.path.join(ROOT, d))
                            if n.startswith("test_") and n.endswith(".py"))
     return [
         ("Style check", [["ruff", "check", "."], ["ruff", "format", "--check", "."]]),
@@ -89,12 +91,12 @@ def checks(a, base, branch, files):
                                                                        "the body (--body) it is a warning")),
         ("Frozen files stay unedited", [[PY, "scripts/invariants.py", base, "HEAD"]]),
         ("Every service is wired into compose and Prometheus",
-         [[PY, "scripts/test_service_wiring.py"]] + ([[PY, "scripts/service-wiring.py"]] if has("services") else [])),
+         [[PY, "scripts/tests/test_service_wiring.py"]] + ([[PY, "scripts/service-wiring.py"]] if has("services") else [])),
         ('"Replaces: lines name real earlier criteria"',
-         [[PY, "scripts/test_behaviour_index.py"], [PY, "scripts/behaviour-index.py"]]),
+         [[PY, "scripts/tests/test_behaviour_index.py"], [PY, "scripts/behaviour-index.py"]]),
         ("A changed brief shows its case count", "skip: pass --body <file>" if body is None else
-         [[PY, "scripts/test_case_count.py"], [PY, "scripts/case-count.py", base, "HEAD", "--body", a.body]]),
-        ('"Plan links quote the plan\'s words"', [[PY, "scripts/test_plan_links.py"], [PY, "scripts/plan-links.py"]]),
+         [[PY, "scripts/tests/test_case_count.py"], [PY, "scripts/case-count.py", base, "HEAD", "--body", a.body]]),
+        ('"Plan links quote the plan\'s words"', [[PY, "scripts/tests/test_plan_links.py"], [PY, "scripts/plan-links.py"]]),
         ("Branch, title, commits and Jira keys agree",
          "skip: pass --title" if not a.title else [[PY, "scripts/pr-names.py", base, "HEAD"]]),
         ("Track tests seen red", [[PY, "scripts/track-red.py", "--branch", branch, "--runner", "unittest",

@@ -1,8 +1,9 @@
 name: Dashboard metric tests
 
 # The dashboard's drift and gap are only worth reading if they move when they
-# should. scripts/test_spec_drift.py builds small repositories and checks that
-# they do. The tests job runs every scripts/test_*.py, that one and the tests of each
+# should. scripts/tests/test_spec_drift.py builds small repositories and checks that
+# they do. The tests job runs every scripts/tests/test_*.py and the three scripts/test_*.py that
+# stay beside the scripts, that one and the tests of each
 # tool beside it (token counts, frozen files, breaks on purpose, the blind relabel, evidence,
 # seen-red and track-red whatever TRACK_RED_RUNNER is, the auditors' hook, ...), on every pull
 # request that touches a script or a file they read. A new test file runs without an edit here.
@@ -33,7 +34,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(scripts/[^/]+\.py$|\.claude/agents/.*\.md$|\.claude/settings\.json$|spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)'
+          PATHS: '^(scripts/(tests/)?[^/]+\.py$|\.claude/agents/.*\.md$|\.claude/settings\.json$|spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)'
         run: |
           files=$(git diff --name-only HEAD^1 HEAD)
           if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
@@ -53,10 +54,10 @@ jobs:
       # numpy for the dashboard's tests, PyYAML for service-wiring.py's.
       - run: pip install numpy pyyaml
       # Each file in its own log group; every one runs, and the job fails if any did.
-      - name: Every scripts/test_*.py
+      - name: Every scripts/test_*.py and scripts/tests/test_*.py
         run: |
           failed=""
-          for t in scripts/test_*.py; do
+          for t in scripts/test_*.py scripts/tests/test_*.py; do
             echo "::group::$t"
             python "$t" || failed="$failed $t"
             echo "::endgroup::"

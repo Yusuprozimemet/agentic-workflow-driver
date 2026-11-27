@@ -309,13 +309,14 @@ def attach_abilities(index, stories):
 
 
 # What runs each test file, first match wins: tests.yml runs tests/ on every push and pull request, where
-# the live modules skip without DRIVER_LIVE_CLI; spec-drift-tests.yml runs scripts/test_*.py.
+# the live modules skip without DRIVER_LIVE_CLI; spec-drift-tests.yml runs scripts/tests/test_*.py and the
+# three scripts/test_*.py held beside the scripts.
 TEST_GROUPS = (
     ("live", r"^tests/test_live_", "Live runs against real Claude",
      "By hand only: skipped in CI, which has no login or budget"),
     ("gap", r"^tests/test_dashboard_gap\.py$", "The dashboard's gap numbers", "Every push and pull request"),
     ("driver", r"^tests/test_[^/]*\.py$", "Driver behaviour", "Every push and pull request"),
-    ("tooling", r"^scripts/test_[^/]*\.py$", "Project tooling",
+    ("tooling", r"^scripts/(tests/)?test_[^/]*\.py$", "Project tooling",
      "Only on pull requests that touch a script or a file they read (spec-drift-tests.yml)"),
 )
 

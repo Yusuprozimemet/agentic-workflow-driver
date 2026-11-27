@@ -66,7 +66,8 @@ owns a `new` criterion and passes the rest.
   says so. Its "Tests" line runs the test files the branch changes 5 times each inside the whole
   run (`test-parallel.py --repeat 5 --of <files>`), which CI does not: a test that fails on and off
   under load is met in the PR that wrote it, not in a later track's full run (D12.34 passed 25 of
-  25 alone). The scripts' own tests (`scripts/test_*.py`) are not repeated. Its `ok` line carries
+  25 alone). The scripts' own tests (`scripts/tests/test_*.py`, and the three
+  `scripts/test_*.py` held beside the scripts) are not repeated. Its `ok` line carries
   `test-parallel.py`'s "Ran N tests" line, and that run is the track's one full run: there is no
   second `test-parallel.py` for the whole of `tests/` beside it. Over Days 13 to 16 (20 tracks),
   `pre-push.py` ran 32 times at a median of 6.7 minutes, beside 18 more full runs, and 5 calls

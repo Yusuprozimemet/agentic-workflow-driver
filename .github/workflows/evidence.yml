@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
       # PROJECT: install what the replayed checks and breaks need, as the project's own test
       # workflow does (a docs build needs its docs requirements); by default, requirements.txt.
-      # Change scripts/test_evidence_workflow.py's install tests with it.
+      # Change scripts/tests/test_evidence_workflow.py's install tests with it.
       - name: Install what the replayed checks need
         run: if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
       - name: Replay the closing merge

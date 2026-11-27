@@ -54,7 +54,7 @@ days on a small Python CLI. What that evidence does and does not show is in
    the kit's `.git`). There, delete `kit/` (`rm -r kit`) and start the history on `main`:
    `git init -b main`. The dashboard reads the branch `main` by name and stops without it.
 2. Fill every `<!-- PROJECT: … -->`: `git grep -n "PROJECT:"` lists them (`CLAUDE.md`, the
-   agents, `specs/README.md`, the PR template, `docs/workflow.md`, `scripts/spec_drift_common.py`, `evidence.yml`, `scripts/test_evidence_workflow.py`). Fill
+   agents, `specs/README.md`, the PR template, `docs/workflow.md`, `scripts/spec_drift_common.py`, `evidence.yml`, `scripts/tests/test_evidence_workflow.py`). Fill
    `plan.md`'s `<name>` and `<NN>`, and `spec-drift.config.json`: every field is empty until the
    project has what it names (services, moved paths, an infra workflow, PR areas, frozen files,
    code under `tests/`).
@@ -70,7 +70,7 @@ days on a small Python CLI. What that evidence does and does not show is in
    uses (`python -m pip install -r doc/requirements.txt`, say, for a docs build) in the
    `PROJECT:` step of `.github/workflows/evidence.yml`. By default it installs
    `requirements.txt` when there is one; a changed step changes the install tests in
-   `scripts/test_evidence_workflow.py` too, which fail on `main` otherwise.
+   `scripts/tests/test_evidence_workflow.py` too, which fail on `main` otherwise.
 4. Write each day's spec from [specs/_template.md](../specs/_template.md), as
    `specs/day-NN-<slug>.md`. At a stop (**Stop and evaluate.** in `plan.md`'s list) the next
    step waits until `plan.md` has a `## Course correction after Phase N` section, N the stop
@@ -185,7 +185,7 @@ On GitHub, in this order:
   the repository, and exits 1 until every item is set up. In the kit itself, run it with
   `--kit`: the kit keeps its placeholders on purpose, and they become one `ok` line.
 
-Locally: Python with `numpy` (and `pyyaml` for `scripts/test_service_wiring.py`), `node` for the
+Locally: Python with `numpy` (and `pyyaml` for `scripts/tests/test_service_wiring.py`), `node` for the
 page tests, and `gh`, logged in.
 
 ## A session's prompt

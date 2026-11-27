@@ -1,0 +1,292 @@
+"""scripts/replay-history.py tells each state apart, samples the right days and writes a fixed order.
+
+Each test builds a small repository and classifies one check at its HEAD, as the script does at a merge.
+
+    python scripts/tests/test_replay_history.py
+"""
+import importlib.util
+import json
+import os
+import random
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import unittest
+from unittest import mock
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SPEC = importlib.util.spec_from_file_location("replay_history", os.path.join(HERE, "replay-history.py"))
+rh = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(rh)
+GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+               GIT_COMMITTER_EMAIL="t@t")
+# Fails, with an assertion line, when app.txt says `broken`.
+CHECK = [sys.executable, "-c",
+         "import sys; sys.exit('AssertionError: broken') if 'broken' in open('app.txt').read() else None"]
+BREAK = {"what": "keep broken", "file": "app.txt", "find": "keep", "replace": "broken", "command": CHECK}
+TEST = "class CliTest(unittest.TestCase):\n    def test_a(self):\n        pass\n"
+
+
+class Classify(unittest.TestCase):
+    def setUp(self):
+        self.repo = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.repo, ignore_errors=True)
+        cwd = os.getcwd()
+        os.chdir(self.repo)
+        self.addCleanup(os.chdir, cwd)
+        lock = os.path.join(tempfile.mkdtemp(), "lock")  # a break.py lock of this test's own
+        self.addCleanup(shutil.rmtree, os.path.dirname(lock), ignore_errors=True)
+        self.env = dict(GIT_ENV, PYTHONDONTWRITEBYTECODE="1", BREAK_LOCK=lock)
+        self.commit({"app.txt": "ok\nkeep\n", "tests/__init__.py": "", "tests/test_cli.py": "import unittest\n" + TEST})
+
+    def commit(self, files):
+        for path, text in files.items():
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+        for args in (["init", "-q", "-b", "main"], ["add", "."], ["commit", "-q", "-m", "c"]):
+            subprocess.run(["git", *args], env=GIT_ENV, capture_output=True, check=True)
+        return rh.git("rev-parse", "HEAD").strip()
+
+    def state(self, entry, tests=(), report="AssertionError: broken", pre=False):
+        sha = rh.git("rev-parse", "HEAD").strip()
+        return rh.classify(entry, list(tests), report, self.repo, sha, pre, self.env)
+
+    def test_a_break_the_check_sees_holds_with_no_detail_when_it_reports_as_recorded(self):
+        self.assertEqual(self.state(BREAK), ("holds", None))
+        self.assertEqual(self.state(BREAK, report="AssertionError: other"), ("holds", "reported AssertionError: broken"))
+
+    def test_a_check_that_fails_clean_is_code_broken(self):
+        self.commit({"app.txt": "broken\nkeep\n"})
+        self.assertEqual(self.state(BREAK)[0], "code broken")
+
+    def test_a_check_that_passes_with_the_break_in_is_a_weakened_test(self):
+        self.assertEqual(self.state(dict(BREAK, command=[sys.executable, "-c", "pass"]))[0], "test weakened")
+
+    def test_a_removed_test_is_weakened_after_the_close_and_not_yet_in_force_before_it(self):
+        gone = dict(BREAK, command=["python", "-m", "unittest", "tests.test_cli.CliTest.test_gone"])
+        self.assertEqual(self.state(gone), ("test weakened", "CliTest.test_gone not defined"))
+        self.assertEqual(self.state(gone, pre=True), ("not yet in force", "CliTest.test_gone not defined"))
+        self.assertEqual(self.state(None, [("CliTest", "test_gone")])[0], "test weakened")
+
+    def test_edited_code_that_is_gone_no_longer_applies_and_before_the_close_is_not_yet_in_force(self):
+        self.assertEqual(self.state(dict(BREAK, find="absent")), ("break no longer applies", "the find text occurs 0 times"))
+        self.assertEqual(self.state(dict(BREAK, find="\n")), ("break no longer applies", "the find text occurs 2 times"))
+        self.assertEqual(self.state(dict(BREAK, file="gone.txt")), ("break no longer applies", "gone.txt is gone"))
+        self.assertEqual(self.state(dict(BREAK, find="absent"), pre=True)[0], "not yet in force")
+
+    def test_a_posix_only_break_is_not_applicable_on_windows_and_runs_elsewhere(self):
+        want = "not applicable on this platform" if os.name == "nt" else "holds"
+        self.assertEqual(self.state(dict(BREAK, posix_only=True))[0], want)
+
+    def test_what_cannot_run_is_not_runnable(self):
+        self.assertEqual(self.state(dict(BREAK, command=["no-such-program-xyz"]))[0], "not runnable")
+        self.assertEqual(self.state(None), ("not runnable", "no test or break to replay"))
+
+    def test_a_criterion_with_no_break_runs_its_tests_clean(self):
+        self.assertEqual(self.state(None, [("CliTest", "test_a")]),
+                         ("holds, never broken", "teeth unchecked: no broken: line"))
+        self.commit({"tests/test_cli.py": "import unittest\n" + TEST.replace("pass", "self.fail('no')")})
+        self.assertEqual(self.state(None, [("CliTest", "test_a")])[0], "code broken")
+
+    def test_an_old_holds_row_with_its_teeth_unchecked_read_from_out_is_rewritten_to_never_broken(self):
+        base = {"n": 5, "platform": "windows", "day": "01", "merge": "aaa", "sample": "all"}
+        old = [dict(base, criterion="C01.1", check="tests", state="holds", key="k1",
+                    detail="teeth unchecked: no broken: line"),
+               dict(base, n=6, merge="bbb", criterion="C01.1", check="tests", state="holds", key="k1",
+                    detail="teeth unchecked: no broken: line", reused_from="aaa"),
+               dict(base, criterion="C01.2", check="b", state="holds", key="k2"),
+               dict(base, criterion="C01.3", check="b", state="holds", key="k3", detail="reported X")]
+        out = os.path.join(self.repo, "replay.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump({"schema": 1, "since": "aaa", "rows": old}, f)
+        with mock.patch.object(rh, "merges", return_value=[]), mock.patch.object(rh, "closes", return_value={}):
+            self.assertEqual(rh.main(["--out", out, "--since", "HEAD"]), 0)
+        with open(out, encoding="utf-8") as f:
+            got = json.load(f)
+        self.assertEqual([(r["criterion"], r["n"], r["state"], r.get("detail")) for r in got["rows"]],
+                         [("C01.1", 5, "holds, never broken", "teeth unchecked: no broken: line"),
+                          ("C01.2", 5, "holds", None), ("C01.3", 5, "holds", "reported X"),
+                          ("C01.1", 6, "holds, never broken", "teeth unchecked: no broken: line")])
+        self.assertIn("holds, never broken", got["states"])
+
+    def test_a_pinned_break_whose_line_is_gone_is_left_to_the_close_s_replay(self):
+        sha = rh.git("rev-parse", "HEAD").strip()
+        items = lambda **pin: [  # noqa: E731
+            ("01", "C01.1", "gone", dict(BREAK, what="gone", find="absent", **pin), [], None, False),
+            ("01", "C01.1", "keep broken", dict(BREAK, **pin), [], "AssertionError: broken", False)]
+        rows = lambda **pin: [(r["check"], r["state"]) for r in rh.sample(  # noqa: E731
+            5, sha, "Merge pull request #9 from me/x", "day", items(**pin), {}, {"01": 1})]
+        # a pinned break that still applies is re-checked as any other; one with no pin still says its line is gone
+        self.assertEqual(rows(at="abc1234"), [("keep broken", "holds")])
+        self.assertEqual(rows(), [("gone", "break no longer applies"), ("keep broken", "holds")])
+
+    def test_an_old_no_longer_applies_row_of_a_break_since_pinned_is_dropped_from_out(self):
+        os.makedirs(os.path.join("specs", "breaks"))
+        with open(os.path.join("specs", "breaks", "day-01.json"), "w", encoding="utf-8") as f:
+            json.dump([dict(BREAK, what="p", at="abc1234"), dict(BREAK, what="q")], f)
+        base = {"n": 5, "platform": "linux", "day": "01", "merge": "aaa", "sample": "all", "criterion": "C01.1"}
+        gone = "break no longer applies"
+        old = [dict(base, check="p", state=gone, key="k1"), dict(base, check="q", state=gone, key="k2"),
+               dict(base, n=4, check="p", state="holds", key="k3")]
+        out = os.path.join(self.repo, "replay.json")
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump({"schema": 1, "since": "aaa", "rows": old}, f)
+        with mock.patch.object(rh, "merges", return_value=[]), mock.patch.object(rh, "closes", return_value={}):
+            self.assertEqual(rh.main(["--out", out, "--since", "HEAD"]), 0)
+        with open(out, encoding="utf-8") as f:
+            got = [(r["n"], r["check"]) for r in json.load(f)["rows"]]  # p's row that held stays, and q has no pin
+        self.assertEqual(got, [(4, "p"), (5, "q")])
+
+    def test_a_key_already_measured_is_copied_and_a_change_under_driver_measures_again(self):
+        sha = rh.git("rev-parse", "HEAD").strip()
+        item = ("01", "C01.1", "keep broken", BREAK, [], None, False)
+        known = {rh.key(sha, BREAK, [], False): {"state": "code broken", "merge": "abc"}}
+        row = rh.sample(5, sha, "Merge pull request #9 from me/x", "day", [item], known, {"01": 1})[0]
+        self.assertEqual((row["state"], row["reused_from"], row["pr"]), ("code broken", "abc", 9))
+        other = self.commit({"driver/x.py": "x = 1\n"})
+        self.assertNotIn(rh.key(other, BREAK, [], False), known)
+
+    def sample(self, count, jobs):
+        """The rows of one merge of `count` checks, each a break of its own name."""
+        items = [("01", f"C01.{i}", f"keep broken {i}", dict(BREAK, what=f"keep broken {i}"), [],
+                  "AssertionError: broken", False) for i in range(count)]
+        sha = rh.git("rev-parse", "HEAD").strip()
+        return rh.sample(5, sha, "Merge pull request #9 from me/x", "day", items, {}, {"01": 1}, jobs=jobs)
+
+    def test_a_merge_s_checks_run_side_by_side_each_in_a_worktree_and_under_a_lock_of_its_own(self):
+        together, seen = threading.Barrier(3, timeout=10), []
+
+        def classify(entry, tests, report, worktree, sha, pre, env):
+            seen.append((worktree, env["BREAK_LOCK"], os.path.isfile(os.path.join(worktree, "app.txt"))))
+            together.wait()  # passes only with three checks running at once
+            return "holds", None
+
+        with mock.patch.object(rh, "classify", classify):
+            rows = self.sample(3, jobs=3)
+        self.assertEqual([r["state"] for r in rows], ["holds"] * 3)
+        self.assertEqual((len({s[0] for s in seen}), len({s[1] for s in seen}), [s[2] for s in seen]), (3, 3, [True] * 3))
+        self.assertEqual([os.path.exists(s[0]) for s in seen], [False] * 3)
+
+    def test_two_breaks_run_at_once_both_hold_as_they_do_one_after_the_other(self):
+        self.assertEqual([(r["state"], r.get("detail")) for r in self.sample(2, jobs=2)], [("holds", None)] * 2)
+
+    def test_a_check_that_did_not_hold_beside_the_others_is_measured_again_alone_and_that_is_kept(self):
+        calls = []
+
+        def classify(entry, *rest):
+            calls.append(entry["what"])
+            first = calls.count(entry["what"]) == 1
+            return ("code broken", "port in use") if entry["what"] == "keep broken 1" and first else ("holds", None)
+
+        with mock.patch.object(rh, "classify", classify):
+            rows = self.sample(2, jobs=2)
+        self.assertEqual([(r["state"], r.get("detail")) for r in rows], [("holds", None)] * 2)
+        self.assertEqual(sorted(calls), ["keep broken 0", "keep broken 1", "keep broken 1"])
+
+    def test_the_file_is_written_after_every_merge_so_a_stopped_run_keeps_what_it_measured(self):
+        out = os.path.join(self.repo, "replay.json")
+        row = {"n": 5, "platform": rh.PLATFORM, "day": "01", "criterion": "C01.1", "check": "b", "state": "holds",
+               "merge": "aaa"}
+
+        def sample(n, *rest):
+            if n == 6:
+                raise KeyboardInterrupt
+            return [row]
+
+        with mock.patch.object(rh, "merges", return_value=[(5, "a" * 40, "s"), (6, "b" * 40, "s")]), \
+                mock.patch.object(rh, "closes", return_value={"01": 1}), mock.patch.object(rh, "checks", return_value=[]),                 mock.patch.object(rh, "manifest_days", return_value=set()), \
+                mock.patch.object(rh, "sample", sample), mock.patch("builtins.print"):
+            with self.assertRaises(KeyboardInterrupt):
+                rh.main(["--out", out, "--since", "HEAD"])
+        with open(out, encoding="utf-8") as f:
+            self.assertEqual([r["n"] for r in json.load(f)["rows"]], [5])
+
+
+class LiveOnly(unittest.TestCase):
+    def test_broken_none_under_a_criterion_naming_driver_live_cli_is_live_only_and_any_other_is_not_runnable(self):
+        specs = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, specs, ignore_errors=True)
+        with open(os.path.join(specs, "day-01-a.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("## Acceptance criteria\n"
+                    "- [x] C01.1 **hold** — With `DRIVER_LIVE_CLI` naming Claude Code, the session parks.\n"
+                    "      broken: none → a live check, its break run by hand (#1)\n"
+                    "- [x] C01.2 **hold** — A person reads the page.\n"
+                    "      broken: none → nothing to break (#1)\n")
+        rows = rh.sample(5, "a" * 40, "Merge pull request #9 from me/x", "all", rh.checks(specs, ["01"]), {}, {"01": 1})
+        self.assertEqual([(r["criterion"], r["state"], r["detail"]) for r in rows],
+                         [("C01.1", "live only", "broken: none; the criterion names DRIVER_LIVE_CLI"),
+                          ("C01.2", "not runnable", "broken: none")])
+
+
+class Sampling(unittest.TestCase):
+    closed = {"04": 10, "05": 20}
+
+    def test_a_close_samples_every_day_closed_by_then(self):
+        self.assertEqual(rh.sampled_days(20, "Merge pull request #43 from me/day-05/close-the-day", self.closed),
+                         (["04", "05"], "all"))
+
+    def test_a_day_s_merge_samples_that_day_once_it_has_closed(self):
+        self.assertEqual(rh.sampled_days(15, "Merge pull request #40 from me/day-05/track-a-x", self.closed), (["05"], "day"))
+        self.assertIsNone(rh.sampled_days(22, "Merge pull request #50 from me/day-06/track-a-x", self.closed))
+
+    def test_any_other_merge_samples_the_last_day_closed_before_it(self):
+        self.assertEqual(rh.sampled_days(22, "Merge pull request #44 from me/dashboard/x", self.closed), (["05"], "day"))
+        self.assertEqual(rh.sampled_days(15, "Merge pull request #30 from me/tooling/x", self.closed), (["04"], "day"))
+
+    def test_a_merge_that_changes_a_closed_days_breaks_re_checks_that_day(self):
+        # #184 re-recorded Day 03's to Day 10's breaks; only Day 11 was re-checked at it, so the
+        # board kept the #179 close's "break no longer applies" for them.
+        closed = {"03": 30, "06": 60, "11": 179}
+        self.assertEqual(rh.sampled_days(184, "Merge pull request #184 from me/tooling/x", closed, {"03", "06"}),
+                         (["03", "06", "11"], "day"))
+        self.assertEqual(rh.sampled_days(170, "Merge pull request #170 from me/day-11/track-a-x", closed, {"03"}),
+                         (["03", "11"], "day"))
+
+    def test_a_changed_manifest_of_a_day_not_closed_by_then_waits(self):
+        self.assertEqual(rh.sampled_days(22, "Merge pull request #44 from me/tooling/x", self.closed, {"06"}),
+                         (["05"], "day"))
+        self.assertEqual(rh.sampled_days(15, "Merge pull request #30 from me/tooling/x", self.closed, {"05"}),
+                         (["04"], "day"))
+
+    def test_a_merge_measured_before_gets_only_the_days_it_lacks_and_a_close_none(self):
+        self.assertEqual(rh.still_to_sample(["03", "06", "11"], "day", {"11"}), ["03", "06"])
+        self.assertEqual(rh.still_to_sample(["03", "06", "11"], "all", {"03", "11"}), [])
+        self.assertEqual(rh.still_to_sample(["03", "11"], "all", set()), ["03", "11"])
+
+    def test_the_page_says_the_re_check_runs_after_every_merge_as_recheck_yml_does(self):
+        root = os.path.dirname(HERE)
+        with open(os.path.join(root, ".github", "workflows", "recheck.yml"), encoding="utf-8") as f:
+            self.assertRegex(f.read(), r"on:\s*\n\s*push:\s*\n\s*branches: \[main\]")
+        with open(os.path.join(root, "docs", "dashboard", "dashboard.js"), encoding="utf-8") as f:
+            page = f.read()
+        self.assertEqual(page.count("run by hand"), 0)
+        # once, where graph 7 says what the gate does; the readouts that also said it have left the page
+        self.assertEqual(page.count("recheck.yml: after every merge, re-checks"), 1)
+
+
+class Order(unittest.TestCase):
+    def test_the_file_is_the_same_whatever_order_the_rows_come_in(self):
+        rows = [{"n": n, "platform": p, "day": d, "criterion": c, "check": k, "state": "holds", "merge": "m"}
+                for n in (3, 1) for p in ("windows", "linux") for d, c in (("05", "C05.10"), ("05", "C05.2"))
+                for k in ("b", "a")]
+        out = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
+        texts = []
+        for seed in (1, 2):
+            random.Random(seed).shuffle(rows)
+            rh.write(os.path.join(out, "h.json"), "abc", rows)
+            with open(os.path.join(out, "h.json"), "rb") as f:
+                texts.append(f.read())
+        self.assertEqual(texts[0], texts[1])
+        lines = texts[0].decode("utf-8").splitlines()
+        self.assertEqual(len(lines), len(rows) + 2)  # one row a line, and the head and the end
+        first = json.loads(lines[1].rstrip(","))
+        self.assertEqual((first["n"], first["platform"], first["criterion"], first["check"]), (1, "linux", "C05.2", "a"))
+        self.assertEqual(json.loads(texts[0])["rows"][-1]["criterion"], "C05.10")
+
+
+if __name__ == "__main__":
+    unittest.main()

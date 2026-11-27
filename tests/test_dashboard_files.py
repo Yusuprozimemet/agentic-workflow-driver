@@ -41,8 +41,8 @@ FILES = {
     ".claude/agents/track-reviewer.md": 150,
     "tests/test_a.py": 120, "tests/test_b.py": 60, "tests/__init__.py": 0,
     "driver/decide.py": 200, "run-steps.py": 40, "hooks/readonly.py": 30, ".github/workflows/tests.yml": 50,
-    "scripts/seen-red.py": 150, "scripts/test_seen_red.py": 90, "scripts/spec-drift.py": 316,
-    "scripts/spec_drift_views.py": 1980, "scripts/test_spec_drift_views.py": 10, "scripts/test_diff_limit.py": 40,
+    "scripts/seen-red.py": 150, "scripts/tests/test_seen_red.py": 90, "scripts/spec-drift.py": 316,
+    "scripts/spec_drift_views.py": 1980, "scripts/test_spec_drift_views.py": 10, "scripts/tests/test_diff_limit.py": 40,
     "docs/lab-notebook.md": 300, "docs/kit.md": 100, "README.md": 80, "docs/dashboard/index.html": 800,
     ".gitignore": 10, "pyproject.toml": 20,
 }  # fmt: skip
@@ -95,6 +95,15 @@ class FileMapTest(unittest.TestCase):
         self.assertEqual(m["lines"], sum(FILES.values()))
         self.assertEqual(m["unplaced"], [])
 
+    def test_the_scripts_index_and_the_layout_test_have_a_station_and_are_not_counted_as_scripts(self):
+        more = {"scripts/README.md": 30, "scripts/tests/test_scripts_layout.py": 60}
+        m = drawn(dict(FILES, **more))
+        self.assertEqual(m["unplaced"], [])
+        self.assertEqual(home(m, "scripts/README.md")[0]["label"], "guides")
+        self.assertEqual(home(m, "scripts/tests/test_scripts_layout.py")[0]["at"], "CI's checks, after station 5")
+        # seen-red.py, spec-drift.py and spec_drift_views.py: the scripts, not their tests or their index
+        self.assertEqual(m["scripts"], 3)
+
     def test_a_folder_places_itself(self):
         m = drawn(
             dict(
@@ -122,12 +131,12 @@ class FileMapTest(unittest.TestCase):
             (script["label"], script["at"], kinds[row[2]]),
             ("scripts/", "station 4, a test that fails first", "tool"),
         )
-        test, row = home(m, "scripts/test_seen_red.py")
+        test, row = home(m, "scripts/tests/test_seen_red.py")
         self.assertEqual((test["label"], test["at"]), (script["label"], script["at"]))
         self.assertEqual(kinds[row[2]], "tooltest")
         # a test named in the table hangs where the table says, whatever script its name starts like
         self.assertEqual(
-            home(m, "scripts/test_diff_limit.py")[0]["at"], "CI's checks, after station 5"
+            home(m, "scripts/tests/test_diff_limit.py")[0]["at"], "CI's checks, after station 5"
         )
         # a pattern in the table takes a module, and that module's test follows it
         self.assertEqual(home(m, "scripts/spec_drift_views.py")[0]["label"], "dashboard")
