@@ -33,9 +33,11 @@ Decided by the maintainer on 2026-11-25, on the spec-auditor's findings:
 - Between Track A's merge and Track C's, a level in force of 3 runs as level 1: no level 3 run
   without its entry check (P53). Track C makes it run as level 2 once the count is met.
 - Track A stays one pull request, with an `Oversized:` line.
-- The reviewer's new brief must meet a bar on `scripts/agent-cases.py`'s ten cases:
-  agentic-workflow-driver#214 and agentic-workflow-driver#250 each `blocker` with a blocker line naming the fault in at least 2 of 3
-  runs, and bearing#153 and bearing#154 each `none` in at least 2 of 3.
+- The reviewer's new brief must meet a bar on `scripts/agent-cases.py`'s ten cases, over 3
+  runs: its worst `verdict` and `named` not lower than the record it replaces (brief `401eb39`,
+  written in `2561efb`: `verdict` 2, `named` 0), and bearing#153 and bearing#154 each `none` in
+  at least 2 of 3. (Changed in Track D, after three counts: the first bar, #214 and #250 each
+  `blocker` and named in 2 of 3, was met by none of three briefs; see the Notes.)
 
 Chosen by the writer, for the spec-auditor and the maintainer to read:
 - The switch log is read to decide from here on, which `driver/switchlog.py`'s docstring denies
@@ -160,7 +162,7 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
   today's brief" line leaves `cases` out, as it leaves out `brief` and `runs` (`improve-loop.py:80`).
 - `tests/test_reviewer_bar.py` reads `specs/agent-cases/reviewer.json`. It checks that
   `recorded.brief` is the first 7 characters of `git hash-object rules/reviewer.md`, and that the
-  bar above holds on `recorded.cases`. It is in `tests/` so that every pull request runs it, one
+  bar above holds on `recorded`'s worst counts and its `cases`. It is in `tests/` so that every pull request runs it, one
   that edits only `rules/reviewer.md` included.
 - Track D records the count on the new brief with `agent-cases.py reviewer --record` (3 runs) and
   pastes its lines in the PR (CI's "A changed brief shows its case count"). It adds
@@ -392,16 +394,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track D: "already merged" taken out of the brief.
       Plan: none — what the reviewer looks for is detail of Day 12's reviewer; P63 covers only what it may not do.
 - [ ] C16.18 **new** — `specs/agent-cases/reviewer.json`'s `recorded.brief` is the first 7
-      characters of `git hash-object rules/reviewer.md`. Its `recorded.cases` give:
-      - `agentic-workflow-driver#214` and `agentic-workflow-driver#250` `blocker`, named in at
-        least 2 of 3 runs;
-      - `bearing#153` and `bearing#154` `none` in at least 2 of 3.
+      characters of `git hash-object rules/reviewer.md`, and `recorded.runs` is 3. Its
+      `recorded.verdict` is at least 2 and its `recorded.named` at least 0: not lower than the
+      record it replaces (brief `401eb39`, written in `2561efb`), which the test holds as two
+      constants, since CI's Tests job checks out one commit and cannot read `2561efb`. Its
+      `recorded.cases` give `bearing#153` and `bearing#154` `none` in at least 2 of 3 runs.
+      `agentic-workflow-driver#214` and `agentic-workflow-driver#250` carry no bar of their own.
 
-      The test reports, in fixed words, the first case that falls short. Red today: `recorded`
-      has no `cases` ("no per-case record").
+      The test reports, in fixed words, the first count or case that falls short. Red today:
+      `recorded` has no `cases` ("no per-case record").
       Test: `tests/test_reviewer_bar.py`, `ReviewerBarTest.test_brief_meets_the_bar`.
-      Its break, in Track D: #214's `named` lowered to 1 in `reviewer.json` (the brief names the
-      find).
+      Its break, in Track D: `recorded.verdict` lowered to 1 in `reviewer.json` (the brief names
+      the find).
       Plan: none — the bar is the maintainer's choice of 2026-11-23 for the brief; plan.md names none.
 - [ ] C16.19 **hold** — These files stay unchanged since `97688d5`:
       `driver/__init__.py`, `driver/box.py`, `driver/decide.py`, `driver/github.py`,
@@ -489,6 +493,17 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
   the brief may need more than one. The bar is measured on the same cases the new rules were
   written from, so passing it shows little beyond them. `ReviewerBarTest` sits in `tests/`, so
   the next edit to `rules/reviewer.md` fails it until a new `--record` meets the bar.
+- The first bar (#214 and #250 each `blocker`, named in 2 of 3) was met by none of three briefs
+  in Track D, 90 reviewer sessions in all. Brief `1cb7f27`: #214 `blocker` 1 of 3, #250 0 of 3,
+  worst `verdict` 3, `named` 1. Brief `47491db`: #214 `blocker` 3 of 3 but named 1 of 3, #250
+  0 of 3, worst `verdict` 4, `named` 2. Brief `f87fe8a`: #214 named 1 of 3, #250 `blocker`
+  1 of 3, worst `named` 1. The bearing cases stayed `none` 3 of 3 on all three. The bar becomes
+  "not lower than the record it replaces" (`verdict` 2, `named` 0) with the bearing cases kept:
+  a brief that reads the callers must not cost a clean PR its `none`. `47491db` meets it, with
+  room. The baseline is two constants in the test, not a read of `2561efb`, because CI's Tests
+  job fetches one commit; the next brief is held to the same two, not to `47491db`'s, so the
+  ratchet is one step. A per-case "not lower" cannot be had: the record it replaces has no
+  `cases`. The maintainer agreed to this change on 2026-11-27.
 - **Assumed** — the `--out` JSON gives each Defect line `found` and `id` on this repository's
   `spec-drift.py`: `python -c` over `spec-drift.json`'s `days[].defects` → keys `catchable`,
   `found`, `id`, `cause`, `made`, `same_as`, `problem` (2026-11-25). Bearing at `7f8ec5d` gives
@@ -536,6 +551,7 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.38 — found: auditor · cause: spec · made: Day 16 · the read gave no result when no Day an `escapes` line names is still in `order` (fixed in this PR: such a Day is passed over, and with none in `order` the read is a first read).
 - **Defect** D16.39 — found: auditor · cause: spec · made: Day 16 · C16.7 gave Day 24 `planned`, a status the kit never writes (fixed in this PR: `ready`).
 - **Defect** D16.40 — found: auditor · cause: spec · made: Day 16 · C16.15's named break did not reach its failed-evidence half (fixed in this PR: a second break, that guard put back to 2 only).
+- **Defect** D16.41 — found: Track D · at: Track D build · cause: spec · made: Day 16 · C16.18's bar asked #214 and #250 each `blocker` and named in 2 of 3 runs without a measurement that a brief could reach it; three briefs, 90 sessions, missed it (fixed in this PR: not lower than the record it replaces, bearing cases kept).
 - Between Track B (#309) and Track C, the area PR `tooling/track-speedup` made the tracks
   faster: the full suite runs once per track, as `pre-push.py`'s Tests line (which now prints its
   "Ran N tests"), in the background, with `--skip-tests` on a rerun for a title or body change
