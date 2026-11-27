@@ -73,6 +73,8 @@ owns a `new` criterion and passes the rest.
   met the shell's 10-minute limit (the track speed-up, 2026-11-27).
 - Run `pre-push.py` in the background (`run_in_background`, its output to a file in the
   scratchpad), then print the file's last lines; never a full-suite command in the foreground.
+  Start it as `python -u scripts/pre-push.py ...`: without `-u`, Python holds its output until
+  it exits, and the file stays empty for the whole run, which looks like a hang.
   A rerun after only the title or the body changed takes `--skip-tests`, which leaves the Tests
   line a `skip`; any change to the code or the tests needs the full run again.
 - The style check is check-only, `ruff check . && ruff format --check .`: it must fail on

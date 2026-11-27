@@ -214,7 +214,8 @@ one line per PR check with a local command, exit 1 on any failure. Its "Style ch
 check-only `ruff check . && ruff format --check .`, and its "Tests" is the track's one full run of
 `tests/` (while working, run only the files the change touches): read the "Ran N tests" on its
 `ok` line, and that N is the count the change should give. Run it in the background
-(`run_in_background`, output to a file, then print the file's tail), never in the foreground: a
+(`run_in_background`, as `python -u` so each line reaches its output file as its check ends,
+then print the file's tail), never in the foreground: a
 full run takes about 7 minutes and the shell stops at 10. A rerun after only the title or the
 body changed takes `--skip-tests`; after a code change, the full run again. Break each check once with
 `scripts/break.py` and copy the `broken:` line and `manifest:` it prints into the PR's raw body.
