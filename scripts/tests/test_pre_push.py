@@ -40,6 +40,20 @@ class PrePushTest(unittest.TestCase):
         self.assertEqual(again[2:], ["--repeat", "5", "--of", "test_on.py"])
         self.assertEqual(self.names(files=files, skip_tests=True)["Tests"], "skip: --skip-tests")
 
+    def test_the_scripts_tests_of_both_places_run_when_one_of_either_changes(self):
+        # The scripts' tests sit in scripts/tests/ and three are held beside the scripts: a change to a
+        # test in either place starts the run, here and in CI, and the run holds the tests of both.
+        both = ("scripts/tests/test_pre_push.py", "scripts/test_setup_check.py")
+        for changed in both:
+            ran = [command[1] for command in self.names(files=(changed,))["Drift and gap move when they should"]]
+            for test in both:
+                self.assertIn(test, ran, changed)
+        [(_, _, jobs)] = [w for w in workflows() if w[0] == "spec-drift-tests.yml"]
+        steps = [s for job in jobs.values() for s in job.get("steps", [])]
+        [paths] = [s["env"]["PATHS"] for s in steps if "PATHS" in (s.get("env") or {})]
+        self.assertEqual(paths, pp.DRIFT_PATHS.pattern)
+        self.assertTrue(any("for t in scripts/test_*.py scripts/tests/test_*.py;" in s.get("run", "") for s in steps))
+
     def test_the_tests_line_carries_the_runs_count(self):
         # The Tests step is the track's one full run (CLAUDE.md, "Before pushing"), so its line says
         # how many tests ran: the count a change should give is read there, not from a second run.

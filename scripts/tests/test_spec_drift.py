@@ -2161,6 +2161,12 @@ class TestInventoryTest(unittest.TestCase):
         self.assertEqual({k: g["tests"] for k, g in groups.items()}, dict(driver=2, live=2, gap=2, tooling=2))
         self.assertEqual({k: g["files"] for k, g in groups.items()}, dict(driver=1, live=1, gap=1, tooling=1))
 
+    def test_a_scripts_test_is_tooling_in_its_folder_and_beside_the_scripts(self):
+        # The scripts' tests sit in scripts/tests/; three are held beside the scripts (scripts/README.md).
+        groups = self.inventory(["scripts/tests/test_break.py", "scripts/test_setup_check.py", "scripts/tests/helper.py"])
+        self.assertEqual((groups["tooling"]["files"], groups["tooling"]["tests"]), (2, 4))
+        self.assertEqual(groups["driver"]["files"], 0)
+
     def test_only_a_test_method_of_a_class_counts(self):
         self.assertEqual(self.inventory(["tests/test_x.py"])["driver"]["tests"], 2)
 
