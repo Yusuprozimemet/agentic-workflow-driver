@@ -167,7 +167,8 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
 - Track D records the count on the new brief with `agent-cases.py reviewer --record` (3 runs) and
   pastes its lines in the PR (CI's "A changed brief shows its case count"). It adds
   `{"pr": <its number>, "stops": ["D12.38"]}` to `specs/fixes.json`: the new rules are aimed at
-  that defect (agentic-workflow-driver#214, said `blocker` 3 of 3 on brief `47491db`). D14.68
+  that defect (agentic-workflow-driver#214: on brief `47491db` said `blocker` 3 of 3 but named
+  1 of 3, so the claim is weak and the learn graphs' repeats are what test it). D14.68
   (agentic-workflow-driver#250) is left out: that brief said `none` on it 3 of 3.
 
 ## Out of scope
@@ -564,6 +565,7 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.44 — found: auditor · at: recheck · cause: spec · made: Day 16 · C16.18's Plan line kept only the first bar's date (fixed in this PR: both dates).
 - **Defect** D16.45 — found: auditor · at: recheck · cause: spec · made: Day 16 · nothing said Track D's test and C16.18's break, built to the first bar, must be redone (fixed in this PR: a Note).
 - **Defect** D16.46 — found: auditor · at: recheck · cause: spec · made: Day 16 · `fixes.json`'s row would claim D14.68 stopped, though #250 is said `none` 3 of 3 (fixed in this PR: D14.68 left out).
+- **Defect** D16.47 — found: auditor · at: recheck · cause: spec · made: Day 16 · the row kept D12.38 on #214's `blocker` 3 of 3, though its blocker line named the fault in 1 of 3 (fixed in this PR: both counts quoted, the claim called weak).
 - Between Track B (#309) and Track C, the area PR `tooling/track-speedup` made the tracks
   faster: the full suite runs once per track, as `pre-push.py`'s Tests line (which now prints its
   "Ran N tests"), in the background, with `--skip-tests` on a rerun for a title or body change
