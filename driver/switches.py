@@ -1,10 +1,10 @@
-"""halt, clear and off, the switches a person pulls with run-steps.py; halt and clear also write
-the switch log (switchlog.py). halt writes <state>/halt and,
+"""halt, clear, raise and off, the switches a person pulls with run-steps.py; halt, clear and raise
+also write the switch log (switchlog.py). halt writes <state>/halt and,
 when the lock names a live driver, kills that process's tree; it also kills a session the run log
 names as still alive, and the container the run log names for a session. Then it reports on the
 run's issue from <state>/run.json. clear removes the halt file and a stale lock, and refuses while a
-driver lives. off closes the project's open "Driver run" issues, so the run ends after its current
-step. Each prints its lines and returns its exit code; none starts anything."""
+driver lives. raise lifts a lowered level back to driver.json's. off closes the project's open
+"Driver run" issues, so the run ends after its current step. Each prints its lines and returns its exit code; none starts anything."""
 
 import json
 import os
@@ -170,6 +170,21 @@ def clear(state):
     os.remove(halt_file)
     switchlog.append(state, "clear")
     print("clear: the halt is removed; the driver is off")
+    return 0
+
+
+def lift(state, level):
+    # run-steps.py raise; named lift, as raise is Python's. level is driver.json's: a raise line puts the
+    # level in force back to it, and nothing is written when it is there already.
+    n, _, reason = switchlog.in_force(state, level)
+    if reason:
+        print(f"cannot raise: the level cannot be read: {reason}", file=sys.stderr)
+        return 2
+    if level <= n:
+        print(f"raise: the level is already {level}, driver.json's")
+        return 1
+    switchlog.append(state, "level", level=level, by="maintainer")
+    print(f"level: raised to {level}, driver.json's")
     return 0
 
 

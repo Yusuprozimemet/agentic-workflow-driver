@@ -11,7 +11,7 @@ process tree when its lock names a live process, then reports on the run's issue
 driver lives. Neither needs a project or a config; --state defaults to the state folder beside this
 file. live-check [--state] [--claude] [--python] runs the driver's own tests on the installed Claude
 Code and, when they end "OK" with no skip, records its version in <state>/live-checked.txt; on
-refuses to start on a version that file does not list. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] [--watch [--poll]] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; with --watch it prints again every --poll seconds until no session is live; it takes no lock and writes nothing. --once
+refuses to start on a version that file does not list. raise [--config] [--state] lifts a lowered level back to driver.json's, writing a raise line to <state>/switches.jsonl. off [--config] [--project] [--gh] closes the project's open "Driver run" issues. status [--config] [--project] [--state] [--gh] [--watch [--poll]] prints where the driver is, one line per step, parks by reason and the cost per merged pull request; with --watch it prints again every --poll seconds until no session is live; it takes no lock and writes nothing. --once
 [--config] [--project] [--state] [--claude] [--gh] [--model] [--poll] [--session-minutes] [--limit-hours] does one step's checks in order:
 halt, config, the driver's own repository (the project is the driver's folder, or both share an
 origin URL), lock, the driver's folder left clean, preflight, the tree brought to main, decide, the evidence run, then the run log;
@@ -64,8 +64,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["preflight", "halt", "clear", "off", "status", "on", "live-check"],
-        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, print its status, run on, or run the live check",
+        choices=["preflight", "halt", "clear", "off", "status", "on", "live-check", "raise"],
+        help="check the kit and the Claude Code CLI, halt, clear or turn off the driver, print its status, run on, run the live check, or raise the level to driver.json's",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="print the next action, change nothing"
@@ -151,6 +151,13 @@ def main(argv=None) -> int:
     # must not depend on a file the person may not have.
     # status takes the config's level when it reads a config; with --project it prints level 1.
     status_extra = {}
+    # raise goes back to driver.json's level, which --project does not carry.
+    if args.command == "raise" and args.project is not None:
+        print(
+            "cannot raise: raise reads the level from driver.json; give --config, not --project",
+            file=sys.stderr,
+        )
+        return 2
     if args.project is None:
         config, lines = load_config(args.config)
         if lines:
@@ -159,6 +166,8 @@ def main(argv=None) -> int:
             return 2
         args.project = config["project"]
         status_extra["level"] = config.get("level", 1)
+    if args.command == "raise":
+        return switches.lift(args.state, config.get("level", 1))
     if args.command == "off":
         return switches.off(args.project, args.gh)
     if args.command == "status":

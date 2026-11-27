@@ -12,7 +12,7 @@ import re
 import sys
 import time
 
-from driver import issues, lock, runlog
+from driver import issues, lock, runlog, switchlog
 
 # plan.md, "What it is judged against": the cost per merged pull request the driver is held to.
 BASELINE = 1.86
@@ -41,7 +41,8 @@ def _report(project, gh, state, seen=None, level=1) -> int:
     # 1 when the config has none or none was read.
     listed, gh_reason = issues.open_issues(project, gh)
     mode, live = _mode(state)
-    lines = [mode, f"level: {level}", _halt(state)]
+    level_shown, level_reason = _level(state, level)
+    lines = [mode, level_shown, _halt(state)]
     if gh_reason:
         lines += ["run's issue: unknown", "open parks: unknown"]
     else:
@@ -72,7 +73,19 @@ def _report(project, gh, state, seen=None, level=1) -> int:
         print(line)
     if gh_reason:
         print(f"cannot read the project: {gh_reason}", file=sys.stderr)
+    # A switch log that cannot be read leaves the level unknown, so the report is not a whole one.
+    if level_reason:
+        return 2
     return 2 if gh_reason or reason else 0
+
+
+def _level(state, level):
+    # Returns (the level line, reason): the level in force, with why it is lowered when it is, or
+    # unknown when the switch log cannot be read. level is driver.json's.
+    in_force, newest, reason = switchlog.in_force(state, level)
+    if reason:
+        return f"level: unknown: {reason}", reason
+    return switchlog.lowered(level, in_force, newest) or f"level: {level}", None
 
 
 def _mode(state):

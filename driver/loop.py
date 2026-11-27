@@ -432,8 +432,16 @@ def steps(args, home, project, read_facts, config):
     line = livecheck.refusal(args.state, args.claude, command)
     if line:
         return once.refuse([line])
-    waived = config.get("waived_checks", []) if config.get("level") == 2 else []
-    if config.get("level") == 2:
+    # The level in force: driver.json's, or lower while a lowering in the switch log holds it. Level 2's
+    # checks and merge apply when it is 2; a level in force of 3 runs as level 1 for now.
+    in_force, newest, reason = switchlog.in_force(args.state, config.get("level", 1))
+    if reason:
+        return once.refuse([f"cannot start: the level cannot be read: {reason}"])
+    lowered = switchlog.lowered(config.get("level", 1), in_force, newest)
+    if lowered:
+        once.say(lowered, 0)
+    waived = config.get("waived_checks", []) if in_force == 2 else []
+    if in_force == 2:
         lines = level_2_refusals(args, project, config)
         if lines:
             return once.refuse(lines)
@@ -518,7 +526,7 @@ def steps(args, home, project, read_facts, config):
                 record,
                 config["human_only"],
                 read_facts,
-                level2=(home, started) if config.get("level") == 2 else None,
+                level2=(home, started) if in_force == 2 else None,
             )
         if line is None:
             if count >= config["steps_per_night"]:
