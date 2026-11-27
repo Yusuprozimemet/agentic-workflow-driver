@@ -83,9 +83,101 @@
   }
  ],
  "recorded": {
-  "verdict": 2,
-  "named": 0,
+  "verdict": 4,
+  "named": 2,
   "runs": 3,
-  "brief": "401eb39"
+  "cases": [
+   {
+    "case": "bearing#65",
+    "said": [
+     "blocker",
+     "blocker",
+     "blocker"
+    ],
+    "named": 3
+   },
+   {
+    "case": "bearing#13",
+    "said": [
+     "blocker",
+     "none",
+     "none"
+    ],
+    "named": 1
+   },
+   {
+    "case": "agentic-workflow-driver#85",
+    "said": [
+     "none",
+     "none",
+     "none"
+    ],
+    "named": 0
+   },
+   {
+    "case": "agentic-workflow-driver#24",
+    "said": [
+     "blocker",
+     "none",
+     "none"
+    ],
+    "named": 1
+   },
+   {
+    "case": "agentic-workflow-driver#5",
+    "said": [
+     "none",
+     "none",
+     "blocker"
+    ],
+    "named": 1
+   },
+   {
+    "case": "agentic-workflow-driver#67",
+    "said": [
+     "none",
+     "none",
+     "none"
+    ],
+    "named": 0
+   },
+   {
+    "case": "agentic-workflow-driver#214",
+    "said": [
+     "blocker",
+     "blocker",
+     "blocker"
+    ],
+    "named": 1
+   },
+   {
+    "case": "agentic-workflow-driver#250",
+    "said": [
+     "none",
+     "none",
+     "none"
+    ],
+    "named": 0
+   },
+   {
+    "case": "bearing#153",
+    "said": [
+     "none",
+     "none",
+     "none"
+    ],
+    "named": 0
+   },
+   {
+    "case": "bearing#154",
+    "said": [
+     "none",
+     "none",
+     "none"
+    ],
+    "named": 0
+   }
+  ],
+  "brief": "47491db"
  }
 }
