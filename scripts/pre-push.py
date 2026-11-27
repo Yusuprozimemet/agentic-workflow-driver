@@ -19,6 +19,8 @@ check added to CI and not here fails `test_pre_push.py`.
 whole run (`test-parallel.py --repeat 5 --of`), the suite being the load. Nine of Days 9 to 12's
 late defects were a test that fails on and off under load, each met in a later track's full run;
 alone, one passed 25 of 25 (D12.34). The scripts' own tests (scripts/test_*.py) are not repeated.
+Its `ok` line carries the run's "Ran N tests" line: this is the track's one full run, and a rerun
+for a title or body change only takes --skip-tests (the track speed-up, 2026-11-27).
 """
 
 import argparse
@@ -123,6 +125,11 @@ def run(commands, env):
     return 0, "\n".join(out)
 
 
+def ran_line(output):
+    """test-parallel.py's "Ran N tests in ..." line, or "" when the output has none."""
+    return next((line.strip() for line in output.splitlines() if re.match(r"Ran \d+ tests", line.strip())), "")
+
+
 def last_line(output):
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     return lines[-1] if lines else "no output"
@@ -155,8 +162,10 @@ def main(argv=None):
         code, output = run(what, env)
         if not code:
             again = changed_tests(files) if name == "Tests" else []
-            print(f"ok   {name}" + ("" if what else ": nothing to run")
-                  + (f": {', '.join(again)} run {REPEAT} times in it" if again else ""))
+            ran = ran_line(output) if name == "Tests" else ""
+            print(f"ok   {name}" + ("" if what else ": nothing to run") + (f": {ran}" if ran else "")
+                  + (f"; {', '.join(again)} run {REPEAT} times in it" if again and ran else
+                     f": {', '.join(again)} run {REPEAT} times in it" if again else ""))
             continue
         failed += 1
         os.makedirs(KEPT, exist_ok=True)

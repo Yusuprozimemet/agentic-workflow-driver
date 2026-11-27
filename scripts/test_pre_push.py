@@ -40,6 +40,13 @@ class PrePushTest(unittest.TestCase):
         self.assertEqual(again[2:], ["--repeat", "5", "--of", "test_on.py"])
         self.assertEqual(self.names(files=files, skip_tests=True)["Tests"], "skip: --skip-tests")
 
+    def test_the_tests_line_carries_the_runs_count(self):
+        # The Tests step is the track's one full run (CLAUDE.md, "Before pushing"), so its line says
+        # how many tests ran: the count a change should give is read there, not from a second run.
+        output = "$ py scripts/test-parallel.py\nRan 738 tests in 401.2s (8 workers; slowest test_on.py 190.0s)\nOK\n"
+        self.assertEqual(pp.ran_line(output), "Ran 738 tests in 401.2s (8 workers; slowest test_on.py 190.0s)")
+        self.assertEqual(pp.ran_line("$ ruff check .\nAll checks passed!\n"), "")
+
     def test_every_check_ci_runs_on_a_pull_request_has_a_line(self):
         # A check added to CI and not to pre-push.py is the one a first push meets (#212 S23, #213 B12).
         local = {name.strip('"') for name in self.names()}

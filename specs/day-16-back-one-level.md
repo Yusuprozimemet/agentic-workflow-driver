@@ -536,3 +536,10 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.38 — found: auditor · cause: spec · made: Day 16 · the read gave no result when no Day an `escapes` line names is still in `order` (fixed in this PR: such a Day is passed over, and with none in `order` the read is a first read).
 - **Defect** D16.39 — found: auditor · cause: spec · made: Day 16 · C16.7 gave Day 24 `planned`, a status the kit never writes (fixed in this PR: `ready`).
 - **Defect** D16.40 — found: auditor · cause: spec · made: Day 16 · C16.15's named break did not reach its failed-evidence half (fixed in this PR: a second break, that guard put back to 2 only).
+- Between Track B (#309) and Track C, the area PR `tooling/track-speedup` made the tracks
+  faster: the full suite runs once per track, as `pre-push.py`'s Tests line (which now prints its
+  "Ran N tests"), in the background, with `--skip-tests` on a rerun for a title or body change
+  only. It is a departure from CLAUDE.md's rule that an area PR opens while a Day is open only to
+  unblock its next step: the maintainer chose to do it while Day 16 is open (2026-11-27). Tracks
+  C and D are the first to run under it; their times say whether it saved what was measured
+  (about 12 of about 50 minutes per track over Days 13 to 16).
