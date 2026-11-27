@@ -66,6 +66,7 @@ class ShortfallTest(unittest.TestCase):
 
     def test_each_shortfall(self):
         self.assertIsNone(shortfall(good(), "abc1234"))
+        self.assertEqual("no per-case record", shortfall({}, "abc1234"))
         spoil = {
             "no cases": (lambda r: r.pop("cases"), "no per-case record"),
             "brief": (
