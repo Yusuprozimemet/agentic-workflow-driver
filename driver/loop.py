@@ -19,6 +19,13 @@ from driver import home as driver_home
 from driver.preflight import image_claude, kit_lines
 from driver.steps import Step
 
+# A Defect line found at one of these, or in a "Day NN review" (fullmatch), lowered and stripped, is an
+# escape (P54); every other found value is not.
+ESCAPE_FOUND = ("close", "dashboard", "evidence replay")
+ESCAPE_REVIEW = re.compile(r"day \d+ review")
+# The levels in force a lowering goes down from: 2 only until Track C makes it (2, 3).
+LOWERS_FROM = (2,)
+
 
 def read_switches(args, project, record):
     # Returns (line, code, reason): (line, code, None) when the run must end, (None, None, None) to
@@ -323,13 +330,16 @@ def level_2_merge(args, project, number, level2, asked, now):
     return None
 
 
-def wait_merge(args, project, number, record, human_only, read_facts, git=("git",), level2=None):
+def wait_merge(
+    args, project, number, record, human_only, read_facts, git=("git",), level2=None, in_force=None
+):
     # After wait_pr's green: the path check, the maintainer's merge (no bound on it), main pulled,
     # and the evidence run on the new origin/main head. Returns (line, code, keys); (None, 0, {})
     # means the next step can start. keys is a gated park's pr and head, for once.finish; {} in
     # every other return. level2 is (home, started) at level 2, and the driver then asks the merge
     # itself once, at the first OPEN read whose path check passes (level_2_merge); a moved head parks
-    # there, and a failed merge is read once more.
+    # there, and a failed merge is read once more. An evidence run that ended badly lowers the level
+    # in force by one, from a level it lowers from.
     heads, keys, asked = [], {}, []
 
     def read():
@@ -376,7 +386,101 @@ def wait_merge(args, project, number, record, human_only, read_facts, git=("git"
     if sha is None:
         return f"cannot read the project: no origin/main after #{number} merged", 2, {}
     line, code = wait_evidence(args, project, record, sha)
+    # Only a run that ended lowers: one not finished after --wait-minutes says nothing of the merge.
+    if in_force in LOWERS_FROM and code == 1 and " ended `" in line:
+        lower(args, in_force, evidence=sha)
     return line, code, {}
+
+
+def escape_of(defect):
+    # P54's escape: the found value, lowered and stripped, is one of ESCAPE_FOUND or a Day NN review.
+    if not isinstance(defect, dict) or not isinstance(defect.get("found"), str):
+        return False
+    found = defect["found"].strip().lower()
+    return found in ESCAPE_FOUND or ESCAPE_REVIEW.fullmatch(found) is not None
+
+
+def no_found(pairs):
+    # The first (i, j) of the Days given, (index in days[], Day), whose defects[j] has no found: the key
+    # absent, or null as the kit writes a missing tag. None when every Defect line has one.
+    for i, day in pairs:
+        if not isinstance(day, dict):
+            continue
+        for j, defect in enumerate(day.get("defects") or []):
+            if not isinstance(defect, dict) or defect.get("found") is None:
+                return i, j
+    return None
+
+
+def unread_days(drift, switches):
+    # The finished Days not read yet, as (index in days[], Day), by place in the JSON's order, never by
+    # number. With a Day an escapes line names in order, every finished Day placed after the latest such
+    # one; with none (the first read), only the last-placed finished Day.
+    order = drift.get("order") or []
+    place = {n: k for k, n in enumerate(order)}
+    finished = [
+        (i, day)
+        for i, day in enumerate(drift.get("days") or [])
+        if isinstance(day, dict)
+        and day.get("status") in ("done", "closed")
+        and day.get("day") in place
+    ]
+    finished.sort(key=lambda pair: place[pair[1]["day"]])
+    named = [r.get("day") for r in switches if r.get("event") == "escapes"]
+    placed = [place[n] for n in named if n in place]
+    if not placed:
+        return finished[-1:]
+    latest = max(placed)
+    return [pair for pair in finished if place[pair[1]["day"]] > latest]
+
+
+def lower(args, in_force, escapes=None, evidence=None):
+    # The lowering line, written before it is said; returns the level the run goes on at.
+    level = in_force - 1
+    switchlog.append(
+        args.state, "level", level=level, escapes=escapes, evidence=evidence, **{"from": in_force}
+    )
+    if escapes is not None:
+        once.say(f"level: lowered to {level} from {in_force} on an escape: {', '.join(escapes)}", 0)
+    else:
+        once.say(
+            f"level: lowered to {level} from {in_force} on a failed evidence run of {evidence[:7]}",
+            0,
+        )
+    return level
+
+
+def read_escapes(args, config, drift, in_force):
+    # Before each step, at driver.json's level 2 or 3: an escapes line for each finished Day not read
+    # yet, then one lowering when they hold an escape. Returns (in_force, line); a line ends the run.
+    if config.get("level", 1) not in (2, 3):
+        return in_force, None
+    switches, reason = switchlog.read(args.state)
+    if reason:
+        return in_force, f"cannot read the project: {reason}"
+    pairs = unread_days(drift, switches)
+    missing = no_found(pairs)
+    if missing is not None:
+        i, j = missing
+        return (
+            in_force,
+            f"cannot read the project: spec-drift.py's JSON has no days[{i}].defects[{j}].found",
+        )
+    for i, day in pairs:
+        for j, defect in enumerate(day.get("defects") or []):
+            if escape_of(defect) and not isinstance(defect.get("id"), str):
+                return (
+                    in_force,
+                    f"cannot read the project: spec-drift.py's JSON has no days[{i}].defects[{j}].id",
+                )
+    ids = []
+    for _, day in pairs:
+        found = [d["id"] for d in day.get("defects") or [] if escape_of(d)]
+        switchlog.append(args.state, "escapes", day=day["day"], found=found)
+        ids += found
+    if ids and in_force in LOWERS_FROM:
+        in_force = lower(args, in_force, escapes=ids)
+    return in_force, None
 
 
 def run(args, home, read_facts):
@@ -384,11 +488,21 @@ def run(args, home, read_facts):
     return once.run(args, home, read_facts, steps)
 
 
-def level_2_refusals(args, project, config):
+def level_2_refusals(args, project, config, drift):
     # Level 2 starts only with review on, the sessions in the container, 15 merges in a row without a change
     # and main protected with no bypass. One line per condition that fails, in this order; the protection
-    # is read only when the first three hold, so a start that is refused for them makes no api call.
+    # is read only when the first three hold, so a start that is refused for them makes no api call. A
+    # Defect line with no found, in any Day, is the last line: its escape could not be read.
     path = args.config
+    missing = no_found(list(enumerate(drift.get("days") or [])))
+    found_line = (
+        None
+        if missing is None
+        else (
+            "cannot start: level 2 needs each Defect line's found in spec-drift.py's JSON: "
+            f"days[{missing[0]}].defects[{missing[1]}] has none"
+        )
+    )
     lines = []
     if config.get("review") is not True:
         lines.append(f'cannot start: level 2 needs "review": true in {path}')
@@ -404,7 +518,7 @@ def level_2_refusals(args, project, config):
             f"in a row merged without a change asked; status counts {k}"
         )
     if lines:
-        return lines
+        return lines + ([found_line] if found_line else [])
     waived = tuple(config.get("waived_checks", []))
     reason = github.protection(project, args.gh, waived)
     if reason is not None:
@@ -412,7 +526,7 @@ def level_2_refusals(args, project, config):
             "cannot start: level 2 needs main to require a pull request and its checks with no bypass: "
             f"{reason}"
         )
-    return lines
+    return lines + ([found_line] if found_line else [])
 
 
 def steps(args, home, project, read_facts, config):
@@ -442,7 +556,7 @@ def steps(args, home, project, read_facts, config):
         once.say(lowered, 0)
     waived = config.get("waived_checks", []) if in_force == 2 else []
     if in_force == 2:
-        lines = level_2_refusals(args, project, config)
+        lines = level_2_refusals(args, project, config, drift)
         if lines:
             return once.refuse(lines)
     reason = once.settle(args, project)
@@ -470,6 +584,11 @@ def steps(args, home, project, read_facts, config):
             lines, drift = kit_lines(project)
             if lines:
                 return end("\n".join(lines), 2)
+        # The escapes of Days finished since the last read, before each step, the run's first included:
+        # a close that was a night's last step, or merged by hand, is read here.
+        in_force, line = read_escapes(args, config, drift, in_force)
+        if line:
+            return end(line, 2) if record is not None else once.refuse([line])
         step = once.ready(args, project, read_facts, drift, "container_image" in config)
         open_list = step.open_list
         if step.kind == "running":
@@ -527,6 +646,7 @@ def steps(args, home, project, read_facts, config):
                 config["human_only"],
                 read_facts,
                 level2=(home, started) if in_force == 2 else None,
+                in_force=in_force,
             )
         if line is None:
             if count >= config["steps_per_night"]:
