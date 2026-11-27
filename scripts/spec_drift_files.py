@@ -82,8 +82,11 @@ def place(path, groups):
     for i, g in enumerate(groups):
         if any(fits(p, path) for p in g.get("paths", ())):
             return i
-    if path.startswith(SCRIPTS) and "/" not in path[len(SCRIPTS):]:
-        stem = path[len(SCRIPTS):].rsplit(".", 1)[0]
+    name = path[len(SCRIPTS):]
+    if name.startswith("tests/test_"):
+        name = name[len("tests/"):]  # the scripts' tests sit in scripts/tests/, and hang under the script they test
+    if path.startswith(SCRIPTS) and "/" not in name:
+        stem = name.rsplit(".", 1)[0]
         for names in script_names(stem):
             for i, g in enumerate(groups):
                 if any(fits(p, name) for p in g.get("scripts", ()) for name in names):
@@ -250,7 +253,8 @@ def file_map(counts, groups, head=None, why=None, briefs=None):
     return dict(head=head, files=files, lines=sum(counts.values()), groups=out, geo=geo, zones=zones, loop=loop,
                 kinds=[dict(key=k, name=name, n=sum(f[2] == n for f in files)) for n, (k, name) in enumerate(KINDS)],
                 unplaced=[f[0] for f in files if f[4]], unplaced_what=UNPLACED, table=TABLE_NAME,
-                scripts=sum(f[0].startswith(SCRIPTS) and not f[0].rsplit("/", 1)[-1].startswith("test_") for f in files))
+                scripts=sum(f[0].startswith(SCRIPTS) and f[0].endswith(".py")
+                            and not f[0].rsplit("/", 1)[-1].startswith("test_") for f in files))
 
 
 def build_file_map(head, run):
