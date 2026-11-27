@@ -387,7 +387,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `verdict`, `named`, `runs` and `brief` are as today. The test gives its case repositories
       fixed names (`driver`, `bearing`), never a temporary folder's, so its report replays.
       Red today: `recorded` has no `cases`.
-      Test: `tests/test_reviewer_record.py`, `ReviewerRecordTest.test_record_keeps_each_case`.
+      Test: `ReviewerRecordTest.test_record_keeps_each_case`, in tests/test_reviewer_record.py.
       Its break, in Track D: `cases` left out of the recorded dict.
       Plan: none — measuring the reviewer's brief is tooling for the maintainer's choice of 2026-11-22, not a commitment of plan.md.
 - [ ] C16.17 **new** — `rules/reviewer.md` holds "callers", "already merged" and "as if it were
@@ -405,7 +405,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
 
       The test reports, in fixed words, the first count or case that falls short. Red today:
       `recorded` has no `cases` ("no per-case record").
-      Test: `tests/test_reviewer_bar.py`, `ReviewerBarTest.test_brief_meets_the_bar`.
+      Test: `ReviewerBarTest.test_brief_meets_the_bar`, in tests/test_reviewer_bar.py.
       Its break, in Track D: `recorded.verdict` lowered to 1 in `reviewer.json` (the brief names
       the find).
       Plan: none — the bar is the maintainer's choice of 2026-11-23 for the brief, changed on 2026-11-27; plan.md names none.
@@ -566,6 +566,7 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.45 — found: auditor · at: recheck · cause: spec · made: Day 16 · nothing said Track D's test and C16.18's break, built to the first bar, must be redone (fixed in this PR: a Note).
 - **Defect** D16.46 — found: auditor · at: recheck · cause: spec · made: Day 16 · `fixes.json`'s row would claim D14.68 stopped, though #250 is said `none` 3 of 3 (fixed in this PR: D14.68 left out).
 - **Defect** D16.47 — found: auditor · at: recheck · cause: spec · made: Day 16 · the row kept D12.38 on #214's `blocker` 3 of 3, though its blocker line named the fault in 1 of 3 (fixed in this PR: both counts quoted, the claim called weak).
+- **Defect** D16.48 — found: Track D · at: Track D build · cause: spec · made: Day 16 · C16.16's and C16.18's `Test:` fields put the test file's path in backticks beside the test, and `track-red.py` reads every backticked name there as a test, so the path matched 0 tests and Track D's "Track tests seen red" failed on tests that are red on `ef03069` and green on the branch (fixed in this PR: each path moved out of the backticks).
 - Between Track B (#309) and Track C, the area PR `tooling/track-speedup` made the tracks
   faster: the full suite runs once per track, as `pre-push.py`'s Tests line (which now prints its
   "Ran N tests"), in the background, with `--skip-tests` on a rerun for a title or body change
