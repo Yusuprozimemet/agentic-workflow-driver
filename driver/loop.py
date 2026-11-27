@@ -17,14 +17,14 @@ from time import monotonic, sleep
 from driver import github, issues, livecheck, once, review, runlog, status, switchlog, tree
 from driver import home as driver_home
 from driver.preflight import image_claude, kit_lines
-from driver.steps import Step
+from driver.steps import Step, classify
 
 # A Defect line found at one of these, or in a "Day NN review" (fullmatch), lowered and stripped, is an
 # escape (P54); every other found value is not.
 ESCAPE_FOUND = ("close", "dashboard", "evidence replay")
 ESCAPE_REVIEW = re.compile(r"day \d+ review")
-# The levels in force a lowering goes down from: 2 only until Track C makes it (2, 3).
-LOWERS_FROM = (2,)
+# The levels in force a lowering goes down from: a level 3 run goes back to 2, a level 2 run to 1.
+LOWERS_FROM = (2, 3)
 
 
 def read_switches(args, project, record):
@@ -547,16 +547,28 @@ def steps(args, home, project, read_facts, config):
     if line:
         return once.refuse([line])
     # The level in force: driver.json's, or lower while a lowering in the switch log holds it. Level 2's
-    # checks and merge apply when it is 2; a level in force of 3 runs as level 1 for now.
+    # checks and merge apply at 2 or 3; 3 also needs status's count of two phases in a row at level 2.
     in_force, newest, reason = switchlog.in_force(args.state, config.get("level", 1))
     if reason:
         return once.refuse([f"cannot start: the level cannot be read: {reason}"])
     lowered = switchlog.lowered(config.get("level", 1), in_force, newest)
     if lowered:
         once.say(lowered, 0)
-    waived = config.get("waived_checks", []) if in_force == 2 else []
-    if in_force == 2:
+    waived = config.get("waived_checks", []) if in_force >= 2 else []
+    if in_force >= 2:
         lines = level_2_refusals(args, project, config, drift)
+        if in_force == 3:
+            records, _ = runlog.read(args.state)
+            # An unreadable switch log refuses, as above: read as [] it would pass its lowerings unchecked.
+            switches, reason = switchlog.read(args.state)
+            if reason:
+                return once.refuse([f"cannot start: the level cannot be read: {reason}"])
+            k = status.level_3_run(records or [], switches)
+            if k < status.LEVEL_3_RUN:
+                lines.append(
+                    "cannot start: level 3 needs 2 of 2 phases in a row at level 2 with no escape, "
+                    f"no merge by hand and no step at level 1; status counts {k}"
+                )
         if lines:
             return once.refuse(lines)
     reason = once.settle(args, project)
@@ -618,7 +630,27 @@ def steps(args, home, project, read_facts, config):
             session, line = once.reached(args, home, project, config)
             if line:
                 return once.refuse([line])
-            record, command, prompt, reason = once.begin(args, home, project, config, step, session)
+            # At level 2 or 3 the start line carries the level and the phase of the step's Day in the
+            # JSON read last, so status can count level 3's phases in a row; None when no Day names it.
+            n = classify(step.sentence).day
+            phase = next(
+                (
+                    day.get("phase")
+                    for day in drift.get("days") or []
+                    if n is not None and isinstance(day, dict) and day.get("day") == n
+                ),
+                None,
+            )
+            record, command, prompt, reason = once.begin(
+                args,
+                home,
+                project,
+                config,
+                step,
+                session,
+                level=in_force if in_force >= 2 else None,
+                phase=phase,
+            )
             if reason:
                 return once.refuse([f"cannot read the project: {reason}"])
             count += 1
@@ -645,7 +677,7 @@ def steps(args, home, project, read_facts, config):
                 record,
                 config["human_only"],
                 read_facts,
-                level2=(home, started) if in_force == 2 else None,
+                level2=(home, started) if in_force >= 2 else None,
                 in_force=in_force,
             )
         if line is None:

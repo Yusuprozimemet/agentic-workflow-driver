@@ -660,10 +660,11 @@ def command(args, home, config, settings, session, extra=()):
     ]
 
 
-def begin(args, home, project, config, step, session):
+def begin(args, home, project, config, step, session, level=None, phase=None):
     # Everything a session needs before it starts: its uuid, the run's issue, the settings, the run
     # log's start line, the command and the prompt. Returns (record, command, prompt, None), or
-    # (None, None, None, reason) when the run's issue could not be opened.
+    # (None, None, None, reason) when the run's issue could not be opened. level and phase, given at
+    # level 2 or 3, go on the start line.
     sentence = step.sentence
     record, reason = open_record(args, project, sentence, session, step.open_list)
     if reason:
@@ -689,6 +690,8 @@ def begin(args, home, project, config, step, session):
         version,
         issue=record["issue"],
         container=record.get("container"),
+        level=level,
+        phase=phase,
     )
     argv = command(args, home, config, settings_path, session)
     if boxed:
