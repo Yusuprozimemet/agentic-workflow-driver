@@ -2,7 +2,9 @@
 the driver saw: on, off, halt, clear and level. scripts/driver-runs.py reads it for the count, so that
 a session a halt names is not counted as crashed. The run log keeps the sessions, and this file keeps
 the switches beside it. From Day 16 the driver reads its level lines, at driver.json's level 2 or 3
-only, for the level in force: a lowering holds the level below the config's until a raise lifts it."""
+only, for the level in force: a lowering holds the level below the config's until a raise lifts it.
+The loop reads its escapes lines too, at the same levels only: each names a Day whose escapes were
+read, so that no Day is read twice."""
 
 import json
 import os
