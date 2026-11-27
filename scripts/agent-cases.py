@@ -165,6 +165,7 @@ def review_report(cases, replies, recorded):
     whose verdict agrees with the known one, and the blocker cases whose blocker lines name the
     known fault; an unreadable reply agrees with nothing."""
     said = [[] for _ in cases]
+    named = [0 for _ in cases]
     runs = []
     for run in replies:
         count = dict.fromkeys(REVIEW_AXES, 0)
@@ -176,21 +177,25 @@ def review_report(cases, replies, recorded):
             blockers = got[1]
             said[i].append("blocker" if blockers else "none")
             count["verdict"] += said[i][-1] == case["expect"]
-            count["named"] += case["expect"] == "blocker" and any(
+            hit = case["expect"] == "blocker" and any(
                 re.search(case["names"], line, re.I) for line in blockers
             )
+            count["named"] += hit
+            named[i] += hit
         runs.append(count)
-    lines = [
-        f"{re.split(r'[/\\]', c['repo'])[-1]}#{c['pr']} expects {c['expect']}: {', '.join(s)}"
-        for c, s in zip(cases, said)
-    ]
+    # One name for the printed line and the recorded entry, so the two cannot differ.
+    names = [f"{re.split(r'[/\\]', c['repo'])[-1]}#{c['pr']}" for c in cases]
+    lines = [f"{n} expects {c['expect']}: {', '.join(s)}" for n, c, s in zip(names, cases, said)]
     if all(s == "unreadable" for each in said for s in each):
         return lines + ["no run counted"], None
     totals = {
         "verdict": len(cases),
         "named": sum(c["expect"] == "blocker" for c in cases),
     }
-    return finish(lines, runs, totals, recorded, REVIEW_AXES)
+    lines, worst = finish(lines, runs, totals, recorded, REVIEW_AXES)
+    # Each case's runs, kept by --record: the worst counts alone cannot say which case fell.
+    worst["cases"] = [{"case": n, "said": s, "named": k} for n, s, k in zip(names, said, named)]
+    return lines, worst
 
 
 def findings(reply):

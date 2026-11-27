@@ -57,7 +57,9 @@ def parse(reply):
 
 
 def fell(worst, than):
-    return [f"{a} {worst[a]} < {than[a]}" for a in than if a != "runs" and worst[a] < than[a]]
+    # A review count's per-case record is lists, not a count: only the axes are compared.
+    skip = ("runs", "cases")
+    return [f"{a} {worst[a]} < {than[a]}" for a in than if a not in skip and worst[a] < than[a]]
 
 
 def main(argv, repo=ROOT, drafter=None, runner=None):
@@ -77,7 +79,9 @@ def main(argv, repo=ROOT, drafter=None, runner=None):
     recorded = data.get("recorded") or {}
     last = os.path.join(repo, ".claude", "state", "agent-cases", agent, "count.txt")
     if recorded.get("brief") == sha:
-        was = ", ".join(f"{a} {v}" for a, v in recorded.items() if a not in ("brief", "runs"))
+        was = ", ".join(
+            f"{a} {v}" for a, v in recorded.items() if a not in ("brief", "runs", "cases")
+        )
         before = [f"recorded on today's brief {sha}: {was} ({recorded.get('runs')} runs)"]
         try:
             with open(last, encoding="utf-8") as f:

@@ -218,7 +218,11 @@ class ReviewReportTest(unittest.TestCase):
         self.assertEqual(len(want), len(lines))
         for w, got in zip(want, lines):
             self.assertEqual(w, got)
-        self.assertEqual({"verdict": 1, "named": 0, "runs": 3}, worst)
+        cases = [
+            {"case": "bearing#7", "said": ["blocker", "blocker", "unreadable"], "named": 1},
+            {"case": "bearing#8", "said": ["none", "blocker", "none"], "named": 0},
+        ]
+        self.assertEqual({"verdict": 1, "named": 0, "runs": 3, "cases": cases}, worst)
 
     def test_a_fall_below_the_recorded_count_is_named(self):
         recorded = {"verdict": 2, "named": 1, "runs": 3, "brief": "abc1234"}
