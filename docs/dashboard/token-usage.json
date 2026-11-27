@@ -312,6 +312,6 @@
 {"date":"2026-11-27","day":null,"model":"claude-opus-5-5","agent":"main","part":"day","part_day":16,"input":40,"cache_write":97700,"cache_read":1792943,"output":23168,"replies":20,"bash":15,"cut":3,"reads":8,"whole":0,"cost":1.6037,"cost_past_150k":0},
 {"date":"2026-11-27","day":16,"model":"claude-fable-5-2","agent":"main","part":"day","part_day":16,"input":124,"cache_write":592194,"cache_read":7731758,"output":269974,"replies":57,"bash":36,"cut":0,"reads":12,"whole":7,"cost":21.8214,"cost_past_150k":11.5264},
 {"date":"2026-11-27","day":16,"model":"claude-opus-5-5","agent":"implementer","part":"day","part_day":16,"input":116,"cache_write":207025,"cache_read":4037151,"output":31519,"replies":55,"bash":42,"cut":3,"reads":6,"whole":1,"cost":2.4734,"cost_past_150k":0},
-{"date":"2026-11-27","day":16,"model":"claude-opus-5-5","agent":"main","part":"day","part_day":16,"input":122,"cache_write":101820,"cache_read":6009301,"output":31261,"replies":52,"bash":31,"cut":0,"reads":3,"whole":1,"cost":2.6421,"cost_past_150k":0.9294},
+{"date":"2026-11-27","day":16,"model":"claude-opus-5-5","agent":"main","part":"day","part_day":16,"input":146,"cache_write":155353,"cache_read":6852911,"output":36819,"replies":63,"bash":39,"cut":0,"reads":3,"whole":1,"cost":3.3504,"cost_past_150k":0.9294},
 {"date":"2026-11-27","day":16,"model":"claude-opus-5-5","agent":"track-reviewer","part":"day","part_day":16,"input":172,"cache_write":202392,"cache_read":5894303,"output":60340,"replies":86,"bash":83,"cut":6,"reads":6,"whole":1,"cost":3.3983,"cost_past_150k":0}
 ]
