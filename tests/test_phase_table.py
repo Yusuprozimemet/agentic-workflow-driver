@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
+import pipeline  # noqa: F401  (importing it puts the pipeline's folders on the path)
 import spec_drift_metrics as metrics
 import spec_drift_specs as specs
 

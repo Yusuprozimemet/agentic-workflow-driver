@@ -1,4 +1,4 @@
-"""The dashboard's newer views (scripts/spec_drift_views.py) and the citations they read: what a criterion cites, each
+"""The dashboard's newer views (scripts/pipeline/counts/spec_drift_views.py) and the citations they read: what a criterion cites, each
 criterion's state, and the gene, which every commitment of the plan sits in once. Needs node for the page's model."""
 
 import importlib.util
@@ -15,10 +15,13 @@ import unittest
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SCRIPTS = os.path.join(ROOT, "scripts")
 sys.path.insert(0, SCRIPTS)
+import pipeline  # importing it puts the pipeline's three folders on the path
 
 
 def load(name, file):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(SCRIPTS, file))
+    spec = importlib.util.spec_from_file_location(
+        name, pipeline.path(file) if file.startswith("spec_drift_") else os.path.join(SCRIPTS, file)
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

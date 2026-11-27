@@ -1221,7 +1221,7 @@ def _token_usage():
         import importlib.util
         import os
 
-        here = os.path.dirname(os.path.abspath(__file__))
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)  # scripts/
         spec = importlib.util.spec_from_file_location("token_usage", os.path.join(here, "token-usage.py"))
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

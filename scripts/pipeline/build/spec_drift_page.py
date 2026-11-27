@@ -424,7 +424,7 @@ def page_data(real, spec_days):
     "demo": true, which the page shows under a banner. --out never uses this."""
     if spec_days:
         return real
-    spec = importlib.util.spec_from_file_location("demo_data", os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo-data.py"))
+    spec = importlib.util.spec_from_file_location("demo_data", os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, "demo-data.py"))
     demo_data = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(demo_data)
     # the file map is read from git, so it is the project's own even while the rest is an example

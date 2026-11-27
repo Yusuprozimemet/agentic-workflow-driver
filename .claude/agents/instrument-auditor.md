@@ -240,7 +240,7 @@ For each view, read its picture and its text in `views.txt`, then write four lin
   the same data, so a difference is a drawing bug). Then the headline figure recounted from git,
   `gh`, the spec files, `specs/plan/promises.json` or the `dashboard-data` branch
   (`git show origin/dashboard-data:docs/dashboard/<file>.json`), by a route that does not go
-  through the dashboard's code (`docs/dashboard/dashboard.js`, `scripts/spec_drift_*.py`). Say the
+  through the dashboard's code (`docs/dashboard/dashboard.js`, `scripts/pipeline/*/spec_drift_*.py`). Say the
   command. `<scratch>/sd.json`, saved by the script in step 1, is the page's data (`now.head` is
   the commit it was built at): compare with it to tell a data error from a drawing error, never to
   recount. Do not run `scripts/spec-drift.py`: it takes 20 minutes and more.

@@ -37,7 +37,7 @@ SKIPPABLE = re.compile(r"@Disabled\b|@(?:Enabled|Disabled)If|@(?:unittest\.|pyte
 PY_CLASS = re.compile(r"^[ \t]*class[ \t]+(\w+)", re.M)
 ON_PROPERTY = re.compile(r'@EnabledIfSystemProperty\(\s*named\s*=\s*"([^"]+)"\s*,\s*matches\s*=\s*"true"\s*\)')
 CI_PROPERTY = re.compile(r"-D([\w.-]+)=true\b")
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "spec-drift.config.json")
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "spec-drift.config.json")
 
 
 def project_config(path=CONFIG_FILE):
@@ -102,7 +102,7 @@ IMPORT = CONFIG["IMPORT"]
 INFRA_WORKFLOW = CONFIG["INFRA_WORKFLOW"]
 FINISHED = ("done", "closed")
 CHANCE_DRAWS = 1000
-PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "docs", "dashboard")
+PAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "docs", "dashboard")
 # What the page cannot compute from git and GitHub: the sessions' counts and the driver's, from the
 # maintainer's machine (scripts/publish-counts.py), and the re-check rows (recheck.yml). Machines push
 # them to a branch of their own and nothing commits them to main: the page reads them there, and says
@@ -114,5 +114,5 @@ DATA_FILES = ("token-usage.json", "refusals.json", "gates.json", "sessions.json"
 DATA = dict(commit=None, at=None, held=())  # data_branch() fills it; until then every file reads as absent
 # What git said about each merge, kept between runs: every call cached here names commits only by
 # SHA, so its output never changes. Keyed on this script's text too, so a change here starts over.
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, ".spec-drift-cache.json")
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, ".spec-drift-cache.json")
 CACHE = {}

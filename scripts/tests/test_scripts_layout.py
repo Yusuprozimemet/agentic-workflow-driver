@@ -1,4 +1,5 @@
-"""scripts/README.md indexes every script under one concern, and only the held tests stay beside them.
+"""scripts/README.md indexes every script under one concern, the page's data builder sits in
+scripts/pipeline/ in a folder per concern, and only the held tests stay beside the commands.
 
     python scripts/tests/test_scripts_layout.py
 """
@@ -8,6 +9,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 README = os.path.join(HERE, "README.md")
+PIPELINE = os.path.join(HERE, "pipeline")
 
 CONCERNS = [
     "The dashboard's data: sources",
@@ -20,6 +22,15 @@ CONCERNS = [
     "Guards on a session",
     "Agents with cases",
 ]
+
+# The folder of scripts/pipeline/ that holds each concern's modules, and the folders a module there may
+# import from: a source reads, a count counts what the sources read, the build draws both.
+FOLDERS = {
+    "The dashboard's data: sources": "sources",
+    "The dashboard's data: counts": "counts",
+    "The dashboard's data: build": "build",
+}
+MAY_IMPORT = {"sources": {"sources"}, "counts": {"sources", "counts"}, "build": {"sources", "counts", "build"}}
 
 HELD = [
     "test_dashboard_page.py",  # Day 14's break record runs it by this module name (C14.9)
@@ -43,9 +54,20 @@ def readme_rows():
     return rows, headings
 
 
+def pipeline_modules():
+    """{module's file name: its folder} for every module under scripts/pipeline/<folder>/."""
+    found = {}
+    for folder in sorted(os.listdir(PIPELINE)) if os.path.isdir(PIPELINE) else ():
+        if os.path.isdir(os.path.join(PIPELINE, folder)) and not folder.startswith("__"):
+            found.update({n: folder for n in os.listdir(os.path.join(PIPELINE, folder)) if n.endswith(".py")})
+    return found
+
+
 class ScriptsLayoutTest(unittest.TestCase):
     def scripts(self):
-        return sorted(n for n in os.listdir(HERE) if n.endswith(".py") and not n.startswith("test_"))
+        """The commands beside this folder, and the pipeline's modules as the index names them."""
+        beside = [n for n in os.listdir(HERE) if n.endswith(".py") and not n.startswith("test_")]
+        return sorted(beside + [f"pipeline/{folder}/{name}" for name, folder in pipeline_modules().items()])
 
     def test_the_index_names_every_script_once(self):
         self.assertTrue(os.path.isfile(README), "scripts/README.md is missing")
@@ -71,6 +93,34 @@ class ScriptsLayoutTest(unittest.TestCase):
         self.assertTrue(any(n.startswith("test_") and n.endswith(".py") for n in os.listdir(folder)))
         # A package would shadow the driver's tests/, and a script here would have no station and no index row.
         self.assertEqual(sorted(n for n in os.listdir(folder) if n.endswith(".py") and not n.startswith("test_")), [])
+
+    def test_the_pages_data_builder_sits_in_the_pipeline_by_concern(self):
+        beside = sorted(n for n in os.listdir(HERE) if re.fullmatch(r"spec_drift_\w+\.py", n))
+        # the first one, so that the failure stays short
+        self.assertEqual(beside[:1], [], "modules of spec-drift.py still beside the commands")
+        modules = pipeline_modules()
+        self.assertEqual(sorted(set(modules.values()) - set(FOLDERS.values())), [], "folders that are no concern")
+        # each module is indexed under the concern its folder is named for
+        indexed = {name: heading for heading, name in readme_rows()[0] if name.startswith("pipeline/")}
+        wrong = sorted(n for n, h in indexed.items() if FOLDERS.get(h) != n.split("/")[1])
+        self.assertEqual(wrong, [], "indexed under another concern than their folder's")
+        self.assertEqual(len(indexed), len(modules))
+        self.assertGreater(len(modules), 0, "scripts/pipeline/ holds no module")
+        # the folders hold modules only: importing the package puts them on the path, they are no packages
+        inits = [f for f in FOLDERS.values() if os.path.exists(os.path.join(PIPELINE, f, "__init__.py"))]
+        self.assertEqual(inits, [])
+
+    def test_a_pipeline_module_imports_only_from_the_folders_before_its_own(self):
+        modules, edges, wrong = pipeline_modules(), 0, []
+        for name, folder in sorted(modules.items()):
+            with open(os.path.join(PIPELINE, folder, name), encoding="utf-8") as f:
+                imports = set(re.findall(r"^\s*(?:from|import)\s+(spec_drift_\w+)", f.read(), re.M))
+            for other in sorted(imports):
+                edges += 1
+                if modules.get(other + ".py") not in MAY_IMPORT[folder]:
+                    wrong.append(f"{folder}/{name} imports {other} ({modules.get(other + '.py')})")
+        self.assertEqual(wrong, [])
+        self.assertGreater(edges, 10, "too few imports read for this to have checked anything")
 
 
 if __name__ == "__main__":

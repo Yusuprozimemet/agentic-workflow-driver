@@ -12,7 +12,7 @@ import os
 
 from spec_drift_git import run
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)  # scripts/, where plan-links.py is
 _spec = importlib.util.spec_from_file_location("plan_links", os.path.join(HERE, "plan-links.py"))
 plan_links = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(plan_links)

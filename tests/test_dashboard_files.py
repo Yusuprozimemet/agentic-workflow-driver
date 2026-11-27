@@ -1,4 +1,4 @@
-"""The dashboard's file map, "Where does each file belong?" (scripts/spec_drift_files.py, filDraw in dashboard.js):
+"""The dashboard's file map, "Where does each file belong?" (scripts/pipeline/sources/spec_drift_files.py, filDraw in dashboard.js):
 every tracked file is one dot under the station it serves, a folder places itself, a script is placed by the table
 in docs/dashboard/file-stations.json, and a file the table does not place is drawn in the ring, never dropped.
 The page tests need node."""
@@ -17,10 +17,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SCRIPTS = os.path.join(ROOT, "scripts")
 PAGE = os.path.join(ROOT, "docs", "dashboard")
 sys.path.insert(0, SCRIPTS)
+import pipeline  # importing it puts the pipeline's three folders on the path
 
 
 def load(name, file):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(SCRIPTS, file))
+    spec = importlib.util.spec_from_file_location(
+        name, pipeline.path(file) if file.startswith("spec_drift_") else os.path.join(SCRIPTS, file)
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -145,6 +148,20 @@ class FileMapTest(unittest.TestCase):
         # a pattern in the table takes a module, and that module's test follows it
         self.assertEqual(home(m, "scripts/spec_drift_views.py")[0]["label"], "dashboard")
         self.assertEqual(home(m, "scripts/test_spec_drift_views.py")[0]["label"], "dashboard")
+
+    def test_a_module_in_the_pipeline_folder_hangs_with_the_dashboards_scripts(self):
+        # scripts/pipeline/ holds the page's data builder in a folder per concern: the table takes the folder
+        more = {
+            "scripts/pipeline/__init__.py": 30,
+            "scripts/pipeline/sources/spec_drift_git.py": 260,
+            "scripts/pipeline/counts/spec_drift_views.py": 1980,
+        }
+        m = drawn(dict(FILES, **more))
+        # the first one the table does not place, by its name alone, so that the failure stays short
+        self.assertEqual([p.rsplit("/", 1)[1] for p in more if p in m["unplaced"]][:1], [])
+        self.assertEqual({home(m, p)[0]["label"] for p in more}, {"dashboard"})
+        # they are still scripts in the map's count: the small repository's three, and these three
+        self.assertEqual(m["scripts"], 6)
 
     def test_a_script_missing_from_the_table_is_drawn_in_the_ring(self):
         more = {

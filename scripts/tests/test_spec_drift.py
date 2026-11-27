@@ -254,16 +254,21 @@ class SpecDriftTest(unittest.TestCase):
 
     def test_every_module_of_the_script_is_one_of_its_sources(self):
         # The two tests below loop over SOURCES: a module left out of it would pass them both.
-        beside = sorted(n for n in os.listdir(HERE) if re.fullmatch(r"spec_drift_\w+\.py", n))
-        self.assertEqual(sorted(sd.SOURCES), sorted(["spec-drift.py", *beside]))
+        pipeline = os.path.join(HERE, "pipeline")
+        inside = sorted(f"pipeline/{folder}/{n}" for folder in os.listdir(pipeline)
+                        if os.path.isdir(os.path.join(pipeline, folder))
+                        for n in os.listdir(os.path.join(pipeline, folder)) if re.fullmatch(r"spec_drift_\w+\.py", n))
+        self.assertEqual(len(inside), 11)
+        self.assertEqual(sorted(sd.SOURCES), sorted(["spec-drift.py", *inside]))
 
     def test_a_change_to_a_file_that_makes_the_cache_starts_it_over(self):
-        # The script is split into modules beside it: an edit to the git reader starts the cache
+        # The script is split into modules in scripts/pipeline/: an edit to the git reader starts the cache
         # over, and an edit to a view keeps it (tests/test_spec_drift_speed.py has each part).
         folder = tempfile.mkdtemp(prefix="spec-drift-split-")
         self.addCleanup(shutil.rmtree, folder, True)
         for name in sd.SOURCES:
-            shutil.copy(os.path.join(HERE, name), folder)
+            os.makedirs(os.path.dirname(os.path.join(folder, name)), exist_ok=True)
+            shutil.copy(os.path.join(HERE, name), os.path.join(folder, name))
         self.addCleanup(setattr, sd, "__file__", sd.__file__)
         self.addCleanup(sd.CACHE.clear)
         sd.__file__ = os.path.join(folder, "spec-drift.py")
@@ -273,11 +278,11 @@ class SpecDriftTest(unittest.TestCase):
         sd.save_cache(cache)
         sd.load_cache(cache)
         self.assertEqual(sd.CACHE["git"], {"k": "v"})
-        with open(os.path.join(folder, "spec_drift_views.py"), "a", encoding="utf-8") as f:
+        with open(os.path.join(folder, "pipeline", "counts", "spec_drift_views.py"), "a", encoding="utf-8") as f:
             f.write("# edited\n")
         sd.load_cache(cache)
         self.assertEqual(sd.CACHE["git"], {"k": "v"})
-        with open(os.path.join(folder, "spec_drift_git.py"), "a", encoding="utf-8") as f:
+        with open(os.path.join(folder, "pipeline", "sources", "spec_drift_git.py"), "a", encoding="utf-8") as f:
             f.write("# edited\n")
         sd.load_cache(cache)
         self.assertEqual(sorted(sd.CACHE), ["made_by"])
