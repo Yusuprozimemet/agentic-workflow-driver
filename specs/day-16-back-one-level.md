@@ -34,9 +34,9 @@ Decided by the maintainer on 2026-11-25, on the spec-auditor's findings:
   without its entry check (P53). Track C makes it run as level 2 once the count is met.
 - Track A stays one pull request, with an `Oversized:` line.
 - The reviewer's new brief must meet a bar on `scripts/agent-cases.py`'s ten cases, over 3
-  runs: its worst `verdict` and `named` not lower than the record it replaces (brief `401eb39`,
-  written in `2561efb`: `verdict` 2, `named` 0), and bearing#153 and bearing#154 each `none` in
-  at least 2 of 3. (Changed in Track D, after three counts: the first bar, #214 and #250 each
+  runs: its worst `verdict` at least 2, the record at `2561efb` (brief `401eb39`), and
+  bearing#153 and bearing#154 each `none` in at least 2 of 3. Naming carries no bar: that
+  record's `named` is 0, and a count cannot fall below 0. (Changed in Track D, after three counts: the first bar, #214 and #250 each
   `blocker` and named in 2 of 3, was met by none of three briefs; see the Notes.)
 
 Chosen by the writer, for the spec-auditor and the maintainer to read:
@@ -166,8 +166,9 @@ Chosen by the writer, for the spec-auditor and the maintainer to read:
   that edits only `rules/reviewer.md` included.
 - Track D records the count on the new brief with `agent-cases.py reviewer --record` (3 runs) and
   pastes its lines in the PR (CI's "A changed brief shows its case count"). It adds
-  `{"pr": <its number>, "stops": ["D12.38", "D14.68"]}` to `specs/fixes.json`: the new rules are
-  aimed at those two defects (agentic-workflow-driver#214, agentic-workflow-driver#250).
+  `{"pr": <its number>, "stops": ["D12.38"]}` to `specs/fixes.json`: the new rules are aimed at
+  that defect (agentic-workflow-driver#214, said `blocker` 3 of 3 on brief `47491db`). D14.68
+  (agentic-workflow-driver#250) is left out: that brief said `none` on it 3 of 3.
 
 ## Out of scope
 - Starting the next phase at level 3 on the plan-auditor's verdict, and the verdict line — Day 17
@@ -395,9 +396,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Plan: none — what the reviewer looks for is detail of Day 12's reviewer; P63 covers only what it may not do.
 - [ ] C16.18 **new** — `specs/agent-cases/reviewer.json`'s `recorded.brief` is the first 7
       characters of `git hash-object rules/reviewer.md`, and `recorded.runs` is 3. Its
-      `recorded.verdict` is at least 2 and its `recorded.named` at least 0: not lower than the
-      record it replaces (brief `401eb39`, written in `2561efb`), which the test holds as two
-      constants, since CI's Tests job checks out one commit and cannot read `2561efb`. Its
+      `recorded.verdict` is at least 2, the record at `2561efb` (brief `401eb39`), which the test
+      holds as a constant, since CI's Tests job checks out one commit and cannot read `2561efb`.
+      `recorded.named` carries no bar (that record's is 0, and a count cannot fall below 0). Its
       `recorded.cases` give `bearing#153` and `bearing#154` `none` in at least 2 of 3 runs.
       `agentic-workflow-driver#214` and `agentic-workflow-driver#250` carry no bar of their own.
 
@@ -406,7 +407,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `tests/test_reviewer_bar.py`, `ReviewerBarTest.test_brief_meets_the_bar`.
       Its break, in Track D: `recorded.verdict` lowered to 1 in `reviewer.json` (the brief names
       the find).
-      Plan: none — the bar is the maintainer's choice of 2026-11-23 for the brief; plan.md names none.
+      Plan: none — the bar is the maintainer's choice of 2026-11-23 for the brief, changed on 2026-11-27; plan.md names none.
 - [ ] C16.19 **hold** — These files stay unchanged since `97688d5`:
       `driver/__init__.py`, `driver/box.py`, `driver/decide.py`, `driver/github.py`,
       `driver/home.py`, `driver/issues.py`, `driver/livecheck.py`, `driver/lock.py`,
@@ -498,12 +499,18 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
   worst `verdict` 3, `named` 1. Brief `47491db`: #214 `blocker` 3 of 3 but named 1 of 3, #250
   0 of 3, worst `verdict` 4, `named` 2. Brief `f87fe8a`: #214 named 1 of 3, #250 `blocker`
   1 of 3, worst `named` 1. The bearing cases stayed `none` 3 of 3 on all three. The bar becomes
-  "not lower than the record it replaces" (`verdict` 2, `named` 0) with the bearing cases kept:
-  a brief that reads the callers must not cost a clean PR its `none`. `47491db` meets it, with
-  room. The baseline is two constants in the test, not a read of `2561efb`, because CI's Tests
-  job fetches one commit; the next brief is held to the same two, not to `47491db`'s, so the
-  ratchet is one step. A per-case "not lower" cannot be had: the record it replaces has no
-  `cases`. The maintainer agreed to this change on 2026-11-27.
+  a worst `verdict` not lower than the record at `2561efb` (2), with the bearing cases kept: a
+  brief that reads the callers must not cost a clean PR its `none`. `47491db` meets it, with
+  room. Naming carries no bar: that record's `named` is 0, so "not lower" checks nothing, and
+  the maintainer chose to drop it rather than hold `47491db`'s 2 (2026-11-27). The baseline is
+  a constant in the test, not a read of `2561efb`, because CI's Tests job fetches one commit;
+  every later brief is held to the same 2, not to the last record's, so it does not ratchet.
+  A per-case "not lower" cannot be had: that record has no `cases`. The maintainer agreed to
+  this change on 2026-11-27. Track D's branch was built to the first bar: its
+  `tests/test_reviewer_bar.py` (`BLOCKERS`, the `named < 2` check, the shortfall cases of
+  `test_each_shortfall`) is rewritten to this one, and C16.18's break, recorded on the old find
+  in `f2b7f82`, is recorded again on `recorded.verdict` lowered to 1. `test_each_shortfall` is
+  named by no criterion's `Test:`; it checks the test's own fixed words.
 - **Assumed** — the `--out` JSON gives each Defect line `found` and `id` on this repository's
   `spec-drift.py`: `python -c` over `spec-drift.json`'s `days[].defects` → keys `catchable`,
   `found`, `id`, `cause`, `made`, `same_as`, `problem` (2026-11-25). Bearing at `7f8ec5d` gives
@@ -552,6 +559,11 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
 - **Defect** D16.39 — found: auditor · cause: spec · made: Day 16 · C16.7 gave Day 24 `planned`, a status the kit never writes (fixed in this PR: `ready`).
 - **Defect** D16.40 — found: auditor · cause: spec · made: Day 16 · C16.15's named break did not reach its failed-evidence half (fixed in this PR: a second break, that guard put back to 2 only).
 - **Defect** D16.41 — found: Track D · at: Track D build · cause: spec · made: Day 16 · C16.18's bar asked #214 and #250 each `blocker` and named in 2 of 3 runs without a measurement that a brief could reach it; three briefs, 90 sessions, missed it (fixed in this PR: not lower than the record it replaces, bearing cases kept).
+- **Defect** D16.42 — found: auditor · at: recheck · cause: spec · made: Day 16 · the changed C16.18 held `named` at least 0, which `agent-cases.py`'s worst count can never fall below (fixed in this PR: naming carries no bar, said so).
+- **Defect** D16.43 — found: auditor · at: recheck · cause: spec · made: Day 16 · the changed bar said "not lower than the record it replaces" while the Notes held later briefs to `2561efb`'s constants (fixed in this PR: worded as `2561efb`'s record).
+- **Defect** D16.44 — found: auditor · at: recheck · cause: spec · made: Day 16 · C16.18's Plan line kept only the first bar's date (fixed in this PR: both dates).
+- **Defect** D16.45 — found: auditor · at: recheck · cause: spec · made: Day 16 · nothing said Track D's test and C16.18's break, built to the first bar, must be redone (fixed in this PR: a Note).
+- **Defect** D16.46 — found: auditor · at: recheck · cause: spec · made: Day 16 · `fixes.json`'s row would claim D14.68 stopped, though #250 is said `none` 3 of 3 (fixed in this PR: D14.68 left out).
 - Between Track B (#309) and Track C, the area PR `tooling/track-speedup` made the tracks
   faster: the full suite runs once per track, as `pre-push.py`'s Tests line (which now prints its
   "Ran N tests"), in the background, with `--skip-tests` on a rerun for a title or body change
