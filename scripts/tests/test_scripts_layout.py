@@ -58,7 +58,10 @@ class ScriptsLayoutTest(unittest.TestCase):
     def test_every_script_sits_under_a_concern(self):
         self.assertTrue(os.path.isfile(README), "scripts/README.md is missing")
         rows, headings = readme_rows()
-        self.assertEqual(headings, CONCERNS)
+        # The differences, not the two lists: unittest shortens a long list, and break.py refuses such a report.
+        self.assertEqual([h for h in headings if h not in CONCERNS], [], "headings that are no concern")
+        self.assertEqual([c for c in CONCERNS if c not in headings], [], "concerns with no heading")
+        self.assertEqual([CONCERNS.index(h) for h in headings], list(range(len(CONCERNS))), "the concerns' order")
         self.assertEqual(sorted(name for heading, name in rows if heading not in CONCERNS), [])
 
     def test_only_the_held_tests_stay_in_scripts(self):
