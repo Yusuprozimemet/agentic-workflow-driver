@@ -109,6 +109,25 @@ class LoopTest(unittest.TestCase):
         self.assertIn("No count of this brief was kept", prompt)
         self.assertIn(f"recorded on today's brief {sha}: stage 2 (3 runs)", self.read("report.md"))
 
+    def test_a_recorded_per_case_list_is_left_out_of_the_recorded_line(self):
+        sha = subprocess.run(
+            ["git", "-C", self.repo, "hash-object", ".claude/agents/rater.md"],
+            capture_output=True,
+            check=True,
+        ).stdout.decode()[:7]
+        cases = [{"case": "bearing#7", "said": ["none"], "named": 0}]
+        data = {"cases": [], "recorded": {"stage": 2, "runs": 3, "brief": sha, "cases": cases}}
+        with open(os.path.join(self.repo, "specs/agent-cases/rater.json"), "w") as f:
+            json.dump(data, f)
+        code, _ = self.run_it(REPLY)
+        self.assertEqual(0, code)
+        self.assertIn(f"recorded on today's brief {sha}: stage 2 (3 runs)", self.read("report.md"))
+
+    def test_a_review_counts_cases_are_not_compared(self):
+        worst = {"verdict": 1, "named": 2, "runs": 3, "cases": [{"case": "a#1"}]}
+        than = {"verdict": 2, "named": 1, "runs": 3, "cases": [{"case": "b#2"}, {"case": "a#1"}]}
+        self.assertEqual(["verdict 1 < 2"], improve_loop.fell(worst, than))
+
     def test_a_reply_with_no_draft_exits_1_and_counts_no_draft(self):
         code, _ = self.run_it("DELETIONS: []\n")
         self.assertEqual(1, code)

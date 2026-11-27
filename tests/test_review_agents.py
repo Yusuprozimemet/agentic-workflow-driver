@@ -61,6 +61,15 @@ class ReviewAgentsTest(unittest.TestCase):
                 # Not assertIn: its message would print the whole brief, dashes and all.
                 self.assertTrue(phrase in text, f"the brief lacks {phrase!r}")
 
+    def test_brief_reads_the_callers(self):
+        # C16.17: the brief sends the reviewer to the callers of what the diff changes, and has it
+        # review a merged pull request as an open one (D12.38, D14.68).
+        text = (ROOT / "rules" / "reviewer.md").read_bytes().decode("utf-8")
+        for phrase in ["callers", "already merged", "as if it were open"]:
+            with self.subTest(phrase=phrase):
+                # Not assertIn: its message would print the whole brief.
+                self.assertTrue(phrase in text, f"{phrase!r} not found in the brief")
+
 
 class ReviewSettingsTest(unittest.TestCase):
     def setUp(self):
