@@ -206,7 +206,7 @@ switch log lines are compared as dicts with `at` removed, through `same`.
 Tick each box in the closing PR once its evidence is in it; under a box left unticked, write
 `Not proven: <why>` (`specs/README.md`, "Evidence at the close").
 
-- [ ] C16.1 **new** — `config.problems` gives no line for `level` 3. For `level` 0, 4, 3.0,
+- [x] C16.1 **new** — `config.problems` gives no line for `level` 3. For `level` 0, 4, 3.0,
       `True` and `"3"` it gives exactly `cannot start: <path>'s level must be 1, 2 or 3`. For 1,
       2 and absent it gives none, as before. Red today: 3 gives
       "level must be 1 or 2".
@@ -214,7 +214,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track A: `is_level`'s tuple put back to `(1, 2)`.
       Replaces: C13.1 — was: `driver.config.problems` gives no line for a config without `level` or with `level` 1 or 2, and "cannot start: <path>'s level must be 1 or 2" for any other value.
       Plan: P53 "it is entered only after two phases in a row at level 2"
-- [ ] C16.2 **new** — On a state whose switch log's newest `level` line is
+      Evidence: `LevelConfigTest.test_level_three` passes on `main` at `06d0d99` (#308).
+      seen red: python -m unittest tests.test_level_config.LevelConfigTest.test_level_three on main → AssertionError: differs: '3', 0, 3, 3.0, 4, True
+      broken: is_level back to (1, 2) (C16.1) → AssertionError: differs: 3
+      broken: C13.1: a level of 2.0 or True taken → AssertionError: differs: 2.0, True
+- [x] C16.2 **new** — On a state whose switch log's newest `level` line is
       `{"level": 1, "from": 2, "escapes": ["D23.4"]}`, with `driver.json`'s level 2,
       `run-steps.py raise --config <c> --state <s>` prints `level: raised to 2, driver.json's`
       and exits 0. The switch log's new last line is `{"event": "level", "level": 2, "by": "maintainer"}`
@@ -225,7 +229,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `RaiseTest.test_raise_then_already`, `RaiseTest.test_raise_needs_the_config`.
       Its break, in Track A: the "already" test made `<` in place of `<=` (the brief names the find).
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.3 **new** — `on` with `driver.json`'s level 2, the four level 2 conditions holding
+      Evidence: `RaiseTest.test_raise_then_already`, `RaiseTest.test_raise_needs_the_config` pass on `main` at `06d0d99` (#308).
+      seen red: python -m unittest tests.test_raise.RaiseTest.test_raise_then_already on main → AssertionError: differs: 0, 1, 2, 3, 4, 6, 7, 10
+      seen red: python -m unittest tests.test_raise.RaiseTest.test_raise_needs_the_config on main → AssertionError: differs: 1
+      broken: the already test made < (C16.2) → AssertionError: differs: 3, 4, 5, 6, 7, 8
+- [x] C16.3 **new** — `on` with `driver.json`'s level 2, the four level 2 conditions holding
       (`LevelStartTest`'s set-up) and that switch log:
       - prints `level: 1, lowered from 2 on an escape: D23.4; run-steps.py raise lifts it` before
         the session;
@@ -238,7 +246,13 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track A: `level_2_refusals` given `driver.json`'s level in place of the level
       in force.
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.4 **new** — `run-steps.py status --config <c>` with `level` 2 and that switch log prints
+      Evidence: `LevelInForceTest.test_lowered_runs_at_one` passes on `main` at `06d0d99` (#308).
+      seen red: python -m unittest tests.test_level_in_force.LevelInForceTest.test_lowered_runs_at_one on main → AssertionError: differs: 0, 1, 3, 4, 5
+      broken: level_2_refusals by driver.json level (C16.3) → AssertionError: differs: 1
+      broken: level 2 started with no check → AssertionError: differs: 0
+      broken: level 2 merge passed at level 1 → AssertionError: differs: 3, 6
+      broken: the waived lines printed at any level (C15.9) → AssertionError: differs: 1, 2
+- [x] C16.4 **new** — `run-steps.py status --config <c>` with `level` 2 and that switch log prints
       `level: 1, lowered from 2 on an escape: D23.4; run-steps.py raise lifts it` as its second
       line. After a raise line it prints `level: 2`. With
       `{"level": 1, "from": 2, "evidence": "0123456789abcdef0123456789abcdef01234567"}` it prints
@@ -250,7 +264,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track A: the lowered line's `from` read from `driver.json` in place of the
       switch log line.
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.5 **new** — With `level` 2 and a switch log whose second line is `{`:
+      Evidence: `StatusLevelTest.test_lowered_level` passes on `main` at `06d0d99` (#308).
+      seen red: python -m unittest tests.test_status_level.StatusLevelTest.test_lowered_level on main → AssertionError: differs: 0, 2, 3, 4
+      broken: from read from driver.json (C16.4) → AssertionError: differs: 3
+- [x] C16.5 **new** — With `level` 2 and a switch log whose second line is `{`:
       - `on` exits 2 with `cannot start: the level cannot be read: <state>/switches.jsonl: line 2 cannot be read`
         and starts no session;
       - `status --config` prints `level: unknown: <state>/switches.jsonl: line 2 cannot be read`
@@ -260,13 +277,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `LevelInForceTest.test_unreadable_switch_log`.
       Its break, in Track A: `in_force`'s reason dropped.
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.6 **hold** — At `driver.json`'s level 1, a switch log with a lowering line and one with
+      Evidence: `LevelInForceTest.test_unreadable_switch_log` passes on `main` at `06d0d99` (#308).
+      seen red: python -m unittest tests.test_level_in_force.LevelInForceTest.test_unreadable_switch_log on main → AssertionError: differs: 0, 1, 2, 3
+      broken: in_force reason dropped (C16.5) → AssertionError: differs: 1
+- [x] C16.6 **hold** — At `driver.json`'s level 1, a switch log with a lowering line and one with
       an unreadable line both change nothing: `on` prints no `level:` line and starts as at
       level 1, and `status --config` prints `level: 1`. True today: nothing reads the switch log.
       Test: `LevelInForceTest.test_level_one_reads_no_switches`.
       Its break, in Track A: the switch log read at level 1 too (the brief names the find).
       Plan: none — level 1 has no lower level; this keeps level 1's start unchanged.
-- [ ] C16.7 **new** — `on` at level 2, set up as follows:
+      Evidence: `LevelInForceTest.test_level_one_reads_no_switches` passes on `main` at `06d0d99` (#308).
+      broken: the switch log read at level 1 too (C16.6) → AssertionError: differs: 1, 2, 3
+- [x] C16.7 **new** — `on` at level 2, set up as follows:
       - before the close, the fake project's `--out` JSON has `order` [23, 24] and `days[]`
         Day 23 `active` and Day 24 `ready`, both of one phase, so no Day is finished and the
         first step reads nothing (not `tests/test_dry_run.py`'s `drift_of`, whose `order` [1]
@@ -289,7 +311,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `EscapeTest.test_close_escape_lowers`.
       Its break, in Track B: `day \d+ review` dropped from the found pattern.
       Plan: P54 "a Defect line found at `close`, by the `dashboard` or in a `Day NN review`"; N41 "read from its `spec-drift.py --out` JSON as the next step is"
-- [ ] C16.8 **hold** — The same run with Day 23's Defect lines found `track-reviewer`, `auditor`,
+      Evidence: `EscapeTest.test_close_escape_lowers` passes on `main` at `06d0d99` (#309).
+      seen red: python -m unittest tests.test_escape.EscapeTest.test_close_escape_lowers on main → AssertionError: differs: 0, 1, 3
+      broken: C16.7: day NN review dropped from the found pattern → AssertionError: differs: 0, 1
+- [x] C16.8 **hold** — The same run with Day 23's Defect lines found `track-reviewer`, `auditor`,
       `seen red`, `break on purpose`, `review`, `Day 22 review of D23`, `spec-change PR`,
       `Track A`, `self`, `rehearsal`, `CI` and `driver reviewer` (`specs/README.md`'s found values
       since #300 to #302) writes no `level` line, prints no `level: lowered` line and
@@ -297,7 +322,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `EscapeTest.test_no_escape_no_change`.
       Its break, in Track B: `review` added to the escapes' found values.
       Plan: P54 "a Defect line found at `close`, by the `dashboard` or in a `Day NN review`"
-- [ ] C16.9 **new** — At level 2, a driver merge whose evidence run ends `failure`
+      Evidence: `EscapeTest.test_no_escape_no_change` passes on `main` at `06d0d99` (#309).
+      broken: C16.8: review added to the escapes' found values → AssertionError: differs: 0, 1, 2
+- [x] C16.9 **new** — At level 2, a driver merge whose evidence run ends `failure`
       (`tests/test_merge_wait.py`'s `test_evidence_failed_parks` set-up, with
       `tests/test_level_2_merge.py`'s `LevelMergeTest` level 2 set-up):
       - prints `level: lowered to 1 from 2 on a failed evidence run of <sha7>` before the park
@@ -312,7 +339,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `EscapeTest.test_failed_evidence_lowers`.
       Its break, in Track B: the lowering skipped when the line holds " ended `".
       Plan: P54 "or a failed evidence replay after a merge"
-- [ ] C16.10 **new** — When a Defect line of the closed Day has no `found` key, and again when its
+      Evidence: `EscapeTest.test_failed_evidence_lowers` passes on `main` at `06d0d99` (#309).
+      seen red: python -m unittest tests.test_escape.EscapeTest.test_failed_evidence_lowers on main → AssertionError: differs: 0, 1
+      broken: C16.9: the lowering skipped when the line holds ended → AssertionError: differs: 0, 1
+- [x] C16.10 **new** — When a Defect line of the closed Day has no `found` key, and again when its
       `found` is `null`, C16.7's run ends after the close with
       `cannot read the project: spec-drift.py's JSON has no days[<i>].defects[<j>].found` (exit 2)
       and starts no next step. When a run at level 2 starts with such a line in any Day, `on`
@@ -322,21 +352,30 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `EscapeTest.test_defect_without_found`.
       Its break, in Track B: a missing `found` read as `""`.
       Plan: N41 "read from its `spec-drift.py --out` JSON as the next step is"
-- [ ] C16.11 **hold** — C16.7's run at level 1 (`driver.json` with no `level`) writes no `escapes`
+      Evidence: `EscapeTest.test_defect_without_found` passes on `main` at `06d0d99` (#309).
+      seen red: python -m unittest tests.test_escape.EscapeTest.test_defect_without_found on main → AssertionError: differs: 0, 1, 2
+      broken: C16.10: a missing found read as an empty string → AssertionError: differs: 0, 1, 2
+      broken: an escape with no id not refused → FAILED (errors=1)
+- [x] C16.11 **hold** — C16.7's run at level 1 (`driver.json` with no `level`) writes no `escapes`
       or `level` line to the switch log (its `on` line is written, as today) and prints no `level:` line, and so does the same run with Day 23's Defect lines
       without `found` (bearing's JSON): the run goes on to the next step. True today.
       Test: `EscapeTest.test_level_one_escape_changes_nothing`.
       Its break, in Track B: the read's guard (only when `driver.json`'s level is 2 or 3) removed,
       so the JSON is read at level 1 and the run without `found` ends (the brief names the find).
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.12 **new** — At level 2, the step's start line carries `"level": 2` and `"phase"`: the
+      Evidence: `EscapeTest.test_level_one_escape_changes_nothing` passes on `main` at `06d0d99` (#309).
+      broken: C16.11: the read's guard at driver.json's level 2 or 3 removed → AssertionError: differs: 2
+- [x] C16.12 **new** — At level 2, the step's start line carries `"level": 2` and `"phase"`: the
       Day's `phase` in the fake `--out` JSON. After the C16.7 lowering, the next step's start line
       has neither key, and neither does a review's start line. At level 1, start lines are as
       today. Red today: no `level` key.
       Test: `StartLevelTest.test_start_records_level_and_phase`.
       Its break, in Track C: `level` left out of `runlog.start`'s record.
       Plan: N40 "no step at level 1, counted by `status`"
-- [ ] C16.13 **new** — `run-steps.py status --config <c>` with `level` 2 prints
+      Evidence: `StartLevelTest.test_start_records_level_and_phase` passes on `main` at `06d0d99` (#311).
+      seen red: python -m unittest tests.test_level_3.StartLevelTest.test_start_records_level_and_phase on main → AssertionError: differs: level, phase
+      broken: C16.12: level left out of the start line → AssertionError: differs: level
+- [x] C16.13 **new** — `run-steps.py status --config <c>` with `level` 2 prints
       `level 3: <k> of 2 phases in a row at level 2 with no escape, no merge by hand and no step at level 1`
       after its `level 2:` line. On fixture run logs, each with two phase-end parks
       (`park: the end of Phase 3: Day 24 starts Phase 4`, then Phase 4's), `k` is:
@@ -351,7 +390,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `StatusLevel3Test.test_counts`.
       Its break, in Track C: the `by` test removed from `level_3_run`.
       Plan: N40 "counted by `status`"; P53 "it is entered only after two phases in a row at level 2 with no escape, no merge by hand and no step at level 1"
-- [ ] C16.14 **new** — `on` with `level` 3 and the level 2 conditions holding:
+      Evidence: `StatusLevel3Test.test_counts` passes on `main` at `06d0d99` (#311).
+      seen red: python -m unittest tests.test_level_3.StatusLevel3Test.test_counts on main → AssertionError: differs: level 3 line
+      broken: C16.13: the by test removed from level_3_run → AssertionError: differs: level 3 line
+- [x] C16.14 **new** — `on` with `level` 3 and the level 2 conditions holding:
       - when the run log counts 1, it exits 2 with
         `cannot start: level 3 needs 2 of 2 phases in a row at level 2 with no escape, no merge by hand and no step at level 1; status counts 1`
         and starts no session;
@@ -363,7 +405,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `Level3StartTest.test_needs_two_phases`, `Level3StartTest.test_runs_as_level_2`.
       Its break, in Track C: the count compared with 1 in place of 2.
       Plan: P53 "it is entered only after two phases in a row at level 2"
-- [ ] C16.15 **new** — C16.7's run with `level` 3 and the entry counted:
+      Evidence: `Level3StartTest.test_needs_two_phases`, `Level3StartTest.test_runs_as_level_2` pass on `main` at `06d0d99` (#311).
+      seen red: python -m unittest tests.test_level_3.Level3StartTest on main → AssertionError: differs: level, merges
+      broken: C16.14: the count compared with 1 in place of 2 → AssertionError: differs: code, merges, refused, sessions
+- [x] C16.15 **new** — C16.7's run with `level` 3 and the entry counted:
       - merges the close's pull request;
       - prints `level: lowered to 2 from 3 on an escape: D23.4, D23.5, D23.6, D23.7`;
       - appends the lowering line with `"level": 2, "from": 3`;
@@ -381,7 +426,11 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       the merge's test; the brief names the find), and a second: the failed-evidence lowering's
       guard put back to 2 only, which the first does not reach.
       Plan: P54 "The driver goes back one level on an escape"
-- [ ] C16.16 **new** — `agent-cases.py reviewer --record`, on a fake runner built as
+      Evidence: `EscapeTest.test_level_three_lowers_to_two` passes on `main` at `06d0d99` (#311).
+      seen red: python -m unittest tests.test_escape.EscapeTest.test_level_three_lowers_to_two on main → AssertionError: differs: lowered line, switches
+      broken: C16.15: level 3 run as level 1 again in the merge → AssertionError: differs: merges
+      broken: C16.15: the failed-evidence lowering from 2 only → AssertionError: differs: lowered line, switches
+- [x] C16.16 **new** — `agent-cases.py reviewer --record`, on a fake runner built as
       `scripts/test_agent_cases.py`'s `ReviewRunTest` builds it, keeps `recorded.cases`, one entry
       per case in order, each with `case`, `said` and `named` (a number) as In scope says. Its
       `verdict`, `named`, `runs` and `brief` are as today. The test gives its case repositories
@@ -390,12 +439,18 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Test: `ReviewerRecordTest.test_record_keeps_each_case`, in tests/test_reviewer_record.py.
       Its break, in Track D: `cases` left out of the recorded dict.
       Plan: none — measuring the reviewer's brief is tooling for the maintainer's choice of 2026-11-22, not a commitment of plan.md.
-- [ ] C16.17 **new** — `rules/reviewer.md` holds "callers", "already merged" and "as if it were
+      Evidence: `ReviewerRecordTest.test_record_keeps_each_case` passes on `main` at `06d0d99` (#314).
+      seen red: python -m unittest tests.test_reviewer_record on main → AssertionError: 'cases' not found in ['brief', 'named', 'runs', 'verdict']
+      broken: C16.16: cases left out of the recorded dict → AssertionError: 'cases' not found in ['brief', 'named', 'runs', 'verdict']
+- [x] C16.17 **new** — `rules/reviewer.md` holds "callers", "already merged" and "as if it were
       open". Red today: it holds none of the three. C12.2's six phrases stay C12.2's.
       Test: `ReviewAgentsTest.test_brief_reads_the_callers`.
       Its break, in Track D: "already merged" taken out of the brief.
       Plan: none — what the reviewer looks for is detail of Day 12's reviewer; P63 covers only what it may not do.
-- [ ] C16.18 **new** — `specs/agent-cases/reviewer.json`'s `recorded.brief` is the first 7
+      Evidence: `ReviewAgentsTest.test_brief_reads_the_callers` passes on `main` at `06d0d99` (#314).
+      seen red: python -m unittest tests.test_review_agents.ReviewAgentsTest.test_brief_reads_the_callers on main → AssertionError: False is not true : 'as if it were open' not found in the brief
+      broken: C16.17: already merged taken out of the brief → AssertionError: False is not true : 'already merged' not found in the brief
+- [x] C16.18 **new** — `specs/agent-cases/reviewer.json`'s `recorded.brief` is the first 7
       characters of `git hash-object rules/reviewer.md`, and `recorded.runs` is 3. Its
       `recorded.verdict` is at least 2, the record at `2561efb` (brief `401eb39`), which the test
       holds as a constant, since CI's Tests job checks out one commit and cannot read `2561efb`.
@@ -409,7 +464,10 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track D: `recorded.verdict` lowered to 1 in `reviewer.json` (the brief names
       the find).
       Plan: none — the bar is the maintainer's choice of 2026-11-23 for the brief, changed on 2026-11-27; plan.md names none.
-- [ ] C16.19 **hold** — These files stay unchanged since `97688d5`:
+      Evidence: `ReviewerBarTest.test_brief_meets_the_bar` passes on `main` at `06d0d99` (#314).
+      seen red: python -m unittest tests.test_reviewer_bar.ReviewerBarTest.test_brief_meets_the_bar on main → AssertionError: 'no per-case record' is not None : no per-case record
+      broken: C16.18: recorded.verdict lowered to 1 → AssertionError: 'worst verdict 1, the bar is 2' is not None : worst verdict 1, the bar is 2
+- [x] C16.19 **hold** — These files stay unchanged since `97688d5`:
       `driver/__init__.py`, `driver/box.py`, `driver/decide.py`, `driver/github.py`,
       `driver/home.py`, `driver/issues.py`, `driver/livecheck.py`, `driver/lock.py`,
       `driver/preflight.py`, `driver/review.py`, `driver/settings.py`, `driver/steps.py`,
@@ -424,7 +482,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       `decides its next step` in `driver/__init__.py`).
       Replaces: C15.16 — was: the files C14.1, C14.4 and C14.7 froze at `3f31818` stay unchanged since `11206ea`, all but the six Day 15's tracks edit, and `scripts/test_token_usage.py` with them.
       Plan: none — the freeze keeps Days 7 to 15's code out of this Day's diff; it serves no Day 16 commitment.
-- [ ] C16.20 **new** — A close the driver did not read when it merged is read by the next `on`:
+      Evidence: Verify's `git diff --exit-code 97688d5` prints nothing and exits 0 on `main` at `06d0d99`, and `tests/test_status.py` passes there (proved in #304; the tracks #308 to #314 left the files unedited).
+      broken: a driver file outside the edited ones (C16.19) → +"""The driver: reads a project's state and decides its step (plan.md)."""
+- [x] C16.20 **new** — A close the driver did not read when it merged is read by the next `on`:
       - C16.7's set-up with `steps_per_night` 1: the run ends after the close's merge and writes
         no `escapes` line; the next `on` prints
         `level: lowered to 1 from 2 on an escape: D23.4, D23.5, D23.6, D23.7` before its session,
@@ -450,6 +510,9 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       Its break, in Track B: the switch log's `escapes` lines not looked at, so Day 23 is read
       again (the brief names the find).
       Plan: P54 "The driver goes back one level on an escape"
+      Evidence: `EscapeTest.test_close_read_at_next_on` passes on `main` at `06d0d99` (#309).
+      seen red: python -m unittest tests.test_escape.EscapeTest.test_close_read_at_next_on on main → AssertionError: differs: 0, 1
+      broken: C16.20: the Days an escapes line names not read → AssertionError: differs: 0
 
 ## Verify
 ```bash
@@ -574,3 +637,55 @@ git -c core.safecrlf=false diff --exit-code 97688d5 -- driver/__init__.py driver
   unblock its next step: the maintainer chose to do it while Day 16 is open (2026-11-27). Tracks
   C and D are the first to run under it; their times say whether it saved what was measured
   (about 12 of about 50 minutes per track over Days 13 to 16).
+- **Defect** D16.49 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · catchable: track-reviewer · Track A's brief invited rewriting `status.py`'s `return 2 if gh_reason or reason else 0`, Day 7's break find, and naming the switch log's reason `reason`, which `runlog.live_session` overwrites, losing the exit 2 (fixed before the implementer ran).
+- **Defect** D16.50 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · catchable: track-reviewer · Track A's brief borrowed helpers from `LevelStartTest` without saying how, so the class would have been imported by name and unittest would have collected its tests again (fixed before the implementer ran).
+- **Defect** D16.51 — found: track-reviewer · at: Track A brief · cause: spec · made: Day 16 · catchable: auditor · the Notes planned to re-record Day 13's and Day 15's `loop.py` breaks with the new `in_force == 2` finds, which `break.py --record` refuses for a closed Day's find that is not at its close (`closed_day_misses`); the Notes' Track C line rests on the same plan (fixed in #308: the four retired in their Day's manifest, pinned at `f7c6b15`, and recorded again in `specs/breaks/day-16.json`).
+- **Defect** D16.52 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · catchable: track-reviewer · Track A's brief gave C16.4's break no unique find: `newest["from"]` stood in two f-strings (fixed before the implementer ran).
+- **Defect** D16.53 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · catchable: track-reviewer · Track A's brief gave C16.5's break no replace, and the obvious one would raise a TypeError (fixed before the implementer ran).
+- **Defect** D16.54 — found: track-reviewer · at: Track A brief · cause: process · made: Day 16 · catchable: track-reviewer · Track A's brief had `self.state/switches.jsonl` in `StatusLevelTest`, a str path that setUp never creates (fixed before the implementer ran).
+- **Defect** D16.55 — found: track-reviewer · at: Track A diff · cause: implementation · made: Day 16 · catchable: Track A · `lowered` read the line's `from` before testing its keys, so with `driver.json` at 3 and a newest raise line at 2, `status` and `on` crashed with a KeyError; the brief's "status prints `level: 3`" had never been run (fixed in #308: keys tested first, a case in `test_lowered_level`).
+- **Defect** D16.56 — found: track-reviewer · at: Track A diff · cause: implementation · made: Day 16 · catchable: Track A · the waived checks' `in_force == 2` had no test that fails without it (fixed in #308: a test).
+- **Defect** D16.57 — found: track-reviewer · at: Track A diff · cause: implementation · made: Day 16 · catchable: Track A · `raise` on an unreadable switch log had no test that fails without it (fixed in #308: a test).
+- **Defect** D16.58 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief tested C16.9 with a direct `wait_merge` call, a TypeError on `main` that never reached `steps`' caller (fixed before the implementer ran: through `on`).
+- **Defect** D16.59 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief queued three views (one pull request's), which made C16.8's hold fail because #13's first read was MERGED (fixed before the implementer ran: six views shared by the two).
+- **Defect** D16.60 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · the fake's pull requests in Track B's brief were all `day-01/track-a-x`, so every step parked "ended with no pull request" (fixed before the implementer ran).
+- **Defect** D16.61 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief reused `LevelInForceTest`'s one-step helpers, which cannot run two steps (fixed before the implementer ran: the file has its own).
+- **Defect** D16.62 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief's `starts()` counted review sessions too (fixed before the implementer ran).
+- **Defect** D16.63 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief had a mid-run unreadable switch log say `cannot start` (fixed before the implementer ran: `cannot read the project: <reason>`, a line the spec does not name).
+- **Defect** D16.64 — found: track-reviewer · at: Track B brief · cause: process · made: Day 16 · catchable: track-reviewer · Track B's brief offered "status or on" where C16.9 says the next `on` (fixed before the implementer ran).
+- **Defect** D16.65 — found: track-reviewer · at: Track B brief · cause: spec · made: Day 16 · catchable: auditor · with waived checks, a run lowered at its first read goes on at level 1 under an `on` line that lists level 2's waived checks, since the spec puts the read after the `on` line (not fixed; recorded in #309).
+- **Defect** D16.66 — found: track-reviewer · at: Track B brief · cause: spec · made: Day 16 · catchable: auditor · the level 3 half of the missing-`found` start refusal could not hold before Track C: with `driver.json` at 3 the run is level 1 and `level_2_refusals` is not called (not fixed in #309; Track C, #311, runs level 3 through it).
+- **Defect** D16.67 — found: track-reviewer · at: Track B diff · cause: implementation · made: Day 16 · catchable: Track B · an escape Defect line with no `id` raised a KeyError at `d["id"]`, a traceback where `plan.md` says the driver refuses and names the field (fixed in #309: `cannot read the project: spec-drift.py's JSON has no days[<i>].defects[<j>].id`, exit 2, subtest `escape_without_id` and its own break).
+- **Defect** D16.68 — found: track-reviewer · at: Track B diff · cause: process · made: Day 16 · catchable: track-reviewer · #309's draft wrote Contract impact "None", though the driver now reads `days[].defects[].id` and `.found` (fixed in #309).
+- **Defect** D16.69 — found: track-reviewer · at: Track B diff · cause: process · made: Day 16 · catchable: track-reviewer · #309's draft had wrong per-file counts and wrong wording about the views (fixed in #309: recounted).
+- **Defect** D16.70 — found: CI · at: Track B PR · cause: process · made: Day 16 · catchable: break on purpose · Track A's C16.5 break (`in_force reason dropped`) replayed as `differs: 1`, not its recorded `differs: 0, 1, 2, 3`: Track B's escape read now meets the unreadable switch log before the first step (fixed in #309: report taken from CI's Linux replay with `break.py --take-reports`).
+- **Defect** D16.71 — found: review · at: Track B diff · cause: environment · made: none · catchable: review · `seen-red.py` reports one assertion line for a test with subtests, the last, so C16.20's recorded red named `two_days`, not the close's read, and an earlier subtest's red is not on the record unless read by hand (not fixed; a tooling note).
+- **Defect** D16.72 — found: track-reviewer · at: Track C brief · cause: spec · made: Day 16 · catchable: auditor · C16.15's Red today says the driver does not merge the close (one `gh pr merge`), but on Tracks A and B's code a level 3 run is level 1 throughout and merges neither pull request: 0, not 1 (recorded in #311; the test expects 2 after the change).
+- **Defect** D16.73 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief built reds that `same` cannot name: it prints only `differs: <keys>` (fixed before the implementer ran: reds as dicts whose keys name the fact).
+- **Defect** D16.74 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief proposed a circular import between the test modules (fixed before the implementer ran).
+- **Defect** D16.75 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief gave no rules for seeding phase spans (fixed before the implementer ran: spans then `container_merges(101, 15)`, each span start with a session and an end line, foreign prefixes, PRs 201 and up).
+- **Defect** D16.76 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief had `on`'s second switch log read fail open, counting with no lowerings (fixed before the implementer ran: `cannot start: the level cannot be read: <reason>`).
+- **Defect** D16.77 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief would have rewritten six earlier break finds in `status.py` (fixed before the implementer ran).
+- **Defect** D16.78 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief had breaks that delete a line, which would leave an IndentationError (fixed before the implementer ran: each break replaces its line).
+- **Defect** D16.79 — found: track-reviewer · at: Track C brief · cause: process · made: Day 16 · catchable: track-reviewer · Track C's brief named no finds for C16.15's breaks (fixed before the implementer ran).
+- **Defect** D16.80 — found: track-reviewer · at: Track C diff · cause: process · made: Day 16 · catchable: track-reviewer · #311's Oversized line mixed added and changed lines (fixed in #311: recounted).
+- **Defect** D16.81 — found: track-reviewer · at: Track D brief · cause: process · made: Day 16 · catchable: track-reviewer · Track D's brief gave C16.17 `--expect "callers"`, which also matched the test's own name in any failure header (fixed before the implementer ran).
+- **Defect** D16.82 — found: track-reviewer · at: Track D brief · cause: process · made: Day 16 · catchable: track-reviewer · Track D's brief's scratch `reviewer.json` lacked `"brief"`, so C16.16 would stop on `CalledProcessError` before its red (fixed before the implementer ran).
+- **Defect** D16.83 — found: track-reviewer · at: Track D brief · cause: process · made: Day 16 · catchable: track-reviewer · Track D's brief gave the `improve-loop.py` changes no test (fixed before the implementer ran: two tests).
+- **Defect** D16.84 — found: track-reviewer · at: Track D brief · cause: process · made: Day 16 · catchable: track-reviewer · Track D's brief's bar did not check the runs, so a 2-run record would pass "2 of 3" with 2 of 2 (fixed in #314: `recorded.runs` must be 3).
+- **Defect** D16.85 — found: track-reviewer · at: Track D brief · cause: spec · made: Day 16 · catchable: auditor · Track D's In scope named only `improve-loop.py`'s line 80, but without `fell()` also skipping `cases`, `fell(worst, after)` compares two lists of dicts and raises a TypeError (fixed in #314: `fell()` skips `cases`).
+- **Defect** D16.86 — found: track-reviewer · at: Track D diff · cause: implementation · made: Day 16 · catchable: Track D · only two of `shortfall()`'s lines were ever seen to fail (fixed in #314: `ShortfallTest` spoils a good record one way at a time).
+- **Defect** D16.87 — found: track-reviewer · at: Track D diff · cause: process · made: Day 16 · catchable: track-reviewer · #314's draft did not list the `fell()` change as a choice (fixed in #314).
+- **Defect** D16.88 — found: track-reviewer · at: Track D diff · cause: process · made: Day 16 · catchable: track-reviewer · Track D's break record was not committed (fixed in #314).
+- **Defect** D16.89 — found: track-reviewer · at: Track D diff · cause: implementation · made: Day 16 · catchable: Track D · `shortfall()`'s `not recorded` half was untested, and without it a `reviewer.json` with no `recorded` stops on a TypeError (fixed in #314: `test_each_shortfall` checks `shortfall({})`).
+- **Defect** D16.90 — found: Track D · at: Track D build · cause: spec · made: Day 16 · catchable: auditor · In scope's rule for the reviewer reads "The pull request may already be merged when you read it", which holds no "already merged", the words C16.17 requires (not fixed in the spec; #314's brief says "If the pull request is already merged when you read it, review it as if it were open").
+- **Defect** D16.91 — found: Track D · at: Track D build · cause: spec · made: Day 16 · catchable: auditor · the Notes said C16.18's break was "recorded on the old find in `f2b7f82`"; that commit recorded C16.16's, and `specs/breaks/day-16.json` held no C16.18 entry (not fixed in the spec; #314 recorded it first, on `recorded.verdict` lowered to 1).
+- **Defect** D16.92 — found: Track C · at: Track C build · cause: spec · made: Day 16 · catchable: auditor · the Notes' list of rewritten finds said Track C rewrites Day 7's `record["issue"] = issue`, Day 8's `"issue"] = issue` and `lines.append(_level_2(records))`; Track C's code needed none of them, and each still occurs once (not fixed in the spec; recorded in #311).
+- **Hand-off** H16.1 → the maintainer, before Day 18: bearing's `spec-drift.py` at `7f8ec5d` writes no `found` on its Defect lines, so level 2 and 3 refuse bearing until bearing takes the kit's `spec-drift.py` (`70fe106`), as Out of scope says. `plan.md`'s table of what the driver reads from the kit names neither `days[].defects[].id` nor `.found`, which the driver now reads (#309's Contract impact): for a plan-change PR.
+- **Hand-off** H16.2 → the maintainer: what CI and the auditors did not check in the tracks. No test runs `raise` while a driver runs; it takes no lock and takes effect at the next `on` (#308). With `driver.json` at 3 and a newest raise line at 2, the level in force is 2 but `status` prints `level: 3`: the lowered text is written only for a line that names escapes or an evidence run (#308). Branches no test sees in Track B: the evidence lowering's `` " ended `" in line `` clause (a run unfinished after `--wait-minutes`), the mid-run read's `once.refuse` arm when `record` is None, `found_line` on `level_2_refusals`' early return, a finished Day or an `escapes` line's Day not in `order`, a non-string `found` or non-dict defect, and an `escapes` line with `"found": []` (#309). In Track C: a wrong or null phase and a span with no step start (rules the spec states that C16.13's fixtures leave out), the stamp guard, `lower < at`, the missing `level 3:` line, the second read's refusal and the dropped run-log reason (#311). The bar for the reviewer is measured on the same ten cases its rules came from, and `fixes.json`'s claim on D12.38 is weak (#312, #314).
+- **Hand-off** H16.3 → the maintainer: in #314's counts of the reviewer on #214, runs 1 and 3 filed faults outside the case that may be real: `driver-runs.py` groups review starts as one step, and STOP in `review.run`. Nobody has checked them.
+- Departures in the tracks, beyond D16.90 to D16.92: #308 re-recorded C13.1's break, which the Notes only retire, so the 2.0/True check stays bitten; `LevelInForceTest` keeps its own `held`; `raise` on an unreadable switch log prints `cannot raise: the level cannot be read: <reason>` and exits 2, a line no criterion names. #309 adds the `...defects[<j>].id` refusal line and a seventh test, `test_unreadable_switch_log_at_read`, which no criterion names and no break covers. #311 made four choices the spec leaves open: refuse on the second read, no `level 3:` line when the switch log is unreadable, a park with no string `at` does not count, `"phase": null` when the sentence names no Day.
+- A flaky test, under load only: in #314's full pre-push run, `scripts/test_publish_counts.py`'s `test_detached_runs_together_write_whole_lines_each_after_its_moment_and_pid` failed once with `PermissionError: [WinError 32]` on a temporary file's cleanup (Windows holds a file another process still has open), and passed 3 of 3 alone. It is Windows-only so far and not fixed; `test-parallel.py --repeat 10 --of` on it would say how often.
+- `catchable:` is missing from 48 of the Day's lines: D16.1 to D16.48, written by the spec-change PRs #304, #312 and #313, carry none, though `specs/README.md` asks it of every Defect line from Day 16 on (#313 noted it as a known limit). D16.49 to D16.92, added here, carry it. The lines before them were not backfilled at the close: `spec-drift.py`'s count of lines an earlier layer could have caught covers D16.49 to D16.92 only.
+- The speed-up (#310) in Tracks C and D: Track C's full pre-push run was `Ran 798 tests in 645.5s`, OK, with `test_escape.py` the slowest file at 399.3 s; Track D's was 786 tests ok.
+- The close. Day 16 answers H15.1 (C16.1: `driver.json` takes level 3, `Replaces: C13.1`) and H15.2 (C16.2 to C16.11, C16.20: the switch log is read to decide, the level in force replaces `driver.json`'s, and the driver's escape is its own count, the maintainer's choice of 2026-11-23). Nothing ran for real: the Day is code and fakes, and level 3 is still entered by no project. The reviewer's brief went through three counts that missed the first bar (90 sessions) before the bar changed (#312, D16.41). Retired this Day and recorded again in `specs/breaks/day-16.json` with `in_force`'s finds: Day 13's "level 2 started with no check", "level 2 merge passed at level 1" and "C13.1: a level of 2.0 or True taken", and Day 15's "the waived lines printed at any level (C15.9)" (#308).
