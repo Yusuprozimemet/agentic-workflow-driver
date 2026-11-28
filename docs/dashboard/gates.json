@@ -198,5 +198,5 @@
 {"date":"2026-11-28","day":null,"gate":"evidence replay","runs":17,"replies":26,"context":2427236,"output":36964,"cost":2.1798},
 {"date":"2026-11-28","day":null,"gate":"hooks","runs":1,"replies":2,"context":126014,"output":853,"cost":0.5621},
 {"date":"2026-11-28","day":null,"gate":"seen red","runs":21,"replies":37,"context":3995060,"output":52705,"cost":4.2617},
-{"date":"2026-11-28","day":null,"gate":"track-reviewer","runs":3,"replies":182,"context":15900823,"output":134064,"cost":10.1714}
+{"date":"2026-11-28","day":null,"gate":"track-reviewer","runs":3,"replies":204,"context":19211263,"output":158133,"cost":11.4489}
 ]
