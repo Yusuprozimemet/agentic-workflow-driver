@@ -62,7 +62,7 @@
     {"at": "s7", "label": "re-check", "kind": "tool", "what": "The script that tests finished promises again on later merges.",
      "scripts": ["replay-history", "test_replay_set"]},
     {"at": "s7", "label": "dashboard", "kind": "tool", "what": "The scripts that count the project and build this page.",
-     "paths": ["scripts/pipeline/"], "scripts": ["spec-drift", "spec_drift_*", "demo-data", "dashboard-reconcile", "publish-counts", "token-usage", "driver-runs", "session-size", "test_dashboard_page"]},
+     "paths": ["scripts/pipeline/"], "scripts": ["spec-drift", "spec_drift_*", "demo-data", "dashboard-reconcile", "publish-counts", "token-usage", "driver-runs", "session-size", "test_dashboard_page", "data_contract"]},
     {"at": "s7", "label": "docs/dashboard", "kind": "tool", "what": "The page itself: its markup, style, script and data files.",
      "paths": ["docs/dashboard/"]},
     {"at": "s7", "label": "agent", "kind": "tool", "what": "The instrument-auditor's brief: it checks this page against git.",

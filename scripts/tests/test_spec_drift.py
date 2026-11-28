@@ -258,7 +258,7 @@ class SpecDriftTest(unittest.TestCase):
         inside = sorted(f"pipeline/{folder}/{n}" for folder in os.listdir(pipeline)
                         if os.path.isdir(os.path.join(pipeline, folder))
                         for n in os.listdir(os.path.join(pipeline, folder)) if re.fullmatch(r"spec_drift_\w+\.py", n))
-        self.assertEqual(len(inside), 11)
+        self.assertEqual(len(inside), 28)  # 11 modules, and the 17 views split out of spec_drift_views.py
         self.assertEqual(sorted(sd.SOURCES), sorted(["spec-drift.py", *inside]))
 
     def test_a_change_to_a_file_that_makes_the_cache_starts_it_over(self):

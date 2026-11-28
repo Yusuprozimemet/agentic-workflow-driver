@@ -3945,7 +3945,8 @@ class LearningTest(unittest.TestCase):
         self.assertEqual(keys_in(got["fixes"], ("verdict",)), [True] * 4)
         self.assertEqual([f["verdict"] for f in got["fixes"]], [None] * 4)
         # the module's own LRN_WAIT, read when learning() is called: one Day is enough here
-        module = load("spec_drift_views", "spec_drift_views.py")
+        # (the learning view's module, which spec_drift_views.py only imports it from)
+        module = load("spec_drift_view_learning", "spec_drift_view_learning.py")
         module.LRN_WAIT = 1
         got = module.learning(learn_data())
         self.assertEqual(

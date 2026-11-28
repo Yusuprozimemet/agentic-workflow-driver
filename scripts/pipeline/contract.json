@@ -1,0 +1,574 @@
+{
+  "now": {
+    "what": "When the data was built, the commit, the open Day, the next step and the open pull requests.",
+    "made_by": "spec-drift:main",
+    "read_by": [
+      "spec_drift_view_common",
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_reading",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "model"
+    ],
+    "graph": "the header and Where we are"
+  },
+  "rows": {
+    "what": "One row per merge: what the specs name and the code has, the measures counted at that commit.",
+    "made_by": "spec_drift_metrics:trajectory",
+    "read_by": [
+      "spec_drift_view_common",
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_one_day",
+      "spec_drift_view_proofreading",
+      "spec_drift_view_reading",
+      "spec_drift_view_rings",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "lookGraph",
+      "mergeGraph",
+      "model",
+      "sieveGraph"
+    ],
+    "graph": "Graphs 1 and 6, the old graph 7"
+  },
+  "files": {
+    "what": "The files trajectory() counted the names in, at the last merge.",
+    "made_by": "spec_drift_metrics:trajectory",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "days": {
+    "what": "Each Day of the plan: its spec, status, criteria, tracks, Notes and Defect lines.",
+    "made_by": "spec_drift_specs:roadmap",
+    "read_by": [
+      "spec_drift_view_budget",
+      "spec_drift_view_learning",
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_needs_attention",
+      "spec_drift_view_one_day",
+      "spec_drift_view_proofreading",
+      "spec_drift_view_reading",
+      "spec_drift_view_rewrites",
+      "spec_drift_view_rings",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "model"
+    ],
+    "graph": "every graph, through model()"
+  },
+  "origin_lines": {
+    "what": "The number of lines the first spec had.",
+    "made_by": "spec_drift_metrics:trajectory",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "order": {
+    "what": "The Days in the plan's order.",
+    "made_by": "spec_drift_specs:roadmap",
+    "read_by": [
+      "spec_drift_view_common",
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_reading",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "lookGraph",
+      "model"
+    ],
+    "graph": "Graph 1 and the look-ahead"
+  },
+  "out_of_order": {
+    "what": "The Days the plan's order does not follow.",
+    "made_by": "spec_drift_specs:out_of_order",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "removals": {
+    "what": "Criteria or Days a later merge removed.",
+    "made_by": "spec_drift_specs:removal_history",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "hand_offs": {
+    "what": "What a Day's Notes or a test's comment defers to a later Day.",
+    "made_by": "spec_drift_handoffs:hand_offs",
+    "read_by": [
+      "spec_drift_view_merge_graph"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it"
+  },
+  "look_ahead": {
+    "what": "How far to the next stop: the hand-off ledger and what is pending.",
+    "made_by": "spec_drift_handoffs:look_ahead",
+    "read_by": [
+      "spec_drift_view_reading",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "lookGraph",
+      "rdgGraph"
+    ],
+    "graph": "Graph 1 and the look-ahead"
+  },
+  "criteria_index": {
+    "what": "Every criterion with its Day, tag, tests, evidence and state.",
+    "made_by": "spec_drift_page:criterion_index",
+    "read_by": [
+      "spec_drift_view_budget",
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_needs_attention",
+      "spec_drift_view_one_day",
+      "spec_drift_view_protein",
+      "spec_drift_view_reading",
+      "spec_drift_view_rewrites",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "geneGraph",
+      "lookGraph",
+      "oneGraph",
+      "planGraph",
+      "promises"
+    ],
+    "graph": "Graphs 3 to 5, 6, 7's One Day, 12 and the gene"
+  },
+  "attention": {
+    "what": "The criteria the index flags, each with its reason.",
+    "made_by": "spec_drift_page:criterion_index",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Needs attention)"
+  },
+  "test_inventory": {
+    "what": "The tests in tests/ and scripts/ at the last merge, by file.",
+    "made_by": "spec_drift_page:test_inventory",
+    "read_by": [
+      "spec_drift_view_merge_graph"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it"
+  },
+  "defect_recurrence": {
+    "what": "Defects of a kind seen again on a later Day.",
+    "made_by": "spec_drift_metrics:recurrence",
+    "read_by": [
+      "spec_drift_view_learning",
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it"
+  },
+  "fixes": {
+    "what": "specs/fixes.json: each fix to the process and the pull request that made it.",
+    "made_by": "spec_drift_metrics:fixes_record",
+    "read_by": [
+      "spec_drift_view_learning"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Graph 13)"
+  },
+  "user_stories": {
+    "what": "Each pull request's user story and the abilities named in plan.md.",
+    "made_by": "spec_drift_page:user_stories",
+    "read_by": [
+      "spec_drift_score",
+      "spec_drift_view_needs_attention",
+      "spec_drift_view_protein"
+    ],
+    "drawn_by": [
+      "model"
+    ],
+    "graph": "Graphs 3 to 5"
+  },
+  "plan": {
+    "what": "plan.md's commitments and the criteria whose Plan: lines serve each.",
+    "made_by": "spec_drift_plan:plan_graph",
+    "read_by": [
+      "spec_drift_view_merge_graph"
+    ],
+    "drawn_by": [
+      "planGraph"
+    ],
+    "graph": "Graph 12"
+  },
+  "gene": {
+    "what": "Each commitment of plan.md by the state of the criteria that serve it.",
+    "made_by": "spec_drift_view_gene:gene",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [
+      "geneGraph"
+    ],
+    "graph": "the gene"
+  },
+  "gate_report": {
+    "what": "Each gate's catches and the guards' refusals.",
+    "made_by": "spec_drift_metrics:gate_report",
+    "read_by": [
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Graph 7)"
+  },
+  "defect_counts": {
+    "what": "The Defect lines counted by Day and by tag.",
+    "made_by": "spec_drift_metrics:defect_counts",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "never_found": {
+    "what": "The known faults each checking agent's cases name that it never found.",
+    "made_by": "spec_drift_metrics:never_found",
+    "read_by": [
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Graph 7)"
+  },
+  "other_groups": {
+    "what": "The names counted in no group of the measures.",
+    "made_by": "spec_drift_metrics:other_groups",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "vocab_size": {
+    "what": "The number of backticked names the specs hold.",
+    "made_by": "spec_drift_metrics:trajectory",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "tokens": {
+    "what": "Each session's tokens and dollars, from scripts/token-usage.py.",
+    "made_by": "spec_drift_data:token_usage",
+    "read_by": [
+      "spec_drift_view_budget",
+      "spec_drift_view_one_day"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Graphs 7 and 8)"
+  },
+  "refusals": {
+    "what": "The guards' refusals, from the dashboard-data branch.",
+    "made_by": "spec_drift_data:refusals",
+    "read_by": [
+      "spec_drift_view_budget",
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [
+      "sieveGraph"
+    ],
+    "graph": "the old graph 7"
+  },
+  "verification": {
+    "what": "Each pull request's checks on GitHub.",
+    "made_by": "spec_drift_metrics:verification",
+    "read_by": [
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [
+      "mergeGraph",
+      "sieveGraph"
+    ],
+    "graph": "Graph 6 and the old graph 7"
+  },
+  "infra": {
+    "what": "The infrastructure workflow's last run.",
+    "made_by": "spec_drift_page:infra",
+    "read_by": [],
+    "drawn_by": [
+      "notMeasured"
+    ],
+    "graph": "what is not measured yet"
+  },
+  "deployment": {
+    "what": "The last deployment, or nothing.",
+    "made_by": "spec_drift_page:deployment",
+    "read_by": [],
+    "drawn_by": [
+      "notMeasured"
+    ],
+    "graph": "what is not measured yet"
+  },
+  "evidence_checks": {
+    "what": "docs/dashboard/evidence-checks.json: the replay's report on the closes.",
+    "made_by": "spec_drift_data:evidence_checks",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "replay": {
+    "what": "scripts/replay-history.py's re-check of every criterion at every merge.",
+    "made_by": "spec_drift_data:replay_history",
+    "read_by": [
+      "spec_drift_view_merge_graph"
+    ],
+    "drawn_by": [],
+    "graph": "not drawn: the views read it (Graph 6)"
+  },
+  "conclusion": {
+    "what": "The lab notebook's conclusion, by Day.",
+    "made_by": "spec_drift_handoffs:conclusion",
+    "read_by": [],
+    "drawn_by": [],
+    "graph": "not drawn; no view reads it"
+  },
+  "yardsticks": {
+    "what": "Each yardstick's value by Day and its verdict.",
+    "made_by": "spec_drift_metrics:yardsticks",
+    "read_by": [
+      "spec_drift_view_gel"
+    ],
+    "drawn_by": [
+      "yardGraph"
+    ],
+    "graph": "Graph 2, the old one"
+  },
+  "clock": {
+    "what": "When each pull request opened, its checks ran and it merged.",
+    "made_by": "spec_drift_metrics:clock",
+    "read_by": [
+      "spec_drift_view_actogram",
+      "spec_drift_view_learning",
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [
+      "clockGraph",
+      "model"
+    ],
+    "graph": "Graph 10, the old one"
+  },
+  "counted": {
+    "what": "When the dashboard-data branch was last counted.",
+    "made_by": "spec_drift_data:counted",
+    "read_by": [
+      "spec_drift_view_actogram",
+      "spec_drift_view_proofreading"
+    ],
+    "drawn_by": [
+      "model"
+    ],
+    "graph": "the header"
+  },
+  "driver_runs": {
+    "what": "The driver's runs, steps and parks, from the dashboard-data branch.",
+    "made_by": "spec_drift_data:driver_runs",
+    "read_by": [
+      "spec_drift_view_budget",
+      "spec_drift_view_gel",
+      "spec_drift_view_protein",
+      "spec_drift_view_reflex"
+    ],
+    "drawn_by": [
+      "clockGraph",
+      "lookGraph",
+      "model",
+      "notMeasured"
+    ],
+    "graph": "Graphs 1 and 10, the old graph 7"
+  },
+  "data": {
+    "what": "Which files the dashboard-data branch gave, and which it lacked.",
+    "made_by": "spec_drift_data:data_source",
+    "read_by": [
+      "spec_drift_view_actogram",
+      "spec_drift_view_budget",
+      "spec_drift_view_proofreading",
+      "spec_drift_view_reflex"
+    ],
+    "drawn_by": [
+      "dataMissing"
+    ],
+    "graph": "what is missing"
+  },
+  "meta": {
+    "what": "Caveats, provenance, the project's name and address, the phases, stops and where rows.",
+    "made_by": "spec-drift:main",
+    "read_by": [
+      "spec_drift_view_merge_graph",
+      "spec_drift_view_reading",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "attention",
+      "head",
+      "model"
+    ],
+    "graph": "the header and the score"
+  },
+  "merge_graph": {
+    "what": "Graph 6's merges against the spec, a stripe per criterion.",
+    "made_by": "spec_drift_view_merge_graph:merge_graph",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [
+      "geneGraph",
+      "mrgGraph"
+    ],
+    "graph": "Graph 6 and the gene"
+  },
+  "score": {
+    "what": "The quality score: one number out of 100, by Day and by ability.",
+    "made_by": "spec_drift_score:quality_score",
+    "read_by": [
+      "spec_drift_view_protein",
+      "spec_drift_view_where_ring"
+    ],
+    "drawn_by": [
+      "quality",
+      "whrGraph"
+    ],
+    "graph": "the header and Where we are"
+  },
+  "where_ring": {
+    "what": "The plan as one turn of the cell cycle, a checkpoint at each stop.",
+    "made_by": "spec_drift_view_where_ring:where_ring",
+    "read_by": [],
+    "drawn_by": [
+      "whrGraph"
+    ],
+    "graph": "Where we are and the gene"
+  },
+  "reading": {
+    "what": "The plan being read, merge by merge.",
+    "made_by": "spec_drift_view_reading:reading",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [
+      "rdgGraph"
+    ],
+    "graph": "Graph 1"
+  },
+  "gel": {
+    "what": "The yardsticks drawn as a gel.",
+    "made_by": "spec_drift_view_gel:gel",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [
+      "gelGraph",
+      "model"
+    ],
+    "graph": "Graph 2"
+  },
+  "protein": {
+    "what": "The abilities as proteins, each promise a cell on its chain.",
+    "made_by": "spec_drift_view_protein:protein",
+    "read_by": [
+      "spec_drift_view_needs_attention"
+    ],
+    "drawn_by": [
+      "prtGraph"
+    ],
+    "graph": "Graphs 3 to 5"
+  },
+  "proofreading": {
+    "what": "The checking as error correction, gate by gate.",
+    "made_by": "spec_drift_view_proofreading:proofreading",
+    "read_by": [],
+    "drawn_by": [
+      "prfGraph",
+      "sieveGraph"
+    ],
+    "graph": "Graph 7"
+  },
+  "budget": {
+    "what": "The dollars as an energy budget, a bead per two dollars.",
+    "made_by": "spec_drift_view_budget:budget",
+    "read_by": [],
+    "drawn_by": [
+      "atpGraph"
+    ],
+    "graph": "Graph 8"
+  },
+  "rings": {
+    "what": "The files as growth rings, a band per kind.",
+    "made_by": "spec_drift_view_rings:rings",
+    "read_by": [],
+    "drawn_by": [
+      "rngGraph"
+    ],
+    "graph": "Graph 9"
+  },
+  "actogram": {
+    "what": "The clock as an actogram, a lane per actor.",
+    "made_by": "spec_drift_view_actogram:actogram",
+    "read_by": [],
+    "drawn_by": [
+      "actGraph",
+      "clockGraph"
+    ],
+    "graph": "Graph 10"
+  },
+  "reflex": {
+    "what": "The driver's steps as reflex arcs.",
+    "made_by": "spec_drift_view_reflex:reflex",
+    "read_by": [],
+    "drawn_by": [
+      "rfxGraph"
+    ],
+    "graph": "Graph 11"
+  },
+  "learning": {
+    "what": "Repeats per Day and each fix's before and after.",
+    "made_by": "spec_drift_view_learning:learning",
+    "read_by": [],
+    "drawn_by": [
+      "lrnGraph"
+    ],
+    "graph": "Graph 13"
+  },
+  "one_day": {
+    "what": "One Day step by step, each defect at the step it was caught.",
+    "made_by": "spec_drift_view_one_day:one_day",
+    "read_by": [],
+    "drawn_by": [
+      "oneGraph"
+    ],
+    "graph": "Graph 7's One Day ring"
+  },
+  "rewrites": {
+    "what": "Replaced promises joined to what replaced them.",
+    "made_by": "spec_drift_view_rewrites:rewrites",
+    "read_by": [],
+    "drawn_by": [
+      "rewGraph"
+    ],
+    "graph": "Graph 6's rewrites frame"
+  },
+  "needs_attention": {
+    "what": "What needs attention, by one rule.",
+    "made_by": "spec_drift_view_needs_attention:needs_attention",
+    "read_by": [],
+    "drawn_by": [
+      "attention"
+    ],
+    "graph": "Needs attention, in the header"
+  },
+  "file_map": {
+    "what": "Every tracked file at its station.",
+    "made_by": "spec_drift_files:build_file_map",
+    "read_by": [
+      "spec_drift_page"
+    ],
+    "drawn_by": [
+      "draw"
+    ],
+    "graph": "the file map"
+  }
+}

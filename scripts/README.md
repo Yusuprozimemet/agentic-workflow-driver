@@ -3,7 +3,7 @@
 `scripts/` holds this repository's commands: each one a body of its own, run by hand, by a hook or
 by CI. The specs, the workflows and the docs name them by path, so their names and places do not
 move; this page only sorts them by what they are for. The page's data builder is not a command: the
-11 modules `spec-drift.py` runs sit in `scripts/pipeline/`, in a folder for each of the first three
+28 modules `spec-drift.py` runs sit in `scripts/pipeline/`, in a folder for each of the first three
 concerns below (`sources/`, `counts/`, `build/`), and keep the names they had beside it. Their tests are in `scripts/tests/`, run one
 file at a time (`python scripts/tests/test_<name>.py`). Three tests stay beside the scripts on
 purpose: `test_token_usage.py`, frozen by C16.19 (a hold in force); `test_setup_check.py`, which
@@ -28,7 +28,24 @@ record runs by this module name (C14.9).
 |---|---|
 | `pipeline/counts/spec_drift_metrics.py` | spec-drift.py's measures: the clock, the chance bands, the names in code, boundaries and yardsticks. |
 | `pipeline/counts/spec_drift_score.py` | spec-drift.py's quality score: one number out of 100 for the whole project, each Day and each ability. |
-| `pipeline/counts/spec_drift_views.py` | spec-drift.py's newer views: one function per section of the page, each written under its own key of spec-drift.json. |
+| `pipeline/counts/spec_drift_views.py` | spec-drift.py's newer views, by one name: it imports each from its own module below, which writes its own key of spec-drift.json. |
+| `pipeline/counts/spec_drift_view_actogram.py` | Graph 10: the clock as an actogram, a lane per actor (`actogram`). |
+| `pipeline/counts/spec_drift_view_budget.py` | Graph 8: the dollars as an energy budget (`budget`). |
+| `pipeline/counts/spec_drift_view_common.py` | Helpers more than one view uses: the replay's groups, a Day's state, rounding, plain words, times. |
+| `pipeline/counts/spec_drift_view_criterion_states.py` | Each criterion's state, worked out once for every view and the page (`criteria_index[].state`). |
+| `pipeline/counts/spec_drift_view_gel.py` | Graph 2: the yardsticks drawn as a gel (`gel`). |
+| `pipeline/counts/spec_drift_view_gene.py` | The gene: each commitment of plan.md by the state of the criteria that serve it (`gene`). |
+| `pipeline/counts/spec_drift_view_learning.py` | Graph 13: does it learn? Repeats per Day and each fix's before and after (`learning`). |
+| `pipeline/counts/spec_drift_view_merge_graph.py` | Graph 6: the merges against the spec, a stripe per criterion (`merge_graph`). |
+| `pipeline/counts/spec_drift_view_needs_attention.py` | What needs attention: the header's panel, by one rule (`needs_attention`). |
+| `pipeline/counts/spec_drift_view_one_day.py` | Graph 7's One Day ring: one Day step by step, each defect at the step it was caught (`one_day`). |
+| `pipeline/counts/spec_drift_view_proofreading.py` | Graph 7: the checking as error correction, gate by gate (`proofreading`). |
+| `pipeline/counts/spec_drift_view_protein.py` | Graphs 3 to 5: the abilities as proteins, each promise a cell on its chain (`protein`). |
+| `pipeline/counts/spec_drift_view_reading.py` | Graph 1: the plan being read, merge by merge (`reading`). |
+| `pipeline/counts/spec_drift_view_reflex.py` | Graph 11: the driver's steps as reflex arcs (`reflex`). |
+| `pipeline/counts/spec_drift_view_rewrites.py` | Graph 6's rewrites frame: replaced promises joined to what replaced them (`rewrites`). |
+| `pipeline/counts/spec_drift_view_rings.py` | Graph 9: the files as growth rings (`rings`). |
+| `pipeline/counts/spec_drift_view_where_ring.py` | Where we are: the plan as one turn of the cell cycle, a checkpoint at each stop (`where_ring`). |
 
 ## The dashboard's data: build
 
@@ -38,6 +55,12 @@ record runs by this module name (C14.9).
 | `pipeline/build/spec_drift_page.py` | spec-drift.py's page: the data the dashboard draws, and the one-file page it builds. |
 | `demo-data.py` | Made-up data in the shape spec-drift.py writes for the dashboard, for a project called sample-shop. |
 | `dashboard-reconcile.py` | Hold each new section of the dashboard to the graph it is drawn beside, one line per section. |
+
+`pipeline/contract.json` is the data contract: for each key of spec-drift.json, what it holds, the function that
+makes it, the modules of `counts/` and `build/` that read it, the functions of `docs/dashboard/dashboard.js` that
+draw it, and where it shows on the page. `scripts/tests/test_data_contract.py` reads the first four from the code,
+so a key added, read or drawn without the contract saying so fails it. `phase-table.py` and
+`dashboard-reconcile.py` read the file too, and are not in it.
 
 ## Counts from outside git
 
