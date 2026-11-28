@@ -19,7 +19,7 @@
       <button type="button" class="theme" id="theme" aria-pressed="false">Dark mode</button>
     </div>
     <h1>A script that runs AI coding work one step at a time</h1>
-    <p class="lede">The whole project in twelve graphs, each answering one question. Point at, tap or tab to any mark, and the box under its graph says the detail. Every graph keeps its exact numbers in a table under it.</p>
+    <p class="lede">The project in graphs, each answering one question: the work on this page, the plan's yardsticks and where the time went on the back page. Point at, tap or tab to any mark, and the box under its graph says the detail. Under every graph, one closed line holds its key, its lists and its exact numbers.</p>
     <dl class="words" id="words">
       <div><dt>Day</dt><dd>A numbered step of the plan, written as a spec before it is built. It is not a calendar day: <span id="words-took">several Days can fit in one date</span>.</dd></div>
       <div><dt>Date</dt><dd>A calendar date, on the maintainer's clock.</dd></div>
@@ -33,6 +33,10 @@
     <p class="demo-banner" id="demo-banner" role="note" hidden></p>
     <p class="demo-banner" id="data-banner" role="note" hidden></p>
     <p class="now" id="now">Loading the latest data…</p>
+    <div class="views" role="group" aria-label="Which page">
+      <button type="button" data-view="front" aria-pressed="true">Front page</button>
+      <button type="button" data-view="back" aria-pressed="false">Back page<small id="back-n"></small></button>
+    </div>
     <section class="graph" id="whr" aria-labelledby="whr-h" hidden>
       <div class="graph-head">
         <p class="graph-n">Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop</p>
@@ -97,12 +101,15 @@
       <p class="limit" id="attention-unread" hidden></p>
       </div>
       </details>
+      <div class="sticks" id="sticks" hidden></div>
     </section>
   </header>
 
   <div class="days" id="days" role="group" aria-label="Highlight one Day in every graph"></div>
 
-  <h2 class="chapter">Where is it going?<small>what is left before the stop, and whether it is on the plan's yardsticks</small></h2>
+  <div class="view" id="v-front">
+
+  <h2 class="chapter">Where is it going?<small>what is left before the stop, and which old problems came back</small></h2>
 
   <section class="graph" id="rdg">
     <div class="graph-head">
@@ -114,6 +121,8 @@
     <div class="ladder" id="g1-ladder"></div>
     <div class="figs" id="rdg-figs"></div>
     <p class="mk-line" aria-label="Key; the full key is in the fold below"><span>A Day's work:</span><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-spec" width="8" height="14" rx="1"/></svg>a merge of the Day's spec</span><span><svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true"><rect class="cell k-code" width="8" height="14" rx="1"/></svg>of its code</span><span><svg width="9" height="15" viewBox="0 0 9 15" aria-hidden="true"><rect class="cell k-close" x=".7" y=".7" width="7.6" height="13.6" rx="1"/></svg>the Day's close</span><span><svg width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="strand" d="M0 5H26"/></svg>Between Days</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="q q-new" width="12" height="4" rx="1.6"/></svg>Promises</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><ellipse class="pol" cx="6" cy="9" rx="5" ry="8"/></svg>Today and ahead</span><span><svg class="ho picked" width="26" height="10" viewBox="0 0 26 10" aria-hidden="true"><path class="v" d="M1 1Q13 17 25 1"/></svg>Hand-offs</span></p>
+    <div class="scroll" id="rdg-scroll"><svg class="fig" id="rdg-fig" viewBox="0 0 1240 414" role="group"></svg></div>
+    <details class="under" id="rdg-under"><summary><b>Under the picture</b><span class="under-n" id="rdg-under-n"></span></summary>
     <details class="exact mock-key">
     <summary>Key, and how to read it</summary>
     <div>
@@ -223,7 +232,6 @@
     <p class="stamp" id="rdg-stamp"></p>
     </div>
     </details>
-    <div class="scroll" id="rdg-scroll"><svg class="fig" id="rdg-fig" viewBox="0 0 1240 414" role="group"></svg></div>
     <details class="exact mock-key"><summary>What the picture shows · Open, numbered hand-offs · Where the model bends</summary>
       <div><div class="cols">
         <div><h3>What the picture shows</h3><ul class="finds" id="rdg-finds"></ul>
@@ -231,10 +239,7 @@
         <div><h3>Where the model bends</h3><ul class="plain" id="rdg-bends"></ul></div>
       </div></div>
     </details>
-    <div id="rdg-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g1-fold">
+  <div class="mock-fold" id="g1-fold">
     <details class="exact"><summary>Graph 1 as it was, folded: promises built, merge by merge</summary>
     <div id="g1">
     <div class="graph-head">
@@ -250,300 +255,48 @@
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g1-table"></table></div></details>
   </div>
     </details>
-  </section>
-
-  <section class="graph" id="gel">
-    <div class="graph-head">
-      <p class="graph-n">Graph 2 · drawn as a gel; the old graph 2 is folded below</p>
-      <h2>Is it meeting what the plan judges it on?</h2>
-      <p class="chips" id="gel-chips" hidden></p>
-      <p class="graph-say">One small gel per yardstick: each Day runs in its own lane, and the first lane holds the kit's figure and the average.</p>
-    </div>
-    <div class="figs" id="gel-figs"></div>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>A Day's figure</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>What to read it against</span><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>Which way is good</span></p>
-    <details class="exact mock-key"><summary>Key, and how to read it</summary>
-<div><p class="graph-say">One small gel for each yardstick the plan names, each on its own scale. Inside a gel every Day has a lane, and the Day's figure is one band: the lower the band, the lower the figure, and lower is better. Read a band against the first lane, the ladder, which holds the average so far and, where the kit recorded one, the figure reached with a person driving every step.</p>
-<dl class="lg">
-    <dt>A Day's figure <small>a band in its lane</small></dt>
-    <dd><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>the last Day counted; its number is bold</span><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band earlier" y="1.5" width="16" height="5" rx="2.5"/></svg>an earlier Day</span><span><svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><rect class="box" x=".5" y=".5" width="15" height="17" rx="3"/><rect class="well" x="4" y="3" width="8" height="2.5" rx="1"/></svg>an empty lane, its number faded: no figure that Day. A band on the floor is a zero</span></dd>
-    <dt>What to read it against <small>the ladder, lane "ref"</small></dt>
-    <dd><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>the kit's figure: what the kit reached with a person driving every step (<span id="gel-k-kit"></span>)</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band avg" x=".6" y="1.5" width="11" height="5" rx="2.5"/><path class="across avg" d="M15 4H38"/></svg>the average so far</span></dd>
-    <dt>Which way is good <small>the direction of the run</small></dt>
-    <dd><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>lower on the gel is a lower figure, and lower is better</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri better" d="M.5 .5h9l-4.5 7z"/></svg>green: the last figure is below its average</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri worse" d="M.5 7.5h9l-4.5-7z"/></svg>amber: above it</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri flat" d="M.5 7.5h9l-4.5-7z"/></svg>grey: no direction is better (refused calls)</span></dd>
-  </dl>
-<p class="hint">Point at a lane, or reach it with the Tab key, for the Day, its figure and what was recorded for it. The scale's top and bottom are printed at the left of each gel. A panel compares with itself only: the same height in two panels is two different figures.</p>
-<p class="stamp" id="gel-stamp"></p></div>
-    </details>
-    <div class="scroll" id="gel-scroll"><svg class="fig" id="gel-fig" viewBox="0 0 1198 307" role="group"></svg></div>
-    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
-      <div><div class="cols">
-        <div><h3>What the picture shows</h3><ul class="finds" id="gel-finds"></ul><p class="hint" id="gel-drift"></p></div>
-        <div><h3>Where the model bends</h3><ul class="plain" id="gel-bends"></ul></div>
-      </div></div>
-    </details>
-    <div id="gel-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g2-fold">
-    <details class="exact"><summary>Graph 2 as it was, folded: one row per yardstick</summary>
-    <div id="g2">
-    <div class="graph-head">
-      <p class="graph-n">Graph 2</p>
-      <h2>Is it meeting what the plan judges it on?</h2>
-      <p class="graph-say">One row per yardstick the plan names, counted at each Day's close. Up to Day 6 a Day's figure covers everything merged since the close before it, whichever Day the work belonged to; from Day 7 on, only the Day's own pull requests, by branch. Dollars are API list prices, as in graph 8, and not what was paid. Each row has its own scale: the dark bar is the last Day counted, the grey band every Day's range, the hollow diamond the average so far, and the tall black tick the figure the kit reached with a person driving every step. The trend on the right is Day by Day. Green or amber on the number says whether the last Day beat the average, where lower is better.</p>
-    </div>
-    <div class="legend" id="g2-key"></div>
-    <div class="scroll-x" id="g2-plot"></div>
-    <div class="readout" id="g2-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g2-table"></table></div></details>
   </div>
     </details>
+    <div id="rdg-tip" hidden></div>
   </section>
 
-  <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, and the promises behind them</small></h2>
-
-  <section class="graph" id="prt">
-    <span class="anchor" id="g3"></span><span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
+  <section class="graph" id="lrn">
     <div class="graph-head">
-      <p class="graph-n">Graphs 3–5 · drawn as proteins</p>
-      <h2>What can the driver do, and can I rely on it?</h2>
-      <p class="chips" id="prt-chips" hidden></p>
-      <p class="graph-say">One chain per ability, one cell per promise in the order built, marked by what its test and the replay say.</p>
+      <p class="graph-n">Graph 13 · read as immunity, after the checking</p>
+      <h2>Does it learn from its mistakes?</h2>
+      <p class="graph-say">The first picture counts how often an old problem came back, Day by Day. The second takes each fix and sets the times before it beside the times after it.</p>
     </div>
-    <div class="figs" id="prt-figs"></div>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>An ability</span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg>A promise</span><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>A Day</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg>used in a real run</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg>never yet in one</span></p>
-    <details class="exact mock-key"><summary>Key, and how to read it</summary>
-<div><p class="graph-say">Each box is one ability, drawn as a protein: a chain with one cell for every promise the specs made for it. Read a chain from the dot, row by row, in the order the promises were built. A filled green cell is a promise that holds and whose test was seen to fail when the code was broken on purpose. The more of a chain is filled, the more you can rely on that ability.</p>
-<dl class="lg">
-    <dt>An ability <small>a protein</small></dt>
-    <dd><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>one chain per ability, read from the dot; the same cell size in every box, so a longer chain is a larger protein</span><span><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="40.06 53.41" transform="rotate(-90 11 11)"/></svg>proven, of the promises the last re-check counted</span></dd>
-    <dt>A promise <small>a residue</small></dt>
-    <dd><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg><span><b id="prt-k-proven"></b> holds, and a break on purpose proved its test</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unproved" x="0.8" y="0.8" width="11.4" height="11.4" rx="3.2"/></svg><span><b id="prt-k-unproven"></b> holds, never seen to fail</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m norun" x="0.5" y="0.5" width="12" height="12" rx="3.2"/></svg><span><b id="prt-k-skipped"></b> the replay cannot run its check</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unbuilt" x="0.6" y="0.6" width="11.9" height="11.9" rx="3.2"/></svg><span><b id="prt-k-open"></b> written, not built</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m stale" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M6.5 2.9v4.2 M6.5 9.9v.1"/></svg><span><b id="prt-k-repair"></b> its recorded break no longer applies</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m broken" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M3.9 3.9l5.2 5.2 M9.1 3.9l-5.2 5.2"/></svg><span><b id="prt-k-broken"></b> does not hold</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m replaced" x="0.5" y="0.5" width="12.1" height="12.1" rx="3.2"/></svg><span><b id="prt-k-replaced"></b> replaced by a later promise</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved scar" x="0.7" y="0.7" width="11.7" height="11.7" rx="3.2"/></svg><span><b id="prt-k-back"></b> of the proven are edged: the replay once saw it stop, and it came back</span></span></dd>
-    <dt>A Day <small>where in the chain</small></dt>
-    <dd><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>a wider gap and a small number where the chain passes into a new Day</span><span id="prt-k-all"></span></dd>
-    <dt>In real runs <small>the protein at work</small></dt>
-    <dd><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>used</b> the driver's own run log counts a step that used the ability</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>never yet</b> the count could show it, and does not</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm na" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>not counted</b> or <b>does not apply</b> the run log has no line for it</span></span></dd>
-  </dl>
-<p class="hint">Point at a cell for the promise, its state and the pull requests it cites. With the keyboard, Tab reaches a chain and the arrow keys walk along it. The Day buttons at the top of the page light one Day's promises. Point at a score, at "n of m proven" or at the pull requests for what is behind each. A box's shape says nothing: only the order along the chain does.</p>
-<p class="stamp" id="prt-stamp"></p></div>
-    </details>
-    <p class="say" id="prt-say" aria-live="polite"></p>
-    <div class="scroll" id="prt-scroll"><svg class="fig" id="prt-fig" viewBox="0 0 1196 645" role="group" aria-label="One folded chain per ability, one cell per promise, marked by what its test and the replay say"></svg></div>
-    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
-      <div><div class="cols">
-        <div><h3>What the picture shows</h3><ul class="finds" id="prt-finds"></ul><p class="hint">Point at a line to light up its cells above.</p></div>
-        <div><h3>Where the model bends</h3><ul class="plain" id="prt-bends"></ul></div>
-      </div></div>
-    </details>
-    <div id="prt-tip" hidden></div>
-  </section>
-
-  <h2 class="chapter">Is the way of working sound?<small>plan against spec, spec against code, and what the checks catch</small></h2>
-
-  <section class="graph" id="gene" aria-label="Plan, spec and code, drawn as gene, transcript and protein">
-    <div class="graph-head">
-      <p class="graph-n">The gene · first in its chapter, above graph 12</p>
-      <h2>Does the plan reach proved code?</h2>
-      <p class="chips" id="gene-chips" hidden></p>
-      <p class="graph-say">Read from the top: the plan, the criteria that copy it, their tests and replay, and the code that is proved.</p>
+    <div class="figs" id="lrn-figs"></div>
+    <div id="lrn-scroll">
+      <h3>Do old problems keep coming back?</h3>
+      <p class="keys"><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-before" width="14" height="14" rx="2"/></svg>came back, with no fix in place for it yet</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-gate" width="14" height="14" rx="2"/><rect class="l-gateh" width="14" height="14" rx="2"/></svg>came back although a fix was in place, and a gate caught it before the close</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-past" width="14" height="14" rx="2"/><rect class="l-pasth" width="14" height="14" rx="2"/></svg>came back although a fix was in place, and got past the gates before the close: red and hatched</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path class="l-fixline" d="M6 7V18"/><path class="l-fixcap" d="M6 0 10 4 6 8 2 4Z"/></svg>a fix counts from this Day</span></p>
+      <div class="scroll"><svg class="fig" id="lrn-epi" viewBox="0 0 960 330" role="group"></svg></div>
+      <h3>Did each fix work?</h3>
+      <p class="keys"><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="l-dot-before" cx="7" cy="7" r="6"/></svg>times a Day before the fix</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-held" r="6.5"/><path class="l-on" d="M-3.2 .2-.9 2.6 3.4-2.4"/></svg>after it: gone</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-back" r="6.5"/><path class="l-on" d="M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6"/></svg>after it: not reduced</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-less" r="6.5"/><path class="l-on" d="M0-3.2V3.2M-2.8 .6 0 3.4 2.8 .6"/></svg>after it: at most half as often</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-early" r="6.5"/></svg>too early to say: fewer than 5 Days since</span></p>
+      <div class="scroll"><svg class="fig" id="lrn-dmb" viewBox="0 0 1100 100" role="group"></svg></div>
     </div>
-    <svg class="gene-defs" width="0" height="0" aria-hidden="true"><defs>
-      <pattern id="gene-pat-rule" width="4" height="4" patternUnits="userSpaceOnUse"><rect class="pr-bg" width="4" height="4"/><path class="pr-l" d="M0 1H4"/></pattern>
-      <pattern id="gene-pat-over" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="po-bg" width="5" height="5"/><rect class="po-l" width="2.5" height="5"/></pattern>
-      <pattern id="gene-pat-norun" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="pn-bg" width="3" height="3"/><rect class="pn-l" width="1.4" height="3"/></pattern>
-      <linearGradient id="gene-half" x1="0" x2="1" y1="0" y2="0"><stop class="gh-a" offset="50%"/><stop class="gh-b" offset="50%"/></linearGradient>
-    </defs></svg>
-    <div class="reach">
-      <p class="of">Of the <b><span id="gene-total"></span> commitments</b> in <code>plan.md</code>:</p>
-      <div class="figs" id="gene-figs"></div>
-    </div>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>The plan</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>Criteria, as written</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>Replacement</span><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>Criteria in force</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>Tests and replay</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>The code</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="stale" width="10" height="10" rx="2"/></svg>Off the plan</span></p>
-    <details class="exact mock-key"><summary>Key, and how to read it</summary>
-      <div>
-        <p class="graph-say">Read it from the top, the way a cell reads a gene. The plan is the gene. Each criterion copies a line of it, as a transcript does. Replacing a criterion is splicing: what the new one no longer quotes drops out. The code is the protein, and a break on purpose is the proof that it works. Between the two is translation: under each commitment still named, one cell per criterion in force, coloured by what its test and the replay say.</p>
-        <dl class="lg">
-          <dt>The plan <small>the gene</small></dt>
-          <dd><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>one band per commitment: the darker, the more criteria name it</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="cap-bg" stroke="var(--s2)" stroke-width=".8" x=".5" y=".5" width="9" height="11"/></svg>the tube: background only, no promise</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="cap-bg" width="10" height="12"/><line class="secdiv" x1="5" x2="5" y1="0" y2="12"/></svg>a thin line: a new section of <code>plan.md</code></span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="rule" x=".5" y=".5" width="9" height="11"/></svg>regulatory: a rule for people, never built into code</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="notdue" x=".5" y=".5" width="9" height="11"/></svg>switched off: a gene that turns on at a later Day</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="overdue" width="10" height="12"/></svg>should be covered by now, and is not</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri changed" d="M4.5 7.5 l4 -6.5 h-8 z"/></svg>the plan later rewrote it</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri reworded" d="M4.5 7 l3.4 -5.5 h-6.8 z"/></svg>reworded only</span></dd>
-          <dt>Criteria, as written <small>the first transcript</small></dt>
-          <dd><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>one quote of the commitment, in a criterion for new work</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd hold" width="12" height="5" rx="2"/></svg>in a safety check</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd replaced" x=".5" y=".5" width="11" height="4" rx="2"/></svg>in a criterion that a later one replaced</span></dd>
-          <dt>Replacement <small>splicing</small></dt>
-          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>named at least once</span><span><svg width="24" height="16" viewBox="0 0 24 16" aria-hidden="true"><path class="arc" d="M1 13 Q12 -8 23 13"/><rect class="ex skip" x="8" y="7" width="8" height="8" rx="2"/></svg>named only by replaced criteria: it drops out</span><span><svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true"><path class="strand" d="M0 5H22"/></svg>bare strand: never named</span></dd>
-          <dt>Criteria in force <small>the mature transcript</small></dt>
-          <dd><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>what is still named, closed up, so this strand is shorter than the plan</span></dd>
-          <dt>Tests and replay <small>translation</small></dt>
-          <dd><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>one criterion in force that names the commitment: it holds, and a break on purpose proved its test</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unproved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>holds, never seen to fail</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc norun" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>the replay cannot run its check</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc stale" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>its test needs repair, or it is broken</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unbuilt" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>written, not built yet</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved scar" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>edged: the replay once saw it stop, and it came back (on the ring too)</span></dd>
-          <dt>The code <small>the protein</small></dt>
-          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>every criterion that names it holds and was proved by a break on purpose</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="part" cx="5" cy="5" r="3.9"/></svg>proved for some of those criteria, not all</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="unproved" cx="5" cy="5" r="3.8"/></svg>holds, never seen to fail</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="norun" cx="5" cy="5" r="4.2"/></svg>the replay cannot run its check</span></dd>
-          <dt>Off the plan <small>a plasmid</small></dt>
-          <dd><span>outer ring: a criterion that names no commitment, by Day</span><span>inner ring: its code, for each one in force</span></dd>
-        </dl>
-        <p class="hint">Point at a band to follow one commitment down to its code. Point at a quote to light up the other quotes of the same criterion. Point at a cell under Criteria in force for its tests, its merges and what the replay saw. Sections are in the plan's order, as on graph 12. The Day buttons at the top of the page fade every quote and cell that is not that Day's.</p>
-      </div>
-    </details>
-    <div class="scroll" id="gene-plot"></div>
-    <div class="readout" id="gene-read" aria-live="polite"></div>
-    <details class="exact mock-key"><summary>Where the plan does not reach proved code · Gaps that are expected · Where the model bends</summary>
-      <div><div class="cols">
-        <div>
-          <h3>Where the plan does not reach proved code</h3>
-          <ul class="finds" id="gene-finds"></ul>
-          <p class="hint">Point at a line to light up its commitments above.</p>
-        </div>
-        <div>
-          <h3>Gaps that are expected</h3>
-          <ul class="plain" id="gene-expected"></ul>
-          <h3>Where the model bends</h3>
-          <ul class="plain" id="gene-bends"></ul>
-        </div>
-      </div></div>
-    </details>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="gene-table"></table></div></details>
-    <div id="gene-tip" hidden></div>
-  </section>
-
-  <section class="graph" id="g12">
-    <div class="graph-head">
-      <p class="graph-n">Graph 12 · placed before graph 6: plan against spec, as 6 is spec against code</p>
-      <h2>Do the specs follow the plan?</h2>
-      <p class="chips" id="g12-chips" hidden></p>
-      <p class="graph-say" id="g12-say">One stripe per commitment of the plan, and one row per Day.</p>
-    </div>
+    <details class="under" id="lrn-under"><summary><b>Under the picture</b><span class="under-n" id="lrn-under-n"></span></summary>
+    <p class="hint">Point at a bar for the Day's repeats, at a dashed line for the fixes that count from it, and at a row for its fix. With the keyboard, Tab moves from mark to mark. A Day's button above dims every other Day.</p>
     <details class="exact"><summary>How to read it</summary>
-      <ul class="pg-how">
-        <li><b>Commitment:</b> one thing <code>plan.md</code> says the driver will do or the people will keep, listed with a number in <code>specs/plan/promises.json</code>. P01 to P69 come from the plan as approved on 6 Nov; N01 onwards were added by later plan changes. (The page says "promise" for a spec's criterion, so the plan's are called commitments here.)</li>
-        <li><b>The long bar</b> at the bottom is the plan, one stripe per commitment in the plan's own order, with its chapter headings under it. Those added later stand in their own block, chapter by chapter: the chapters in the order each first gained one, and inside a chapter in the order added. The darker a stripe, the more criteria name it; a white one is named by none; a hatched one is regulatory, a rule about people, which no test can check; an amber-striped one was due by a Day that has closed and no criterion names it.</li>
-        <li><b>The rows</b> above the bar are the Days. A mark in a row means a criterion of that Day names the commitment straight below it. Blue is a commitment of the approved plan, red-orange one added later. The third block holds the criteria that name none: amber for new work the plan does not ask for, grey for safety checks that only confirm earlier work still holds. The short bars at the right count each Day's criteria by those four kinds.</li>
-        <li><b>A dashed line</b> between two Days: <code>plan.md</code> was rewritten there, so the Days below wrote against the new plan. A ▲ under a stripe: the plan later changed that commitment; △: reworded, same meaning.</li>
-        <li><b>Where the marks come from:</b> from Day 11 each criterion carries a <code>Plan:</code> line naming the commitments it serves and quoting their words; Days 1 to 10 are backfilled in <code>specs/plan/links-days-01-10.json</code>. <code>scripts/plan-links.py</code> checks every quote on every pull request. The link is the spec author's own claim: the check proves the words exist, not that the criterion really tests them.</li>
-        <li>Point at a stripe for its commitment; click it to read the commitment and every criterion that names it, with its quote, in the box under the graph. Click a Day's name to see that Day alone, and a "Show only" button to keep the stripes of one kind.</li>
-      </ul>
+      <p class="read">Read it as immunity: a fix is the memory of a problem met once, and a problem that comes back although its fix was in place is an escape. A repeat is a defect whose line in a Day's Notes says <code>same-as:</code> an earlier one. The links are followed both ways, so every defect linked to another is one problem. A fix is a pull request that <code>specs/fixes.json</code> names, with the defects it was meant to stop.</p>
+      <p class="read">A fix counts from the first Day whose spec merged after the fix did. In the first picture its line stands at that Day. A repeat on that Day or later of a problem the fix names is amber and hatched when a gate caught it before the close, and red and hatched when it got past the gates before the close (noticed in the work, or found at the close or later). In the second picture the times a Day before the fix (from the Day the problem was first recorded) are set beside the times a Day after it, and a verdict comes only after 5 Days: gone, reduced (at most half as often) or not reduced.</p>
+      <p class="stamp" id="lrn-stamp"></p>
     </details>
-    <div class="pc-fig">
-      <div id="g12-plot"></div>
-      <div id="g12-tip" class="pc-tip" hidden></div>
-      <div id="g12-panel" class="pc-panel" aria-live="polite"></div>
-    </div>
-    <div class="readout" id="g12-read" hidden></div>
-    <details class="exact"><summary>The ladder: where on the plan each Day lands</summary>
-      <div class="pc-fig">
-        <p class="pc-howto">The left lane is the ladder: the original plan's commitments, in the plan's order. "Today" is the plan as it stands now. Each numbered lane is a Day. A band level with a commitment means a criterion of that Day names it. Point at a row for the full commitment and its criteria.</p>
-        <div class="pc-legend">
-          <span><i class="pc-sw" style="background:var(--ink-2)"></i>Commitment, same as the original</span>
-          <span><i class="pc-sw" style="background:var(--ink-2);opacity:.45"></i>"Today" lane, faded: reworded, same commitment</span>
-          <span><i class="pc-sw" style="background:var(--c-grid);opacity:.45"></i>"Today" lane, empty: the plan dropped it</span>
-          <span><i class="pc-sw" style="background:var(--c-out)"></i>Commitment the plan changed or added later</span>
-          <span><i class="pc-sw" style="background:var(--c-in)"></i>A Day's criteria (darker: more of them)</span>
-          <span><i class="pc-dot"></i>No criterion names it</span>
-        </div>
-        <div id="g12-ladder"></div>
-        <div id="g12-ltip" class="pc-tip" hidden></div>
+    <details class="exact"><summary>What the pictures show, and where the model bends</summary>
+      <div class="cols">
+        <div><h3>What the pictures show</h3><ul class="finds" id="lrn-finds"></ul></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="lrn-bends"></ul></div>
       </div>
     </details>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g12-table"></table></div></details>
+    <details class="exact"><summary>Exact numbers</summary>
+      <div class="scroll-x"><table id="lrn-days"></table></div>
+      <div class="scroll-x"><table id="lrn-fixes"></table></div>
+    </details>
+    </details>
+    <div id="lrn-tip" hidden></div>
   </section>
 
-  <section class="graph" id="mrg">
-    <div class="graph-head">
-      <p class="graph-n">Graph 6 · the merges against the spec; the old graph 6 is folded below</p>
-      <h2>Does the code still pass the spec?</h2>
-      <p class="chips" id="mrg-chips" hidden></p>
-      <p class="graph-say" id="mrg-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
-    </div>
-    <div class="bar-top">
-      <h3 class="frame-h" id="mrg-frame-h">Merges against criteria</h3>
-      <h3 class="frame-h" id="rew-frame-h" hidden>Promises rewritten, each joined to what replaced it</h3>
-      <div class="ctl">
-        <span id="mrg-zoom-wrap"><label for="mrg-zoom">Show</label>
-        <select id="mrg-zoom"></select></span>
-        <div class="mseg" role="group" aria-label="What the graph draws">
-          <button type="button" id="mrg-v-day" aria-pressed="true">One row per Day</button>
-          <button type="button" id="mrg-v-merge" aria-pressed="false">One row per merge</button>
-          <button type="button" id="mrg-v-rew" aria-pressed="false">Promises rewritten</button>
-        </div>
-      </div>
-    </div>
-    <div id="mrg-all">
-    <p class="stamp" id="mrg-stamp"></p>
-    <dl class="verdict" id="mrg-verdict"></dl>
-    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Row drawn for a stop</span></p>
-    <details class="exact mock-key"><summary>Key, and how to read it</summary>
-  <div><p class="graph-say">The long bar is the spec, one stripe per criterion. Each row above it is a Day's merges. A mark says what a merge did to the criterion straight below it: gave it its evidence, or stopped it holding. Everything a reader needs is printed inside the card, so a screenshot of it can be read without the hover.</p>
-  <dl class="mlegend">
-        <dt>The long bar</dt>
-        <dd><span><i class="msw grad"></i>one stripe per criterion: the darker, the more tests it names</span><span><i class="msw empty"></i>names no test</span></dd>
-        <dt>Marks in a row</dt>
-        <dd><span><i class="msw new"></i>the merge is evidence a new criterion cites</span><span><i class="msw hold"></i>evidence a hold criterion cites</span><span><i class="msw bad"></i>the replay first reports "code broken" or "test weakened" here</span><span><i class="msw stale"></i>first reports "break no longer applies" here</span><span><i class="msw loose"></i>changed product code, and no criterion cites it</span></dd>
-        <dt>Red line</dt>
-        <dd><span><i class="ln"></i>broken from the mark until the line ends</span><span><i class="ln mdash"></i>the break no longer applies until the line ends</span><span>a line that reaches the bar has not come back</span></dd>
-        <dt>Red band</dt>
-        <dd><span><i class="msw win"></i>the suspect window: every row after the last replay where the criterion held, up to the mark</span><span><i class="msw win hot"></i>darker where a merge in the window changed product code</span><span>the cause is somewhere in the band</span></dd>
-        <dt>Numbers</dt>
-        <dd><span><i class="bd fix">n</i>not holding, still in force</span><span><i class="bd retired">n</i>not holding when last run, since replaced by one not shown to hold</span><span><i class="bd replaced">n</i>not holding when last run, since replaced by one that holds</span><span><i class="bd">n</i>stopped holding and came back</span><span><i class="bd loose">n</i>a merge no criterion cites</span><span><i class="tri"></i>a later criterion replaced this one</span></dd>
-        <dt>Rows</dt>
-        <dd><span><i class="msw own"></i>a Day's own merges over its own criteria</span><span><i class="msw dead"></i>the replay never ran at this merge, so no red can show here</span><span><i class="msw new" style="opacity:.38"></i>faint: a later criterion names an earlier merge</span><span><i class="msw prod"></i>product lines</span><span><i class="msw test"></i>test lines</span><span><b class="stopk">3</b>Stopped: criteria the replay first saw not holding in this row</span><span><i class="msw due"></i>not due: plan.md lists the Day, no spec yet</span><span><i class="msw nocite"></i>dashed, in italics, or "2 drawn for a stop" beside a Day: no criterion cites the merge; it is drawn because the replay first noticed a stop, or saw one hold again, there, at a sampled merge</span></dd>
-      </dl>
-  <p class="vcap">These counts are each criterion's state the last time the replay ran it. The strip under the long bar draws the same state, one cell per criterion.</p></div>
-  </details>
-
-    <div class="scroll" id="mrg-scroll"><svg class="g" id="mrg-g" role="img"></svg></div>
-    <p class="narrow" id="mrg-narrow" hidden>The graph is wider than this window, so a screenshot will cut it off. Widen the window or zoom the browser out until this note goes away.</p>
-    <div class="find" id="mrg-find"></div>
-    <div class="notes" id="mrg-notes"></div>
-    <details class="exact"><summary id="mrg-ev-h">Where a criterion stopped holding</summary>
-      <div class="tablewrap"><table>
-        <thead><tr><th>No.</th><th>Criterion</th><th>What it promises</th><th>Last held at</th><th>First seen at</th><th>In the window between</th><th>The replay reported</th><th>Held again at</th></tr></thead>
-        <tbody id="mrg-ev"></tbody>
-      </table></div>
-    </details>
-    <details class="exact"><summary>What this graph cannot show</summary>
-      <ul class="cannot" id="mrg-cannot"></ul>
-    </details>
-    </div>
-    <div id="rew" hidden>
-      <p class="graph-say">Each replaced promise is joined to the promise that replaced it. Every Day that holds a wording is an arc of the ring, as long as the wordings it holds, read clockwise from the top. A mark is one wording, and a line runs from a wording to the one that replaced it. The most rewritten promise is drawn dark.</p>
-      <div class="figs" id="rew-figs"></div>
-      <details class="exact mock-key"><summary>Key, and how to read it</summary>
-      <div><dl class="lg">
-        <dt>A wording</dt>
-        <dd><span><svg width="12" height="12" aria-hidden="true"><circle class="nd old" cx="6" cy="6" r="4"/></svg>a wording replaced</span>
-          <span><svg width="12" height="12" aria-hidden="true"><rect class="nd old" x="2" y="2" width="8" height="8" rx="1.5"/></svg>replaced, from a short spec</span>
-          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd proven" cx="7" cy="7" r="5.5"/></svg>in force, and proved by a break on purpose</span>
-          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd unproven" cx="7" cy="7" r="4.8"/></svg>in force, never seen to fail</span>
-          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd building" cx="7" cy="7" r="4.8"/></svg>in force, not built yet</span></dd>
-        <dt>The line</dt>
-        <dd><span><svg width="26" height="8" aria-hidden="true"><path class="chord" d="M0 4H26"/></svg>replaced by</span>
-          <span><svg width="26" height="8" aria-hidden="true"><g class="lin most"><path class="chord" d="M0 4H26"/></g></svg>the most rewritten promise</span></dd>
-      </dl>
-      <p class="hint">Point at a line for its history, or at a mark for that wording. With the keyboard, Tab moves from line to line and the arrow keys walk a line's marks.</p>
-      <p class="stamp" id="rew-stamp"></p></div>
-      </details>
-      <div class="duo" id="rew-ring">
-        <div class="scroll" id="rew-scroll"><svg class="rfig" id="rew-rfig" role="group" aria-label="Replaced promises as lines across a ring of Days"></svg></div>
-        <div class="side">
-          <div class="readout tall" id="rew-out" aria-live="polite"></div>
-          <p class="note" id="rew-note"></p>
-        </div>
-      </div>
-    </div>
-    <div id="mrg-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g6-fold">
-    <details class="exact"><summary>Graph 6 as it was, folded: the angle between the specs' names and the code</summary>
-    <div id="g6">
-    <div class="graph-head">
-      <p class="graph-n">Graph 6</p>
-      <h2>Do the spec and the code still agree?</h2>
-      <p class="graph-say" id="g6-say">One column per merge, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open.</p>
-    </div>
-    <div class="legend" id="g6-key"></div>
-    <div class="scroll-x" id="g6-plot"></div>
-    <p class="limit">The angle matches names, not meaning: a spec can name a thing the code has and still describe it wrongly. <a href="#cannot-see">What these figures cannot see</a> lists the rest.</p>
-    <div class="readout" id="g6-read" aria-live="polite"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g6-table"></table></div></details>
-  </div>
-    </details>
-  </section>
+  <h2 class="chapter">What happens inside a Day?<small>the checks of every Day side by side, and where each file belongs</small></h2>
 
   <section class="graph" id="prf">
     <div class="graph-head">
@@ -560,6 +313,8 @@
       <p class="graph-say">One stream of defects, thinning left to right at each layer of checking; a dot under a layer is one defect caught there.</p>
     <div class="figs" id="prf-figs"></div>
     <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="9" height="9" viewBox="-4.5 -4.5 9 9" aria-hidden="true"><circle class="c-spec" r="4"/></svg>A defect</span><span><svg width="13" height="13" viewBox="-6.5 -6.5 13 13" aria-hidden="true"><circle class="rg" r="5.6"/><circle class="c-other" r="3.4"/></svg>Its marks</span><span><svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect class="flow" width="26" height="12"/></svg>The stream</span><span><svg width="26" height="8" viewBox="0 0 26 8" aria-hidden="true"><rect class="hbar" width="26" height="8" rx="1.5"/></svg>Beside the stream</span></p>
+    <div class="scroll" id="prf-scroll"><svg class="fig" id="prf-fig" viewBox="0 0 1272 613" role="group"></svg></div>
+    <details class="under" id="prf-all-under"><summary><b>Under the picture</b><span class="under-n" id="prf-all-under-n"></span></summary>
     <details class="exact mock-key"><summary>Key, and how to read it</summary>
 <div><p class="graph-say">Read it left to right. The grey stream is every defect the Days' Notes record, and it is as wide as the defects not yet caught. At each layer of checking, the ones caught there drop into the tray below: one dot each, grouped by the gate that caught them. The hatched part left the stream with no gate at all.</p>
 <dl class="lg" id="prf-key">
@@ -575,13 +330,37 @@
 <p class="hint">Point at a dot for the defect, at a gate's name for its catches, runs and cost, and at a layer's name for what it removed. With the keyboard, Tab moves from gate to gate and the arrow keys walk a gate's dots. A ringed dot lights up the defect it repeats. A Day's button above dims every other Day's dots.</p>
 <p class="stamp" id="prf-stamp"></p></div>
     </details>
-    <div class="scroll" id="prf-scroll"><svg class="fig" id="prf-fig" viewBox="0 0 1272 613" role="group"></svg></div>
     <p class="ci" id="prf-ci"></p>
     <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
       <div><div class="cols">
         <div><h3>What the picture shows</h3><ul class="finds" id="prf-finds"></ul></div>
         <div><h3>Where the model bends</h3><ul class="plain" id="prf-bends"></ul></div>
       </div></div>
+    </details>
+  <div class="mock-fold" id="g7-fold">
+    <details class="exact"><summary>Graph 7 as it was, folded: the pipe, gate by gate</summary>
+    <div id="g7">
+    <div class="graph-head">
+      <p class="graph-n">Graph 7</p>
+      <h2>Does the checking work, and is it worth it?</h2>
+      <p class="graph-say" id="g7-say">Work flows down the pipe, through the gates, stage by stage; every pull request passes CI and your merge. Each dot is one defect from a Day's Notes, at the gate that caught it: the lower its tray, the later the catch.</p>
+    </div>
+    <div class="g7-body">
+      <div class="scroll-x" id="g7-plot"></div>
+      <aside class="g7-panel" aria-label="Reading panel">
+        <p class="g7-h">When the catches came</p>
+        <div id="g7-split"></div>
+        <p class="g7-h">Key</p>
+        <div class="legend" id="g7-key"></div>
+        <p class="g7-h">In focus</p>
+        <div class="readout" id="g7-read" aria-live="polite"></div>
+      </aside>
+    </div>
+    <div id="g7-days"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
+  </div>
+    </details>
+  </div>
     </details>
     </div>
     <div id="one" hidden>
@@ -596,6 +375,19 @@
         </div>
       </div>
       <div class="figs" id="one-figs"></div>
+      <div class="duo" id="one-ring">
+        <div class="scroll" id="one-scroll"><svg class="rfig" id="one-rfig" role="group"></svg></div>
+        <div class="side">
+          <div id="one-ring-slot"><div class="readout tall" id="one-out" aria-live="polite"></div></div>
+          <table class="who" id="one-who"></table>
+          <p class="note">Replies and dollars are each agent's total for the Day, at API list prices. A band places an agent by its role, not by the clock.</p>
+        </div>
+      </div>
+      <div id="one-strand" hidden>
+        <div class="scroll"><svg class="sfig" id="one-fig" role="group"></svg></div>
+        <div id="one-strand-slot"></div>
+      </div>
+      <details class="under" id="one-under"><summary><b>Under this Day's picture</b><span class="under-n" id="one-under-n"></span></summary>
       <details class="exact mock-key"><summary>Key, and how to read it</summary>
       <div><dl class="lg">
         <dt>The steps</dt>
@@ -623,82 +415,288 @@
       <p class="hint">Point at a step, a dot, a band or a square. With the keyboard, Tab moves from step to step and the arrow keys walk a step's dots and squares.</p>
       <p class="stamp" id="one-stamp"></p></div>
       </details>
-      <div class="duo" id="one-ring">
-        <div class="scroll" id="one-scroll"><svg class="rfig" id="one-rfig" role="group"></svg></div>
-        <div class="side">
-          <div id="one-ring-slot"><div class="readout tall" id="one-out" aria-live="polite"></div></div>
-          <table class="who" id="one-who"></table>
-          <p class="note">Replies and dollars are each agent's total for the Day, at API list prices. A band places an agent by its role, not by the clock.</p>
-        </div>
-      </div>
-      <div id="one-strand" hidden>
-        <div class="scroll"><svg class="sfig" id="one-fig" role="group"></svg></div>
-        <div id="one-strand-slot"></div>
-      </div>
+      </details>
     </div>
     <div id="prf-tip" hidden></div>
   </section>
 
-  <section class="graph mock-fold" id="g7-fold">
-    <details class="exact"><summary>Graph 7 as it was, folded: the pipe, gate by gate</summary>
-    <div id="g7">
-    <div class="graph-head">
-      <p class="graph-n">Graph 7</p>
-      <h2>Does the checking work, and is it worth it?</h2>
-      <p class="graph-say" id="g7-say">Work flows down the pipe, through the gates, stage by stage; every pull request passes CI and your merge. Each dot is one defect from a Day's Notes, at the gate that caught it: the lower its tray, the later the catch.</p>
-    </div>
-    <div class="g7-body">
-      <div class="scroll-x" id="g7-plot"></div>
-      <aside class="g7-panel" aria-label="Reading panel">
-        <p class="g7-h">When the catches came</p>
-        <div id="g7-split"></div>
-        <p class="g7-h">Key</p>
-        <div class="legend" id="g7-key"></div>
-        <p class="g7-h">In focus</p>
-        <div class="readout" id="g7-read" aria-live="polite"></div>
-      </aside>
-    </div>
-    <div id="g7-days"></div>
-    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g7-table"></table></div></details>
+  <section class="graph" id="fil">
+  <div class="graph-head">
+    <p class="graph-n">How this works · every file, at the station it serves</p>
+    <h2>Where does each file belong?</h2>
+    <p class="graph-say">The way of working, drawn as a cell: a promise goes from the written goal on the left, through every check, to the re-check on the right. Every file of the repository hangs under the station it serves. One dot is one file, and a bigger dot is a longer file.</p>
   </div>
+  <div class="figs" id="fil-figs"></div>
+  <div class="key" id="fil-key"></div>
+  <div class="scroll" id="fil-scroll"><svg class="fig" id="fil-fig" viewBox="0 100 1236 489" role="group"></svg></div>
+  <details class="under" id="fil-under"><summary><b>Under the picture</b><span class="under-n" id="fil-under-n"></span></summary>
+  <p class="hint" id="fil-hint"></p>
+  <details class="exact"><summary>Every file, by station</summary>
+    <div class="scroll-x"><table id="fil-table"></table></div>
+    <p class="stamp" id="fil-stamp"></p>
+  </details>
+  <details class="exact"><summary>How it is drawn, and where the model bends</summary>
+    <div class="cols">
+      <div>
+        <h3>How it is drawn</h3>
+        <ul class="plain" id="fil-how"></ul>
+      </div>
+      <div>
+        <h3>Where the model bends</h3>
+        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
+      </div>
+    </div>
+  </details>
+  </details>
+  <div id="fil-tip" hidden></div>
+</section>
+
+  <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, the plan's reach, and the spec against the code</small></h2>
+
+  <section class="graph" id="prt">
+    <span class="anchor" id="g3"></span><span class="anchor" id="g4"></span><span class="anchor" id="g5"></span>
+    <div class="graph-head">
+      <p class="graph-n">Graphs 3–5 · drawn as proteins</p>
+      <h2>What can the driver do, and can I rely on it?</h2>
+      <p class="chips" id="prt-chips" hidden></p>
+      <p class="graph-say">One chain per ability, one cell per promise in the order built, marked by what its test and the replay say.</p>
+    </div>
+    <div class="figs" id="prt-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>An ability</span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg>A promise</span><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>A Day</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg>used in a real run</span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg>never yet in one</span></p>
+    <p class="say" id="prt-say" aria-live="polite"></p>
+    <div class="scroll" id="prt-scroll"><svg class="fig" id="prt-fig" viewBox="0 0 1196 645" role="group" aria-label="One folded chain per ability, one cell per promise, marked by what its test and the replay say"></svg></div>
+    <details class="under" id="prt-under"><summary><b>Under the picture</b><span class="under-n" id="prt-under-n"></span></summary>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+<div><p class="graph-say">Each box is one ability, drawn as a protein: a chain with one cell for every promise the specs made for it. Read a chain from the dot, row by row, in the order the promises were built. A filled green cell is a promise that holds and whose test was seen to fail when the code was broken on purpose. The more of a chain is filled, the more you can rely on that ability.</p>
+<dl class="lg">
+    <dt>An ability <small>a protein</small></dt>
+    <dd><span><svg width="50" height="13" viewBox="0 0 50 13" aria-hidden="true"><path class="bone" d="M2 6.5H44"/><circle class="nterm" cx="2.6" cy="6.5" r="2.6"/><rect class="m proved" x="8" width="13" height="13" rx="3.2"/><rect class="m proved" x="24" width="13" height="13" rx="3.2"/></svg>one chain per ability, read from the dot; the same cell size in every box, so a longer chain is a larger protein</span><span><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="40.06 53.41" transform="rotate(-90 11 11)"/></svg>proven, of the promises the last re-check counted</span></dd>
+    <dt>A promise <small>a residue</small></dt>
+    <dd><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved" x="0" y="0" width="13" height="13" rx="3.2"/></svg><span><b id="prt-k-proven"></b> holds, and a break on purpose proved its test</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unproved" x="0.8" y="0.8" width="11.4" height="11.4" rx="3.2"/></svg><span><b id="prt-k-unproven"></b> holds, never seen to fail</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m norun" x="0.5" y="0.5" width="12" height="12" rx="3.2"/></svg><span><b id="prt-k-skipped"></b> the replay cannot run its check</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m unbuilt" x="0.6" y="0.6" width="11.9" height="11.9" rx="3.2"/></svg><span><b id="prt-k-open"></b> written, not built</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m stale" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M6.5 2.9v4.2 M6.5 9.9v.1"/></svg><span><b id="prt-k-repair"></b> its recorded break no longer applies</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m broken" x="0" y="0" width="13" height="13" rx="3.2"/><path class="sign" d="M3.9 3.9l5.2 5.2 M9.1 3.9l-5.2 5.2"/></svg><span><b id="prt-k-broken"></b> does not hold</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m replaced" x="0.5" y="0.5" width="12.1" height="12.1" rx="3.2"/></svg><span><b id="prt-k-replaced"></b> replaced by a later promise</span></span><span><svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><rect class="m proved scar" x="0.7" y="0.7" width="11.7" height="11.7" rx="3.2"/></svg><span><b id="prt-k-back"></b> of the proven are edged: the replay once saw it stop, and it came back</span></span></dd>
+    <dt>A Day <small>where in the chain</small></dt>
+    <dd><span><svg width="34" height="24" viewBox="0 0 34 24" aria-hidden="true"><path class="bone" d="M0 17.5H34"/><rect class="m proved" x="0" y="11" width="13" height="13" rx="3.2"/><rect class="m proved" x="21" y="11" width="13" height="13" rx="3.2"/><text class="t-day" x="27.5" y="8" text-anchor="middle">7</text></svg>a wider gap and a small number where the chain passes into a new Day</span><span id="prt-k-all"></span></dd>
+    <dt>In real runs <small>the protein at work</small></dt>
+    <dd><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm seen" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>used</b> the driver's own run log counts a step that used the ability</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm never" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>never yet</b> the count could show it, and does not</span></span><span><svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><rect class="rm na" x="1" y="1" width="9" height="9" rx="2"/></svg><span><b>not counted</b> or <b>does not apply</b> the run log has no line for it</span></span></dd>
+  </dl>
+<p class="hint">Point at a cell for the promise, its state and the pull requests it cites. With the keyboard, Tab reaches a chain and the arrow keys walk along it. The Day buttons at the top of the page light one Day's promises. Point at a score, at "n of m proven" or at the pull requests for what is behind each. A box's shape says nothing: only the order along the chain does.</p>
+<p class="stamp" id="prt-stamp"></p></div>
     </details>
+    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="prt-finds"></ul><p class="hint">Point at a line to light up its cells above.</p></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="prt-bends"></ul></div>
+      </div></div>
+    </details>
+    </details>
+    <div id="prt-tip" hidden></div>
   </section>
 
-  <section class="graph" id="lrn">
+  <section class="graph" id="gene" aria-label="Plan, spec and code, drawn as gene, transcript and protein">
     <div class="graph-head">
-      <p class="graph-n">Graph 13 · read as immunity, after the checking</p>
-      <h2>Does it learn from its mistakes?</h2>
-      <p class="graph-say">The first picture counts how often an old problem came back, Day by Day. The second takes each fix and sets the times before it beside the times after it.</p>
+      <p class="graph-n">The gene · first in its chapter, above graph 12</p>
+      <h2>Does the plan reach proved code?</h2>
+      <p class="chips" id="gene-chips" hidden></p>
+      <p class="graph-say">Read from the top: the plan, the criteria that copy it, their tests and replay, and the code that is proved.</p>
     </div>
-    <div class="figs" id="lrn-figs"></div>
-    <div id="lrn-scroll">
-      <h3>Do old problems keep coming back?</h3>
-      <p class="keys"><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-before" width="14" height="14" rx="2"/></svg>came back, with no fix in place for it yet</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-gate" width="14" height="14" rx="2"/><rect class="l-gateh" width="14" height="14" rx="2"/></svg>came back although a fix was in place, and a gate caught it before the close</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect class="l-past" width="14" height="14" rx="2"/><rect class="l-pasth" width="14" height="14" rx="2"/></svg>came back although a fix was in place, and got past the gates before the close: red and hatched</span><span><svg width="12" height="18" viewBox="0 0 12 18" aria-hidden="true"><path class="l-fixline" d="M6 7V18"/><path class="l-fixcap" d="M6 0 10 4 6 8 2 4Z"/></svg>a fix counts from this Day</span></p>
-      <div class="scroll"><svg class="fig" id="lrn-epi" viewBox="0 0 960 330" role="group"></svg></div>
-      <h3>Did each fix work?</h3>
-      <p class="keys"><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="l-dot-before" cx="7" cy="7" r="6"/></svg>times a Day before the fix</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-held" r="6.5"/><path class="l-on" d="M-3.2 .2-.9 2.6 3.4-2.4"/></svg>after it: gone</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-back" r="6.5"/><path class="l-on" d="M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6"/></svg>after it: not reduced</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-less" r="6.5"/><path class="l-on" d="M0-3.2V3.2M-2.8 .6 0 3.4 2.8 .6"/></svg>after it: at most half as often</span><span><svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true"><circle class="l-dot-early" r="6.5"/></svg>too early to say: fewer than 5 Days since</span></p>
-      <div class="scroll"><svg class="fig" id="lrn-dmb" viewBox="0 0 1100 100" role="group"></svg></div>
+    <svg class="gene-defs" width="0" height="0" aria-hidden="true"><defs>
+      <pattern id="gene-pat-rule" width="4" height="4" patternUnits="userSpaceOnUse"><rect class="pr-bg" width="4" height="4"/><path class="pr-l" d="M0 1H4"/></pattern>
+      <pattern id="gene-pat-over" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="po-bg" width="5" height="5"/><rect class="po-l" width="2.5" height="5"/></pattern>
+      <pattern id="gene-pat-norun" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="pn-bg" width="3" height="3"/><rect class="pn-l" width="1.4" height="3"/></pattern>
+      <linearGradient id="gene-half" x1="0" x2="1" y1="0" y2="0"><stop class="gh-a" offset="50%"/><stop class="gh-b" offset="50%"/></linearGradient>
+    </defs></svg>
+    <div class="reach">
+      <p class="of">Of the <b><span id="gene-total"></span> commitments</b> in <code>plan.md</code>:</p>
+      <div class="figs" id="gene-figs"></div>
     </div>
-    <p class="hint">Point at a bar for the Day's repeats, at a dashed line for the fixes that count from it, and at a row for its fix. With the keyboard, Tab moves from mark to mark. A Day's button above dims every other Day.</p>
-    <details class="exact"><summary>How to read it</summary>
-      <p class="read">Read it as immunity: a fix is the memory of a problem met once, and a problem that comes back although its fix was in place is an escape. A repeat is a defect whose line in a Day's Notes says <code>same-as:</code> an earlier one. The links are followed both ways, so every defect linked to another is one problem. A fix is a pull request that <code>specs/fixes.json</code> names, with the defects it was meant to stop.</p>
-      <p class="read">A fix counts from the first Day whose spec merged after the fix did. In the first picture its line stands at that Day. A repeat on that Day or later of a problem the fix names is amber and hatched when a gate caught it before the close, and red and hatched when it got past the gates before the close (noticed in the work, or found at the close or later). In the second picture the times a Day before the fix (from the Day the problem was first recorded) are set beside the times a Day after it, and a verdict comes only after 5 Days: gone, reduced (at most half as often) or not reduced.</p>
-      <p class="stamp" id="lrn-stamp"></p>
-    </details>
-    <details class="exact"><summary>What the pictures show, and where the model bends</summary>
-      <div class="cols">
-        <div><h3>What the pictures show</h3><ul class="finds" id="lrn-finds"></ul></div>
-        <div><h3>Where the model bends</h3><ul class="plain" id="lrn-bends"></ul></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>The plan</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>Criteria, as written</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>Replacement</span><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>Criteria in force</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>Tests and replay</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>The code</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="stale" width="10" height="10" rx="2"/></svg>Off the plan</span></p>
+    <div class="scroll" id="gene-plot"></div>
+    <div class="readout" id="gene-read" aria-live="polite"></div>
+    <details class="under" id="gene-under"><summary><b>Under the picture</b><span class="under-n" id="gene-under-n"></span></summary>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+      <div>
+        <p class="graph-say">Read it from the top, the way a cell reads a gene. The plan is the gene. Each criterion copies a line of it, as a transcript does. Replacing a criterion is splicing: what the new one no longer quotes drops out. The code is the protein, and a break on purpose is the proof that it works. Between the two is translation: under each commitment still named, one cell per criterion in force, coloured by what its test and the replay say.</p>
+        <dl class="lg">
+          <dt>The plan <small>the gene</small></dt>
+          <dd><span><svg width="46" height="12" viewBox="0 0 46 12" aria-hidden="true"><rect class="gs1" width="10" height="12"/><rect class="gs2" x="12" width="10" height="12"/><rect class="gs3" x="24" width="10" height="12"/><rect class="gs4" x="36" width="10" height="12"/></svg>one band per commitment: the darker, the more criteria name it</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="cap-bg" stroke="var(--s2)" stroke-width=".8" x=".5" y=".5" width="9" height="11"/></svg>the tube: background only, no promise</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="cap-bg" width="10" height="12"/><line class="secdiv" x1="5" x2="5" y1="0" y2="12"/></svg>a thin line: a new section of <code>plan.md</code></span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="rule" x=".5" y=".5" width="9" height="11"/></svg>regulatory: a rule for people, never built into code</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="notdue" x=".5" y=".5" width="9" height="11"/></svg>switched off: a gene that turns on at a later Day</span><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect class="overdue" width="10" height="12"/></svg>should be covered by now, and is not</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri changed" d="M4.5 7.5 l4 -6.5 h-8 z"/></svg>the plan later rewrote it</span><span><svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true"><path class="tri reworded" d="M4.5 7 l3.4 -5.5 h-6.8 z"/></svg>reworded only</span></dd>
+          <dt>Criteria, as written <small>the first transcript</small></dt>
+          <dd><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd new" width="12" height="5" rx="2"/></svg>one quote of the commitment, in a criterion for new work</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd hold" width="12" height="5" rx="2"/></svg>in a safety check</span><span><svg width="12" height="5" viewBox="0 0 12 5" aria-hidden="true"><rect class="rd replaced" x=".5" y=".5" width="11" height="4" rx="2"/></svg>in a criterion that a later one replaced</span></dd>
+          <dt>Replacement <small>splicing</small></dt>
+          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="ex pre" x=".5" y=".5" width="9" height="9" rx="2"/></svg>named at least once</span><span><svg width="24" height="16" viewBox="0 0 24 16" aria-hidden="true"><path class="arc" d="M1 13 Q12 -8 23 13"/><rect class="ex skip" x="8" y="7" width="8" height="8" rx="2"/></svg>named only by replaced criteria: it drops out</span><span><svg width="22" height="10" viewBox="0 0 22 10" aria-hidden="true"><path class="strand" d="M0 5H22"/></svg>bare strand: never named</span></dd>
+          <dt>Criteria in force <small>the mature transcript</small></dt>
+          <dd><span><svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true"><rect class="ex mat" width="10" height="10" rx="2"/><rect class="ex mat" x="12" width="10" height="10" rx="2"/><rect class="ex mat" x="24" width="10" height="10" rx="2"/></svg>what is still named, closed up, so this strand is shorter than the plan</span></dd>
+          <dt>Tests and replay <small>translation</small></dt>
+          <dd><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>one criterion in force that names the commitment: it holds, and a break on purpose proved its test</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unproved" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>holds, never seen to fail</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc norun" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>the replay cannot run its check</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc stale" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>its test needs repair, or it is broken</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc unbuilt" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>written, not built yet</span><span><svg width="12" height="6" viewBox="0 0 12 6" aria-hidden="true"><rect class="tc proved scar" x=".6" y=".6" width="10.8" height="4.8" rx="2"/></svg>edged: the replay once saw it stop, and it came back (on the ring too)</span></dd>
+          <dt>The code <small>the protein</small></dt>
+          <dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="proved" cx="5" cy="5" r="4.5"/></svg>every criterion that names it holds and was proved by a break on purpose</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="part" cx="5" cy="5" r="3.9"/></svg>proved for some of those criteria, not all</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="unproved" cx="5" cy="5" r="3.8"/></svg>holds, never seen to fail</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="norun" cx="5" cy="5" r="4.2"/></svg>the replay cannot run its check</span></dd>
+          <dt>Off the plan <small>a plasmid</small></dt>
+          <dd><span>outer ring: a criterion that names no commitment, by Day</span><span>inner ring: its code, for each one in force</span></dd>
+        </dl>
+        <p class="hint">Point at a band to follow one commitment down to its code. Point at a quote to light up the other quotes of the same criterion. Point at a cell under Criteria in force for its tests, its merges and what the replay saw. Sections are in the plan's order, as on graph 12. The Day buttons at the top of the page fade every quote and cell that is not that Day's.</p>
       </div>
     </details>
-    <details class="exact"><summary>Exact numbers</summary>
-      <div class="scroll-x"><table id="lrn-days"></table></div>
-      <div class="scroll-x"><table id="lrn-fixes"></table></div>
+    <details class="exact mock-key"><summary>Where the plan does not reach proved code · Gaps that are expected · Where the model bends</summary>
+      <div><div class="cols">
+        <div>
+          <h3>Where the plan does not reach proved code</h3>
+          <ul class="finds" id="gene-finds"></ul>
+          <p class="hint">Point at a line to light up its commitments above.</p>
+        </div>
+        <div>
+          <h3>Gaps that are expected</h3>
+          <ul class="plain" id="gene-expected"></ul>
+          <h3>Where the model bends</h3>
+          <ul class="plain" id="gene-bends"></ul>
+        </div>
+      </div></div>
     </details>
-    <div id="lrn-tip" hidden></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="gene-table"></table></div></details>
+    </details>
+    <div id="gene-tip" hidden></div>
   </section>
 
-  <h2 class="chapter">What does it take?<small>money, lines and hours</small></h2>
+  <section class="graph" id="mrg">
+    <div class="graph-head">
+      <p class="graph-n">Graph 6 · the merges against the spec; the old graph 6 is folded below</p>
+      <h2>Does the code still pass the spec?</h2>
+      <p class="chips" id="mrg-chips" hidden></p>
+      <p class="graph-say" id="mrg-say">The long bar is the spec, one stripe per criterion; each row above it is a Day's merges and what they did to it.</p>
+    </div>
+    <div class="bar-top">
+      <h3 class="frame-h" id="mrg-frame-h">Merges against criteria</h3>
+      <h3 class="frame-h" id="rew-frame-h" hidden>Promises rewritten, each joined to what replaced it</h3>
+      <div class="ctl">
+        <span id="mrg-zoom-wrap"><label for="mrg-zoom">Show</label>
+        <select id="mrg-zoom"></select></span>
+        <div class="mseg" role="group" aria-label="What the graph draws">
+          <button type="button" id="mrg-v-day" aria-pressed="true">One row per Day</button>
+          <button type="button" id="mrg-v-merge" aria-pressed="false">One row per merge</button>
+          <button type="button" id="mrg-v-rew" aria-pressed="false">Promises rewritten</button>
+        </div>
+      </div>
+    </div>
+    <div id="mrg-all">
+    <p class="stamp" id="mrg-stamp"></p>
+    <dl class="verdict" id="mrg-verdict"></dl>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><i class="msw grad"></i>The long bar</span><span><i class="msw new"></i>Marks in a row</span><span><i class="ln"></i>Red line</span><span><i class="msw win"></i>Red band</span><span><i class="bd fix">n</i>Numbers</span><span><i class="msw own"></i>Rows</span><span><i class="msw nocite"></i>Row drawn for a stop</span></p>
+
+    <div class="scroll" id="mrg-scroll"><svg class="g" id="mrg-g" role="img"></svg></div>
+    <p class="narrow" id="mrg-narrow" hidden>The graph is wider than this window, so a screenshot will cut it off. Widen the window or zoom the browser out until this note goes away.</p>
+    <details class="under" id="mrg-all-under"><summary><b>Under the picture</b><span class="under-n" id="mrg-all-under-n"></span></summary>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+  <div><p class="graph-say">The long bar is the spec, one stripe per criterion. Each row above it is a Day's merges. A mark says what a merge did to the criterion straight below it: gave it its evidence, or stopped it holding. Everything a reader needs is printed inside the card, so a screenshot of it can be read without the hover.</p>
+  <dl class="mlegend">
+        <dt>The long bar</dt>
+        <dd><span><i class="msw grad"></i>one stripe per criterion: the darker, the more tests it names</span><span><i class="msw empty"></i>names no test</span></dd>
+        <dt>Marks in a row</dt>
+        <dd><span><i class="msw new"></i>the merge is evidence a new criterion cites</span><span><i class="msw hold"></i>evidence a hold criterion cites</span><span><i class="msw bad"></i>the replay first reports "code broken" or "test weakened" here</span><span><i class="msw stale"></i>first reports "break no longer applies" here</span><span><i class="msw loose"></i>changed product code, and no criterion cites it</span></dd>
+        <dt>Red line</dt>
+        <dd><span><i class="ln"></i>broken from the mark until the line ends</span><span><i class="ln mdash"></i>the break no longer applies until the line ends</span><span>a line that reaches the bar has not come back</span></dd>
+        <dt>Red band</dt>
+        <dd><span><i class="msw win"></i>the suspect window: every row after the last replay where the criterion held, up to the mark</span><span><i class="msw win hot"></i>darker where a merge in the window changed product code</span><span>the cause is somewhere in the band</span></dd>
+        <dt>Numbers</dt>
+        <dd><span><i class="bd fix">n</i>not holding, still in force</span><span><i class="bd retired">n</i>not holding when last run, since replaced by one not shown to hold</span><span><i class="bd replaced">n</i>not holding when last run, since replaced by one that holds</span><span><i class="bd">n</i>stopped holding and came back</span><span><i class="bd loose">n</i>a merge no criterion cites</span><span><i class="tri"></i>a later criterion replaced this one</span></dd>
+        <dt>Rows</dt>
+        <dd><span><i class="msw own"></i>a Day's own merges over its own criteria</span><span><i class="msw dead"></i>the replay never ran at this merge, so no red can show here</span><span><i class="msw new" style="opacity:.38"></i>faint: a later criterion names an earlier merge</span><span><i class="msw prod"></i>product lines</span><span><i class="msw test"></i>test lines</span><span><b class="stopk">3</b>Stopped: criteria the replay first saw not holding in this row</span><span><i class="msw due"></i>not due: plan.md lists the Day, no spec yet</span><span><i class="msw nocite"></i>dashed, in italics, or "2 drawn for a stop" beside a Day: no criterion cites the merge; it is drawn because the replay first noticed a stop, or saw one hold again, there, at a sampled merge</span></dd>
+      </dl>
+  <p class="vcap">These counts are each criterion's state the last time the replay ran it. The strip under the long bar draws the same state, one cell per criterion.</p></div>
+  </details>
+    <div class="find" id="mrg-find"></div>
+    <div class="notes" id="mrg-notes"></div>
+    <details class="exact"><summary id="mrg-ev-h">Where a criterion stopped holding</summary>
+      <div class="tablewrap"><table>
+        <thead><tr><th>No.</th><th>Criterion</th><th>What it promises</th><th>Last held at</th><th>First seen at</th><th>In the window between</th><th>The replay reported</th><th>Held again at</th></tr></thead>
+        <tbody id="mrg-ev"></tbody>
+      </table></div>
+    </details>
+    <details class="exact"><summary>What this graph cannot show</summary>
+      <ul class="cannot" id="mrg-cannot"></ul>
+    </details>
+  <div class="mock-fold" id="g6-fold">
+    <details class="exact"><summary>Graph 6 as it was, folded: the angle between the specs' names and the code</summary>
+    <div id="g6">
+    <div class="graph-head">
+      <p class="graph-n">Graph 6</p>
+      <h2>Do the spec and the code still agree?</h2>
+      <p class="graph-say" id="g6-say">One column per merge, oldest on the left. The dot is the angle between the specs and the code over the names the specs use, in degrees: lower means closer. The bar under it is how long the pull request stayed open.</p>
+    </div>
+    <div class="legend" id="g6-key"></div>
+    <div class="scroll-x" id="g6-plot"></div>
+    <p class="limit">The angle matches names, not meaning: a spec can name a thing the code has and still describe it wrongly. <a href="#cannot-see">What these figures cannot see</a> lists the rest.</p>
+    <div class="readout" id="g6-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g6-table"></table></div></details>
+  </div>
+    </details>
+  </div>
+    </details>
+    </div>
+    <div id="rew" hidden>
+      <p class="graph-say">Each replaced promise is joined to the promise that replaced it. Every Day that holds a wording is an arc of the ring, as long as the wordings it holds, read clockwise from the top. A mark is one wording, and a line runs from a wording to the one that replaced it. The most rewritten promise is drawn dark.</p>
+      <div class="figs" id="rew-figs"></div>
+      <div class="duo" id="rew-ring">
+        <div class="scroll" id="rew-scroll"><svg class="rfig" id="rew-rfig" role="group" aria-label="Replaced promises as lines across a ring of Days"></svg></div>
+        <div class="side">
+          <div class="readout tall" id="rew-out" aria-live="polite"></div>
+          <p class="note" id="rew-note"></p>
+        </div>
+      </div>
+      <details class="under" id="rew-under"><summary><b>Under the rewrites</b><span class="under-n" id="rew-under-n"></span></summary>
+      <details class="exact mock-key"><summary>Key, and how to read it</summary>
+      <div><dl class="lg">
+        <dt>A wording</dt>
+        <dd><span><svg width="12" height="12" aria-hidden="true"><circle class="nd old" cx="6" cy="6" r="4"/></svg>a wording replaced</span>
+          <span><svg width="12" height="12" aria-hidden="true"><rect class="nd old" x="2" y="2" width="8" height="8" rx="1.5"/></svg>replaced, from a short spec</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd proven" cx="7" cy="7" r="5.5"/></svg>in force, and proved by a break on purpose</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd unproven" cx="7" cy="7" r="4.8"/></svg>in force, never seen to fail</span>
+          <span><svg width="14" height="14" aria-hidden="true"><circle class="nd building" cx="7" cy="7" r="4.8"/></svg>in force, not built yet</span></dd>
+        <dt>The line</dt>
+        <dd><span><svg width="26" height="8" aria-hidden="true"><path class="chord" d="M0 4H26"/></svg>replaced by</span>
+          <span><svg width="26" height="8" aria-hidden="true"><g class="lin most"><path class="chord" d="M0 4H26"/></g></svg>the most rewritten promise</span></dd>
+      </dl>
+      <p class="hint">Point at a line for its history, or at a mark for that wording. With the keyboard, Tab moves from line to line and the arrow keys walk a line's marks.</p>
+      <p class="stamp" id="rew-stamp"></p></div>
+      </details>
+      </details>
+    </div>
+    <div id="mrg-tip" hidden></div>
+  </section>
+
+  <h2 class="chapter">Can it be left alone?<small>the steps the driver started, and which of them needed a person</small></h2>
+
+  <section class="graph" id="rfx">
+  <div class="graph-head">
+    <p class="graph-n">Graph 11 · drawn as reflex arcs</p>
+    <h2>Can it run without a person?</h2>
+    <p class="graph-say">Each row is one step the driver started, read left to right; a row that climbs to the band at the top needed a person.</p>
+  </div>
+  <div class="figs" id="rfx-figs"></div>
+  <p class="keys"><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>step started</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>a session</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>its fix rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>crashed</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for the maintainer</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked by a fault</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>pull request merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge: the plan requires it every time, so it is not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>awaited</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>ended with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></p>
+  <div class="scroll" id="rfx-scroll"><svg class="fig" id="rfx-fig" viewBox="0 0 1198 211" role="group"></svg></div>
+  <details class="under" id="rfx-under"><summary><b>Under the picture</b><span class="under-n" id="rfx-under-n"></span></summary>
+  <p class="hint" id="rfx-hint"></p>
+  <details class="exact"><summary>How to read it</summary>
+    <p class="read">A reflex is what the body does without asking the brain. Here a step the driver finished without a park is a reflex: the signal runs from the step's start, through its sessions, to a pull request, and stays below the band. A step that parked leaves its row at the session where it parked and climbs to the band. It comes back down where the step took up again; if it never comes back, the step ended with the person.</p>
+    <p class="read">The diamond near the end of a row is the maintainer's go-ahead to merge. The plan requires it at every pull request, so it is drawn the same on every row and is not a park: "without a person" here means without a park, no more. Rows run top to bottom in the order the driver started them, and the distance along a row is order, not time. The Days and the pull request numbers are those of the project the driver ran on, not this repository's.</p>
+    <p class="read">Why a reflex: it answers the graph's own question, which steps needed the brain.</p>
+    <dl class="lg"><dt>The step started <small>the stimulus</small></dt><dd><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>one row for each step the driver started, with its Day in the project it ran on</span></dd><dt>A session <small>a signal along the nerve</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>one session the driver ran for the step</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>a session that fixed its own pull request, in that many rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>a session that crashed: the run log has no end for it</span></dd><dt>A park <small>the signal goes up to the brain</small></dt><dd><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for a decision that is the maintainer's</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked because the driver or the kit was at fault</span><span>The branch leaves the row at the session where the step parked and comes back where it took up again. The dotted stretch under it is the way it did not go.</span></dd><dt>The pull request <small>the response</small></dt><dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>the pull request the step opened, merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge, which the plan requires at every pull request: not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>go-ahead awaited</span></dd><dt>How the step ended <small>the mark at the end of its row</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>merged with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin fixed" cx="5" cy="5" r="5"/></svg>merged after fixing itself</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin maint" cx="5" cy="5" r="5"/></svg>parked for the maintainer</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="x-fin fault" x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>parked by a fault</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></dd><dt>The trial for level 2 <small>no biology here</small></dt><dd><span><svg width="34" height="8" viewBox="0 0 34 8" aria-hidden="true"><rect class="x-l2 run" x="0" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="12" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="24" y=".5" width="9" height="7" rx="1.5"/></svg>one box for each pull request in a row with no change asked; 15 before the driver merges</span></dd></dl>
+    <p class="stamp" id="rfx-stamp"></p>
+  </details>
+  <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+    <div class="cols">
+      <div>
+        <h3>What the picture shows</h3>
+        <ul class="finds" id="rfx-finds"></ul>
+      </div>
+      <div>
+        <h3>Where the model bends</h3>
+        <ul class="plain" id="rfx-bends"></ul>
+      </div>
+    </div>
+  </details>
+  </details>
+  <div id="rfx-tip" hidden></div>
+</section>
+
+  <h2 class="chapter">What does it take?<small>dollars, by Day</small></h2>
 
   <section class="graph" id="atp" data-grp="day">
     <span class="anchor" id="g8"></span>
@@ -721,6 +719,7 @@
     </div>
     <p class="key" id="atp-key"></p>
     <div class="scroll" id="atp-scroll"><svg class="fig" id="atp-fig" viewBox="0 0 1198 266" role="group"></svg></div>
+    <details class="under" id="atp-under"><summary><b>Under the picture</b><span class="under-n" id="atp-under-n"></span></summary>
     <p class="hint">Point at a column or a block, or Tab to one and use the arrow keys, for its dollars, what they bought and who spent them. The figure over a column is its exact dollars. A Day's button above dims every column not on that Day.</p>
     <details class="exact"><summary>How to read it</summary>
       <p>One bead is $2 of tokens at list prices. By Day, each column is a Day and a taller column is a dearer Day; the dashed line is the average closed Day. The blocks beside the Days are the work between them, made of the same beads and as tall as the tallest Day, so a block twice as wide cost twice as much. By date, each column is a date with a session, its beads coloured from the bottom up by where the dollars went; the pills under the dates are the Days worked on each date.</p>
@@ -747,8 +746,125 @@
         <div><h3>Where the model bends</h3><ul class="plain" id="atp-bends"></ul></div>
       </div>
     </details>
+    </details>
     <div id="atp-tip" hidden></div>
   </section>
+
+  <div class="to-back">
+    <p>Four more graphs are on the back page, as they were: the plan's yardsticks, the specs against the plan, where the work went, and where a date's time goes.</p>
+    <button type="button" data-view="back">Open the back page</button>
+  </div>
+
+  <section class="graph foot" id="cannot-see">
+    <h2>What these figures cannot see</h2>
+    <ul id="caveats"></ul>
+    <h2>Not measured yet</h2>
+    <ul id="not-measured"></ul>
+  </section>
+
+  </div>
+
+  <div class="view" id="v-back" hidden>
+
+  <p class="back-note">The back page: four graphs moved here from the front, as they were.</p>
+
+  <h2 class="chapter">Is it on the plan's yardsticks?<small>the figures the plan judges the work on</small></h2>
+
+  <section class="graph" id="gel">
+    <div class="graph-head">
+      <p class="graph-n">Graph 2 · drawn as a gel; the old graph 2 is folded below</p>
+      <h2>Is it meeting what the plan judges it on?</h2>
+      <p class="chips" id="gel-chips" hidden></p>
+      <p class="graph-say">One small gel per yardstick: each Day runs in its own lane, and the first lane holds the kit's figure and the average.</p>
+    </div>
+    <div class="figs" id="gel-figs"></div>
+    <p class="mk-line" aria-label="Key; the full key is in the fold below"><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>A Day's figure</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>What to read it against</span><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>Which way is good</span></p>
+    <div class="scroll" id="gel-scroll"><svg class="fig" id="gel-fig" viewBox="0 0 1198 307" role="group"></svg></div>
+    <details class="under" id="gel-under"><summary><b>Under the picture</b><span class="under-n" id="gel-under-n"></span></summary>
+    <details class="exact mock-key"><summary>Key, and how to read it</summary>
+<div><p class="graph-say">One small gel for each yardstick the plan names, each on its own scale. Inside a gel every Day has a lane, and the Day's figure is one band: the lower the band, the lower the figure, and lower is better. Read a band against the first lane, the ladder, which holds the average so far and, where the kit recorded one, the figure reached with a person driving every step.</p>
+<dl class="lg">
+    <dt>A Day's figure <small>a band in its lane</small></dt>
+    <dd><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band last" y="1.5" width="16" height="5" rx="2.5"/></svg>the last Day counted; its number is bold</span><span><svg width="16" height="8" viewBox="0 0 16 8" aria-hidden="true"><rect class="band earlier" y="1.5" width="16" height="5" rx="2.5"/></svg>an earlier Day</span><span><svg width="16" height="18" viewBox="0 0 16 18" aria-hidden="true"><rect class="box" x=".5" y=".5" width="15" height="17" rx="3"/><rect class="well" x="4" y="3" width="8" height="2.5" rx="1"/></svg>an empty lane, its number faded: no figure that Day. A band on the floor is a zero</span></dd>
+    <dt>What to read it against <small>the ladder, lane "ref"</small></dt>
+    <dd><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band kit" y="1.5" width="12" height="5" rx="2.5"/><path class="across kit" d="M15 4H38"/></svg>the kit's figure: what the kit reached with a person driving every step (<span id="gel-k-kit"></span>)</span><span><svg width="38" height="8" viewBox="0 0 38 8" aria-hidden="true"><rect class="band avg" x=".6" y="1.5" width="11" height="5" rx="2.5"/><path class="across avg" d="M15 4H38"/></svg>the average so far</span></dd>
+    <dt>Which way is good <small>the direction of the run</small></dt>
+    <dd><span><svg width="10" height="20" viewBox="0 0 10 20" aria-hidden="true"><path d="M5 1V15" fill="none" stroke="var(--ink-2)" stroke-width="1.4"/><path d="M1 12.5l4 6 4-6z" fill="var(--ink-2)"/></svg>lower on the gel is a lower figure, and lower is better</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri better" d="M.5 .5h9l-4.5 7z"/></svg>green: the last figure is below its average</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri worse" d="M.5 7.5h9l-4.5-7z"/></svg>amber: above it</span><span><svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true"><path class="tri flat" d="M.5 7.5h9l-4.5-7z"/></svg>grey: no direction is better (refused calls)</span></dd>
+  </dl>
+<p class="hint">Point at a lane, or reach it with the Tab key, for the Day, its figure and what was recorded for it. The scale's top and bottom are printed at the left of each gel. A panel compares with itself only: the same height in two panels is two different figures.</p>
+<p class="stamp" id="gel-stamp"></p></div>
+    </details>
+    <details class="exact mock-key"><summary>What the picture shows · Where the model bends</summary>
+      <div><div class="cols">
+        <div><h3>What the picture shows</h3><ul class="finds" id="gel-finds"></ul><p class="hint" id="gel-drift"></p></div>
+        <div><h3>Where the model bends</h3><ul class="plain" id="gel-bends"></ul></div>
+      </div></div>
+    </details>
+  <div class="mock-fold" id="g2-fold">
+    <details class="exact"><summary>Graph 2 as it was, folded: one row per yardstick</summary>
+    <div id="g2">
+    <div class="graph-head">
+      <p class="graph-n">Graph 2</p>
+      <h2>Is it meeting what the plan judges it on?</h2>
+      <p class="graph-say">One row per yardstick the plan names, counted at each Day's close. Up to Day 6 a Day's figure covers everything merged since the close before it, whichever Day the work belonged to; from Day 7 on, only the Day's own pull requests, by branch. Dollars are API list prices, as in graph 8, and not what was paid. Each row has its own scale: the dark bar is the last Day counted, the grey band every Day's range, the hollow diamond the average so far, and the tall black tick the figure the kit reached with a person driving every step. The trend on the right is Day by Day. Green or amber on the number says whether the last Day beat the average, where lower is better.</p>
+    </div>
+    <div class="legend" id="g2-key"></div>
+    <div class="scroll-x" id="g2-plot"></div>
+    <div class="readout" id="g2-read" aria-live="polite"></div>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g2-table"></table></div></details>
+  </div>
+    </details>
+  </div>
+    </details>
+    <div id="gel-tip" hidden></div>
+  </section>
+
+  <h2 class="chapter">Do the specs follow the plan?<small>commitment by commitment</small></h2>
+
+  <section class="graph" id="g12">
+    <div class="graph-head">
+      <p class="graph-n">Graph 12 · placed before graph 6: plan against spec, as 6 is spec against code</p>
+      <h2>Do the specs follow the plan?</h2>
+      <p class="chips" id="g12-chips" hidden></p>
+      <p class="graph-say" id="g12-say">One stripe per commitment of the plan, and one row per Day.</p>
+    </div>
+    <div class="pc-fig">
+      <div id="g12-plot"></div>
+      <div id="g12-tip" class="pc-tip" hidden></div>
+      <div id="g12-panel" class="pc-panel" aria-live="polite"></div>
+    </div>
+    <div class="readout" id="g12-read" hidden></div>
+    <details class="under" id="g12-under"><summary><b>Under the picture</b><span class="under-n" id="g12-under-n"></span></summary>
+    <details class="exact"><summary>How to read it</summary>
+      <ul class="pg-how">
+        <li><b>Commitment:</b> one thing <code>plan.md</code> says the driver will do or the people will keep, listed with a number in <code>specs/plan/promises.json</code>. P01 to P69 come from the plan as approved on 6 Nov; N01 onwards were added by later plan changes. (The page says "promise" for a spec's criterion, so the plan's are called commitments here.)</li>
+        <li><b>The long bar</b> at the bottom is the plan, one stripe per commitment in the plan's own order, with its chapter headings under it. Those added later stand in their own block, chapter by chapter: the chapters in the order each first gained one, and inside a chapter in the order added. The darker a stripe, the more criteria name it; a white one is named by none; a hatched one is regulatory, a rule about people, which no test can check; an amber-striped one was due by a Day that has closed and no criterion names it.</li>
+        <li><b>The rows</b> above the bar are the Days. A mark in a row means a criterion of that Day names the commitment straight below it. Blue is a commitment of the approved plan, red-orange one added later. The third block holds the criteria that name none: amber for new work the plan does not ask for, grey for safety checks that only confirm earlier work still holds. The short bars at the right count each Day's criteria by those four kinds.</li>
+        <li><b>A dashed line</b> between two Days: <code>plan.md</code> was rewritten there, so the Days below wrote against the new plan. A ▲ under a stripe: the plan later changed that commitment; △: reworded, same meaning.</li>
+        <li><b>Where the marks come from:</b> from Day 11 each criterion carries a <code>Plan:</code> line naming the commitments it serves and quoting their words; Days 1 to 10 are backfilled in <code>specs/plan/links-days-01-10.json</code>. <code>scripts/plan-links.py</code> checks every quote on every pull request. The link is the spec author's own claim: the check proves the words exist, not that the criterion really tests them.</li>
+        <li>Point at a stripe for its commitment; click it to read the commitment and every criterion that names it, with its quote, in the box under the graph. Click a Day's name to see that Day alone, and a "Show only" button to keep the stripes of one kind.</li>
+      </ul>
+    </details>
+    <details class="exact"><summary>The ladder: where on the plan each Day lands</summary>
+      <div class="pc-fig">
+        <p class="pc-howto">The left lane is the ladder: the original plan's commitments, in the plan's order. "Today" is the plan as it stands now. Each numbered lane is a Day. A band level with a commitment means a criterion of that Day names it. Point at a row for the full commitment and its criteria.</p>
+        <div class="pc-legend">
+          <span><i class="pc-sw" style="background:var(--ink-2)"></i>Commitment, same as the original</span>
+          <span><i class="pc-sw" style="background:var(--ink-2);opacity:.45"></i>"Today" lane, faded: reworded, same commitment</span>
+          <span><i class="pc-sw" style="background:var(--c-grid);opacity:.45"></i>"Today" lane, empty: the plan dropped it</span>
+          <span><i class="pc-sw" style="background:var(--c-out)"></i>Commitment the plan changed or added later</span>
+          <span><i class="pc-sw" style="background:var(--c-in)"></i>A Day's criteria (darker: more of them)</span>
+          <span><i class="pc-dot"></i>No criterion names it</span>
+        </div>
+        <div id="g12-ladder"></div>
+        <div id="g12-ltip" class="pc-tip" hidden></div>
+      </div>
+    </details>
+    <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g12-table"></table></div></details>
+    </details>
+  </section>
+
+  <h2 class="chapter">Where did the work and the time go?<small>lines by Day, hours by date</small></h2>
 
 <section class="graph" id="rng">
     <span class="anchor" id="g9"></span>
@@ -772,6 +888,7 @@
       <span><svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true"><path class="rule" d="M2 1H10M2 15H10M6 1V15"/></svg>height: share of the ring</span>
     </div>
     <div class="rng-scroll" id="rng-scroll"><svg class="rng-fig" id="rng-fig" viewBox="0 0 1198 379" role="group"></svg></div>
+    <details class="under" id="rng-under"><summary><b>Under the picture</b><span class="under-n" id="rng-under-n"></span></summary>
     <p class="rng-hint">Point at a ring, or reach it with the Tab key, for the Day, its pull requests and its lines by kind. Both strips share one scale: a ring 1 px wide is about <span id="rng-scale"></span> lines. A Day's button above dims every ring not of that Day.</p>
     <details class="exact"><summary>How to read it</summary>
       <p class="rng-read">Read each strip from the left, the first Day, to the right, today. A wide ring is a heavy Day: its width is the lines added plus the lines deleted in the Day's own merged pull requests. Inside a ring the bands are stacked in one fixed order, and a band's height is that kind's share of the ring, so a band's area is its lines. The lower strip is the work that belongs to no Day, mostly the dashboard and the tooling. It is placed at the Day that was open, or had last closed, when it merged, and it counts in no Day's size. The two columns at the top right add each strip up. Why rings: a ring records how much a tree grew in one season and cannot be changed afterwards, as a merged Day cannot.</p>
@@ -796,6 +913,7 @@
       </div>
     </details>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="rng-table"></table></div></details>
+    </details>
     <div id="rng-tip" hidden></div>
   </section>
 
@@ -824,6 +942,7 @@
       <span><svg width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><rect class="act-unc" x="3" y="1" width="19" height="10"/><path class="act-cnt" d="M3 0V12"/></svg>sessions not counted yet</span>
     </div>
     <div class="act-scroll" id="act-scroll"><svg class="act-fig" id="act-fig" viewBox="0 0 1232 400" role="group"></svg></div>
+    <details class="under" id="act-under"><summary><b>Under the picture</b><span class="under-n" id="act-under-n"></span></summary>
     <p class="act-hint">Point at a row, or reach it with the Tab key, for that date's figures; point at a pull request, a check or a merge for its own. Click a row, or press Enter, to open graph 10 below at that date. A Day's button above dims every date that is not of that Day.</p>
     <details class="exact"><summary>How to read it</summary>
       <p class="act-read">Read down for the rhythm and across for one date. Each row is a date from 05:00 to 05:00 on the clock of the machine that recorded the sessions, oldest on top, so one hour is one column and work after midnight stays on the evening it belongs to. A row has five lanes. The top lane is the main session: a dark bar while it was busy, a fainter stretch inside it for a wait of a minute or longer on a command the session ran, and a thin strip over it while two main sessions were busy at once. The second lane is the sub-agents, drawn the same way. Under the sessions, each pull request runs from opened to merged, coloured by what it is, and a second pull request open at the same time is a half-height bar. Under it are its checks while they ran, red and deeper when a run failed, and in the last lane a tick at the merge, so a long coloured bar is a pull request that waited for the maintainer. A pull request opened before the row's 05:00 is cut at the row's start, and the pointer gives its whole wait. At the right of a row are that date's hours with a session busy, the hours of them spent waiting on commands, and the pull requests merged; the small bar under them draws busy and waiting on one scale for every row. Click a row and graph 10 opens below at that date, one lane per actor and every wait by its kind. An actogram is how a biologist draws an animal's activity, a row for each turn of the clock, so the rhythm shows down the page.</p>
@@ -835,10 +954,7 @@
       </div>
     </details>
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="act-table"></table></div></details>
-    <div id="act-tip" hidden></div>
-  </section>
-
-  <section class="graph mock-fold" id="g10-fold">
+  <div class="mock-fold" id="g10-fold">
     <details class="exact"><summary>Graph 10 as it was, folded: one date on the clock, a lane per actor</summary>
     <div id="g10">
     <div class="graph-head">
@@ -853,77 +969,12 @@
     <details class="exact"><summary>Exact numbers</summary><div class="scroll-x"><table id="g10-table"></table></div></details>
     </div>
     </details>
+  </div>
+    </details>
+    <div id="act-tip" hidden></div>
   </section>
 
-  <h2 class="chapter">Can it be left alone?<small>the steps the driver started, and which of them needed a person</small></h2>
-
-  <section class="graph" id="rfx">
-  <div class="graph-head">
-    <p class="graph-n">Graph 11 · drawn as reflex arcs</p>
-    <h2>Can it run without a person?</h2>
-    <p class="graph-say">Each row is one step the driver started, read left to right; a row that climbs to the band at the top needed a person.</p>
   </div>
-  <div class="figs" id="rfx-figs"></div>
-  <p class="keys"><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>step started</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>a session</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>its fix rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>crashed</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for the maintainer</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked by a fault</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>pull request merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge: the plan requires it every time, so it is not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>awaited</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>ended with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></p>
-  <div class="scroll" id="rfx-scroll"><svg class="fig" id="rfx-fig" viewBox="0 0 1198 211" role="group"></svg></div>
-  <p class="hint" id="rfx-hint"></p>
-  <details class="exact"><summary>How to read it</summary>
-    <p class="read">A reflex is what the body does without asking the brain. Here a step the driver finished without a park is a reflex: the signal runs from the step's start, through its sessions, to a pull request, and stays below the band. A step that parked leaves its row at the session where it parked and climbs to the band. It comes back down where the step took up again; if it never comes back, the step ended with the person.</p>
-    <p class="read">The diamond near the end of a row is the maintainer's go-ahead to merge. The plan requires it at every pull request, so it is drawn the same on every row and is not a park: "without a person" here means without a park, no more. Rows run top to bottom in the order the driver started them, and the distance along a row is order, not time. The Days and the pull request numbers are those of the project the driver ran on, not this repository's.</p>
-    <p class="read">Why a reflex: it answers the graph's own question, which steps needed the brain.</p>
-    <dl class="lg"><dt>The step started <small>the stimulus</small></dt><dd><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>one row for each step the driver started, with its Day in the project it ran on</span></dd><dt>A session <small>a signal along the nerve</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>one session the driver ran for the step</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>a session that fixed its own pull request, in that many rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>a session that crashed: the run log has no end for it</span></dd><dt>A park <small>the signal goes up to the brain</small></dt><dd><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for a decision that is the maintainer's</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked because the driver or the kit was at fault</span><span>The branch leaves the row at the session where the step parked and comes back where it took up again. The dotted stretch under it is the way it did not go.</span></dd><dt>The pull request <small>the response</small></dt><dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>the pull request the step opened, merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge, which the plan requires at every pull request: not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>go-ahead awaited</span></dd><dt>How the step ended <small>the mark at the end of its row</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>merged with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin fixed" cx="5" cy="5" r="5"/></svg>merged after fixing itself</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin maint" cx="5" cy="5" r="5"/></svg>parked for the maintainer</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="x-fin fault" x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>parked by a fault</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></dd><dt>The trial for level 2 <small>no biology here</small></dt><dd><span><svg width="34" height="8" viewBox="0 0 34 8" aria-hidden="true"><rect class="x-l2 run" x="0" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="12" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="24" y=".5" width="9" height="7" rx="1.5"/></svg>one box for each pull request in a row with no change asked; 15 before the driver merges</span></dd></dl>
-    <p class="stamp" id="rfx-stamp"></p>
-  </details>
-  <details class="exact"><summary>What the picture shows, and where the model bends</summary>
-    <div class="cols">
-      <div>
-        <h3>What the picture shows</h3>
-        <ul class="finds" id="rfx-finds"></ul>
-      </div>
-      <div>
-        <h3>Where the model bends</h3>
-        <ul class="plain" id="rfx-bends"></ul>
-      </div>
-    </div>
-  </details>
-  <div id="rfx-tip" hidden></div>
-</section>
-
-  <section class="graph foot" id="cannot-see">
-    <h2>What these figures cannot see</h2>
-    <ul id="caveats"></ul>
-    <h2>Not measured yet</h2>
-    <ul id="not-measured"></ul>
-  </section>
-
-  <section class="graph" id="fil">
-  <div class="graph-head">
-    <p class="graph-n">How this works · every file, at the station it serves</p>
-    <h2>Where does each file belong?</h2>
-    <p class="graph-say">The way of working, drawn as a cell: a promise goes from the written goal on the left, through every check, to the re-check on the right. Every file of the repository hangs under the station it serves. One dot is one file, and a bigger dot is a longer file.</p>
-  </div>
-  <div class="figs" id="fil-figs"></div>
-  <div class="key" id="fil-key"></div>
-  <div class="scroll" id="fil-scroll"><svg class="fig" id="fil-fig" viewBox="0 100 1236 489" role="group"></svg></div>
-  <p class="hint" id="fil-hint"></p>
-  <details class="exact"><summary>Every file, by station</summary>
-    <div class="scroll-x"><table id="fil-table"></table></div>
-    <p class="stamp" id="fil-stamp"></p>
-  </details>
-  <details class="exact"><summary>How it is drawn, and where the model bends</summary>
-    <div class="cols">
-      <div>
-        <h3>How it is drawn</h3>
-        <ul class="plain" id="fil-how"></ul>
-      </div>
-      <div>
-        <h3>Where the model bends</h3>
-        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
-      </div>
-    </div>
-  </details>
-  <div id="fil-tip" hidden></div>
-</section>
 
   <footer>
     <p>Built by <code>scripts/spec-drift.py --build</code> from git and GitHub at every merge. The token, refusal, gate and session counts come from <code>scripts/token-usage.py</code>, which the session hooks run on the maintainer's computer when a session starts or ends (<code>scripts/publish-counts.py</code>); they are pushed to the <code>dashboard-data</code> branch, and the page reads them there. The page this one replaced, with its sixty panels, is the tag <a id="old-page"><code>dashboard-v1</code></a>.</p>
