@@ -704,7 +704,15 @@ function model(DATA) {
   function rdgGraph() {
     const R = DATA.reading, L = DATA.look_ahead || {}, C = L.columns || [], last = C[C.length - 1] || {};
     if (!R || !(R.m || []).length) return { empty: (R && R.empty) || "nothing is merged yet, so there is no strand to read." };
-    return Object.assign({}, R, { ledger: { n: (L.hand_offs || []).length, open: last.open || 0, numbered: last.open_numbered || 0 } });
+    // its row of old problems back, from Python's counts (learning): per Day the repeats before any fix, and past a fix
+    // caught at a gate or not; null, and the error if there is one, when nothing is counted
+    const B = DATA.learning, ok = B && !B.error && (B.days || []).length;
+    const back = ok ? B.days.map(d => ({ day: d.day, n: d.n, defects: d.defects || 0, before: (d.before || []).length, gated: (d.gated || []).length,
+      leaked: (d.leaked || []).length, fixes: d.fixes || [] })) : null;
+    const back_total = ok ? { repeats: Array.isArray(B.repeats) ? B.repeats.length : B.repeats || 0, past_fix: B.past_fix || 0, gated: B.past_gated || 0,
+      leaked: B.past_leaked || 0, defects: sum(B.days, d => d.defects || 0) } : null;
+    return Object.assign({}, R, { ledger: { n: (L.hand_offs || []).length, open: last.open || 0, numbered: last.open_numbered || 0 },
+      back, back_total, back_error: B && B.error ? String(B.error) : null });
   }
   /* Graph 2 as a gel, and graphs 3 to 5 as proteins: counted in scripts/pipeline/counts/spec_drift_views.py (gel, protein). */
   function gelGraph() {
@@ -818,11 +826,6 @@ function model(DATA) {
     if (!R) return { empty: "the driver's run log is not counted for this project yet, so no step is drawn." };
     if (R.missing) return { empty: R.missing };
     return (R.rows || []).length ? R : { empty: "the driver has started no step yet, so there is no row to draw." };
-  }
-  // Graph 13, does it learn: counted in Python (learning); with no Day whose spec has merged it draws nothing.
-  function lrnGraph() {
-    const L = DATA.learning;
-    return L && (L.days || []).length ? L : { empty: "no Day's spec has merged yet, so there is no Day to count repeats on." };
   }
   function mrgGraph() {
     const G = DATA.merge_graph;
@@ -1075,7 +1078,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), yardsticks: safe(() => yardsticks(DATA.gel)), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph), cell: safe(cellGraph),
+    attention: attention(), yardsticks: safe(() => yardsticks(DATA.gel)), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), cell: safe(cellGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -1871,6 +1874,12 @@ function rdgTip(R, k, v) {
     return { t: `Phase ${p.phase} · ${p.name}`, l: [ds.length ? `${ds.length === 1 ? `Day ${ds[0]}` : `Days ${ds[0]} to ${ds[ds.length - 1]}`}.` : `From Day ${p.from_day}; none of its Days is numbered yet.`,
       p.stop == null ? "No stop of its own." : p.lifted ? `Its stop, after Day ${p.stop}, was lifted.` : `Its stop, after Day ${p.stop}, is the next one: the maintainer decides there.`] };
   }
+  if (k === "rep") {
+    const x = (R.back || []).find(b => String(b.day) === String(v)); if (!x) return null;
+    return { t: `Day ${x.day} · old problems back: ${x.n} of its ${x.defects} defects`, l: [`${x.before} with no fix yet`,
+      `${x.gated} although a fix was in place, caught at a gate`, `${x.leaked} got past`,
+      x.fixes.length ? `Fixes counted from this Day: ${x.fixes.map(p => "#" + p).join(", ")}` : "", `Click to open Day ${x.day} in the cell.`].filter(Boolean) };
+  }
   if (k === "gap") { const g = R.gap.find(x => x.id === v); return { t: `${v} · written on Day ${g.d}, never built`, q: g.x, l: ["Its Day closed without it, and nothing ahead builds it."] }; }
   if (k === "ahead") {
     const a = R.ahead.find(x => x.day === +v), named = a.w.filter(x => x !== "unnumbered");
@@ -1880,13 +1889,40 @@ function rdgTip(R, k, v) {
   return null;
 }
 
+/* A Day opened in the cell from another graph: its button on the page pressed as a reader would, but only when it is not
+   lit already, since a second press lets the Day go; then the cell brought into view. A Day the buttons lack does nothing.
+   `get` finds an element by its id; `win` answers whether the reader asked for less motion. */
+function dayToCell(day, M, get, win) {
+  const i = M.days.findIndex(d => d.day === day), box = get("days");
+  const b = i >= 0 && box && box.querySelectorAll ? [...box.querySelectorAll("button")][i + 1] : null;
+  if (!b) return false;
+  if (b.getAttribute("aria-pressed") !== "true") b.click();
+  const cell = get("cell");
+  if (cell && typeof cell.scrollIntoView === "function") {
+    const reduced = !!(win && typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    cell.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" });
+  }
+  return true;
+}
+// a mark that opens its Day in the cell, by a click or by Enter or Space; with no `toCell` it stays a plain mark. `tab`
+// "-1" keeps it out of the Tab order where a graph moves between its marks by itself
+function dayLink(e, day, toCell, tab) {
+  if (typeof toCell !== "function") return e;
+  e.setAttribute("tabindex", tab || "0"); e.setAttribute("role", "button"); e.setAttribute("data-day", day);
+  if (!e.getAttribute("aria-label")) e.setAttribute("aria-label", `Open Day ${day} in the cell`);
+  e.addEventListener("click", () => toCell(day));
+  e.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { if (ev.preventDefault) ev.preventDefault(); toCell(day); } });
+  return e;
+}
+
 /* Graph 1 as the plan being read, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
    merges between Days as thin stretches, the promises built under each merge, today as the polymerase, the Days with
    no spec ahead and the stop, and the hand-offs as arcs. Layout only, as the mockup at #228 drew it: every count it
    prints is in DATA.reading, counted by scripts/pipeline/counts/spec_drift_views.py (reading). Every hand-off's arc is drawn, closed or open;
-   pointing at one, or at its merge, lights it and fades the others, and a Day chosen fades those not of it. `get` finds an element by its
-   id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #rdg. */
-function readingDraw(R, get, onDay) {
+   pointing at one, or at its merge, lights it and fades the others, and a Day chosen fades those not of it. Under it, a row of the old
+   problems that came back, Day by Day, from DATA.learning. `get` finds an element by its id; `onDay` is the page's Day buttons;
+   `toCell`, when given, opens a Day in the cell, and a Day's label or bar is then a button for it. Colours are in dashboard.css, under #rdg. */
+function readingDraw(R, get, onDay, toCell) {
   const NS = "http://www.w3.org/2000/svg", $ = id => get("rdg-" + id), fig = $("fig"), tip = $("tip");
   const el = (n, a, txt, parent) => { const e = document.createElementNS(NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
   const h = (tag, cls, txt, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; if (parent) parent.appendChild(e); return e; };
@@ -1910,7 +1946,8 @@ function readingDraw(R, get, onDay) {
   const rank = d => { const i = R.ahead.findIndex(a => a.day === d); return i < 0 ? 1e6 + (d || 0) : i; };
   const opens = R.h.map((x, j) => ({ x, j })).filter(o => o.x.c == null).sort((a, b) => rank(a.x.w) - rank(b.x.w) || b.x.o - a.x.o || a.j - b.j);
   const Y0 = 268, rows = opens.map((o, k) => Y0 + 4.6 * k), lastY = rows.length ? rows[rows.length - 1] : 220;
-  const VH = f(Math.max(lastY + 26.4, 240));
+  // the row of old problems back, under all of it
+  const BY = f(Math.max(lastY + 26.4, 240)) + 8, VH = BY + 34;
   fig.setAttribute("viewBox", `0 0 ${VW} ${VH}`);
   const defs = el("defs", {}), pat = el("pattern", { id: "rdg-hatch", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
   el("rect", { class: "hb", width: 5, height: 5 }, null, pat); el("rect", { class: "hl", width: 1.6, height: 5 }, null, pat);
@@ -1938,13 +1975,15 @@ function readingDraw(R, get, onDay) {
     el("text", { class: "t-ph", x: f(x0 + 6), y: 43 }, full.length * 5.4 < x1 - x0 - 12 ? full : `Phase ${p.phase}`, g);
   });
   // a bracket over each Day's main span, its number and its promises; a small number over a fragment away from it
+  const mids = {};
   R.days.forEach(d => {
     const x0 = CX[d.main[0]], x1 = cellEnd(d.main[1]), mid = (x0 + x1) / 2;
     el("path", { class: "brk", d: `M${f(x0)} 69 V66 H${f(x1)} V69` });
-    el("text", { class: "t-dayn", x: f(mid), y: 62, "text-anchor": "middle" }, x1 - x0 >= 30 ? `Day ${d.day}` : String(d.day));
+    dayLink(el("text", { class: "t-dayn", x: f(mid), y: 62, "text-anchor": "middle" }, x1 - x0 >= 30 ? `Day ${d.day}` : String(d.day)), d.day, toCell);
+    mids[d.day] = mid;
     if (d.total) el("text", { class: `t-bw${d.ticked < d.total ? " short" : ""}`, x: f(mid), y: 153, "text-anchor": "middle" }, `${d.ticked}/${d.total}`);
     d.strays.forEach(([a, b]) => { el("path", { class: "brk", d: `M${f(CX[a])} 69 V66 H${f(cellEnd(b))} V69` });
-      el("text", { class: "t-stray", x: f((CX[a] + cellEnd(b)) / 2), y: 62, "text-anchor": "middle" }, String(d.day)); });
+      dayLink(el("text", { class: "t-stray", x: f((CX[a] + cellEnd(b)) / 2), y: 62, "text-anchor": "middle" }, String(d.day)), d.day, toCell); });
   });
   // the strand: a cell per merge of a Day, a thin stretch for the merges between Days
   el("path", { class: "strand", d: `M${X0} 90 H${f(SE)}` });
@@ -2043,7 +2082,35 @@ function readingDraw(R, get, onDay) {
   Object.keys(waits).forEach(day => { const ys = waits[day];
     el("path", { class: "guide", d: `M${f(boxX[day])} 101 V${f(ys[0] - 3)}` });
     el("text", { class: "t-n", x: f(boxX[day]), y: f(lastY + 16), "text-anchor": "middle" }, `${ys.length} wait`); });
-  fig.setAttribute("aria-label", `Every merge in order, drawn as the plan being read: Days as blocks, the work between Days as thin lines, the promises built under them, today's place, the Days ahead and the stop, and the hand-offs as arcs`);
+  // the old problems back, a bar under each Day's number: no fix yet at the bottom, then past a fix and caught at a gate,
+  // then past a fix and past the gates, red; both parts past a fix hatched, so red is never alone. The count is over
+  // the bar, and a dashed tick left of it marks a Day a fix counts from. Nothing counted: one line says so in its place.
+  const reps = [];
+  if (R.back) {
+    el("text", { class: "t-row", x: 0, y: f(BY + 24) }, "Old problems back");
+    const bp = el("pattern", { id: "rdg-bk-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
+    el("rect", { class: "bk-hatchl", width: 2.2, height: 6 }, null, bp);
+    // scaled to the tallest bar drawn: a Day with no span on the strand has no bar
+    const U = 22 / Math.max(1, ...R.back.filter(x => x.day in mids).map(x => x.n)), base = BY + 32, BW = 8;
+    R.back.forEach(x => {
+      if (!(x.day in mids)) return;
+      const cx = mids[x.day], g = el("g", { class: "b rep", tabindex: 0, "data-k": "rep", "data-v": x.day,
+        "aria-label": `Day ${x.day}: ${n(x.n, "old problem", "old problems")} back, ${x.gated} although a fix was in place caught at a gate, ${x.leaked} got past` });
+      let v = 0;
+      [["bk-before", x.before], ["bk-gate", x.gated], ["bk-past", x.leaked]].forEach(([cls, k]) => {
+        if (!k) return;
+        const a = { class: cls, x: f(cx - BW / 2), y: f(base - (v + k) * U), width: BW, height: f(k * U) };
+        el("rect", a, null, g);
+        if (cls !== "bk-before") el("rect", Object.assign({}, a, { class: cls + "h" }), null, g);
+        v += k;
+      });
+      el("text", { class: x.n ? "bk-n" : "bk-n0", x: f(cx), y: f(base - x.n * U - 3), "text-anchor": "middle" }, String(x.n), g);
+      if (x.fixes.length) el("path", { class: "bk-fix", d: `M${f(cx - BW / 2 - 4)} ${f(base - 22)}V${f(base)}` }, null, g);
+      reps.push([g, x.day]);
+      dayLink(g, x.day, toCell);
+    });
+  } else el("text", { class: "t-row bk-none", x: 0, y: f(BY + 24) }, `Old problems back: not counted yet.${R.back_error ? " " + R.back_error : ""}`);
+  fig.setAttribute("aria-label", `Every merge in order, drawn as the plan being read: Days as blocks, the work between Days as thin lines, the promises built under them, today's place, the Days ahead and the stop, the hand-offs as arcs, and under them the old problems back, Day by Day`);
 
   // the figures over it, and the key's counts
   const fig4 = (num, of, what, sub) => { const d = h("div"); const v = h("div", "num", String(num), d); if (of != null) h("small", "", ` ${of}`, v); h("div", "what", what, d); h("div", "sub", sub, d); return d; };
@@ -2061,6 +2128,9 @@ function readingDraw(R, get, onDay) {
   const d0 = R.days[0]; say("k-bw", d0 ? `${d0.ticked}/${d0.total} under a Day: built of written` : "built of written, under a Day");
   say("k-picked", `(${how.picked || 0})`); say("k-lapsed", `(${how.lapsed || 0})`); say("k-withdrawn", `(${how.withdrawn || 0})`);
   say("k-open", `(${R.open - R.numbered})`); say("k-num", `(${R.numbered})`);
+  const bt = R.back_total;
+  say("k-back", R.back ? `${bt.repeats} of ${bt.defects} defects repeat an earlier one; ${bt.past_fix} came back although a fix was in place: ${bt.gated} caught at a gate, ${bt.leaked} got past.`
+    : `Old problems back: not counted yet.${R.back_error ? " " + R.back_error : ""}`);
   say("stamp", `Drawn from the page's data at ${R.head}${R.last_pr ? ` (#${R.last_pr})` : ""}, generated ${R.generated} · ${n(R.merges, "merge", "merges")} · the level cards above are graph 1's own`);
 
   // the lists under it
@@ -2117,6 +2187,7 @@ function readingDraw(R, get, onDay) {
     qs.forEach(q => q.classList.toggle("mk-dim", day != null && q.dataset.day !== String(day)));
     R.h.forEach((x, j) => { if (!arcs[j]) return; const on = day != null && (own(x.o, day) || own(x.c, day));
       arcs[j].classList.toggle("day", on); arcs[j].classList.toggle("mk-dim", day != null && !on); });
+    reps.forEach(([g, d]) => g.classList.toggle("mk-dim", day != null && d !== day));
   });
   return fig;
 }
@@ -2605,8 +2676,8 @@ function gelDraw(G, get, onDay) {
 }
 
 /* Graphs 3 to 5 as proteins, as the mockup at #228 draws them: counted in scripts/pipeline/counts/spec_drift_views.py (protein); this
-   folds each chain and words it. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in
-   dashboard.css, under #prt. */
+   folds each chain and words it. `get` finds an element by its id; `onDay` is the page's Day buttons; `toCell`, when given,
+   opens a Day in the cell, and a Day's number on a chain is then a button for it. Colours are in dashboard.css, under #prt. */
 const PRT_MARK = { proven: ["proved", 13], unproven: ["unproved", 11.4], skipped: ["norun", 12], repair: ["stale", 13], broken: ["broken", 13],
   replaced: ["replaced", 12.1], open: ["unbuilt", 11.9], building: ["unbuilt", 11.9], unchecked: ["unbuilt", 11.9] };
 const PRT_SAYS = { proven: "holds, and a break on purpose proved its test", unproven: "holds, never seen to fail", skipped: "the replay cannot run its check",
@@ -2621,7 +2692,7 @@ function prtFold(cells, span) {
   cells.forEach((c, i) => { if (i) { const step = c.day !== cells[i - 1].day ? 20 : 16; if (u + step > span - 15) { row++; u = 0; } else u += step; } out.push({ row, u }); });
   return out;
 }
-function protDraw(P, get, onDay) {
+function protDraw(P, get, onDay, toCell) {
   const $ = id => get("prt-" + id), fig = $("fig"), tip = $("tip"), say = $("say");
   const el = (n, a, txt, parent) => { const e = document.createElementNS(SVG_NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; (parent || fig).appendChild(e); return e; };
   const f = v => (+v).toFixed(1).replace(/\.0$/, "");
@@ -2672,7 +2743,7 @@ function protDraw(P, get, onDay) {
     const gs = [];
     c.cells.forEach((x, i) => {
       const p = places[i], X = cx(p), Yc = Y(p.row);
-      if (!i || x.day !== c.cells[i - 1].day) el("text", { class: "t-day", "data-d": x.day, x: f(X), y: f(Yc - 9.5), "text-anchor": "middle" }, String(x.day));
+      if (!i || x.day !== c.cells[i - 1].day) dayLink(el("text", { class: "t-day", "data-d": x.day, x: f(X), y: f(Yc - 9.5), "text-anchor": "middle" }, String(x.day)), x.day, toCell, "-1");
       const g = el("g", { class: "b rs", "data-c": x.id, "data-d": x.day, tabindex: tab ? (i ? -1 : 0) : null });
       if (tab) el("rect", { class: "hit", x: f(X - 8), y: f(Yc - 8.5), width: 16, height: 17 }, null, g);
       const [cls, s] = PRT_MARK[x.state] || PRT_MARK.unchecked, scar = x.state === "proven" && x.back;
@@ -4107,164 +4178,6 @@ function rfxDraw(R, get) {
   return fig;
 }
 
-/* Graph 13, does it learn: two plain pictures from Python's counts (spec_drift_views.learning). The first is one bar per
-   Day of the defects that repeat an earlier one, split by whether a fix of their problem counted by then, with a dashed
-   line at each Day a fix counts from; the second is one row per fix, its times before against its times after. Red is
-   never alone: a repeat past a fix is hatched too, and an after dot carries a tick or a cross. Colours are under #lrn. */
-const LRN_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const lrnDate = iso => iso ? `${+iso.slice(8, 10)} ${LRN_MON[+iso.slice(5, 7) - 1]}` : "";
-const lrnTimes = n => n === 0 ? "never" : n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
-const lrnRate = v => v == null ? "–" : v === 0 ? "0" : v < 0.1 ? v.toFixed(2) : v.toFixed(1);
-const lrnDays = n => `${n} ${n === 1 ? "Day" : "Days"}`;
-const lrnIds = (ids, most) => ids.length > most ? `${ids.slice(0, most).join(", ")} and ${ids.length - most} more` : ids.join(", ");
-const lrnCut = (s, n) => s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
-// a title on one line, or on two broken at a space; only one longer than two lines is cut, and the pointer box gives it whole
-const lrnLines = (s, n) => { if (s.length <= n) return [s]; const at = s.lastIndexOf(" ", n); const k = at > 0 ? at : n;
-  return [s.slice(0, k), lrnCut(s.slice(k).trimStart(), n)]; };
-function lrnDraw(L, get, onDay) {
-  const $ = id => get("lrn-" + id), tip = $("tip"), days = L.days, fixes = L.fixes || [], tips = {}, groups = [];
-  const wait = L.wait || 5, shared = L.shared || [], pastGated = L.past_gated || 0, pastLeaked = "past_leaked" in L ? L.past_leaked : L.past_fix;
-  const byPr = Object.fromEntries(fixes.map(f => [f.pr, f]));
-  const mark = (fig, k, day, label) => { const g = svgEl(fig, "g", { class: "b", tabindex: 0, "data-k": k, "aria-label": label }); groups.push([g, day]); return g; };
-
-  // the first picture: a bar per Day, the repeats with no fix yet at the bottom and those past a fix on top
-  const epi = $("epi"), E = { w: 960, l: 56, r: 944, t: 66, b: 292 }, SW = (E.r - E.l) / days.length, BW = Math.min(34, SW * .6);
-  const most = Math.max(1, ...days.map(x => x.n)), step = most > 30 ? 10 : 5, top = Math.ceil(most / step) * step, U = (E.b - E.t) / top;
-  const ep = (n, a, txt, parent) => svgEl(epi, n, a, txt, parent);
-  epi.replaceChildren();
-  epi.setAttribute("viewBox", `0 0 ${E.w} ${E.b + 58}`);
-  const defs = ep("defs", {}), pat = ep("pattern", { id: "lrn-hatch", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, null, defs);
-  ep("rect", { class: "l-hatchl", width: 2.2, height: 6 }, null, pat);
-  for (let v = 0; v <= top; v += step) {
-    ep("path", { class: v ? "l-grid" : "l-base", d: `M${E.l} ${E.b - v * U}H${E.r}` });
-    ep("text", { class: "l-tick", x: E.l - 10, y: E.b - v * U + 4, "text-anchor": "end" }, String(v));
-  }
-  ep("text", { class: "l-axis", x: E.l - 40, y: 14 }, "times an old problem came back");
-  days.forEach((x, i) => {
-    const cx = E.l + (i + .5) * SW, x0 = cx - BW / 2, nb = x.before.length, gated = x.gated || [], leaked = x.leaked || x.past_fix;
-    const ng = gated.length, nl = leaked.length, g = mark(epi, `d${x.day}`, x.day, `Day ${x.day}: ${x.n} came back, ${ng} although a fix was in place and caught by a gate, ${nl} although a fix was in place and past the gates before the close`);
-    ep("rect", { class: "hit", x: cx - SW / 2 + 3, y: E.t - 6, width: SW - 6, height: E.b - E.t + 44, rx: 3 }, null, g);
-    // a segment from v0 to v1, its top rounded when it is the bar's top, 2 px of card between the two
-    const seg = (cls, v0, v1, cap) => {
-      const y1 = E.b - v0 * U - (v0 ? 1 : 0), y0 = E.b - v1 * U + (cap ? 0 : 1), r = cap ? Math.min(4, (y1 - y0) / 2) : 0;
-      const d = `M${x0} ${y1}V${y0 + r}Q${x0} ${y0} ${x0 + r} ${y0}H${x0 + BW - r}Q${x0 + BW} ${y0} ${x0 + BW} ${y0 + r}V${y1}Z`;
-      ep("path", { class: cls, d }, null, g);
-      if (cls === "l-past" || cls === "l-gate") ep("path", { class: cls + "h", d }, null, g);
-    };
-    if (nb) seg("l-before", 0, nb, !(ng + nl));
-    if (ng) seg("l-gate", nb, nb + ng, !nl);
-    if (nl) seg("l-past", nb + ng, nb + ng + nl, true);
-    ep("text", { class: x.n ? "l-n" : "l-n0", x: cx, y: E.b - x.n * U - 7, "text-anchor": "middle" }, String(x.n), g);
-    ep("text", { class: "l-tick", x: cx, y: E.b + 18, "text-anchor": "middle" }, String(x.day), g);
-    if (x.n > 0 && typeof x.share === "number") ep("text", { class: "l-tick", x: cx, y: E.b + 32, "text-anchor": "middle" }, `${x.share}%`, g);
-    tips[`d${x.day}`] = { t: `Day ${x.day} · ${x.n ? `${x.n} came back` : "nothing came back"}${typeof x.share === "number" ? `, ${x.share}% of its ${x.defects} defects` : ""}`, l: [
-      nb && `${nb} with no fix in place for it yet: ${lrnIds(x.before, 8)}`,
-      ng && `${ng} although a fix was in place, caught by a gate before the close: ${lrnIds(gated, 8)}`,
-      nl && `${nl} although a fix was in place, and past the gates before the close: ${lrnIds(leaked, 8)}`,
-      x.fixes.length && `Fixes that count from this Day: ${x.fixes.map(p => "#" + p).join(", ")}`] };
-  });
-  ep("text", { class: "l-axis", x: (E.l + E.r) / 2, y: E.b + 50, "text-anchor": "middle" }, "Day · under it, the repeats as a share of that Day's defects");
-  days.forEach((x, i) => {
-    if (!x.fixes.length) return;
-    const fx = E.l + i * SW, g = mark(epi, `f${x.day}`, x.day, `${x.fixes.length} fixes count from Day ${x.day}`);
-    ep("path", { class: "hitl", d: `M${fx} ${E.t - 40}V${E.b}` }, null, g);
-    ep("path", { class: "l-fixline", d: `M${fx} ${E.t - 16}V${E.b}` }, null, g);
-    ep("path", { class: "l-fixcap", d: `M${fx} ${E.t - 26} ${fx + 5} ${E.t - 21} ${fx} ${E.t - 16} ${fx - 5} ${E.t - 21}Z` }, null, g);
-    ep("text", { class: "l-fixt", x: fx, y: E.t - 32, "text-anchor": "middle" }, x.fixes.length === 1 ? `#${x.fixes[0]}` : `${x.fixes.length} fixes`, g);
-    tips[`f${x.day}`] = { t: `Counting from Day ${x.day}`, l: x.fixes.map(p => byPr[p]).map(f => `#${f.pr}, merged ${lrnDate(f.merged)}: ${f.title}`) };
-  });
-  epi.setAttribute("aria-label", "Times an old problem came back, by Day: " + days.map(x => `Day ${x.day}, ${x.n}`).join("; ") + ".");
-
-  // the second picture: a row per fix, a grey dot at its times before and a ticked or crossed one at its times after
-  const dmb = $("dmb"), D = { w: 1160, x0: 470, x1: 860, vx: 892, t: 46, rh: 50 };
-  const dm = (n, a, txt, parent) => svgEl(dmb, n, a, txt, parent);
-  dmb.replaceChildren();
-  // a row grows by a line when its title needs two
-  const titles = fixes.map(f => lrnLines(f.title, 62)), RH = titles.map(t => D.rh + 16 * (t.length - 1));
-  const tops = RH.reduce((a, h) => [...a, a[a.length - 1] + h], [D.t]);
-  const H = (fixes.length ? tops[fixes.length] : D.t + D.rh) + 8;
-  dmb.setAttribute("viewBox", `0 0 ${D.w} ${H}`);
-  const most2 = Math.max(1, ...fixes.flatMap(f => [f.rate_before || 0, f.rate_after || 0])), step2 = most2 > 5 ? 2 : 1, top2 = Math.ceil((most2 + .5) / step2) * step2, U2 = (D.x1 - D.x0) / top2;
-  dm("text", { class: "l-axis", x: D.x0, y: 14 }, "times a Day the problems it names happened");
-  for (let v = 0; v <= top2; v += step2) {
-    dm("path", { class: v ? "l-grid" : "l-base", d: `M${D.x0 + v * U2} ${D.t - 8}V${H - 8}` });
-    dm("text", { class: "l-tick", x: D.x0 + v * U2, y: D.t - 14, "text-anchor": "middle" }, String(v));
-  }
-  if (!fixes.length) dm("text", { class: "l-sub", x: 12, y: D.t + 26 }, "specs/fixes.json names no fix yet.");
-  fixes.forEach((f, i) => {
-    const y = tops[i], rh = RH[i], more = 8 * (titles[i].length - 1), cy = y + rh / 2, rb = f.rate_before || 0, ra = f.rate_after || 0, xb = D.x0 + rb * U2, xa = D.x0 + ra * U2, on = f.from_day != null;
-    // the two dots of a fix whose rates are as near as this sit one above the other, not on each other
-    const near = on && Math.abs(xa - xb) < 16, leftOf = on && !near && xa > xb;
-    const g = mark(dmb, `p${f.pr}`, f.from_day, `#${f.pr}: ${lrnRate(f.rate_before)} a Day before, ${on ? `${lrnRate(f.rate_after)} a Day after, ${f.verdict || "too early to say"}` : "counts from no Day yet"}`);
-    dm("rect", { class: "hit", x: 0, y: y + 1, width: D.w, height: rh - 2, rx: 4 }, null, g);
-    titles[i].forEach((t, j) => dm("text", { class: "l-name", x: 12, y: cy - 2 - more + 16 * j }, t, g));
-    dm("text", { class: "l-sub", x: 12, y: cy + 14 + more }, `#${f.pr} · merged ${lrnDate(f.merged)} · ${on ? `counts from Day ${f.from_day}` : "counts from no Day yet"}`, g);
-    if (on && !near) dm("path", { class: "l-link", d: `M${Math.min(xa, xb)} ${cy}H${Math.max(xa, xb)}` }, null, g);
-    dm("circle", { class: "l-dot-before", cx: xb, cy: near ? cy - 8 : cy, r: 6.5 }, null, g);
-    dm("text", { class: "l-n", x: xb + (leftOf ? -13 : 13), y: (near ? cy - 8 : cy) + 4, "text-anchor": leftOf ? "end" : "start" }, lrnRate(f.rate_before), g);
-    if (on) {
-      // by its verdict: gone is ticked, reduced has an arrow down, not reduced is crossed, and too early has no mark yet
-      const [cls, mark2] = f.verdict === "gone" ? ["l-dot-held", "M-3.2 .2-.9 2.6 3.4-2.4"] : f.verdict === "reduced" ? ["l-dot-less", "M0-3.2V3.2M-2.8 .6 0 3.4 2.8 .6"]
-        : f.verdict === "not reduced" ? ["l-dot-back", "M-2.6-2.6 2.6 2.6M2.6-2.6-2.6 2.6"] : ["l-dot-early", null];
-      const a = svgEl(dmb, "g", { transform: `translate(${xa},${near ? cy + 8 : cy})` }, null, g);
-      svgEl(dmb, "circle", { class: cls, r: 7.5 }, null, a);
-      if (mark2) svgEl(dmb, "path", { class: "l-on", d: mark2 }, null, a);
-      dm("text", { class: "l-n", x: xa + (!near && xa < xb ? -13 : 13), y: (near ? cy + 8 : cy) + 4, "text-anchor": !near && xa < xb ? "end" : "start" }, lrnRate(f.rate_after), g);
-    }
-    const verdict = !on ? "no Day since it yet" : f.verdict || (f.rate_before == null ? "nothing before it to compare" : "too early to say");
-    const sub = !on ? "its first Day is still to merge" : f.verdict ? `${lrnRate(f.rate_after)} a Day, against ${lrnRate(f.rate_before)} · ${lrnDays(f.days_since)} since`
-      : f.rate_before == null ? `${lrnDays(f.days_since)} since` : `${f.days_since} of ${wait} Days since · ${f.after ? `back ${lrnTimes(f.after)} so far` : "nothing back so far"}`;
-    dm("text", { class: "l-verdict", x: D.vx, y: cy - 1 }, verdict, g);
-    dm("text", { class: "l-sub", x: D.vx, y: cy + 14 }, sub, g);
-    dm("path", { class: "l-row", d: `M0 ${y + rh}H${D.w}` });
-    tips[`p${f.pr}`] = { t: `#${f.pr} · merged ${lrnDate(f.merged)}${on ? ` · counts from Day ${f.from_day}` : ""}`, l: [
-      f.days_before == null ? `Before: ${f.before}.` : `Before: ${f.before} in ${lrnDays(f.days_before)}, ${lrnRate(f.rate_before)} a Day, counted from Day ${f.first_day}.`,
-      on ? `After: ${f.after} in ${lrnDays(f.days_since)}, ${lrnRate(f.rate_after)} a Day.` : "After: nothing yet to count.",
-      `Meant to stop: ${lrnIds(f.stops, 8)}`, f.after && `Came back as: ${lrnIds(f.after_ids, 8)}`,
-      f.after && `A gate caught ${(f.gated || []).length} of them before the close; ${(f.leaked || f.after_ids).length} got past the gates before the close.`], q: f.title };
-  });
-  dmb.setAttribute("aria-label", "Before and after each fix: " + fixes.map(f => `#${f.pr}, ${lrnRate(f.rate_before)} a Day before, ${lrnRate(f.rate_after)} after`).join("; ") + ".");
-
-  // the figures, the folded text and the tables
-  const first = days.find(x => x.n), last = [...days].reverse().find(x => x.n), judged = fixes.filter(f => f.verdict), count = v => judged.filter(f => f.verdict === v).length;
-  const fig = (num, what, sub) => h("div", null, h("span", { class: "num" }, String(num)), h("span", { class: "txt" }, h("b", { class: "what" }, what), h("span", { class: "sub" }, sub)));
-  $("figs").replaceChildren(
-    fig(L.repeats, "times an old problem came back", first ? `on Days ${first.day} to ${last.day}` : "on no Day yet"),
-    fig(L.past_fix, "of them although a fix was in place", `a gate caught ${pastGated} before the close, ${pastLeaked} got past the gates before the close`),
-    fig(fixes.length, fixes.length === 1 ? "fix on record" : "fixes on record", "each names the defects it was meant to stop"),
-    fig(judged.length, judged.length === 1 ? "fix old enough to judge" : "fixes old enough to judge", `${count("gone")} gone, ${count("reduced")} reduced, ${count("not reduced")} not reduced · a verdict waits for ${wait} Days`));
-  $("stamp").textContent = `Counted from the Days' Notes and specs/fixes.json at ${L.head || "?"}, to #${L.last_pr || "?"}, on ${(L.generated || "").slice(0, 10)}.`;
-  const peak = days.reduce((a, x) => x.n > a.n ? x : a, days[0]), topShare = days.filter(x => typeof x.share === "number").reduce((a, x) => !a || x.share > a.share ? x : a, null);
-  const leakedAll = days.flatMap(x => x.leaked || x.past_fix), group = v => fixes.filter(f => f.verdict === v), young = fixes.filter(f => f.from_day != null && !f.verdict && f.rate_before != null);
-  const prs = list => list.map(f => "#" + f.pr).join(", "), ways = list => list.map(f => `#${f.pr} from ${lrnRate(f.rate_before)} a Day to ${lrnRate(f.rate_after)}`).join("; ") + ".";
-  const finds = [
-    ["", "Old problems keep coming back.", (L.repeats ? `${L.repeats} times over ${lrnDays(days.length)}, the most on Day ${peak.day} (${peak.n}).` : "Not once yet.") + (topShare ? ` The largest share of a Day's defects was ${topShare.share}%, on Day ${topShare.day} (${topShare.n} of ${topShare.defects}).` : "")],
-    [pastLeaked ? "fault" : "good", `${L.past_fix} of the ${L.repeats} came back although a fix was in place.`, `A gate caught ${pastGated} of them before the close, and ${pastLeaked} got past the gates before the close${leakedAll.length ? `: ${lrnIds(leakedAll, 8)}` : ""}. The gate is any gate before the close, not the fix's own: the Notes cannot say that yet. The other ${L.repeats - L.past_fix} were problems no fix named yet, or not yet in force.`],
-    group("gone").length && ["good", "Gone so far.", `Nothing came back after ${prs(group("gone"))} in ${lrnDays(Math.min(...group("gone").map(f => f.days_since)))} or more.`],
-    group("reduced").length && ["good", "Reduced.", ways(group("reduced"))],
-    group("not reduced").length && ["fault", "Not reduced.", ways(group("not reduced"))],
-    young.length && ["", `${young.length} ${young.length === 1 ? "fix is" : "fixes are"} too young to judge.`, `Fewer than ${wait} Days since each: ${young.map(f => `#${f.pr} (${lrnRate(f.rate_before)} a Day before, ${lrnRate(f.rate_after)} in the ${lrnDays(f.days_since)} since)`).join("; ")}.`],
-    shared.length && ["", "The second picture counts some repeats twice.", `Its after counts add up to ${fixes.reduce((a, f) => a + f.after, 0)}, and the first picture's ${L.past_fix} count each repeat once: ${shared.join(", ")} ${shared.length === 1 ? "sits" : "sit"} under more than one fix.`],
-    ...(L.problems || []).map(p => ["fault", "A row of specs/fixes.json reads wrong.", p])].filter(Boolean);
-  $("finds").replaceChildren(...finds.map(([c, b, t]) => h("li", { class: c || null }, h("b", null, b), " ", rich(t))));
-  $("bends").replaceChildren(...[
-    ["A repeat is what the Notes tag.", "A defect that repeats an earlier one with no `same-as:` line is not counted. Days 14 and 15 were tagged by hand after they closed."],
-    ["A fix is what `specs/fixes.json` lists.", "A rule or a gate added with no row there is not drawn, and a row names only the defects its pull request said it was for."],
-    ["A rate is times a Day.", `Before runs from the Day the problem was first recorded to the Day before the fix counts, after from that Day on. A rate over one or two Days is rough, so a verdict waits for ${wait} Days.`],
-    ["Reduced means half.", "A fix's problems are reduced when they happen at most half as often a Day as before, and gone when nothing came back."],
-    ["A gate, not the fix's gate.", "A repeat caught by any gate before the close counts as caught. The Notes cannot say yet whether it was the gate the fix added."],
-    ["A Day counts whole.", "A fix that merged in the middle of a Day counts only from the next Day whose spec merged."]].map(([b, t]) => h("li", null, h("b", null, rich(b)), " ", rich(t))));
-  const table = (id, head, rows) => $(id).replaceChildren(h("thead", null, h("tr", null, head.map(c => h("th", null, c)))), h("tbody", null, rows.map(r => h("tr", null, r.map(c => h("td", null, c == null ? "" : String(c)))))));
-  table("days", ["Day", "Defects", "Came back", "Share", "With no fix yet", "Fix in place, caught by a gate", "Fix in place, past the gates before the close", "Fixes that count from it"],
-    days.map(x => [x.day, x.defects, x.n, x.share == null ? null : `${x.share}%`, x.before.length, (x.gated || []).length, (x.leaked || x.past_fix).length, x.fixes.map(p => "#" + p).join(", ")]));
-  table("fixes", ["Fix", "Merged", "Counts from", "Meant to stop", "Before", "Days before", "A Day before", "After", "Days since", "A Day after", "Verdict", "Came back as"],
-    fixes.map(f => [`#${f.pr}`, lrnDate(f.merged), f.from_day == null ? "no Day yet" : `Day ${f.from_day}`, f.stops.join(", "), f.before, f.days_before, f.rate_before == null ? "" : lrnRate(f.rate_before), f.after, f.days_since, f.rate_after == null ? "" : lrnRate(f.rate_after), f.verdict || (f.from_day == null ? "" : f.rate_before == null ? "nothing before it" : "too early"), f.after_ids.join(", ")]));
-
-  [epi, dmb].forEach(f => pointerBox(f, tip, key => key != null && tips[key] ? tipFill(tip, tips[key]) : false, b => b.getAttribute("data-k")));
-  onDay.push(day => groups.forEach(([g, d]) => g.classList.toggle("mk-dim", day != null && d !== day)));
-  return epi;
-}
-
 /* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10) opens every fold around it, and
    scrolls to it. A link to a graph that has left the page (#g3, #g4, #g5, #g8, #g9) lands on the empty anchor in the
    section drawn in its place, which is in no fold. */
@@ -4472,6 +4385,8 @@ function draw(M, DATA) {
     onDay.forEach(f => f(lit));
   }));
   put("days", h("span", null, "Highlight one Day in every graph:"), chips);
+  // a Day's label in graphs 1 and 3 opens that Day in the cell, below them
+  const toCell = day => dayToCell(day, M, $, typeof window === "undefined" ? null : window);
 
   /* Where we are, as a ring: a Day on it presses its button, a second press lets it go. The ring's middle says the next
      step, so the plain Now line hides while the ring is drawn, and is all the page says of where the work is without it. */
@@ -4489,18 +4404,18 @@ function draw(M, DATA) {
     const r = M.rdg, failed = e => { put("rdg-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`rdg: ${e}`); };
     if (r.error) failed(r.error);
     else if (r.empty) put("rdg-scroll", h("p", { class: "load-error" }, "Not measured yet: ", rich(r.empty)));
-    else try { readingDraw(r, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
+    else try { readingDraw(r, $, onDay, toCell); } catch (e) { failed(String((e && e.message) || e)); }
   }
 
   /* Graph 2 as a gel, graphs 3 to 5 as proteins, graph 7 as proofreading, graph 8 as an energy budget, graph 9 as
      growth rings and graph 10 as an actogram, in their places; graphs 2, 7 and 10 are folded under theirs */
   // graph 10 turns to a date the actogram's row names, once both are drawn
   const onDate = [];
-  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["lrn", lrnDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
+  [["gel", gelDraw], ["prt", protDraw], ["prf", prfDraw], ["atp", atpDraw], ["rng", rngDraw], ["act", actDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
     if (g.error) failed(g.error);
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
-    else try { fn(g, $, onDay, onDate); } catch (e) { failed(String((e && e.message) || e)); }
+    else try { fn(g, $, onDay, k === "prt" ? toCell : onDate); } catch (e) { failed(String((e && e.message) || e)); }
   });
   // graph 7's other view, one Day opened; its switch is wired even where one of the two views cannot be drawn
   prfViews($);
@@ -5342,10 +5257,10 @@ function cellEngine(C, root, opts) {
   function fixHtml(id, dn) {
     var a = LEARN.fixes.filter(function (f) { return f.stn === id; }); if (!a.length) return null;
     return [h('h3', null, 'Antibodies at this check: the fixes'), h('ul', { class: 'dl' }, a.map(function (f) {
-      return h('li', null, fxBtn(f), f.from_day == null ? ' not counted from a Day yet' : f.from_day > dn ? ' not yet on Day ' + dn + ': it counts from Day ' + f.from_day : ' in place since Day ' + f.from_day);
+      return h('li', null, fxBtn(f), (f.from_day == null ? ' not counted from a Day yet' : f.from_day > dn ? ' not yet on Day ' + dn + ': it counts from Day ' + f.from_day : ' in place since Day ' + f.from_day) + ': ' + rateLine(f));
     }))];
   }
-  // what the cell takes over from the file map, the abilities and graph 13: a station's files, a promise's ability, a fix's verdict
+  // what the cell takes over from the file map, the abilities and the old picture of fixes: a station's files, a promise's ability, a fix's verdict
   function filesGroup(x) {
     return h('details', { class: 'fl' }, h('summary', null, h('b', null, x.label), h('span', null, cplural(x.n, 'file') + ' · ' + comma(x.lines) + ' lines')), h('p', null, x.what),
       h('ul', null, x.files.map(function (f) { return h('li', null, h('code', null, f[0]), h('i', null, comma(f[1]))); })));
@@ -5362,14 +5277,34 @@ function cellEngine(C, root, opts) {
     return a.map(function (x) { return [row('Ability', x[0] ? x[0] : 'not tied to an ability yet'), row('Proven', x[1] === 'proven' ? 'yes' : 'no: ' + x[1])]; });
   }
   function verdict(f) { return f.verdict ? f.verdict : 'too early to say: ' + f.days_since + ' of ' + LEARN.wait + ' Days since'; }
+  // a fix's times of its kind before and since, its rates a Day where it has them, and, once it counts from a Day, its
+  // verdict; a fix counted from no Day has no rate since it, whatever its record says
+  function rateLine(f) {
+    var counted = f.from_day != null, rates = [];
+    if (f.rate_before != null) rates.push(f.rate_before + ' a Day before');
+    if (counted && f.rate_after != null) rates.push(f.rate_after + ' since');
+    return f.before + ' of its kind before, ' + f.after + ' since' + (rates.length ? '; ' + rates.join(', ') : '') + (counted ? ': ' + verdict(f) : '');
+  }
+  // the fixes by how they did: gone, reduced, any other verdict in the order met, too early to say, counted from no Day
+  function fixTotal() {
+    var n = {}, order = ['gone', 'reduced', 'not reduced'];
+    LEARN.fixes.forEach(function (f) {
+      var k = f.from_day == null ? 'not counted from a Day yet' : f.verdict == null ? 'too early to say' : f.verdict;
+      n[k] = (n[k] || 0) + 1; if (order.indexOf(k) < 0 && k !== 'too early to say' && k !== 'not counted from a Day yet') order.push(k);
+    });
+    order.push('too early to say', 'not counted from a Day yet');
+    var parts = order.filter(function (k) { return n[k]; }).map(function (k) { return n[k] + ' ' + k; });
+    if (!LEARN.fixes.length) return 'No fix yet.';
+    return LEARN.fixes.length + (LEARN.fixes.length === 1 ? ' fix' : ' fixes') + ': ' + parts.join(', ') + '.';
+  }
   function byHand() {
     return h('p', { class: 'none' }, 'Chosen by hand: nothing turns a line of the Notes into a fix or a known case by itself. A person picks them: ' + LEARN.fixes.length + ' fixes so far, out of ' + comma(LEARN.totals.defects) + ' defects.');
   }
   function loopHtml() {
     var t = LEARN.totals, ks = ['sa', 'chap', 'ci', 'rater'].filter(function (k) { return LEARN.cards[k] && CELL_CARD[k]; });
     return [h('dl', null, row('Old problems back', t.repeats + ' of ' + t.defects), row('Back although a fix was in place', t.past_fix), row('Of those, caught at a gate', t.gated), row('Of those, got past', t.leaked)),
-      h('h3', null, 'The antibodies: ' + LEARN.fixes.length + ' fixes'), h('ul', { class: 'dl' }, LEARN.fixes.map(function (f) {
-        return h('li', null, fxBtn(f), (f.from_day == null ? ' not counted from a Day yet' : ' from Day ' + f.from_day) + (f.stn ? '' : ', no station chosen yet') + ': ' + f.before + ' of its kind before, ' + f.after + ' since. ' + f.title);
+      h('p', null, fixTotal()), h('h3', null, 'The antibodies: ' + LEARN.fixes.length + ' fixes'), h('ul', { class: 'dl' }, LEARN.fixes.map(function (f) {
+        return h('li', null, fxBtn(f), (f.from_day == null ? ' not counted from a Day yet' : ' from Day ' + f.from_day) + (f.stn ? '' : ', no station chosen yet') + ': ' + rateLine(f) + '. ' + f.title);
       })),
       byHand(), h('h3', null, 'The checking agents’ challenge tests'),
       ks.length ? h('ul', { class: 'dl' }, ks.map(function (k) {

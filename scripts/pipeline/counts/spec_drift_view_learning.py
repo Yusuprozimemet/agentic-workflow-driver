@@ -1,4 +1,4 @@
-"""Graph 13: does it learn? Repeats per Day and each fix's before and after (`learning`).
+"""Does it learn? Read by the cell and graph 1's row of old problems back: repeats per Day and each fix's before and after (`learning`).
 spec_drift_views.py imports it for spec-drift.py, demo-data.py and the tests."""
 
 import collections

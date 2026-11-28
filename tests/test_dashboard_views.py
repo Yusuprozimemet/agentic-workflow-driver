@@ -4448,239 +4448,271 @@ class RewritesTest(unittest.TestCase):
         )
 
 
-# lrnDraw() on a hand-built learning, on a document that keeps every node: the first picture's segments by class, the
-# second's dots by row, and the words of its figures.
-LRN = r"""
+# a document that keeps each node's listeners, a click that fires them, and a querySelectorAll("button") over a node's
+# own children: enough for readingDraw(), and for draw() to make the page's Day buttons and press them
+LINK_DOC = r"""
 const fs = require("fs"), vm = require("vm"), els = {};
-const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
-  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
-  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
-  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {} };
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, dataset: {}, hidden: false, textContent: "", on: {}, value: "",
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on === undefined ? !k.has(c) : on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); },
+    add(c) { this.toggle(c, true); }, remove(c) { this.toggle(c, false); }, contains(c) { return (n.attrs.class || "").split(" ").includes(c); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, removeAttribute(k) { delete this.attrs[k]; },
+  appendChild(c) { this.kids.push(c); return c; }, append(...c) { this.kids.push(...c); }, prepend(...c) { this.kids.unshift(...c); }, replaceChildren(...c) { this.kids = c; },
+  addEventListener(type, fn) { (n.on[type] = n.on[type] || []).push(fn); }, click() { (n.on.click || []).forEach(f => f({ key: "", target: n, preventDefault() {} })); },
+  querySelectorAll(s) { return s === "button" ? n.kids.filter(k => k && k.tag === "button") : []; }, querySelector() { return null; }, closest() { return null; } };
   Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
   return n; };
-const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
 const $ = id => els[id] || (els[id] = node(id));
-const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
+const document = { createElementNS(ns, tag) { return node(tag); }, createElement: node, createTextNode: t => String(t), addEventListener() {}, getElementById: $,
+  querySelectorAll: () => [], querySelector: () => null, documentElement: node("html"), body: node("body") };
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, els, window: {}, location: { hash: "" },
+  matchMedia: () => ({ matches: false, addEventListener() {} }), console: { error() {}, log() {} } });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
   const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
   const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
-  const is = (root, c) => all(root).filter(e => has(e, c)).length;
-  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
-  const days = [], e = $("lrn-epi"), d = $("lrn-dmb");
-  lrnDraw(model(DATA).lrn, $, days);
-  days.forEach(f => f(8));
-  const rows = all(d).filter(x => x.attrs && /^p\\d+$/.test(x.attrs["data-k"] || ""));
-  ({ gate: is(e, "l-gate"), gateh: is(e, "l-gateh"), past: is(e, "l-past"), pasth: is(e, "l-pasth"),
-     held: is(d, "l-dot-held"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"),
-     rows: rows.map(r => [r.attrs["data-k"], all(r).filter(x => has(x, "l-dot-before")).map(x => x.attrs.cy), all(r).filter(x => x.attrs.transform).map(x => x.attrs.transform)]),
-     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(),
-     texts: all(e).filter(x => x.tag === "text").map(x => x.textContent),
-     names: all(d).filter(x => has(x, "l-name")).map(x => [x.textContent, +x.attrs.y]),
-     rowsAt: rows.map(r => ({ names: all(r).filter(x => has(x, "l-name")).map(x => [x.textContent, +x.attrs.y]),
-       sub: all(r).filter(x => has(x, "l-sub") && x.attrs.x === "12").map(x => +x.attrs.y),
-       height: all(r).filter(x => has(x, "hit")).map(x => +x.attrs.height) })) })`, ctx)));
+  const fire = (e, type, ev) => (e.on[type] || []).forEach(f => f(Object.assign({ key: "", target: e, preventDefault() {} }, ev || {})));
+  BODY`, ctx)));
 """
 
+# readingDraw() on the data from stdin: graph 1's row of old problems back (a group per Day, each part's top and height
+# over the bars' base, its count), its words and the marks that are links, and the Days its links opened in the cell.
+REP = LINK_DOC.replace(
+    "BODY",
+    r"""
+  const M = model(DATA), days = [], opened = [];
+  readingDraw(M.rdg, $, days, d => opened.push(d));
+  const r = $("rdg-fig"), reps = all(r).filter(e => has(e, "rep")), base = +r.attrs.viewBox.split(" ")[3] - 2;
+  const PARTS = ["bk-before", "bk-gate", "bk-gateh", "bk-past", "bk-pasth"];
+  const out = { reps: reps.map(g => g.attrs["data-v"]), height: +r.attrs.viewBox.split(" ")[3],
+    n: reps.map(g => all(g).filter(e => has(e, "bk-n") || has(e, "bk-n0")).map(e => (has(e, "bk-n0") ? "faint " : "") + e.textContent).join(" ")),
+    parts: reps.map(g => all(g).filter(e => PARTS.some(c => has(e, c))).map(e => [e.attrs.class, +(base - e.attrs.y).toFixed(2), +e.attrs.height])),
+    ticks: reps.filter(g => all(g).some(e => has(e, "bk-fix"))).map(g => g.attrs["data-v"]),
+    label: all(r).filter(e => e.tag === "text" && e.textContent === "Old problems back").length,
+    none: all(r).filter(e => has(e, "bk-none")).map(e => e.textContent),
+    total: $("rdg-k-back").textContent, tips: reps.map(g => rdgTip(M.rdg, "rep", g.attrs["data-v"])),
+    links: all(r).filter(e => e.attrs && e.attrs["data-day"] != null).map(e => [e.attrs.class.split(" ")[0], e.attrs.tabindex, e.attrs.role, e.attrs["aria-label"]]) };
+  days.forEach(f => f(2)); out.dim = reps.filter(g => has(g, "mk-dim")).map(g => g.attrs["data-v"]);
+  // a Day's label and its strays clicked, then Enter, Space and another key on each group of the row
+  all(r).filter(e => (has(e, "t-dayn") || has(e, "t-stray")) && e.attrs["data-day"] != null).forEach(e => fire(e, "click"));
+  reps.forEach(g => { fire(g, "keydown", { key: "Enter" }); fire(g, "keydown", { key: " " }); fire(g, "keydown", { key: "x" }); });
+  out.opened = opened;
+  // drawn with no way to the cell: nothing is a button
+  readingDraw(M.rdg, $, []);
+  out.plain = all($("rdg-fig")).filter(e => e.attrs && (e.attrs.role === "button" || e.attrs["data-day"] != null)).length;
+  out
+""",
+)
 
-def lrn_node(data):
-    reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
-    out = subprocess.run(
-        ["node", "-e", LRN, reconcile.SCRIPT],
-        input=json.dumps(data),
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if out.returncode:
-        raise AssertionError(out.stderr[:800])
-    return json.loads(out.stdout)
+# draw() itself, the whole page on the same document: Day 2's label in graph 1 clicked, then Day 1's number on a chain
+# of graph 3, each time the page's Day buttons' aria-pressed (All Days first); graph 3's tab stops as drawn on the page
+# and as protDraw() alone draws them with no link to the cell, and the tabindex of its Day numbers.
+DRAW_LINK = LINK_DOC.replace(
+    "BODY",
+    r"""
+  const M = model(DATA);
+  draw(M, DATA);
+  const pressed = () => $("days").kids.filter(k => k && k.tag === "button").map(b => b.attrs["aria-pressed"]).join(" ");
+  const out = { before: pressed() };
+  const lab = all($("rdg-fig")).find(e => has(e, "t-dayn") && e.attrs["data-day"] === "2");
+  if (lab) fire(lab, "click");
+  out.rdg = pressed();
+  const num = all($("prt-fig")).find(e => has(e, "t-day") && e.attrs["data-d"] === "1");
+  if (num) fire(num, "click");
+  out.prt = pressed();
+  const stops = () => all($("prt-fig")).filter(e => e.attrs && e.attrs.tabindex === "0").length;
+  out.days = [...new Set(all($("prt-fig")).filter(e => has(e, "t-day") && e.attrs["data-d"] != null).map(e => e.attrs.tabindex))];
+  out.stops = stops();
+  protDraw(M.prt, $, []);
+  out.stopsPlain = stops();
+  out
+""",
+)
 
 
-class LearnDrawTest(unittest.TestCase):
-    """lrnDraw(): a repeat past a fix is drawn caught by a gate or past the gates, and a fix's before and after rates."""
+def short(stderr):
+    """The last line of a node error, its paths taken out, so a failure prints the same on any machine."""
+    lines = [x for x in (stderr or "").splitlines() if x.strip()]
+    return re.sub(r"\S*[\\/]\S*", "<path>", lines[-1] if lines else "")[:200]
 
-    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
-    def test_a_gate_and_a_leak_are_drawn_apart_and_a_rate_equal_before_and_after_is_drawn_apart(
-        self,
-    ):
-        # one fix gone, one not reduced, one too young to judge whose two rates are both 0; the repeats each fix
-        # names are on the Day they fall on, so the first picture and the fixes agree
-        fixes = [
-            {
-                "pr": 21,
-                "title": "fix 21",
-                "merged": "2026-11-10T08:00:00Z",
-                "from_day": 8,
-                "stops": ["D07.1"],
-                "before": 4,
-                "after": 0,
-                "after_ids": [],
-                "days_since": 2,
-                "first_day": 7,
-                "days_before": 1,
-                "rate_before": 4.0,
-                "rate_after": 0.0,
-                "verdict": "gone",
-                "gated": [],
-                "leaked": [],
-            },
-            {
-                "pr": 22,
-                "title": "fix 22",
-                "merged": "2026-11-10T08:00:00Z",
-                "from_day": 8,
-                "stops": ["D07.2"],
-                "before": 2,
-                "after": 3,
-                "after_ids": ["D08.2", "D08.3", "D08.4"],
-                "days_since": 2,
-                "first_day": 7,
-                "days_before": 1,
-                "rate_before": 2.0,
-                "rate_after": 1.5,
-                "verdict": "not reduced",
-                "gated": ["D08.2"],
-                "leaked": ["D08.3", "D08.4"],
-            },
-            {
-                "pr": 23,
-                "title": "fix 23",
-                "merged": "2026-11-10T08:00:00Z",
-                "from_day": 9,
-                "stops": ["D07.3"],
-                "before": 0,
-                "after": 0,
-                "after_ids": [],
-                "days_since": 1,
-                "first_day": 7,
-                "days_before": 2,
-                "rate_before": 0.0,
-                "rate_after": 0.0,
-                "verdict": None,
-                "gated": [],
-                "leaked": [],
-            },
-        ]
-        days = [
-            {
-                "day": 7,
-                "n": 1,
-                "before": ["D07.1"],
-                "past_fix": [],
-                "gated": [],
-                "leaked": [],
-                "defects": 3,
-                "share": 33,
-                "fixes": [],
-            },
-            {
-                "day": 8,
-                "n": 3,
-                "before": [],
-                "past_fix": ["D08.2", "D08.3", "D08.4"],
-                "gated": ["D08.2"],
-                "leaked": ["D08.3", "D08.4"],
-                "defects": 4,
-                "share": 75,
-                "fixes": [21, 22],
-            },
-            {
-                "day": 9,
-                "n": 0,
-                "before": [],
-                "past_fix": [],
-                "gated": [],
-                "leaked": [],
-                "defects": 2,
-                "share": 0,
-                "fixes": [23],
-            },
-        ]
-        learning = {
-            "head": "abc1234",
-            "last_pr": 30,
-            "generated": "2026-11-25",
-            "repeats": 4,
-            "past_fix": 3,
-            "past_gated": 1,
-            "past_leaked": 2,
-            "held": 0,
-            "wait": 5,
-            "shared": [],
-            "problems": [],
-            "days": days,
+
+def back_learning():
+    """A learning of three Days: Day 1 with two back before any fix and a fix counted from it; Day 2 with one back
+    before any fix, two caught at a gate and one that got past although a fix was in place; Day 3, which graph 1 does
+    not draw, with six back and a fix of its own."""
+
+    def day(n, before, gated, leaked, defects, fixes):
+        return {
+            "day": n,
+            "n": len(before) + len(gated) + len(leaked),
+            "before": before,
+            "past_fix": gated + leaked,
+            "gated": gated,
+            "leaked": leaked,
+            "defects": defects,
+            "share": None,
             "fixes": fixes,
         }
-        out = lrn_node(
-            {
-                "now": {"generated": "2026-11-25", "head": "abc1234", "last_pr": 30},
-                "days": [],
-                "learning": learning,
-            }
+
+    days = [
+        day(1, ["D1.1", "D1.2"], [], [], 3, [5]),
+        day(2, ["D2.1"], ["D2.2", "D2.4"], ["D2.3"], 5, []),
+        day(3, ["D3.1", "D3.2"], [], ["D3.3", "D3.4", "D3.5", "D3.6"], 6, [9]),
+    ]
+    return {
+        "head": "abc1234",
+        "last_pr": 12,
+        "generated": "2026-01-02",
+        "repeats": 12,
+        "past_fix": 7,
+        "past_gated": 2,
+        "past_leaked": 5,
+        "held": 0,
+        "wait": 5,
+        "shared": [],
+        "problems": [],
+        "days": days,
+        "fixes": [],
+    }
+
+
+class ImmunityRowTest(unittest.TestCase):
+    """Graph 1's row of old problems back: a bar per Day it draws, what it says with nothing counted, and its links."""
+
+    def run_page(self, script, learning="keep", protein=False):
+        data = ring_data()
+        views = load("spec_drift_views", "spec_drift_views.py")
+        data["reading"] = views.reading(data)
+        if learning == "keep":
+            data["learning"] = back_learning()
+        elif learning is not None:
+            data["learning"] = learning
+        if protein:
+            data["protein"] = views.protein(prt_data())
+        reconcile = load("dashboard_reconcile", "dashboard-reconcile.py")
+        out = subprocess.run(
+            ["node", "-e", script, reconcile.SCRIPT],
+            input=json.dumps(data),
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
         )
-        self.assertEqual((out["gate"], out["gateh"], out["past"], out["pasth"]), (1, 1, 1, 1))
-        self.assertEqual((out["held"], out["back"], out["early"]), (1, 1, 1))
-        self.assertEqual([r[0] for r in out["rows"]], ["p21", "p22", "p23"])
-        self.assertEqual([len(r[1]) for r in out["rows"]], [1, 1, 1])
-        self.assertEqual([len(r[2]) for r in out["rows"]], [1, 1, 1])
-        # the row whose two rates are equal: the after dot sits below the before dot, not on top of it
-        before = float(out["rows"][2][1][0])
-        after = float(re.findall(r"[\d.]+", out["rows"][2][2][0])[1])
-        self.assertNotEqual(before, after)
-        self.assertIn(
-            "a gate caught 1 before the close, 2 got past the gates before the close", out["figs"]
-        )
-        self.assertIn("2 fixes old enough to judge", out["figs"])
-        # under each Day with repeats its share of the Day's defects; Day 9, with none, has no share label
-        self.assertEqual([t for t in out["texts"] if t.endswith("%")], ["33%", "75%"])
+        self.assertEqual((out.returncode, short(out.stderr)), (0, ""))
+        return json.loads(out.stdout)
+
+    def drawn(self, learning="keep"):
+        return self.run_page(REP, learning)
 
     @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
-    def test_a_long_fix_title_wraps_onto_a_second_line_before_it_is_cut(self):
-        # a title of 92 characters: two lines, whole, the second under the first; a short one stays one line
-        title = "Workflow: the spec-auditor walks the tracks, traces values and checks the hand-offs it reads"
-        self.assertEqual(len(title), 92)
+    def test_the_row_draws_a_bar_per_day_graph_1_draws_its_parts_stacked_and_scaled(self):
+        out = self.drawn()
+        # Days 1 and 2 have a span on the strand; Day 3 has no merge, so no bar
+        self.assertEqual(out["reps"], ["1", "2"])
+        self.assertEqual(out["n"], ["2", "4"])
+        # [part, its top over the bars' base, its height]: Day 2, the tallest drawn, is the full 22 px, 5.5 a repeat
+        # (Day 3's 6 is not drawn and sets no scale); Day 1's 2 is half of it. Stacked from the base: 1 before, 2
+        # caught at a gate, 1 got past, both parts past a fix with their hatch over them
+        self.assertEqual(len(out["parts"]), 2)
+        self.assertEqual(out["parts"][0], [["bk-before", 11, 11]])
+        self.assertEqual(out["parts"][1][:2], [["bk-before", 5.5, 5.5], ["bk-gate", 16.5, 11]])
+        self.assertEqual(out["parts"][1][2:3], [["bk-gateh", 16.5, 11]])
+        self.assertEqual(out["parts"][1][3:], [["bk-past", 22, 5.5], ["bk-pasth", 22, 5.5]])
+        # the part that got past is red, the one a gate caught amber
+        with open(os.path.join(ROOT, "docs", "dashboard", "dashboard.css"), encoding="utf-8") as f:
+            css = f.read()
+        colours = [
+            "#rdg .bk-past{fill:var(--broken)}" in css,
+            "#rdg .bk-gate{fill:var(--repair)}" in css,
+        ]
+        self.assertEqual(colours, [True, True])
+        # ring_data's picture ends 299 high (two open hand-offs, the last at 272.6): the row adds 8 and 34
+        self.assertEqual(out["height"], 341)
+        self.assertEqual(out["ticks"], ["1"])
+        self.assertEqual((out["label"], out["none"]), (1, []))
+        # Day 2 chosen on the page's buttons dims Day 1's bar
+        self.assertEqual(out["dim"], ["1"])
 
-        def fix(pr, words):
-            return {
-                "pr": pr, "title": words, "merged": "2026-11-10T08:00:00Z", "from_day": 8,
-                "stops": ["D07.1"], "before": 2, "after": 0, "after_ids": [], "days_since": 2,
-                "first_day": 7, "days_before": 1, "rate_before": 2.0, "rate_after": 0.0,
-                "verdict": None, "gated": [], "leaked": [],
-            }  # fmt: skip
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_day_with_nothing_back_draws_a_faint_0(self):
+        learning = back_learning()
+        learning["days"][0] = dict(learning["days"][0], n=0, before=[])
+        out = self.drawn(learning)
+        self.assertEqual(len(out["parts"]), 2)
+        self.assertEqual((out["n"], out["parts"][0]), (["faint 0", "4"], []))
 
-        day = {"day": 8, "n": 0, "before": [], "past_fix": [], "gated": [], "leaked": [],
-               "defects": 1, "share": 0, "fixes": [21, 22]}  # fmt: skip
-        learning = {"head": "abc1234", "last_pr": 30, "generated": "2026-11-25", "repeats": 0,
-                    "past_fix": 0, "past_gated": 0, "past_leaked": 0, "held": 0, "wait": 5,
-                    "shared": [], "problems": [], "days": [day],
-                    "fixes": [fix(21, title), fix(22, "A short fix")]}  # fmt: skip
-        long = " ".join(["a fix whose title runs on and on"] * 6)  # 197 characters: over two lines
-        self.assertEqual(len(long), 197)
-        learning["fixes"].append(fix(23, long))
-        day["fixes"].append(23)
-        now = {"generated": "2026-11-25", "head": "abc1234", "last_pr": 30}
-        out = lrn_node({"now": now, "days": [], "learning": learning})
-        names = out["names"]
-        self.assertEqual(len(names), 5)
-        first, second, short = names[:3]
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_bars_tip_says_its_parts_its_fixes_and_where_a_click_goes(self):
+        tips = self.drawn()["tips"]
+        self.assertEqual(len(tips), 2)
+        self.assertEqual([("t" in t, "l" in t) for t in tips], [(True, True), (True, True)])
+        self.assertEqual(tips[1]["t"], "Day 2 · old problems back: 4 of its 5 defects")
+        want = {
+            0: ["2 with no fix yet", "0 although a fix was in place, caught at a gate", "0 got past",
+                "Fixes counted from this Day: #5", "Click to open Day 1 in the cell."],
+            1: ["1 with no fix yet", "2 although a fix was in place, caught at a gate", "1 got past",
+                "Click to open Day 2 in the cell."],
+        }  # fmt: skip
+        # line by line, so a failure prints one short line whole
+        for k, lines in want.items():
+            self.assertEqual((k, len(tips[k]["l"])), (k, len(lines)))
+            for i, line in enumerate(lines):
+                self.assertEqual((k, i, tips[k]["l"][i]), (k, i, line))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_with_nothing_counted_the_row_and_the_key_say_so(self):
+        for name, learning, said in (
+            ("missing", None, "Old problems back: not counted yet."),
+            ("error", {"error": "x"}, "Old problems back: not counted yet. x"),
+            (
+                "error and days",
+                dict(back_learning(), error="x"),
+                "Old problems back: not counted yet. x",
+            ),
+            ("no days", dict(back_learning(), days=[]), "Old problems back: not counted yet."),
+        ):
+            out = self.drawn(learning)
+            self.assertEqual((name, out["reps"], out["none"]), (name, [], [said]))
+            self.assertEqual((name, out["total"]), (name, said))
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_key_says_the_totals_from_the_counts(self):
+        # 12 repeats of 3 + 5 + 6 = 14 defects; 7 past a fix: 2 gated, 5 leaked
+        total = self.drawn()["total"].split("; ")
+        self.assertEqual(len(total), 2)
+        self.assertEqual(total[0], "12 of 14 defects repeat an earlier one")
         self.assertEqual(
-            (first[0] + " " + second[0] == title, second[0].endswith("…"), short[0]),
-            (True, False, "A short fix"),
+            total[1], "7 came back although a fix was in place: 2 caught at a gate, 5 got past."
         )
-        self.assertGreater(second[1], first[1])
-        # each row: its title's lines, the line under them at least a line lower, and a row of two lines taller
-        rows = out["rowsAt"]
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_a_days_label_its_stray_and_its_bar_open_it_in_the_cell(self):
+        out = self.drawn()
+        # clicks on Day 1's label, its stray (#9, inside Day 2), Day 2's label and its stray (#8, cut off by #9); then
+        # Enter and Space on each bar, and another key that opens nothing
+        self.assertEqual(out["opened"], [1, 1, 2, 2, 1, 1, 2, 2])
+        self.assertEqual(out["plain"], 0)
+        # each link a tab stop and a button; a label named by its link, a bar by its counts, in three short parts
+        links = out["links"]
+        self.assertEqual(len(links), 6)
         self.assertEqual(
-            [(len(r["names"]), len(r["sub"]), len(r["height"])) for r in rows],
-            [(2, 1, 1), (1, 1, 1), (2, 1, 1)],
+            [x[0] for x in links], ["t-dayn", "t-stray", "t-dayn", "t-stray", "b", "b"]
         )
-        clear = [r["sub"][0] - r["names"][-1][1] >= 12 for r in rows]
-        self.assertEqual(clear, [True, True, True])
-        self.assertGreater(rows[0]["height"][0], rows[1]["height"][0])
-        # only a title over two lines is cut, at the end of its second line
-        self.assertEqual(
-            (rows[2]["names"][1][0][-1], len(rows[2]["names"][1][0]) <= 62), ("…", True)
-        )
+        self.assertEqual([x[1:3] for x in links], [["0", "button"]] * 6)
+        named = [x[3] for x in links[:4]]
+        self.assertEqual(named[:2], ["Open Day 1 in the cell", "Open Day 1 in the cell"])
+        self.assertEqual(named[2:], ["Open Day 2 in the cell", "Open Day 2 in the cell"])
+        bar = links[5][3].split(", ")
+        self.assertEqual(bar[0], "Day 2: 4 old problems back")
+        self.assertEqual(bar[1:], ["2 although a fix was in place caught at a gate", "1 got past"])
+
+    @unittest.skipUnless(shutil.which("node"), "needs node to run the page's model")
+    def test_the_page_presses_the_days_button_from_graph_1s_label_and_graph_3s_number(self):
+        out = self.run_page(DRAW_LINK, protein=True)
+        # the page's buttons: All Days, Day 1, Day 2
+        self.assertEqual(out["before"], "true false false")
+        self.assertEqual(out["rdg"], "false false true")
+        self.assertEqual(out["prt"], "false true false")
+        # graph 3's Day numbers are links out of the Tab order: its tab stops are what protDraw makes without them
+        self.assertEqual(out["days"], ["-1"])
+        self.assertEqual(out["stops"], out["stopsPlain"])
 
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ record runs by this module name (C14.9).
 | `pipeline/counts/spec_drift_view_criterion_states.py` | Each criterion's state, worked out once for every view and the page (`criteria_index[].state`). |
 | `pipeline/counts/spec_drift_view_gel.py` | Graph 2: the yardsticks drawn as a gel (`gel`). |
 | `pipeline/counts/spec_drift_view_gene.py` | The gene: each commitment of plan.md by the state of the criteria that serve it (`gene`). |
-| `pipeline/counts/spec_drift_view_learning.py` | Graph 13: does it learn? Repeats per Day and each fix's before and after (`learning`). |
+| `pipeline/counts/spec_drift_view_learning.py` | Does it learn? Read by the cell and graph 1's row of old problems back: repeats per Day and each fix's before and after (`learning`). |
 | `pipeline/counts/spec_drift_view_merge_graph.py` | Graph 6: the merges against the spec, a stripe per criterion (`merge_graph`). |
 | `pipeline/counts/spec_drift_view_needs_attention.py` | What needs attention: the header's panel, by one rule (`needs_attention`). |
 | `pipeline/counts/spec_drift_view_one_day.py` | Graph 7's One Day ring: one Day step by step, each defect at the step it was caught (`one_day`). |

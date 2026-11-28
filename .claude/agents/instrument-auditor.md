@@ -141,7 +141,7 @@ with sync_playwright() as p:
         shot(page, sel, name)
     for g in GRAPHS:
         shot(page, f"#{g}", g)
-    shot(page, "#lrn", "lrn", "(Graph 13: Does it learn from its mistakes?)")
+    shot(page, "#rdg", "rdg", "(Graph 1: the plan being read, and the row of old problems back)")
     shot(page, "#cell", "cell", "(The cell: the Day it opens on)", CELL_TEXT)
     # Playwright's CSS reaches into the open shadow root
     station = page.query_selector("#cell-host #s-sa")
@@ -151,6 +151,13 @@ with sync_playwright() as p:
         shot(page, "#cell", "cell-station", opened, CELL_TEXT)
     else:
         views.append("cell-station: NOT FOUND")
+    loop = page.query_selector("#cell-host #s-loop")
+    if loop:
+        click(page, loop, 400)
+        opened = "(The cell: the loop station opened, each fix before and after)"
+        shot(page, "#cell", "cell-loop", opened, CELL_TEXT)
+    else:
+        views.append("cell-loop: NOT FOUND")
     # Each closed section on its own.
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
@@ -158,7 +165,6 @@ with sync_playwright() as p:
     shot(page, "#attention-never", "attention-never", "(Hold, never proved)")
     shot(page, "#attention-known", "attention-known", "(Expected, not counted)")
     shot(page, "#g7-days", "g7-byday", "(By Day: each Day's catches)")
-    shot(page, "#lrn", "lrn-open", "(Graph 13, its three folds opened)")
     shot(page, "details:has(#g12-ladder)", "g12-ladder", "(the ladder)")
     for g in GRAPHS:
         shot(page, f"#{g} details.exact:has(table#{g}-table)", f"{g}-exact", "(Exact numbers)")
@@ -266,7 +272,7 @@ a box that is cut off or overlaps is a finding.
 | 10 | Graph 6: Do the spec and the code still agree? | `g6`, `g6-exact` |
 | 11 | Graph 7: Does the checking work, and is it worth it? (the pipeline) | `g7`, `g7-exact` |
 | 12 | Graph 7, By Day: each Day's catches side by side | `g7-byday` |
-| 13 | Graph 13: Does it learn from its mistakes? Its two pictures (repeats by Day, before and after each fix), then its three folds opened | `lrn`, `lrn-open` |
+| 13 | The row of old problems back, under graph 1 (it replaced graph 13) | `rdg` |
 | 14 | Graph 8: What did it cost? By who | `g8`, `g8-exact` |
 | 15 | Graph 8, By Day | `g8-byday` |
 | 16 | Graph 9: Where did the work go? | `g9`, `g9-exact` |
@@ -278,7 +284,7 @@ a box that is cut off or overlaps is a finding.
 | 22 | Graph 6, Promises rewritten: the ring of Days, each replaced promise joined to what replaced it | `g6-rewrites` |
 | 23 | The plan's yardsticks, the row under Needs attention | `attention` |
 | 24 | The back page: its switch and its five graphs | `back-NN` |
-| 25 | The cell: the Day it opens on, then the spec-auditor's station opened | `cell`, `cell-station` |
+| 25 | The cell: the Day it opens on, then the spec-auditor's station opened, and the loop station opened (each fix, before and after) | `cell`, `cell-station`, `cell-loop` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 
