@@ -2908,6 +2908,8 @@ class ViewSwitchTest(unittest.TestCase):
 
     def test_draw_mounts_graph_11s_cell_always_and_draws_its_figures_only_when_it_has_steps(self):
         out = node(DRAW_WIRING, data(reflex=views.reflex(dict(driver_runs=driver_runs_fixture()))))
+        # short first, so that a break of anything draw() needs reports one line: what it threw
+        self.assertIsNone(out["threw"])
         self.assertEqual(out["drew"], dict(error=["rfxCellMount"], empty=["rfxCellMount"], drawn=["rfxDraw", "rfxCellMount"]))
 
 
@@ -3041,12 +3043,13 @@ const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, his
   matchMedia: () => ({ matches: false, addEventListener() {} }), console: { error() {} }, DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
 const calls = [], drew = {};
+let threw = null;
 ctx.rfxDraw = () => { calls.push("rfxDraw"); };
 ctx.rfxCellMount = () => { calls.push("rfxCellMount"); return null; };
 const M = ctx.model(ctx.DATA);
 for (const [k, rfx] of [["error", { error: "boom" }], ["empty", { empty: "no step yet." }], ["drawn", M.rfx]]) {
   calls.length = 0; clicks.length = 0;
-  try { ctx.draw(Object.assign({}, M, { rfx }), ctx.DATA); } catch (e) { calls.push("threw"); }
+  try { ctx.draw(Object.assign({}, M, { rfx }), ctx.DATA); } catch (e) { calls.push("threw"); threw = threw || String((e && e.message) || e); }
   drew[k] = calls.slice();
 }
 const el = (tag, attrs, parent) => ({ tagName: tag, attrs, parentElement: parent || null,
@@ -3059,7 +3062,7 @@ const html = el("HTML", { "data-view": "front" }), body = el("BODY", {}, html), 
 const click = target => { delete docEl.dataset.view;
   clicks.forEach(fn => { try { fn({ target, preventDefault() {}, stopPropagation() {} }); } catch (e) { /* another listener's */ } });
   return docEl.dataset.view || null; };
-console.log(JSON.stringify({ drew, clicks: [click(el("SUMMARY", {}, el("DETAILS", {}, body))), click(el("SPAN", {}, back))] }));
+console.log(JSON.stringify({ threw, drew, clicks: [click(el("SUMMARY", {}, el("DETAILS", {}, body))), click(el("SPAN", {}, back))] }));
 """
 
 
