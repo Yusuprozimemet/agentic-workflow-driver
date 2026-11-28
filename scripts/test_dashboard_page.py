@@ -1236,8 +1236,9 @@ CARDS = (1, 2, 6, 7, 10)
 FOLDED = (6, 1, 2, 7, 10)
 FOLDS = ["g1-fold", "g7-fold", "g6-fold", "g2-fold", "g10-fold"]  # in the page's order, front page first
 GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist", "g11-fold", "g11", "g11-plot", "g11-table", "cel",
-            "cel-fig", "how-fold", "how-this-works")
-GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how")
+            "cel-fig", "how-fold", "how-this-works", "lrn", "lrn-figs", "lrn-scroll", "lrn-epi", "lrn-dmb", "lrn-under", "lrn-stamp",
+            "lrn-finds", "lrn-bends", "lrn-days", "lrn-fixes", "lrn-tip")
+GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how", "lrn")
 # Links to the graphs that left still land on the drawing in their place: an empty anchor in its section.
 ANCHORS = (("prt", ("g3", "g4", "g5")), ("atp", ("g8",)), ("rng", ("g9",)))
 EYEBROWS = {"whr": "Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop", "prt": "Graphs 3–5 · drawn as proteins",
@@ -1720,73 +1721,6 @@ class ActogramPageTest(unittest.TestCase):
         loop = read("dashboard.js")
         loop = loop[loop.index('["rng", rngDraw], ["act", actDraw]]'):]
         self.assertIn('"Not measured yet: ", rich(g.empty)', loop[:loop.index("});")])
-
-
-# lrnDraw() on the model of the data from stdin, on a document that keeps every node: how many marks of each kind it
-# drew, the words of its figures, and which marks a Day's button dims.
-LRN = r"""
-const fs = require("fs"), vm = require("vm"), els = {};
-const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "",
-  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); } },
-  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k]; }, appendChild(c) { this.kids.push(c); return c; },
-  append(...c) { this.kids.push(...c); }, replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; }, addEventListener() {} };
-  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
-  return n; };
-const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
-const $ = id => els[id] || (els[id] = node(id));
-const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $ });
-console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
-  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
-  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
-  const is = (root, c) => all(root).filter(e => has(e, c)).length;
-  const keys = (root, re) => all(root).filter(e => e.attrs && re.test(e.attrs["data-k"] || "")).map(e => e.attrs["data-k"]);
-  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
-  const days = [], e = $("lrn-epi"), d = $("lrn-dmb");
-  lrnDraw(model(DATA).lrn, $, days);
-  days.forEach(f => f(8));
-  ({ bars: keys(e, /^d/), lines: keys(e, /^f/), rows: keys(d, /^p/), before: is(e, "l-before"), past: is(e, "l-past"), hatch: is(e, "l-pasth"),
-     held: is(d, "l-dot-held"), less: is(d, "l-dot-less"), back: is(d, "l-dot-back"), early: is(d, "l-dot-early"), dim: [...all(e), ...all(d)].filter(x => has(x, "mk-dim")).map(x => x.attrs["data-k"]),
-     figs: words($("lrn-figs")).replace(/\\s+/g, " ").trim(), table: $("lrn-fixes").kids[1].kids.length })`, ctx)));
-"""
-
-
-class LearnPageTest(unittest.TestCase):
-    def setUp(self):
-        if not shutil.which("node"):
-            self.skipTest("needs node")
-
-    def test_does_it_learn_draws_a_bar_per_day_a_line_per_fix_day_and_a_row_per_fix_red_never_alone(self):
-        def fix(pr, day, before, after, verdict=None):
-            return dict(pr=pr, title=f"fix {pr}", merged="2026-11-10T08:00:00Z", from_day=day, stops=["D07.1"], before=before,
-                        after=after, after_ids=[f"D08.{i}" for i in range(after)], days_since=2, first_day=7,
-                        days_before=1 if day else 0, rate_before=before if day else None,
-                        rate_after=round(after / 2, 2) if day else None, gated=[], leaked=[f"D08.{i}" for i in range(after)],
-                        verdict=verdict)
-        learning = dict(head="abc1234", last_pr=9, generated="2026-11-24", repeats=5, past_fix=2, held=1, problems=[],
-                        days=[dict(day=7, n=2, before=["D07.2", "D07.3"], past_fix=[], fixes=[]),
-                              dict(day=8, n=3, before=["D08.1"], past_fix=["D08.2", "D08.3"], fixes=[112]),
-                              dict(day=9, n=0, before=[], past_fix=[], fixes=[133])],
-                        fixes=[fix(112, 8, 4, 2, "reduced"), fix(133, 9, 1, 0, "gone"), fix(150, None, 1, 0)])
-        out = node(LRN, data(learning=learning))
-        self.assertEqual(out["bars"], ["d7", "d8", "d9"])
-        self.assertEqual(out["lines"], ["f8", "f9"])
-        self.assertEqual(out["rows"], ["p112", "p133", "p150"])
-        # a grey segment for each Day with a repeat before a fix; each red segment carries its hatch
-        self.assertEqual((out["before"], out["past"], out["hatch"]), (2, 1, 1))
-        # a fix in force gets a dot after it, ticked when gone (133), arrowed when reduced (112), crossed when not; one
-        # that counts from no Day yet gets none: three fixes, two after dots
-        self.assertEqual((out["held"], out["less"], out["back"], out["early"]), (1, 1, 0, 0))
-        # Day 8's button dims every mark of another Day: the bars, the fix lines and the fixes' rows
-        self.assertEqual(sorted(out["dim"]), ["d7", "d9", "f9", "p133", "p150"])
-        self.assertIn("5 times an old problem came back", out["figs"])
-        self.assertIn("2 of them although a fix was in place", out["figs"])
-        self.assertIn("2 fixes old enough to judge", out["figs"])
-        self.assertIn("1 gone, 1 reduced, 0 not reduced", out["figs"])
-        self.assertEqual(out["table"], 3)
-
-    def test_does_it_learn_without_a_merged_day_says_so_under_not_measured(self):
-        self.assertIn("empty", model(data(learning=dict(days=[], fixes=[])))["lrn"])
-        self.assertIn("empty", model(data())["lrn"])
 
 
 def one_day_key():
@@ -2523,7 +2457,7 @@ class CellPageTest(unittest.TestCase):
         front = html[html.index('<div class="view" id="v-front">'):html.index('<div class="view" id="v-back" hidden>')]
         back = html[html.index('<div class="view" id="v-back" hidden>'):html.index("<footer>")]
         graphs = lambda part: re.findall(r'<section class="graph(?: foot)?" id="([\w-]+)"[ >]', part)  # noqa: E731
-        self.assertEqual(graphs(front), ["rdg", "lrn", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
+        self.assertEqual(graphs(front), ["rdg", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
         self.assertEqual(graphs(back), ["gel", "g12", "rng", "act", "fil"])
         # first under its chapter's head, the template inside its section, and one template on the page
         self.assertLess(front.index("<h2 class=\"chapter\">What happens inside a Day?<small>"), front.index('<section class="graph" id="cell">'))
@@ -2812,6 +2746,129 @@ class CellPageTest(unittest.TestCase):
         self.assertEqual(([d["phase"] for d in got["meta"]["days"]], got["now"]["start"]), ([None, None], 2))
 
 
+# dayToCell() on a page of three Day buttons ("All Days" first, pressed) whose click presses the button alone, as the
+# page's own listener does, and a #cell that records each scrollIntoView: after each call, the clicks per button, the
+# first letter of each aria-pressed, and how many scrolls; then each scroll's behaviour. null with no such function.
+DAY_TO_CELL = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: {} });
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+const run = (reduced, calls) => {
+  const chips = ["true", "false", "false"].map(p => ({ attrs: { "aria-pressed": p }, clicks: 0, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+    click() { this.clicks++; chips.forEach(x => { x.attrs["aria-pressed"] = x === this ? "true" : "false"; }); } }));
+  const scrolls = [], els = { days: { querySelectorAll: s => s === "button" ? chips : [] }, cell: { scrollIntoView: o => scrolls.push(o) } };
+  const M = { days: [{ day: 3 }, { day: 4 }] }, win = { matchMedia: q => ({ matches: reduced && /reduce/.test(q) }) };
+  const after = calls.map(day => { ctx.dayToCell(day, M, id => els[id], win); return [chips.map(b => b.clicks).join(" "), chips.map(b => b.attrs["aria-pressed"][0]).join(""), scrolls.length]; });
+  return { after, scrolls: scrolls.map(o => `${o.block} ${o.behavior}`) };
+};
+console.log(JSON.stringify(typeof ctx.dayToCell !== "function" ? null : { motion: run(false, [4, 4, 9]), reduced: run(true, [3]) }));
+"""
+
+# protDraw() on GEL_PRT's document, its listeners kept: a Day's number on a chain clicked, another's given Enter and
+# a third key, and the Days the toCell passed in was called with; then drawn with none, how many marks are buttons.
+PRT_LINK = GEL_PRT[:GEL_PRT.index("console.log(")].replace(
+    "addEventListener() {} };", "on: {}, addEventListener(type, fn) { (this.on[type] = this.on[type] || []).push(fn); } };") + r"""console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
+  const all = n => [n, ...(n.kids || []).filter(k => k && typeof k === "object").flatMap(all)];
+  const has = (e, c) => ((e.attrs && e.attrs.class) || "").split(" ").includes(c);
+  const fire = (e, type, ev) => ((e.on || {})[type] || []).forEach(f => f(Object.assign({ key: "", target: e, preventDefault() {} }, ev || {})));
+  const M = model(DATA), opened = [];
+  protDraw(M.prt, $, [], d => opened.push(d));
+  const ts = all($("prt-fig")).filter(e => has(e, "t-day") && e.attrs["data-d"] != null);
+  const a = ts[0], b = ts.find(t => t.attrs["data-d"] !== (a && a.attrs["data-d"]));
+  if (a) fire(a, "click");
+  if (b) { fire(b, "keydown", { key: "Enter" }); fire(b, "keydown", { key: "Tab" }); }
+  const want = [a, b].filter(Boolean).map(t => +t.attrs["data-d"]);
+  protDraw(M.prt, $, []);
+  ({ n: ts.length, want, opened, plain: all($("prt-fig")).filter(e => e.attrs && e.attrs.role === "button").length })`, ctx)));
+"""
+
+# the loop station's panel and the spec-auditor's, as CELL_PANELS opens them: the loop's total line, each fix's line
+# there, and each fix's line at the spec-auditor's station.
+CELL_LOOP = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell, R = root(), E = ctx.cellEngine(C, R, { reduced: true, at: { day: 1, paused: true, end: true } });
+  const lines = () => find(R.getElementById("panel"), n => n.tag === "li").map(words).filter(l => l.startsWith("#"));
+  E.show({ type: "stn", id: "loop" });
+  const total = find(R.getElementById("panel"), n => n.tag === "p" && /^(\d+ fix(es)?: |No fix yet\.)/.test(words(n))).map(words), loop = lines();
+  E.show({ type: "stn", id: "sa" });
+  return { total, loop, sa: lines() };
+""")
+
+
+class ImmunityLinksTest(unittest.TestCase):
+    """A Day opened in the cell from graph 3, and the cell's loop station saying how each fix did."""
+
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def test_day_to_cell_presses_the_days_button_once_and_brings_the_cell_into_view(self):
+        out = node(DAY_TO_CELL, {})
+        self.assertIsNotNone(out, "the page has no dayToCell")
+        # Day 4 (the third button) pressed; again: not pressed a second time, so it stays lit, and scrolled again;
+        # Day 9 has no button: nothing
+        self.assertEqual(out["motion"]["after"], [["0 0 1", "fft", 1], ["0 0 1", "fft", 2], ["0 0 1", "fft", 2]])
+        self.assertEqual(out["motion"]["scrolls"], ["start smooth", "start smooth"])
+        self.assertEqual(out["reduced"], {"after": [["0 1 0", "ftf", 1]], "scrolls": ["start auto"]})
+
+    def test_a_days_number_on_a_chain_opens_it_in_the_cell(self):
+        out = node(PRT_LINK, demo_data())
+        self.assertEqual((out["n"] > 1, len(out["want"])), (True, 2))
+        # the click and the Enter, each with its own Day; the Tab opens nothing
+        self.assertEqual(out["opened"], out["want"])
+        self.assertEqual(out["plain"], 0)
+
+    def loop(self, fixes):
+        data = cell_data()
+        data["learning"] = dict(data["learning"], fixes=fixes)
+        out = node(CELL_LOOP, data)
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        return out
+
+    def fix(self, of, **more):
+        return next(dict(f, **more) for f in cell_data()["learning"]["fixes"] if f["pr"] == of)
+
+    def test_the_loop_station_says_each_fixs_rates_and_verdict_and_a_total(self):
+        fix = self.fix
+        # one fix of each kind: reduced; not reduced; counted from no Day, though its record has a rate since; too
+        # early, with no rate before or since; gone
+        out = self.loop([fix(31, before=23, after=3, rate_before=4.6, rate_after=0.33, verdict="reduced"),
+                         fix(32, before=2, after=3, rate_before=0.5, rate_after=1.5, verdict="not reduced"), fix(33, rate_after=0.5),
+                         fix(34, rate_before=None, rate_after=None), fix(31, pr=35, title="fix 35", before=2, rate_after=0.0)])
+        self.assertEqual(len(out["total"]), 1)
+        self.assertEqual(out["total"][0][:40], "5 fixes: 1 gone, 1 reduced, 1 not reduce")
+        self.assertEqual(out["total"][0][40:], "d, 1 too early to say, 1 not counted from a Day yet.")
+        want = ["#31 from Day 1: 23 of its kind before, 3 since; 4.6 a Day before, 0.33 since: reduced. fix 31",
+                "#32 from Day 2, no station chosen yet: 2 of its kind before, 3 since; 0.5 a Day before, 1.5 since: not reduced. fix 32",
+                "#33 not counted from a Day yet: 1 of its kind before, 0 since; 1 a Day before. fix 33",
+                "#34 from Day 2: 1 of its kind before, 0 since: too early to say: 1 of 5 Days since. fix 34",
+                "#35 from Day 1, no station chosen yet: 2 of its kind before, 0 since; 1 a Day before, 0 since: gone. fix 35"]
+        self.assertEqual(len(out["loop"]), len(want))
+        for k, (line, w) in enumerate(zip(out["loop"], want)):
+            self.assert_pieces(k, line, w)
+        # the spec-auditor's station: its fix with the same rates
+        self.assertEqual(len(out["sa"]), 1)
+        self.assert_pieces("sa", out["sa"][0], "#31 in place since Day 1: 23 of its kind before, 3 since; 4.6 a Day before, 0.33 since: reduced")
+
+    def assert_pieces(self, k, got, want):
+        """got is want, compared a clause at a time (cut after each ";" and ":"), so a failure prints one short clause."""
+        g, w = re.split(r"(?<=[;:]) ", got), re.split(r"(?<=[;:]) ", want)
+        self.assertEqual((k, len(g)), (k, len(w)))
+        for i, (a, b) in enumerate(zip(g, w)):
+            self.assertEqual((k, i, a), (k, i, b))
+
+    def test_the_loop_stations_total_counts_each_verdict_by_its_own_word(self):
+        fix = self.fix
+        # one fix: singular
+        self.assertEqual(self.loop([fix(31)])["total"], ["1 fix: 1 gone."])
+        # verdicts the page has no word of its own for, after gone, in the order met; a kind with no fix is left out
+        fixes = [fix(31, verdict="held"), fix(31, pr=36, verdict="gone"), fix(31, pr=37, verdict="worse"),
+                 fix(31, pr=38, verdict="held"), fix(32)]
+        self.assertEqual(self.loop(fixes)["total"], ["5 fixes: 1 gone, 2 held, 1 worse, 1 too early to say."])
+        # no fix at all
+        self.assertEqual(self.loop([])["total"], ["No fix yet."])
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -2939,7 +2996,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
     # The front page, chapter by chapter: each graph's section and where its old card is folded (g1, g7, g6).
-    FRONT = {"rdg": 0, "g1": 0, "lrn": 0, "cell": 1, "prf": 1, "g7": 1, "prt": 2, "g3": 2, "gene": 2, "mrg": 2, "g6": 2, "rfx": 3, "atp": 4, "g8": 4}
+    FRONT = {"rdg": 0, "g1": 0, "cell": 1, "prf": 1, "g7": 1, "prt": 2, "g3": 2, "gene": 2, "mrg": 2, "g6": 2, "rfx": 3, "atp": 4, "g8": 4}
     FRONT_HEADS = ["Where is it going?", "What happens inside a Day?", "What can it do, and can it be trusted?", "Can it be left alone?",
                    "What does it take?"]
     BACK = {"gel": 0, "g2": 0, "g12": 1, "rng": 2, "g9": 2, "act": 2, "g10": 2, "fil": 3}
@@ -2957,7 +3014,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r'<div class="view" id="(v-front|v-back)"', html), ["v-front", "v-back"])
         front = html[html.index('<div class="view" id="v-front"'):html.index('<div class="view" id="v-back"')]
         self.assertEqual(re.findall(r'<section class="graph(?: foot)?" id="([\w-]+)"[ >]', front),
-                         ["rdg", "lrn", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
+                         ["rdg", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', front), self.FRONT_HEADS)
         self.assertEqual(self.chapters(front, self.FRONT_HEADS, self.FRONT), self.FRONT)
         self.assertLess(front.index('id="atp"'), front.find('<div class="to-back">'))
@@ -2980,7 +3037,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual((to_back, len(re.findall(r'<section class="graph"', back))), (["Five"], 5))
 
     # Each picture's container, and the lead of its closed line where it is not "Under the picture".
-    UNDER = ("rdg", "lrn", "prf-all", "one", "fil", "prt", "gene", "mrg-all", "rew", "rfx", "atp", "gel", "g12", "rng", "act")
+    UNDER = ("rdg", "prf-all", "one", "fil", "prt", "gene", "mrg-all", "rew", "rfx", "atp", "gel", "g12", "rng", "act")
     UNDER_LEAD = {"one": "Under this Day's picture", "rew": "Under the rewrites"}
     OLD_CARDS = {"g1-fold": "rdg-under", "g2-fold": "gel-under", "g6-fold": "mrg-all-under", "g7-fold": "prf-all-under", "g10-fold": "act-under"}
 

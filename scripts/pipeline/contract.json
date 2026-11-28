@@ -179,7 +179,7 @@
       "spec_drift_view_learning"
     ],
     "drawn_by": [],
-    "graph": "not drawn: the views read it (Graph 13)"
+    "graph": "not drawn: the views read it (the cell and graph 1's row of old problems back)"
   },
   "user_stories": {
     "what": "Each pull request's user story and the abilities named in plan.md.",
@@ -543,9 +543,9 @@
     ],
     "drawn_by": [
       "cellGraph",
-      "lrnGraph"
+      "rdgGraph"
     ],
-    "graph": "Graph 13"
+    "graph": "The cell's loop station and graph 1's row of old problems back"
   },
   "one_day": {
     "what": "One Day step by step, each defect at the step it was caught.",

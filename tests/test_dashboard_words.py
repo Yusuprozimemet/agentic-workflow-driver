@@ -1,6 +1,6 @@
 """The dashboard's words for its biology: the plan is the gene, graph 1 is its reading, proofreading is graph 7's
-second layer alone, graph 13 is read as immunity, two sets of merges no criterion cites have names of their own,
-and the file map's small words say what each station is in the cell."""
+second layer alone, the row of old problems back is read as immunity, two sets of merges no criterion cites have names
+of their own, and the file map's small words say what each station is in the cell."""
 
 import importlib.util
 import os
@@ -61,16 +61,18 @@ class OneBiologyTest(unittest.TestCase):
         layers = [L["name"] for L in views().PRF_LAYERS if "proofreading" in L["bio"]]
         self.assertEqual(layers, ["While writing"])
 
-    def test_the_ring_and_graph_13_say_what_they_are_read_as(self):
+    def test_the_ring_and_the_row_of_old_problems_back_say_what_they_are_read_as(self):
         for words in (
             "Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop",
-            "Graph 13 · read as immunity, after the checking",
             (
                 "Read it as immunity: a fix is the memory of a problem met once, and a problem "
                 "that comes back although its fix was in place is an escape."
             ),
         ):
             self.assertEqual(self.says(self.html, words), (words[:48], True))
+        # graph 13 left the page: its eyebrow is in neither file (named in ASCII, so a failure prints the same anywhere)
+        gone = "Graph 13 · read as immunity" in self.html + self.js
+        self.assertEqual(("graph 13's eyebrow", gone), ("graph 13's eyebrow", False))
 
     def test_graph_12_and_graph_6_name_what_they_count(self):
         for words, there in (

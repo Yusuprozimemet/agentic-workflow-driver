@@ -1861,79 +1861,21 @@ footer { font-size: 12.5px; color: var(--muted); }
 #fil #fil-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px;overflow-wrap:anywhere}
 #fil #fil-tip .l{margin-top:4px}
 
-/* Graph 13, does it learn. Every rule is under #lrn; the colours are the dashboard's tokens. Red (a repeat past a fix,
-   a fix that did not hold) always comes with a second sign: a hatch on the bar, a cross on the dot. */
-#lrn{--shadow:rgba(14,17,22,.16);gap:10px}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #lrn{--shadow:rgba(0,0,0,.5)}}
-:root[data-theme="dark"] #lrn{--shadow:rgba(0,0,0,.5)}
-#lrn h3{font:600 15px/1.25 var(--display);margin:14px 0 8px;text-wrap:balance}
-#lrn .cols h3{margin-top:0}
-#lrn .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:12px 0 0}
-#lrn .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 22px;border-block:1px solid var(--line);padding:9px 0}
-#lrn .figs>div{min-width:0;display:flex;align-items:flex-start;gap:10px}
-#lrn .figs .num{font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:2px}
-#lrn .figs .txt{min-width:0}
-#lrn .figs .what{display:block;font-weight:600;color:var(--ink);line-height:1.3}
-#lrn .figs .sub{display:block;font:400 12px/1.35 var(--sans);color:var(--muted)}
-#lrn .keys{display:flex;flex-wrap:wrap;align-items:center;gap:3px 16px;margin:0 0 6px;font-size:12px;color:var(--ink-2)}
-#lrn .keys span{display:inline-flex;align-items:center;gap:6px}
-#lrn .keys svg{flex:none;overflow:visible}
-#lrn .hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
-#lrn .read{margin:10px 0 0;max-width:860px;font-size:13.5px;color:var(--ink-2)}
-#lrn .scroll{overflow-x:auto;min-width:0}
-#lrn .fig{display:block;width:100%;height:auto}
-#lrn #lrn-epi{min-width:640px;max-width:980px}
-#lrn #lrn-dmb{min-width:880px}
-#lrn .fig text{font-family:var(--sans)}
-#lrn .l-grid{stroke:var(--line);stroke-width:1}
-#lrn .l-base{stroke:var(--axis);stroke-width:1}
-#lrn .l-tick{font:400 11px var(--mono);fill:var(--muted);font-variant-numeric:tabular-nums}
-#lrn .l-axis{font:400 11.5px var(--sans);fill:var(--muted)}
-#lrn .l-n{font:500 12px var(--mono);fill:var(--ink);font-variant-numeric:tabular-nums}
-#lrn .l-n0{font:400 12px var(--mono);fill:var(--muted)}
-#lrn .l-before{fill:var(--s3)}
-#lrn .l-past{fill:var(--broken)}
-#lrn .l-pasth{fill:url(#lrn-hatch)}
-#lrn .l-gate{fill:var(--repair)}
-#lrn .l-gateh{fill:url(#lrn-hatch)}
-#lrn .keys .l-gateh{fill:none;stroke:var(--card);stroke-width:2;stroke-dasharray:2 2.4}
-#lrn .l-hatchl{fill:var(--card);fill-opacity:.55}
-#lrn .keys .l-pasth{fill:none;stroke:var(--card);stroke-width:2;stroke-dasharray:2 2.4}
-#lrn .l-fixline{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3}
-#lrn .l-fixcap{fill:var(--ink)}
-#lrn .l-fixt{font:500 11.5px var(--sans);fill:var(--ink)}
-#lrn .l-name{font:400 13.5px var(--sans);fill:var(--ink)}
-#lrn .l-sub{font:400 10.5px var(--mono);fill:var(--muted)}
-#lrn .l-verdict{font:500 12.5px var(--sans);fill:var(--ink)}
-#lrn .l-link{fill:none;stroke:var(--axis);stroke-width:3;stroke-linecap:round}
-#lrn .l-row{fill:none;stroke:var(--line);stroke-width:1}
-#lrn .l-dot-before{fill:var(--s3)}
-#lrn .l-dot-held{fill:var(--proven);stroke:var(--card);stroke-width:2}
-#lrn .l-dot-back{fill:var(--broken);stroke:var(--card);stroke-width:2}
-#lrn .l-dot-less{fill:var(--proven);stroke:var(--card);stroke-width:2}
-#lrn .l-dot-early{fill:var(--card);stroke:var(--muted);stroke-width:2}
-#lrn .keys .l-dot-held,#lrn .keys .l-dot-back,#lrn .keys .l-dot-less{stroke:none}
-#lrn .l-on{fill:none;stroke:var(--card);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-#lrn .hit{fill:var(--ink);fill-opacity:0}
-#lrn .hitl{fill:none;stroke:var(--ink);stroke-opacity:0;stroke-width:14;pointer-events:stroke}
-#lrn .fig .b{cursor:default}
-#lrn .fig .b:focus{outline:none}
-#lrn .fig .b:hover .hit{fill-opacity:.06}
-#lrn .fig .b:hover .hitl{stroke-opacity:.08}
-#lrn .fig .b:focus-visible .hit{fill-opacity:.06;stroke:var(--link);stroke-width:1.6}
-#lrn .fig .b:focus-visible .hitl{stroke:var(--link);stroke-opacity:.3}
-#lrn .fig .b.mk-dim{opacity:.25}
-#lrn .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px 32px;margin-top:12px}
-#lrn .cols>div{min-width:0}
-#lrn .finds{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
-#lrn .finds li{font-size:13.5px;color:var(--ink-2);padding-left:12px;border-left:2px solid var(--s2)}
-#lrn .finds li.good{border-left-color:var(--proven)}
-#lrn .finds li.fault{border-left-color:var(--broken)}
-#lrn .finds b,#lrn .plain b{color:var(--ink);font-weight:600}
-#lrn .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
-#lrn .exact table+table,#lrn .scroll-x+.scroll-x{margin-top:14px}
-#lrn #lrn-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
-#lrn #lrn-tip[hidden]{display:none}
-#lrn #lrn-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
-#lrn #lrn-tip .l{margin-top:4px;overflow-wrap:anywhere}
-#lrn #lrn-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2);overflow-wrap:anywhere}
+/* Graph 1's row of old problems back: red (got past although a fix was in place) is never
+   alone, since both parts past a fix are hatched; a Day a fix counts from has a dashed tick. A Day's number, its stray
+   numbers and its bar open the Day in the cell. */
+#rdg .bk-before{fill:var(--s3)}
+#rdg .bk-gate{fill:var(--repair)}
+#rdg .bk-past{fill:var(--broken)}
+#rdg .bk-gateh,#rdg .bk-pasth{fill:url(#rdg-bk-hatch)}
+#rdg .lg .bk-gateh,#rdg .lg .bk-pasth{fill:none;stroke:var(--card);stroke-width:2;stroke-dasharray:2 2.4}
+#rdg .bk-hatchl{fill:var(--card);fill-opacity:.55}
+#rdg .bk-fix{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3}
+#rdg .bk-n{font:500 9.5px var(--mono);fill:var(--ink)}
+#rdg .bk-n0{font:400 9.5px var(--mono);fill:var(--muted);opacity:.6}
+#rdg .fig text[data-day],#rdg .fig .b.rep[data-day]{cursor:pointer}
+#rdg .fig text[data-day]:hover{text-decoration:underline}
+#rdg .fig text[data-day]:focus-visible{outline:2px solid var(--link);outline-offset:1px}
+#prt .fig text[data-day]{cursor:pointer}
+#prt .fig text[data-day]:hover{text-decoration:underline}
+#prt .fig text[data-day]:focus-visible{outline:2px solid var(--link);outline-offset:1px}
