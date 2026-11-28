@@ -140,7 +140,8 @@ def defines(made_by):
 class DataContractTest(unittest.TestCase):
     def test_every_key_written_is_in_the_contract_and_no_other(self):
         keys, _ = written()
-        self.assertEqual(sorted(contract()), sorted(keys))
+        # (in the data and not the contract, in the contract and not the data)
+        self.assertEqual((sorted(set(keys) - set(contract())), sorted(set(contract()) - set(keys))), ([], []))
 
     def test_each_entry_has_its_fields(self):
         for key, entry in contract().items():
@@ -158,17 +159,13 @@ class DataContractTest(unittest.TestCase):
 
     def test_each_key_is_read_by_the_views_it_names(self):
         read = readers()
-        self.assertEqual(
-            {k: e["read_by"] for k, e in contract().items() if e["read_by"]},
-            {k: sorted(read[k]) for k in contract() if k in read},
-        )
+        # the keys whose readers the contract names wrong
+        self.assertEqual([k for k, e in contract().items() if e["read_by"] != sorted(read.get(k, ()))], [])
 
     def test_each_key_is_drawn_by_the_functions_it_names(self):
         drawn = drawers()
-        self.assertEqual(
-            {k: e["drawn_by"] for k, e in contract().items() if e["drawn_by"]},
-            {k: sorted(drawn[k]) for k in contract() if k in drawn},
-        )
+        # the keys whose drawers the contract names wrong
+        self.assertEqual([k for k, e in contract().items() if e["drawn_by"] != sorted(drawn.get(k, ()))], [])
 
     def test_the_page_reads_no_key_the_data_does_not_have(self):
         # "demo" is what spec_drift_page.page_data adds when there are no day specs yet (demo-data.py's data)
