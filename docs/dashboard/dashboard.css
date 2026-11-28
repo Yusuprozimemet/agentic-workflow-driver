@@ -1701,10 +1701,8 @@ footer { font-size: 12.5px; color: var(--muted); }
 #act .exact .scroll-x{max-width:100%;overflow-x:auto}
 #act .exact th,#act .exact td{white-space:nowrap}
 
-/* Graph 11 as reflex arcs. Every rule is under #rfx; the colours are the dashboard's tokens, and only the ones it lacks are defined here. */
-#rfx{--shadow:rgba(14,17,22,.16);gap:10px}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #rfx{--shadow:rgba(0,0,0,.5)}}
-:root[data-theme="dark"] #rfx{--shadow:rgba(0,0,0,.5)}
+/* Graph 11: the driver's steps, each replayed as a cell. Every rule is under #rfx; the colours are the dashboard's tokens. */
+#rfx{gap:10px}
 
 #rfx .stamp{font:400 12px/1.4 var(--mono);color:var(--muted);margin:12px 0 0}
 #rfx h3{font:600 15px/1.25 var(--display);margin:0 0 8px;text-wrap:balance}
@@ -1718,70 +1716,25 @@ footer { font-size: 12.5px; color: var(--muted); }
 #rfx .figs .what{display:block;font-weight:600;color:var(--ink);line-height:1.3}
 #rfx .figs .sub{display:block;font:400 12px/1.35 var(--sans);color:var(--muted)}
 
-/* the short key over the figure */
-#rfx .keys{display:flex;flex-wrap:wrap;align-items:center;gap:3px 16px;margin:0;font-size:12px;color:var(--ink-2)}
-#rfx .keys span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-#rfx .keys svg,#rfx .lg svg{flex:none;overflow:visible}
-@media (max-width:640px){#rfx .keys span{white-space:normal}}
+/* the trial for level 2: a box for each pull request in a row with no change asked, filled up to the run */
+#rfx .l2{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:12.5px;color:var(--ink-2)}
+#rfx .l2[hidden]{display:none}
+#rfx .boxes,#rfx .l2-key{display:inline-flex;gap:3px}
+#rfx .box{display:block;width:11px;height:8px;border-radius:2px;border:1px solid var(--s2)}
+#rfx .box.run{background:var(--proven);border-color:var(--proven)}
 
-/* the long key, folded */
-#rfx .lg{display:grid;grid-template-columns:max-content 1fr;gap:9px 20px;margin:12px 0 0;font-size:12.5px;color:var(--ink-2)}
-#rfx .lg dt{font:500 11px/20px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
-#rfx .lg dt small{display:block;font:400 11px/1.2 var(--sans);letter-spacing:0;text-transform:none}
-#rfx .lg dd{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;min-width:0}
-#rfx .lg dd span{display:inline-flex;align-items:center;gap:7px}
-@media (max-width:640px){#rfx .lg{grid-template-columns:1fr;gap:2px 0}#rfx .lg dd{margin-bottom:10px}}
+/* the key, folded */
+#rfx .keys{display:flex;flex-wrap:wrap;align-items:center;gap:3px 16px;margin:10px 0 0;font-size:12px;color:var(--ink-2)}
+#rfx .keys>span{display:inline-flex;align-items:center;gap:6px}
+#rfx .keys svg{flex:none;overflow:visible}
+#rfx .keys>span[hidden]{display:none}
+/* rings, as the strip draws each step's small cell: a fault's and an open step's dashed the same */
+#rfx .x-end{fill:var(--card);stroke-width:2}
+#rfx .x-end.merged,#rfx .x-end.fixed{stroke:var(--proven)}
+#rfx .x-end.maint{stroke:var(--bar)}
+#rfx .x-end.fault{stroke:var(--broken);stroke-dasharray:4 2}
+#rfx .x-end.still{stroke:var(--pending);stroke-dasharray:4 3}
 #rfx .read{margin:10px 0 0;max-width:860px;font-size:13.5px;color:var(--ink-2)}
-
-/* the figure */
-#rfx .scroll{overflow-x:auto;min-width:0}
-#rfx .fig{display:block;width:100%;min-width:1198px;height:auto}
-#rfx .fig text{font-family:var(--sans)}
-#rfx .t-hd{font:600 10px var(--sans);fill:var(--ink-2)}
-#rfx .t-bio{font:500 9px var(--mono);letter-spacing:.07em;fill:var(--muted)}
-#rfx .t-who{font:600 12px var(--sans);fill:var(--ink)}
-#rfx .t-lab{font:600 12px var(--sans);fill:var(--ink)}
-#rfx .t-sub{font:400 9.5px var(--sans);fill:var(--muted)}
-#rfx .t-go{font:500 9.5px var(--sans);fill:var(--ink-2);text-anchor:end;paint-order:stroke;stroke:var(--wash);stroke-width:4px;stroke-linejoin:round}
-#rfx .t-end{font:600 11px var(--sans);fill:var(--ink)}
-#rfx .t-l2{font:500 9.5px var(--sans);fill:var(--ink-2)}
-#rfx .t-none{font:400 9.5px var(--sans);fill:var(--muted);text-anchor:middle}
-#rfx .x-band{fill:var(--wash);stroke:var(--axis);stroke-width:1}
-#rfx .x-track{fill:none;stroke:var(--line);stroke-width:1}
-#rfx .x-nerve{fill:none;stroke:var(--s3);stroke-width:1.6;stroke-linecap:round}
-#rfx .x-nerve.skip{stroke:var(--s2);stroke-width:1.2;stroke-dasharray:1.5 4}
-#rfx .x-nerve.await{stroke:var(--pending);stroke-dasharray:4 3}
-#rfx .x-guide{fill:none;stroke:var(--s2);stroke-width:1;stroke-dasharray:.1 4;stroke-linecap:round}
-#rfx .x-stim{fill:var(--s3)}
-#rfx .x-ses{fill:var(--s3)}
-#rfx .x-fix{fill:var(--repair)}
-#rfx .x-fixn{font:600 9px var(--mono);fill:#0b0b0b;text-anchor:middle}
-#rfx .x-crash{fill:var(--card);stroke:var(--broken);stroke-width:1.6}
-#rfx .x-crashx{fill:none;stroke:var(--broken);stroke-width:1.6;stroke-linecap:round}
-#rfx .x-halo{fill:none;stroke:var(--card);stroke-width:5}
-#rfx .x-br{fill:none;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
-#rfx .x-br.maint{stroke:var(--bar)}
-#rfx .x-br.fault{stroke:var(--broken);stroke-dasharray:5 3}
-#rfx .x-term.maint,#rfx .x-fin.maint{fill:var(--bar)}
-#rfx .x-term.fault,#rfx .x-fin.fault{fill:var(--broken)}
-#rfx .x-fin.merged{fill:var(--proven)}
-#rfx .x-fin.fixed{fill:var(--repair)}
-#rfx .x-fin.still{fill:var(--card);stroke:var(--pending);stroke-width:1.6}
-#rfx .x-pill{fill:var(--unproven);stroke:var(--proven);stroke-width:1.2}
-#rfx .x-pill.await{fill:var(--card);stroke:var(--pending);stroke-dasharray:3 2}
-#rfx .x-pilln{font:500 9.5px var(--mono);fill:var(--ink);text-anchor:middle}
-#rfx .x-go{fill:var(--bar);stroke:var(--bar);stroke-width:1.2;stroke-linejoin:round}
-#rfx .x-go.await{fill:var(--card)}
-#rfx .x-l2{fill:none;stroke:var(--s2);stroke-width:1}
-#rfx .x-l2.run{fill:var(--proven);stroke:var(--proven)}
-#rfx .hit{fill:var(--ink);fill-opacity:0}
-#rfx .hitl{fill:none;stroke:var(--ink);stroke-opacity:0;stroke-width:9;pointer-events:stroke}
-#rfx .fig .b{cursor:default}
-#rfx .fig .b:focus{outline:none}
-#rfx .fig .b:hover .hit{fill-opacity:.07}
-#rfx .fig .b:hover .hitl{stroke-opacity:.08}
-#rfx .fig .b:focus-visible .hit{fill-opacity:.07;stroke:var(--link);stroke-width:1.6}
-#rfx .fig .b:focus-visible .hitl{stroke:var(--link);stroke-opacity:.3;stroke-width:7}
 #rfx .hint{font-size:12.5px;color:var(--muted);margin:0}
 
 /* the folded lists */
@@ -1794,12 +1747,6 @@ footer { font-size: 12.5px; color: var(--muted); }
 #rfx .finds li.maint{border-left-color:var(--bar)}
 #rfx .finds b,#rfx .plain b{color:var(--ink);font-weight:600}
 #rfx .plain{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;color:var(--ink-2)}
-
-#rfx #rfx-tip{position:fixed;z-index:20;left:0;top:0;max-width:min(360px,calc(100vw - 24px));background:var(--card);color:var(--ink-2);border:1px solid var(--s2);border-radius:7px;box-shadow:0 8px 26px var(--shadow);padding:10px 12px;font-size:12.5px;line-height:1.4;pointer-events:none}
-#rfx #rfx-tip[hidden]{display:none}
-#rfx #rfx-tip .t{font:600 12px/1.35 var(--mono);color:var(--ink);margin-bottom:4px}
-#rfx #rfx-tip .l{margin-top:4px}
-#rfx #rfx-tip .q{margin-top:6px;padding-left:8px;border-left:2px solid var(--s2);overflow-wrap:anywhere}
 
 /* The file map: every file of the repository, hung at the station of the workflow it serves. Every rule is under #fil. */
 #fil{--fil-shadow:rgba(14,17,22,.16)}

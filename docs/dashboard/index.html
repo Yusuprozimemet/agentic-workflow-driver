@@ -475,6 +475,22 @@ details.bends{margin-top:10px;font-size:13px;color:var(--ink-2)}
 details.bends summary{cursor:pointer;color:var(--ink-2)}
 details.bends .note{margin:8px 0 0;max-width:110ch}
 .byhand{font-family:var(--sans);font-size:10.5px;fill:var(--learn);font-style:italic}
+/* graph 11's cell, in driver mode: a strip of the driver's steps, and only the stations a step used (the user agent's
+   rule for [hidden] does not reach SVG) */
+[hidden]{display:none}
+.drv .body-only,.drv #lgHand{display:none}
+.strip{display:flex;flex-wrap:wrap;gap:4px}
+.strip .cellbtn{width:64px}
+.cellbtn.merged .m,.cellbtn.fixed .m{stroke:var(--proven)}
+.cellbtn.maint .m{stroke:var(--bar)}
+.cellbtn.fault .m{stroke:var(--broken);stroke-dasharray:4 2}
+.cellbtn.still .m{stroke:var(--pending);stroke-dasharray:4 3}
+.sg{fill:var(--spec)}
+.se{fill:var(--code);stroke:var(--card);stroke-width:1.5;cursor:pointer}
+.cx{fill:none;stroke:var(--broken);stroke-width:3;stroke-linecap:round;cursor:pointer}
+.pk{stroke:var(--card);stroke-width:1.5;cursor:pointer}
+.pk.maint{fill:var(--bar)}
+.pk.fault{fill:var(--broken)}
 </style>
     <div class="wrap">
       <div class="modes">
@@ -506,10 +522,10 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
         <div class="scene-box">
           <svg id="scene" viewBox="0 0 1300 640" role="img" aria-label="One Day drawn as a cell: the plan and the spec in the nucleus, tests, code and checks in the cytoplasm, the maintainer at the membrane, and main outside.">
             <!-- the improve loop, over the top -->
-            <path class="loop" d="M948,516 H1286 V34 H300 V104"/>
-            <path class="loop" d="M770,34 V198"/>
-            <path class="arrow2" d="M295,102 l5,9 l5,-9 z"/>
-            <path class="arrow2" d="M765,194 l5,9 l5,-9 z"/>
+            <path class="loop body-only" d="M948,516 H1286 V34 H300 V104"/>
+            <path class="loop body-only" d="M770,34 V198"/>
+            <path class="arrow2 body-only" d="M295,102 l5,9 l5,-9 z"/>
+            <path class="arrow2 body-only" d="M765,194 l5,9 l5,-9 z"/>
             <g class="stn" id="s-loop" tabindex="0" role="button" aria-label="Immune memory">
               <rect class="shape" x="976" y="10" width="300" height="22" rx="11" style="stroke-width:1"/>
               <text class="sub" x="1126" y="25" text-anchor="middle">the improve loop: only when the maintainer asks</text>
@@ -649,8 +665,8 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
               <text class="lbl" id="binLbl" x="514" y="584" text-anchor="middle">broken down: 0</text>
               <text class="sub" x="514" y="598" text-anchor="middle">the proteasome</text>
             </g>
-            <path class="flow" d="M582,516 H918"/>
-            <path class="arrow" d="M914,511 l9,5 l-9,5 z"/>
+            <path class="flow body-only" d="M582,516 H918"/>
+            <path class="arrow body-only" d="M914,511 l9,5 l-9,5 z"/>
             <g class="stn" id="s-mhc" tabindex="0" role="button" aria-label="Shown on the surface: the Day's Notes, antigen presentation">
               <circle class="halo" cx="936" cy="516" r="24"/>
               <rect x="924" y="500" width="24" height="32" style="fill:var(--card);stroke:none"/>
@@ -683,7 +699,7 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
             </g>
             <g id="learnG"></g>
             <g id="dyn"></g>
-            <text class="byhand" x="1282" y="508" text-anchor="end">from the Notes to a fix: chosen by hand</text>
+            <text class="byhand body-only" x="1282" y="508" text-anchor="end">from the Notes to a fix: chosen by hand</text>
           </svg>
         </div>
       <div class="controls">
@@ -1057,26 +1073,26 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
 
   <section class="graph" id="rfx">
   <div class="graph-head">
-    <p class="graph-n">Graph 11 · drawn as reflex arcs</p>
+    <p class="graph-n">Graph 11 · each step the driver started, replayed as a cell</p>
     <h2>Can it run without a person?</h2>
-    <p class="graph-say">Each row is one step the driver started, read left to right; a row that climbs to the band at the top needed a person.</p>
+    <p class="graph-say">Pick a step in the row of small cells and press play: only the stations that step used are drawn.</p>
   </div>
   <div class="figs" id="rfx-figs"></div>
-  <p class="keys"><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>step started</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>a session</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>its fix rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>crashed</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for the maintainer</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked by a fault</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>pull request merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge: the plan requires it every time, so it is not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>awaited</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>ended with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></p>
-  <div class="scroll" id="rfx-scroll"><svg class="fig" id="rfx-fig" viewBox="0 0 1198 211" role="group"></svg></div>
+  <div class="l2" id="rfx-l2" hidden></div>
+  <div id="rfx-cell-host" role="group"></div><p class="stamp" id="rfx-cell-none" hidden></p>
   <details class="under" id="rfx-under"><summary><b>Under the picture</b><span class="under-n" id="rfx-under-n"></span></summary>
   <p class="hint" id="rfx-hint"></p>
   <details class="exact"><summary>How to read it</summary>
-    <p class="read">A reflex is what the body does without asking the brain. Here a step the driver finished without a park is a reflex: the signal runs from the step's start, through its sessions, to a pull request, and stays below the band. A step that parked leaves its row at the session where it parked and climbs to the band. It comes back down where the step took up again; if it never comes back, the step ended with the person.</p>
-    <p class="read">The diamond near the end of a row is the maintainer's go-ahead to merge. The plan requires it at every pull request, so it is drawn the same on every row and is not a park: "without a person" here means without a park, no more. Rows run top to bottom in the order the driver started them, and the distance along a row is order, not time. The Days and the pull request numbers are those of the project the driver ran on, not this repository's.</p>
-    <p class="read">Why a reflex: it answers the graph's own question, which steps needed the brain.</p>
-    <dl class="lg"><dt>The step started <small>the stimulus</small></dt><dd><span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path class="x-stim" d="M1 1l9 5-9 5z"/></svg>one row for each step the driver started, with its Day in the project it ran on</span></dd><dt>A session <small>a signal along the nerve</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-ses" cx="5" cy="5" r="4.5"/></svg>one session the driver ran for the step</span><span><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle class="x-fix" cx="7" cy="7" r="7"/><text class="x-fixn" x="7" y="10.2">2</text></svg>a session that fixed its own pull request, in that many rounds</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-crash" cx="6" cy="6" r="5.2"/><path class="x-crashx" d="M3.5 3.5l5 5m0 -5l-5 5"/></svg>a session that crashed: the run log has no end for it</span></dd><dt>A park <small>the signal goes up to the brain</small></dt><dd><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br maint" d="M1 13Q9 13 9 7V4H21"/><circle class="x-term maint" cx="9" cy="4" r="3.6"/></svg>parked for a decision that is the maintainer's</span><span><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path class="x-br fault" d="M1 13Q9 13 9 7V4H21"/><rect class="x-term fault" x="5.5" y=".5" width="7" height="7" rx="1"/></svg>parked because the driver or the kit was at fault</span><span>The branch leaves the row at the session where the step parked and comes back where it took up again. The dotted stretch under it is the way it did not go.</span></dd><dt>The pull request <small>the response</small></dt><dd><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>the pull request the step opened, merged</span><span><svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><rect class="x-pill await" x=".6" y=".6" width="24.8" height="12.8" rx="6.4"/><text class="x-pilln" x="13" y="10.2">#</text></svg>open</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go" d="M6 1l5 5-5 5-5-5z"/></svg>the maintainer's go-ahead to merge, which the plan requires at every pull request: not a park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path class="x-go await" d="M6 1l5 5-5 5-5-5z"/></svg>go-ahead awaited</span></dd><dt>How the step ended <small>the mark at the end of its row</small></dt><dd><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin merged" cx="5" cy="5" r="5"/></svg>merged with no park</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin fixed" cx="5" cy="5" r="5"/></svg>merged after fixing itself</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin maint" cx="5" cy="5" r="5"/></svg>parked for the maintainer</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect class="x-fin fault" x=".5" y=".5" width="9" height="9" rx="1.5"/></svg>parked by a fault</span><span><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle class="x-fin still" cx="5" cy="5" r="4.2"/></svg>still open</span></dd><dt>The trial for level 2 <small>no biology here</small></dt><dd><span><svg width="34" height="8" viewBox="0 0 34 8" aria-hidden="true"><rect class="x-l2 run" x="0" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="12" y=".5" width="9" height="7" rx="1.5"/><rect class="x-l2" x="24" y=".5" width="9" height="7" rx="1.5"/></svg>one box for each pull request in a row with no change asked; 15 before the driver merges</span></dd></dl>
+    <p class="read">Each small cell in the row is one step the driver started, in the order it started them, coloured by how the step ended: merged with no park, parked for the maintainer, parked by a fault, or still open. Pick one, and the big cell replays that step.</p>
+    <p class="read">Play shows the driver reading the project's main and its spec and picking the step; each session it ran, at the station that does that kind of work; a session that crashed, as a cross where it stopped; a park, which goes to the membrane and waits there for a person; and the pull request, through CI's checks to the maintainer and, once merged, out to main. A station the step did not use is not drawn.</p>
+    <p class="read">The go-ahead to merge is the maintainer's at every pull request: the plan requires it, so it is drawn on every step and is not a park. "Without a person" here means without a park, no more. The Days and the pull request numbers are those of the project the driver ran on, not this repository's.</p>
+    <p class="keys"><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-end merged" cx="6" cy="6" r="5"/></svg>merged with no park</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-end fixed" cx="6" cy="6" r="5"/></svg>merged after fixing itself</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-end maint" cx="6" cy="6" r="5"/></svg>parked for the maintainer</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-end fault" cx="6" cy="6" r="5"/></svg>parked by a fault</span><span><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><circle class="x-end still" cx="6" cy="6" r="5"/></svg>still open</span><span id="rfx-l2-k" hidden><span class="l2-key" aria-hidden="true"><i class="box run"></i><i class="box"></i><i class="box"></i></span>the trial for level 2: one box for each pull request in a row with no change asked; <span id="rfx-l2-of"></span> before the driver merges</span></p>
     <p class="stamp" id="rfx-stamp"></p>
   </details>
-  <details class="exact"><summary>What the picture shows, and where the model bends</summary>
+  <details class="exact"><summary>What the replay shows, and where the model bends</summary>
     <div class="cols">
       <div>
-        <h3>What the picture shows</h3>
+        <h3>What the replay shows</h3>
         <ul class="finds" id="rfx-finds"></ul>
       </div>
       <div>
@@ -1086,7 +1102,6 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
     </div>
   </details>
   </details>
-  <div id="rfx-tip" hidden></div>
 </section>
 
   <h2 class="chapter">What does it take?<small>dollars, by Day</small></h2>
@@ -1392,7 +1407,7 @@ details.bends .note{margin:8px 0 0;max-width:110ch}
       </div>
       <div>
         <h3>Where the model bends</h3>
-        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
+        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is graph 11's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
       </div>
     </div>
   </details>

@@ -820,12 +820,12 @@ function model(DATA) {
     if (A && A.missing) return { empty: A.missing };
     return A && (A.dates || []).some(x => x.segs.length) ? A : { empty: "no session is recorded yet, so there is no date to draw." };
   }
-  // Graph 11 as reflex arcs, counted in Python (reflex); with the run log or the data branch missing it draws nothing.
+  // Graph 11's steps, counted in Python (reflex); with the run log or the data branch missing it draws nothing.
   function rfxGraph() {
     const R = DATA.reflex;
     if (!R) return { empty: "the driver's run log is not counted for this project yet, so no step is drawn." };
     if (R.missing) return { empty: R.missing };
-    return (R.rows || []).length ? R : { empty: "the driver has started no step yet, so there is no row to draw." };
+    return (R.rows || []).length ? R : { empty: "the driver has started no step yet, so there is no step to replay." };
   }
   function mrgGraph() {
     const G = DATA.merge_graph;
@@ -4085,97 +4085,32 @@ function actDraw(A, get, onDay, onDate) {
   return fig;
 }
 
-/* Graph 11 as reflex arcs: a row for each step the driver started, read left to right from the step through its
-   sessions to its pull request; a step that parked climbs to the band of the person. Every figure and sentence is
-   made in Python (spec_drift_views.reflex); this lays the rows out as the mockup at #228 does. The Days are the
-   driven project's, so the page's Day buttons are not wired here. */
-const RFX_GEO = { top: 64, pitch: 32, stim: 252, first: 330, last: 811, gap: 150, pill: 861, go: 922, fin: 946, band: 28, under: 41 };
+/* Graph 11 around its cell: the figures, the trial for level 2, and the folded lists. Every figure and sentence is
+   made in Python (spec_drift_views.reflex); the steps themselves are replayed in the cell (rfxCellMount). The Days
+   are the driven project's, so the page's Day buttons are not wired here. */
 function rfxDraw(R, get) {
-  const $ = id => get("rfx-" + id), fig = $("fig"), tip = $("tip"), G = RFX_GEO, rows = R.rows || [];
-  const el = (n, a, txt, parent) => svgEl(fig, n, a, txt, parent);
-  const most = Math.max(1, ...rows.map(r => r.sessions.length));
-  // distance along a row is order, not time: the first session at 330, the next ones 150 apart or closer
-  const step = most > 1 ? Math.min(G.gap, (G.last - G.first) / (most - 1)) : 0, xOf = j => G.first + j * step;
-  const yOf = i => G.top + i * G.pitch, bottom = yOf(Math.max(0, rows.length - 1));
-  fig.replaceChildren();
-  fig.setAttribute("viewBox", `0 0 1198 ${bottom + 19}`);
-  fig.setAttribute("aria-label", R.aria);
-  el("rect", { class: "x-band", x: 240, y: 16, width: 716, height: 24, rx: 5 });
-  [["t-who", 0, 32, "The person", "THE BRAIN"], ["t-hd", 0, 9, "The step the driver started", "STIMULUS"], ["t-hd", 325, 9, "Its sessions, in order", "THE NERVE"],
-    ["t-hd", 861, 9, "Its pull request, and how it ended", "THE RESPONSE"]].forEach(([c, x, y, t, bio]) => el("tspan", { class: "t-bio", dx: 5 }, bio, el("text", { class: c, x, y }, t)));
-  el("path", { class: "x-guide", d: `M${G.go} 40V${bottom}` });
-  // the climb: up from the session it parked at (or the step, with none yet) to the band, and down at the one it came back at
-  const climb = (r, y, p) => {
-    const x = p.up == null ? G.stim : xOf(p.up), e = p.up == null ? G.stim + 32 : x + 14;
-    const up = `M${x} ${y}Q${e} ${y} ${e} ${y - 9}V`;
-    if (p.back == null) return { e, d: up + G.band, halo: [up + G.under] };
-    const x2 = xOf(p.back), down = `V${y - 9} Q${x2 - 14} ${y} ${x2} ${y}`;
-    return { e, d: `${up}${G.band}H${x2 - 14}${down}`, halo: [up + G.under, `M${x2 - 14} ${G.under}${down}`] };
-  };
-  rows.forEach((r, i) => {
-    const y = yOf(i), n = r.sessions.length, skip = j => r.parks.some(p => p.back != null && (p.up == null ? -1 : p.up) <= j && p.back > j);
-    el("path", { class: "x-track", d: `M${G.stim} ${y}H${G.fin}` });
-    if (n) {
-      el("path", { class: "x-nerve" + (skip(-1) ? " skip" : ""), d: `M${G.stim} ${y}H${G.first}` });
-      for (let j = 0; j + 1 < n; j++) el("path", { class: "x-nerve" + (skip(j) ? " skip" : ""), d: `M${xOf(j)} ${y}H${xOf(j + 1)}` });
-      if (r.pr) el("path", { class: "x-nerve", d: `M${xOf(n - 1)} ${y}H${G.pill}` });
-    }
-    if (r.pr) el("path", { class: "x-nerve" + (r.pr.state === "open" ? " await" : ""), d: `M${G.pill + 38} ${y}H${G.fin - 6}` });
-  });
-  rows.forEach((r, i) => r.parks.forEach(p => climb(r, yOf(i), p).halo.forEach(d => el("path", { class: "x-halo", d }))));
-  // the trial for level 2: a box for each pull request in a row with no change asked
-  const L2 = R.level_2;
-  if (L2 && L2.of) {
-    const g = el("g", { class: "b", tabindex: 0, "data-k": "l2", "aria-label": R.tips.l2.a }), w = Math.min(14, 210 / L2.of);
-    el("rect", { class: "hit", x: 964, y: 14, width: 234, height: 28, rx: 3 }, null, g);
-    for (let k = 0; k < L2.of; k++) el("rect", { class: "x-l2" + (k < L2.run ? " run" : ""), x: 968.5 + k * w, y: 18, width: w - 3, height: 7, rx: 1.5 }, null, g);
-    el("text", { class: "t-l2", x: 968, y: 37 }, R.tips.l2.t, g);
-  }
-  const mark = (k, parent) => el("g", { class: "b", tabindex: 0, "data-k": k, "aria-label": (R.tips[k] || {}).a || "" }, null, parent);
-  rows.forEach((r, i) => {
-    const y = yOf(i), s = mark(`s${i}`);
-    el("rect", { class: "hit", x: -2, y: y - 15, width: 262, height: 30, rx: 3 }, null, s);
-    el("text", { class: "t-lab", x: 0, y: y - 1.5 }, r.label, s);
-    el("text", { class: "t-sub", x: 0, y: y + 10 }, r.sub, s);
-    el("path", { class: "x-stim", d: `M248 ${y - 5}l9 5-9 5z` }, null, s);
-    r.sessions.forEach((x, j) => {
-      const g = mark(`s${i}x${j}`), cx = xOf(j);
-      el("rect", { class: "hit", x: cx - 10, y: y - 10, width: 20, height: 20, rx: 3 }, null, g);
-      if (x.crashed) { el("circle", { class: "x-crash", cx, cy: y, r: 5.2 }, null, g); el("path", { class: "x-crashx", d: `M${cx - 2.5} ${y - 2.5}l5 5m0 -5l-5 5` }, null, g); }
-      else if (x.fixes) { el("circle", { class: "x-fix", cx, cy: y, r: 7 }, null, g); el("text", { class: "x-fixn", x: cx, y: y + 3.2 }, String(x.fixes), g); }
-      else el("circle", { class: "x-ses", cx, cy: y, r: 4.5 }, null, g);
-    });
-    r.parks.forEach((p, j) => {
-      const g = mark(`s${i}p${j}`), c = climb(r, y, p), by = p.by === "fault" ? "fault" : "maint";
-      el("path", { class: "hitl", d: c.d }, null, g);
-      el("path", { class: `x-br ${by}`, d: c.d }, null, g);
-      if (by === "fault") el("rect", { class: "x-term fault", x: c.e - 3.5, y: G.band - 3.5, width: 7, height: 7, rx: 1 }, null, g);
-      else el("circle", { class: "x-term maint", cx: c.e, cy: G.band, r: 3.6 }, null, g);
-    });
-    if (!r.pr) el("text", { class: "t-none", x: 880, y: y + 3.3 }, "no pull request");
-    const g = mark(`s${i}r`);
-    if (r.pr) {
-      const wait = r.pr.state === "open" ? " await" : "";
-      el("rect", { class: "hit", x: 858, y: y - 11, width: 96, height: 22, rx: 3 }, null, g);
-      el("rect", { class: "x-pill" + wait, x: G.pill, y: y - 8, width: 38, height: 16, rx: 8 }, null, g);
-      el("text", { class: "x-pilln", x: 880, y: y + 3.4 }, `#${r.pr.number}`, g);
-      el("path", { class: "x-go" + wait, d: `M${G.go} ${y - 5}l5 5-5 5-5-5z` }, null, g);
-    } else el("rect", { class: "hit", x: 936, y: y - 11, width: 20, height: 22, rx: 3 }, null, g);
-    if (r.fin === "fault") el("rect", { class: "x-fin fault", x: G.fin - 4.5, y: y - 4.5, width: 9, height: 9, rx: 1.5 }, null, g);
-    else el("circle", { class: `x-fin ${r.fin}`, cx: G.fin, cy: y, r: r.fin === "still" ? 4.2 : 5 }, null, g);
-    el("text", { class: "t-end", x: 968, y: y - 1.5 }, r.end);
-    el("text", { class: "t-sub", x: 968, y: y + 10 }, r.end_sub);
-  });
-  el("text", { class: "t-go", x: 912, y: 31 }, "the go-ahead to merge, at every pull request");
-  // the figures, the folded lists and the pointer box: their words are Python's
+  const $ = id => get("rfx-" + id), L2 = R.level_2, T = (R.tips || {}).l2, bar = $("l2");
   $("figs").replaceChildren(...R.figs.map(f => h("div", null, h("span", { class: "num" }, f.num, f.small ? h("small", null, f.small) : null),
     h("span", { class: "txt" }, h("b", { class: "what" }, f.what), h("span", { class: "sub" }, f.sub)))));
+  // the trial for level 2: a box for each pull request the plan asks for in a row, filled up to the run (more fill all)
+  if (L2 && L2.of && T) {
+    const run = Math.min(L2.run || 0, L2.of);
+    bar.replaceChildren(h("span", { class: "boxes", "aria-hidden": "true" }, Array.from({ length: L2.of }, (_, k) => h("i", { class: k < run ? "box run" : "box" }))),
+      h("span", { class: "t" }, T.t));
+    bar.setAttribute("title", [T.t].concat(T.l || []).join(" "));
+    bar.setAttribute("aria-label", T.a);
+    bar.hidden = false;
+  } else bar.hidden = true;
+  // the fold's key names how many the trial asks for, and with no trial no key item
+  const ask = L2 && L2.of ? L2.of : null;
+  $("l2-of").textContent = ask == null ? "" : String(ask);
+  $("l2-k").hidden = ask == null;
+  $("cell-host").setAttribute("aria-label", R.aria);
   $("hint").textContent = R.hint;
   $("stamp").textContent = R.stamp.charAt(0).toUpperCase() + R.stamp.slice(1);
   $("finds").replaceChildren(...R.finds.map(([c, b, t]) => h("li", { class: c || null }, h("b", null, b), " ", t)));
   $("bends").replaceChildren(...R.bends.map(([b, t]) => h("li", null, h("b", null, b), " ", t)));
-  pointerBox(fig, tip, key => key != null && R.tips[key] ? tipFill(tip, R.tips[key]) : false, b => b.getAttribute("data-k"));
-  return fig;
+  return bar;
 }
 
 /* A link to a graph folded under its new drawing (#g1, #g2, #g6, #g7, #g10) opens every fold around it, and
@@ -4204,6 +4139,13 @@ function viewFor(hash, backIds) {
   if (!id) return null;
   if (id === "back" || id === "front") return id;
   return backIds && backIds.has(id) ? "back" : "front";
+}
+
+/* The view a click turns the page to: the `data-view` of the button the click landed in, or null. Only a button
+   counts: <html> carries the view shown as `data-view` too, and would match every click on the page. */
+function viewButton(target) {
+  const b = target && typeof target.closest === "function" ? target.closest("button[data-view]") : null;
+  return b ? b.getAttribute("data-view") : null;
 }
 
 /* The closed line under a picture: the names of what its fold holds, so that a reader sees what is there without
@@ -4426,17 +4368,20 @@ function draw(M, DATA) {
     else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   });
   /* The cell, first under its chapter (cellMount): what the browser offers is read here, so a test can pass its own */
+  const cellEnv = { shadow: typeof ShadowRoot === "function", reduced: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
+    raf: typeof requestAnimationFrame === "function" ? f => requestAnimationFrame(f) : null };
   try {
-    cellMount(M, $, onDay, { shadow: typeof ShadowRoot === "function", reduced: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
-      raf: typeof requestAnimationFrame === "function" ? f => requestAnimationFrame(f) : null });
+    cellMount(M, $, onDay, cellEnv);
   } catch (e) { console.error(`cell: ${(e && e.message) || e}`); }
-  // graph 11 as reflex arcs: its Days are the driven project's, so it takes no Day button
-  [["rfx", rfxDraw]].forEach(([k, fn]) => {
-    const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
-    if (g.error) failed(g.error);
-    else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
-    else try { fn(g, $); } catch (e) { failed(String((e && e.message) || e)); }
-  });
+  /* Graph 11: its figures (rfxDraw), then each step the driver started replayed in a cell of its own (rfxCellMount),
+     which says on #rfx-cell-none why it is not drawn. Its Days are the driven project's, so it takes no Day button. */
+  if (!M.rfx.error && !M.rfx.empty) {
+    try { rfxDraw(M.rfx, $); } catch (e) {
+      const why = (e && e.message) || e;
+      put("rfx-figs", h("p", { class: "load-error" }, `This graph could not be drawn: ${why}`)); console.error(`rfx: ${why}`);
+    }
+  }
+  try { rfxCellMount(M, $, cellEnv); } catch (e) { console.error(`rfx: ${(e && e.message) || e}`); }
 
   /* Graph 1 */
   graph("g1", (m, mark) => {
@@ -4703,9 +4648,8 @@ function draw(M, DATA) {
     };
     put("back-n", `${back.querySelectorAll("section.graph").length} graphs`);
     document.addEventListener("click", e => {
-      const b = e.target && e.target.closest ? e.target.closest("[data-view]") : null;
-      if (!b) return;
-      const v = b.getAttribute("data-view");
+      const v = viewButton(e.target);
+      if (!v) return;
       showPage(v);
       try { history.replaceState(null, "", `#${v}`); } catch (x) { /* the address keeps its old name */ }
       const top = $(`v-${v}`);
@@ -4934,10 +4878,14 @@ function cellPlace(day) {
 
 /* The cell's engine on M.cell (`C`), in the shadow root `root`. `opts`: `reduced`, no motion; `raf`, the frame
    scheduler, none where nothing moves; `at`, the Day it opens on ({ day, paused, end }). It returns open(day), which
-   shows that Day at its end, paused; show(info), which opens a panel; and counts(), what the Day shown has drawn. */
+   shows that Day at its end, paused; show(info), which opens a panel; and counts(), what the Day shown has drawn.
+   With `opts.steps` (graph 11's model) it is in driver mode: its strip is the driver's steps, it opens on the last
+   one at its end, open(i) opens step i, and counts() says what that step drew. */
 function cellEngine(C, root, opts) {
   'use strict';
   var DAYS = C.days, LEARN = C.learn, BIO = C.bio, EXTRA = C.extra, NS = SVG_NS, start = opts.at || {}, reduced = !!opts.reduced, raf = opts.raf || null;
+  // driver mode: `opts.steps` is graph 11's (reflex's rows, tips and level 2), and the cell replays one step at a time
+  var DRV = opts.steps || null, ROWS = DRV ? DRV.rows || [] : [], TIPS = DRV ? DRV.tips || {} : {}, curStep = null;
   function $(i) { return root.getElementById(i); }
   function S(tag, at, par) { var e = document.createElementNS(NS, tag); for (var k in at) e.setAttribute(k, at[k]); if (par) par.appendChild(e); return e; }
   function money(x) { return '$' + Number(x).toFixed(2); }
@@ -5191,6 +5139,70 @@ function cellEngine(C, root, opts) {
     return M;
   }
 
+  // One step the driver started, replayed as build(day) replays a Day: the driver reads main and the spec; each
+  // session works at its kind's station, each park goes to the gate where it went up (after session `up`, or
+  // before any); the pull request goes through CI to the gate, and on to main once merged. Every say is reflex's tip.
+  function buildStep(i) {
+    var r = ROWS[i], dyn = $('dyn'); dyn.replaceChildren();
+    var M = { actors: [], pulses: [], beats: [], marks: [], day: null, step: i, row: r, T: 0, stations: cellDriverStations(r), seA: [], crA: [], pkA: [], prA: [] };
+    var g = S('g', {}, dyn), st = CELL_DRIVER_AT[r.kind] || 'spec', t = 0;
+    function mk(e, base, k) {
+      var a = { el: e, base: base, seg: [], st: [], path: [], t0: null, t1: null, info: k && TIPS[k] ? { type: 'tip', k: k } : null };
+      e.setAttribute('class', base); e.setAttribute('display', 'none'); M.actors.push(a);
+      if (a.info) e.addEventListener('click', function (ev) { ev.stopPropagation(); show(a.info, a); });
+      return a;
+    }
+    // `path` keeps the stations an actor passes, in order, for counts()
+    function at(a, t0, id) { a.seg.push([t0, t0, P[id][0], P[id][1], P[id][0], P[id][1]]); a.path.push(id); if (a.t0 === null) a.t0 = t0; }
+    function go(a, t0, t1, id) { var L = a.seg[a.seg.length - 1]; a.seg.push([t0, t1, L[4], L[5], P[id][0], P[id][1]]); a.path.push(id); }
+    function pulse(id, a, b) { M.pulses.push([id, a, b]); }
+    function beat(name, say, bio) { M.marks.push({ t: t, name: name }); M.beats.push({ t: t, pill: name, say: say, bio: bio }); }
+    function said(k) { return ((TIPS[k] || {}).l || []).join(' '); }
+    function park(p, j) {
+      beat('Park', said('s' + i + 'p' + j), 'In the cell: a checkpoint. The cell waits at it for a signal from outside before it goes on.');
+      var a = mk(S('rect', { x: -7, y: -7, width: 14, height: 14, rx: 3 }, g), 'pk ' + (p.by === 'fault' ? 'fault' : 'maint'), 's' + i + 'p' + j);
+      at(a, t, p.up == null ? 'spec' : st); go(a, t + 0.2, t + 1.4, 'gate'); pulse('gate', t + 1.2, t + 3.0);
+      if (p.back != null) a.t1 = t + 3.4;
+      M.pkA.push(a); t += 3.6;
+    }
+
+    // a label that is a sentence of its own is quoted and takes no second stop, as reflex's _said() writes it
+    beat('Reads', 'The driver reads the project’s main and its open pull requests, and picks the next step: '
+      + (/[.!?]$/.test(r.label) ? '"' + r.label + '"' : r.label + '.'),
+      'In the cell: signalling. A signal from outside reaches the cell, and the cell starts the work it names.');
+    var sg = mk(S('circle', { r: 5, cx: 0, cy: 0 }, g), 'sg', null);
+    at(sg, 0.2, 'main'); go(sg, 0.4, 1.6, 'spec'); sg.t1 = 2.2;
+    pulse('main', 0.2, 1.0); pulse('spec', 1.4, 2.8);
+    t = 3;
+    r.parks.forEach(function (p, j) { if (p.up == null) park(p, j); });
+    r.sessions.forEach(function (x, j) {
+      var k = 's' + i + 'x' + j;
+      beat('Session ' + (j + 1) + (x.crashed ? ' crashed' : ''), said(k), x.crashed
+        ? 'In the cell: a cell that stops mid-division. The run log has no end for this session.'
+        : 'In the cell: the work inside. The session runs at its station until it ends.');
+      var a = mk(S('circle', { r: 7, cx: 0, cy: 0 }, g), 'se', k);
+      at(a, t, 'spec'); go(a, t + 0.2, t + 1.2, st); pulse(st, t + 1.2, t + 3.4); a.t1 = t + 3.6; M.seA.push(a);
+      if (x.crashed) { var c = mk(S('path', { d: 'M-7,-7 L7,7 M7,-7 L-7,7' }, g), 'cx', k); at(c, t + 3.2, st); M.crA.push(c); }
+      t += 4;
+      r.parks.forEach(function (p, pj) { if (p.up === j) park(p, pj); });
+    });
+    if (r.pr) {
+      var merged = r.pr.state === 'merged';
+      beat('#' + r.pr.number, said('s' + i + 'r'), merged ? 'In the cell: quality control, then the membrane gate. The product leaves the cell.'
+        : 'In the cell: the product waits at the membrane gate for the signal to leave.');
+      var v = S('g', {}, g); S('circle', { r: 10, cx: 0, cy: 0, 'class': 'vs-o' }, v); S('circle', { r: 3.5, cx: 0, cy: 0, 'class': 'vs-i' }, v);
+      S('text', { x: 15, y: 4, 'class': 'vs-t' }, v).textContent = '#' + r.pr.number;
+      var a = mk(v, 'vs k-code', 's' + i + 'r');
+      at(a, t, r.sessions.length ? st : 'spec'); go(a, t + 0.2, t + 1.0, 'ci'); pulse('ci', t + 1.0, t + 2.0);
+      go(a, t + 2.0, t + 2.6, 'gate'); pulse('gate', t + 2.4, t + 3.4);
+      if (merged) { go(a, t + 3.4, t + 4.0, 'main'); a.st.push([t + 4.0, 'merged']); pulse('main', t + 4.0, t + 4.8); }
+      M.prA.push(a); t += 5;
+    }
+    beat('End', r.end + '.', r.end_sub);
+    M.T = t + 1.2;
+    return M;
+  }
+
   function render() {
     var M = model, t = T, i;
     M.actors.forEach(function (a) {
@@ -5210,13 +5222,21 @@ function cellEngine(C, root, opts) {
     var b = M.beats[0]; M.beats.forEach(function (x) { if (x.t <= t) b = x; });
     if (b !== curBeat) { curBeat = b; $('pill').textContent = b.pill; $('say').textContent = b.say; $('bio').textContent = b.bio; }
     function cnt(list, key) { var n = 0; list.forEach(function (a) { var x = key ? a[key] : a.t0; if (x !== null && x !== undefined && x <= t) n++; }); return n; }
-    var nd = cnt(M.dfA) + cnt(M.esA), ne = cnt(M.esA);
-    $('c-tr').textContent = cnt(M.trA) + ' of ' + M.day.crit.length;
-    $('c-ts').textContent = cnt(M.tsA, 'gT') + ' of ' + M.tsA.length;
-    $('c-df').textContent = nd + ' of ' + M.day.defects.length;
-    $('c-pr').textContent = cnt(M.prA, 'mT') + ' of ' + M.prA.length;
-    $('binLbl').textContent = 'broken down: ' + (nd - ne);
-    $('escLbl').textContent = ne ? 'found after the close: ' + ne : '';
+    if (M.row) {
+      // a step's sessions, the ones that crashed, its parks and its pull request, each counted once the replay passes it
+      $('c-tr').textContent = cnt(M.seA) + ' of ' + M.seA.length;
+      $('c-ts').textContent = cnt(M.crA) + ' of ' + M.seA.length;
+      $('c-df').textContent = cnt(M.pkA) + ' of ' + M.pkA.length;
+      $('c-pr').textContent = cnt(M.prA) + ' of ' + M.prA.length;
+    } else {
+      var nd = cnt(M.dfA) + cnt(M.esA), ne = cnt(M.esA);
+      $('c-tr').textContent = cnt(M.trA) + ' of ' + M.day.crit.length;
+      $('c-ts').textContent = cnt(M.tsA, 'gT') + ' of ' + M.tsA.length;
+      $('c-df').textContent = nd + ' of ' + M.day.defects.length;
+      $('c-pr').textContent = cnt(M.prA, 'mT') + ' of ' + M.prA.length;
+      $('binLbl').textContent = 'broken down: ' + (nd - ne);
+      $('escLbl').textContent = ne ? 'found after the close: ' + ne : '';
+    }
     var mi = 0; M.marks.forEach(function (m, j) { if (m.t <= t) mi = j; });
     stepBtns.forEach(function (sb, j) { sb.setAttribute('aria-pressed', j === mi ? 'true' : 'false'); });
     $('scrub').value = t;
@@ -5327,7 +5347,25 @@ function cellEngine(C, root, opts) {
     var a = null; model.actors.forEach(function (x) { if (x.info && x.info.type === 'defect' && x.info.d.id === id) a = x; });
     if (a) { playing = false; T = Math.min(model.T, a.t0 + 0.6); show(a.info, a); }
   }
+  // a step's panel, which reads no Day: the step (its tip, how it ended), a station's text, or an actor's own tip
+  function showStep(info, actor) {
+    var i = model.step, r = model.row, out = [], back = button('back', 'Back to the step', function () { show(null); });
+    selActor = actor || null; selStn = info && info.type === 'stn' ? info.id : null;
+    STN.forEach(function (id) { stnEl[id].classList.toggle('sel', id === selStn); });
+    function tip(k) {
+      var X = TIPS[k] || {};
+      return [h('h2', null, X.t || ''), (X.l || []).map(function (l) { return h('p', null, l); }), X.q ? h('blockquote', null, X.q) : null];
+    }
+    if (!info) out.push(tip('s' + i), h('dl', null, row('How it ended', r.end), row('In all', r.end_sub)), h('p', { class: 'none' }, 'Click anything in the cell to see what it is.'));
+    else if (info.type === 'stn') {
+      var I = INFO[info.id];
+      out.push(h('h2', null, I.n), h('p', { class: 'bio' }, 'In the ' + (I.body ? 'body' : 'cell') + ': ' + I.bio), h('p', null, I.what), cardHtml(info.id), filesHtml(info.id), back);
+    } else out.push(tip(info.k), back);
+    $('panel').replaceChildren.apply($('panel'), [out].flat(Infinity).filter(function (x) { return x != null && x !== false; }));
+    render();
+  }
   function show(info, actor) {
+    if (DRV) return showStep(info, actor);
     var day = model.day, out = [], back = button('back', 'Back to Day ' + day.d, function () { show(null); });
     selActor = actor || null; selStn = info && info.type === 'stn' ? info.id : null;
     STN.forEach(function (id) { stnEl[id].classList.toggle('sel', id === selStn); });
@@ -5492,6 +5530,53 @@ function cellEngine(C, root, opts) {
     }));
   }
 
+  // a step in the strip: its Day and a short kind ("13A" for Day 13 Track A, "13 close"), "none" with no Day
+  function stepName(r) {
+    if (r.day == null) return 'none';
+    var m = /Track ([A-Za-z0-9]+)/.exec(r.label || '');
+    return r.kind === 'track' ? r.day + (m ? m[1].toUpperCase() : ' track') : r.kind === 'none' ? String(r.day) : r.day + ' ' + r.kind;
+  }
+  // driver mode: one small cell per step, coloured by how it ended; no phase, no immunity layer; the last step opens
+  function drvMode() {
+    var w = root.querySelector('.wrap');
+    w.classList.toggle('learn', false); w.classList.add('drv');
+    $('learnBtn').hidden = true;
+    root.querySelector('.modes .hint').textContent = 'One step the driver started, drawn as one cell: only the stations it used are drawn.';
+    [['l-tr', 'Sessions'], ['l-ts', 'Crashed'], ['l-df', 'Parks'], ['l-pr', 'Pull requests']].forEach(function (x) { $(x[0]).textContent = x[1]; });
+    var ds = ROWS.map(function (r) { return r.day; }).filter(function (d) { return typeof d === 'number'; });
+    var lo = Math.min.apply(null, ds), hi = Math.max.apply(null, ds);
+    $('orgH').textContent = 'The driver’s ' + cplural(ROWS.length, 'step') + (ds.length ? ', on the trial project’s ' + (lo === hi ? 'Day ' + lo : 'Days ' + lo + ' to ' + hi) : '');
+    $('orgS').textContent = 'Pick a step: each small cell is one step the driver started';
+    orgBtns = ROWS.map(function (r, i) {
+      var svg = S('svg', { viewBox: '0 0 54 54', 'aria-hidden': 'true' }), rr = 12 + Math.min(4, r.sessions.length) * 2.5;
+      S('circle', { 'class': 'm', cx: 27, cy: 27, r: rr }, svg);
+      S('circle', { 'class': 'n', cx: (27 - rr * 0.3).toFixed(1), cy: (27 - rr * 0.25).toFixed(1), r: (rr * 0.3).toFixed(1) }, svg);
+      var b = h('button', { class: 'cellbtn ' + r.fin, type: 'button', 'data-i': i, 'aria-pressed': 'false', 'aria-label': (TIPS['s' + i] || {}).a || r.label },
+        svg, h('b', null, stepName(r)));
+      b.addEventListener('click', function () { pickStep(i, 0, reduced); });
+      return [b, i];
+    });
+    $('org').replaceChildren(h('div', { class: 'strip' }, orgBtns.map(function (x) { return x[0]; })));
+    pickStep(ROWS.length - 1, 0, true);
+    T = model.T; render();
+  }
+  function pickStep(i, t0, paused) {
+    var r = ROWS[i], T0 = TIPS['s' + i] || {}, cost = 0;
+    curStep = i; model = buildStep(i); T = t0 || 0; curBeat = null; playing = !paused;
+    $('scrub').max = model.T;
+    // only the stations the step used are drawn
+    STN.forEach(function (id) { if (model.stations.indexOf(id) >= 0) stnEl[id].removeAttribute('hidden'); else stnEl[id].setAttribute('hidden', ''); });
+    $('specLbl').textContent = r.day == null ? 'no Day' : 'the trial project’s spec, Day ' + r.day;
+    r.sessions.forEach(function (x) { cost += x.cost || 0; });
+    $('mitoFig').textContent = money(cost);
+    $('mitoHeat').textContent = ''; $('heatG').replaceChildren(); $('binLbl').textContent = ''; $('escLbl').textContent = '';
+    stepBtns = model.marks.map(function (m) { return button('ctl', m.name, function () { T = m.t + 0.01; render(); }); });
+    $('steps').replaceChildren.apply($('steps'), [h('span', null, 'Jump to')].concat(stepBtns));
+    orgBtns.forEach(function (x) { x[0].setAttribute('aria-pressed', x[1] === i ? 'true' : 'false'); });
+    $('note').textContent = [T0.t ? T0.t + '.' : ''].concat(T0.l || []).filter(Boolean).join(' ');
+    show(null);
+  }
+
   // the gene's helix
   (function () {
     var g = $('helix'), a = '', b = '', x;
@@ -5547,11 +5632,25 @@ function cellEngine(C, root, opts) {
     });
   })();
   $('learnBtn').addEventListener('click', function () { learn = !learn; setMode(); });
-  learn = start.learn !== false;
-  setMode();
-  // opens on its Day, stopped where the Day is now
-  if (start.end) { T = model.T; playing = false; render(); }
+  if (DRV) {
+    // driver mode keeps the immunity layer off, and opens on the last step at its end
+    learn = false;
+    drvMode();
+  } else {
+    learn = start.learn !== false;
+    setMode();
+    // opens on its Day, stopped where the Day is now
+    if (start.end) { T = model.T; playing = false; render(); }
+  }
   if (raf) raf(frame);
+  if (DRV) return {
+    open: function (i) { if (ROWS[i] && i !== curStep) { pickStep(i, 0, true); T = model.T; render(); } },
+    show: function (info) { show(info); },
+    counts: function () {
+      return { step: curStep, stations: model.stations.slice(), sessions: model.seA.length, crashed: model.crA.length, parks: model.pkA.length, prs: model.prA.length,
+        marks: model.marks.map(function (m) { return m.name; }), paths: model.actors.map(function (a) { return a.path.slice(); }) };
+    }
+  };
   return {
     open: function (n) { var D = DAYS.filter(function (x) { return x.d === n; })[0]; if (D && D !== curDay) { pick(D, 0, true); T = model.T; render(); } },
     show: function (info) { show(info); },
@@ -5585,6 +5684,48 @@ function cellMount(M, $, onDay, env) {
   }
   onDay.push(day => { if (day != null) api.open(day); });
   return api;
+}
+
+/* Graph 11's cell: the same template in #rfx-cell-host's shadow root, its engine in driver mode on M.rfx's steps,
+   opening on the last step. With no step (graph 11 empty or failed), no cell, no template or an engine that throws,
+   the host is hidden and #rfx-cell-none says which. Where shadow roots are missing nothing starts. It returns the
+   engine's API, or null. */
+function rfxCellMount(M, $, env) {
+  const C = M.cell, R = M.rfx || {};
+  const fail = text => { $("rfx-cell-host").hidden = true; $("rfx-cell-none").textContent = text; $("rfx-cell-none").hidden = false; return null; };
+  if (R.error) { console.error(`rfx: ${R.error}`); return fail(`This graph could not be drawn: ${R.error}`); }
+  if (R.empty) return fail(`Not measured yet: ${R.empty}`);
+  if (!(R.rows || []).length) return fail("Not measured yet: the driver has started no step yet, so there is no step to replay.");
+  if (!C) return fail("The cell needs the Day-by-Day data, which this page does not have.");
+  // the cell's own error, which cellMount has logged already
+  if (C.error) return fail(`The cell's data could not be read: ${C.error}`);
+  if (!env.shadow) return null;
+  try {
+    const tpl = $("cell-tpl");
+    if (!tpl || !tpl.content) throw new Error("the page has no template for the cell");
+    const root = $("rfx-cell-host").attachShadow({ mode: "open" });
+    root.appendChild(tpl.content.cloneNode(true));
+    return cellEngine(C, root, { reduced: env.reduced, raf: env.raf, steps: R });
+  } catch (e) {
+    const why = (e && e.message) || e;
+    console.error(`rfx: ${why}`);
+    return fail(`This graph could not be drawn: ${why}`);
+  }
+}
+
+// Where a step's sessions work, by its kind (reflex's `kind`): a spec change at the spec-auditor, a track at the
+// implementer, a close at the close, a review at CI's checks; a step of no kind at the spec it read.
+const CELL_DRIVER_AT = { spec: "sa", track: "ribo", close: "close", review: "ci" };
+
+/* The stations a step the driver started used, sorted: the spec and main always (it reads main and the spec and
+   picks the step); with a session, its kind's stations and the cost; with a pull request, CI and the gate; with a
+   park, the gate. */
+function cellDriverStations(r) {
+  const on = new Set(["spec", "main"]), kinds = { spec: ["sa"], track: ["test", "ribo", "ko"], close: ["close"], review: ["ci"] };
+  if ((r.sessions || []).length) { (kinds[r.kind] || []).forEach(s => on.add(s)); on.add("mito"); }
+  if (r.pr) { on.add("ci"); on.add("gate"); }
+  if ((r.parks || []).length) on.add("gate");
+  return [...on].sort();
 }
 
 function boot(DATA) {

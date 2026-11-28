@@ -1,4 +1,4 @@
-"""Graph 11: the driver's steps as reflex arcs (`reflex`).
+"""Graph 11: the driver's steps, each replayed as a cell (`reflex`).
 spec_drift_views.py imports it for spec-drift.py, demo-data.py and the tests."""
 
 import datetime
@@ -7,7 +7,7 @@ import re
 from spec_drift_view_common import _MONTHS, _list, _lower_median, _ms, _n, _offset, _plain, _runs
 
 
-# Graph 11 as reflex arcs: how a step ended, as the mark at the end of its row (`fin`) and the words beside it.
+# Graph 11: how a step ended, as the colour of its small cell (`fin`) and the words its replay ends on.
 RFX_END = dict(merged="Merged, with no park", fixed="Merged after fixing itself", still="Still open, no park so far")
 
 
@@ -41,6 +41,19 @@ def _rfx_label(step):
     return (label if len(label) <= 38 else label[:37].rstrip() + "…"), None
 
 
+def _rfx_kind(prefix):
+    """Which kind of step a branch prefix names, so that the cell knows the station its sessions work at: a spec
+    change, a track, a close, the driver's review, or none (no branch, or one the driver does not name)."""
+    p = prefix if isinstance(prefix, str) else ""
+    if re.fullmatch(r"day-\d+/spec(?:-.+)?", p):
+        return "spec"
+    if re.fullmatch(r"day-\d+/track-[^/]+", p):
+        return "track"
+    if re.fullmatch(r"day-\d+/close-the-day", p):
+        return "close"
+    return "review" if p == "review" else "none"
+
+
 def _said(label):
     """A step's label inside a sentence: one that is a sentence of its own ("Every day is done.") is quoted."""
     return f'"{label}"' if label[-1:] in ".!?" else label
@@ -52,10 +65,10 @@ def _ago(seconds):
 
 
 def reflex(d):
-    """Graph 11 as reflex arcs: one row per step the driver started, in its run log's order, read left to right from
-    the step, through its sessions, to its pull request; a step that parked climbs to the band of the person. The
-    counts of steps, parks, crashed steps, open and merged steps are _runs()'s, the proteins' "In real runs". No park
-    is given a wait: a park names no issue whose closing would time it, so only the next session's start is said."""
+    """Graph 11: one row per step the driver started, in its run log's order, with its kind, its sessions, its parks
+    and its pull request, which the page replays as a cell, one step at a time. The counts of steps, parks, crashed
+    steps, open and merged steps are _runs()'s, the proteins' "In real runs". No park is given a wait: a park names
+    no issue whose closing would time it, so only the next session's start is said."""
     runs_of = d.get("driver_runs") or {}
     steps = runs_of.get("steps") or []
     counted = runs_of.get("counted")
@@ -106,15 +119,15 @@ def reflex(d):
             up, back = (before[-1] if before else None), (after[0] if after else None)
             later = (f"the next session started {_n(round(secs(p['at'], sessions[back]['start']) / 60), 'minute')} later"
                      if back is not None else "no session started after it in this step")
-            went = ("It went up before any session ran." if up is None else
-                    f"It went up at session {up + 1} of {len(sessions)}" + (", which crashed." if ses[up]["crashed"] else "."))
+            went = ("It parked before any session ran." if up is None else
+                    f"It parked after session {up + 1} of {len(sessions)}" + (", which crashed." if ses[up]["crashed"] else "."))
             known = (f"It names issue #{p['issue']}; how long a person was needed is not counted here." if p.get("issue") else
                      "How long a person was needed is not known: the park names no issue.")
             pk.append(dict(by=by, up=up, back=back, at=when(p["at"]) if p.get("at") else None, later=later, issue=p.get("issue")))
             tips[f"s{i}p{j}"] = dict(
                 t=f"{RFX_BY[by][0]} · {when(p['at'])} ({zone_text})" if p.get("at") else RFX_BY[by][0],
                 l=[f"{RFX_BY[by][2]} {went}",
-                   f"It came back down at session {back + 1}: {later}." if back is not None else f"It did not come back: {later}.",
+                   f"It went on at session {back + 1}: {later}." if back is not None else f"It did not go on: {later}.",
                    known],
                 q=_plain(p.get("line")) or None, a=f"{label}, {RFX_BY[by][0]}" + (f" · {when(p['at'])} ({zone_text})" if p.get("at") else ""))
         ended = s.get("ended")
@@ -156,7 +169,8 @@ def reflex(d):
                "It is still open." if fin == "still" else f"It ended {how}."],
             a=f"{where[0].upper() + where[1:]} · step {i + 1} of {len(steps)}: {label}")
         tips[f"s{i}"]["l"] = [x for x in tips[f"s{i}"]["l"] if x]
-        rows.append(dict(label=label, sub=where + (f" · {crit}" if crit else ""), day=day, sessions=ses, parks=pk, pr=pr,
+        rows.append(dict(label=label, sub=where + (f" · {crit}" if crit else ""), day=day, kind=_rfx_kind(s.get("prefix")), sessions=ses,
+                         parks=pk, pr=pr,
                          fin=fin, end=end, end_sub=" · ".join(bits), ended=ended))
 
     n = len(rows)
@@ -197,7 +211,7 @@ def reflex(d):
     if l2:
         tips["l2"] = dict(t=f"Trial for level 2: {l2.get('run')} of {l2.get('of')} in a row",
                           l=[f"{_n(l2.get('run') or 0, 'pull request')} in a row with no change asked, of the {l2.get('of')} the plan asks for.",
-                             "At level 2 the driver merges, and the go-ahead mark leaves the rows. The driver's own count, as graph 1's level card shows it."],
+                             "At level 2 the driver merges by itself, and the go-ahead is no longer the maintainer's. The driver's own count, as graph 1's level card shows it."],
                           a=f"Trial for level 2: {l2.get('run')} of {l2.get('of')} in a row")
     afters = [r["pr"]["after"] for r in merged if r["pr"]["after"] is not None]
     cost, ran = sum(x["cost"] for x in all_ses), sum(x["minutes"] or 0 for x in all_ses)
@@ -210,11 +224,11 @@ def reflex(d):
         p = r["parks"][-1]
         cls = "fault" if p["by"] == "fault" else "maint"
         if p["back"] is not None:
-            finds.append([cls, f"{_said(r['label'])} went up {'for a fault' if cls == 'fault' else 'for the maintainer'}, and came back.",
+            finds.append([cls, f"{_said(r['label'])} parked {'for a fault' if cls == 'fault' else 'for the maintainer'}, and went on.",
                           f"The driver parked at {p['at'][-5:]}; {p['later']}"
                           + (f" and pull request #{r['pr']['number']} {'merged' if r['pr']['state'] == 'merged' else 'is open'}." if r["pr"] else ".")])
         else:
-            finds.append([cls, f"{_said(r['label'])} went up and stayed.",
+            finds.append([cls, f"{_said(r['label'])} parked and stayed parked.",
                           f"It ran {_n(len(r['sessions']), 'session') if r['sessions'] else 'no session'} and opened "
                           + (f"pull request #{r['pr']['number']}" if r["pr"] else "no pull request") + ": "
                           + ("the park is a decision that is the maintainer's." if cls == "maint" else "the driver or the kit was at fault.")])
@@ -223,7 +237,7 @@ def reflex(d):
                       " ".join(f"{_said(r['label'])} opened pull request #{r['pr']['number']} after {_n(len(r['sessions']), 'session')}; the go-ahead has not come."
                                for r in still)])
     if opened:
-        finds.append(["", "Every row with a pull request ends at the go-ahead.",
+        finds.append(["", "Every step with a pull request ends at the go-ahead.",
                       f"{_n(len(merged), 'pull request')} merged" + (f", {_ago(min(afters))} to {_ago(max(afters))} after the last session ended" if afters else "")
                       + (f"; {len(still)} awaited." if still else ".")])
     if all_ses:
@@ -231,23 +245,23 @@ def reflex(d):
                       f"The sessions cost ${cost:.2f} at API list prices, and ran {ran} min in all."])
     if l2:
         finds.append(["", f"The trial for level 2 stands at {l2.get('run')} of {l2.get('of')}.",
-                      "It counts pull requests in a row with no change asked. At level 2 the driver merges, and the go-ahead mark would leave the rows."])
+                      "It counts pull requests in a row with no change asked. At level 2 the driver merges by itself, and the go-ahead would no longer be the maintainer's."])
     all_parks = [p for r in rows for p in r["parks"]]
     unnamed = sum(1 for p in all_parks if not p["issue"])
     bends = [
-        ["Every arc still ends at a person.", "A reflex never asks the brain. Here the plan requires the maintainer's go-ahead at every pull request: "
+        ["Every step still ends at a person.", "Nothing leaves the cell without the maintainer's merge: the plan requires the maintainer's go-ahead at every pull request: "
          f"{len(merged)} given, {len(still)} awaited. So \"without a person\" means without a park, and nothing more."],
-        ["A reflex is wired; these steps are chosen.", "The body's wiring fixes what a reflex does. The plan and the Day's spec choose each step here, "
+        ["A cell's chemistry is fixed; these steps are chosen.", "A cell does what its chemistry makes it do. The plan and the Day's spec choose each step here, "
          "and people wrote both."],
         [f"{_n(n, 'step')} prove little." if n < 30 else f"{n} steps are a start.",
-         f"They ran on {_n(len(dates), 'date')}, on one project. A reflex is trusted because it has fired the same way countless times; "
-         f"this picture has {_n(len(alone), 'clean run')} and {_n(len(all_parks), 'park')} to go on."],
-        ["Distance along a row is order, not time.", "A short session and a long one are the same dot."
+         f"They ran on {_n(len(dates), 'date')}, on one project. A cell's habit is trusted because it has run the same way countless times; "
+         f"these steps have {_n(len(alone), 'clean run')} and {_n(len(all_parks), 'park')} to go on."],
+        ["The replay is order, not time.", "A short session and a long one take the same seconds in the replay."
          + (f" How long a park kept a person is not known for {unnamed} of the {_n(len(all_parks), 'park')}: the park names no issue." if unnamed else "")],
     ]
     idle = [r for r in parked if not r["sessions"]]
     if idle:
-        bends.append(["A park is not always a reflex that failed.", f"{_list([_said(r['label']) for r in idle])} ran no session: the driver stopped because "
+        bends.append(["A park is not always a step that failed.", f"{_list([_said(r['label']) for r in idle])} ran no session: the driver stopped because "
                       "the plan had nothing more for it, which is the plan working."])
     t = local(counted) if counted else None
     return dict(
@@ -258,7 +272,7 @@ def reflex(d):
                     ended=len(ended), alone=len(alone), crashed_sessions=crashed_ses),
         level_2=dict(run=l2.get("run"), of=l2.get("of")) if l2 else None,
         rows=rows, tips=tips, figs=figs, finds=finds, bends=bends,
-        aria=f"{_n(n, 'step')} the driver started, one row each. {len(alone)} of the {len(ended)} that ended needed no park; "
-        f"{_n(len(all_parks), 'park')} went up to the person.",
-        hint="Point at a mark, or reach it with the Tab key, for the session, the park or the pull request."
+        aria=f"{_n(n, 'step')} the driver started, one small cell each. {len(alone)} of the {len(ended)} that ended needed no park; "
+        f"{_n(len(all_parks), 'park')} stopped a step for a person.",
+        hint="Pick a step in the row of small cells, then click a station or a moving mark for its session, its park or its pull request."
         + (f" Only {_n(n, 'step')} on {_n(len(dates), 'date')} are counted: the picture is true, and proves little yet." if len(dates) < 5 else ""))

@@ -161,7 +161,9 @@ class DemoData(unittest.TestCase):
             dict(event="park", at="2026-10-11T09:30:00Z", step=sentence, line="park: #1 carries Oversized:")])
         for step in runs["steps"]:
             self.assertEqual(list(step), list(counted))
-            self.assertEqual(counter.count([dict(event="park", step=step["step"], line="")])[0]["prefix"], step["prefix"])
+            # a review's prefix is its session's start line's, not its sentence's
+            if step["prefix"] != "review":
+                self.assertEqual(counter.count([dict(event="park", step=step["step"], line="")])[0]["prefix"], step["prefix"])
             for session in step["sessions"]:
                 self.assertEqual(list(session), list(counted["sessions"][0]))
             for park in step["parks"]:

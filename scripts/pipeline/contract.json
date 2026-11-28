@@ -527,7 +527,7 @@
     "graph": "Graph 10"
   },
   "reflex": {
-    "what": "The driver's steps as reflex arcs.",
+    "what": "The driver's steps, each replayed as a cell.",
     "made_by": "spec_drift_view_reflex:reflex",
     "read_by": [],
     "drawn_by": [
