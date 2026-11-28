@@ -14,6 +14,7 @@ from unittest import mock
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SCRIPTS = os.path.join(ROOT, "scripts")
 sys.path.insert(0, SCRIPTS)
+import pipeline  # importing it puts the pipeline's three folders on the path
 
 
 def load(name, path):
@@ -23,8 +24,8 @@ def load(name, path):
     return module
 
 
-specs = load("spec_drift_specs", os.path.join(SCRIPTS, "spec_drift_specs.py"))
-metrics = load("spec_drift_metrics", os.path.join(SCRIPTS, "spec_drift_metrics.py"))
+specs = load("spec_drift_specs", pipeline.path("spec_drift_specs.py"))
+metrics = load("spec_drift_metrics", pipeline.path("spec_drift_metrics.py"))
 
 PARTS = {
     "git": {"ls-tree\0abc": "plan.md\n"},
@@ -40,9 +41,12 @@ class CacheKeptTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.dir, True)
-        for name in os.listdir(SCRIPTS):
-            if name == "spec-drift.py" or name.startswith("spec_drift_"):
-                shutil.copy(os.path.join(SCRIPTS, name), self.dir)
+        shutil.copy(os.path.join(SCRIPTS, "spec-drift.py"), self.dir)
+        shutil.copytree(
+            pipeline.HERE,
+            os.path.join(self.dir, "pipeline"),
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
         self.drift = load("spec_drift_copy", os.path.join(self.dir, "spec-drift.py"))
         self.addCleanup(lambda: self.dir in sys.path and sys.path.remove(self.dir))
         self.addCleanup(self.drift.CACHE.clear)
@@ -52,7 +56,13 @@ class CacheKeptTest(unittest.TestCase):
         self.drift.save_cache(self.cache)
 
     def kept_after_editing(self, name):
-        with open(os.path.join(self.dir, name), "ab") as f:
+        # a module by its place in scripts/pipeline/, the script itself beside the folder
+        rel = (
+            os.path.relpath(pipeline.path(name), SCRIPTS)
+            if name.startswith("spec_drift_")
+            else name
+        )
+        with open(os.path.join(self.dir, rel), "ab") as f:
             f.write(b"# edited\n")
         self.drift.load_cache(self.cache)
         return sorted(part for part in PARTS if self.drift.CACHE.get(part) == PARTS[part])
@@ -96,10 +106,11 @@ class CacheKeptTest(unittest.TestCase):
         import re
 
         used = set()
-        for name in os.listdir(SCRIPTS):
-            if name.startswith("spec_drift_"):
-                with open(os.path.join(SCRIPTS, name), encoding="utf-8") as f:
-                    used.update(re.findall(r'CACHE(?:\.setdefault\(|\[)"(\w+)"', f.read()))
+        for folder in pipeline.FOLDERS:
+            for name in os.listdir(os.path.join(pipeline.HERE, folder)):
+                if name.startswith("spec_drift_"):
+                    with open(os.path.join(pipeline.HERE, folder, name), encoding="utf-8") as f:
+                        used.update(re.findall(r'CACHE(?:\.setdefault\(|\[)"(\w+)"', f.read()))
         self.assertEqual(sorted(used), sorted(self.drift.CACHE_PARTS))
 
 

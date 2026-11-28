@@ -16,6 +16,7 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pipeline  # noqa: E402,F401  (importing it puts the pipeline's folders on the path)
 from spec_drift_metrics import CAUSES, LAYER_RANK, found_stage, found_tag
 from spec_drift_specs import DEFECT_FIELD, DEFECT_LINE
 

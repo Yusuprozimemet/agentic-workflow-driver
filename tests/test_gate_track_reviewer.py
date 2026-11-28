@@ -11,7 +11,9 @@ import tempfile
 import unittest
 
 SCRIPTS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
-sys.path.insert(0, SCRIPTS)  # spec_drift_metrics.py imports its neighbours by name
+sys.path.insert(0, SCRIPTS)
+import pipeline  # importing it puts the pipeline's three folders on the path
+
 spec = importlib.util.spec_from_file_location(
     "token_usage_lines", os.path.join(SCRIPTS, "test_token_usage.py")
 )
@@ -61,7 +63,7 @@ class TrackReviewerGateTest(unittest.TestCase):
 class TrackReviewerReportTest(unittest.TestCase):
     def test_the_gate_report_gives_the_track_reviewers_catches_its_runs_and_cost(self):
         spec = importlib.util.spec_from_file_location(
-            "spec_drift_metrics", os.path.join(SCRIPTS, "spec_drift_metrics.py")
+            "spec_drift_metrics", pipeline.path("spec_drift_metrics.py")
         )
         metrics = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(metrics)

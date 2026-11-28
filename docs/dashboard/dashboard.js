@@ -170,7 +170,7 @@ function model(DATA) {
       missing: dataMissing(), now: daysSay, next: String(now.next_step || ""), open: (now.open_prs || []).length, took };
   }
 
-  /* The promises: each criterion with the state scripts/spec_drift_views.py (criterion_states) gave it; the page only
+  /* The promises: each criterion with the state scripts/pipeline/counts/spec_drift_views.py (criterion_states) gave it; the page only
      reads it. The model's promises key counts them by state, for the merge graph's line in scripts/dashboard-reconcile.py. */
   function promises() {
     const tiles = (DATA.criteria_index || []).map(c => ({ id: c.id, day: c.day, status: STATES[c.state] ? c.state : "unchecked" }));
@@ -219,7 +219,7 @@ function model(DATA) {
         rows: merges.map(m => [m.pr ? `#${m.pr}` : "start", KINDS[m.kind], m.day || "", m.date || "", m.gap == null ? "" : m.gap.toFixed(1), m.mins == null ? "" : Math.round(m.mins), m.failed ? "yes" : ""]) } };
   }
 
-  /* Graph 7: the sieve. Each defect at the gate that caught it. Its rules are counted in scripts/spec_drift_views.py
+  /* Graph 7: the sieve. Each defect at the gate that caught it. Its rules are counted in scripts/pipeline/counts/spec_drift_views.py
      (proofreading), the same fields the proofreading stream reads: the gates, each defect's gate, layer, cause and
      marks, the four phases, and the cost per catch over the Days merged by the count. */
   function sieveGraph() {
@@ -315,7 +315,7 @@ function model(DATA) {
     });
     return { ...r, values };
   };
-  // Which yardsticks are better lower: the maintainer's judgement, kept in scripts/spec_drift_views.py (LOWER_BETTER) and
+  // Which yardsticks are better lower: the maintainer's judgement, kept in scripts/pipeline/counts/spec_drift_views.py (LOWER_BETTER) and
   // read from the gel's panels, so graph 2 and the gel judge alike.
   const lowerBetter = new Set(((DATA.gel || {}).panels || []).filter(p => p.lower_better).map(p => p.key));
   function yardGraph() {
@@ -544,7 +544,7 @@ function model(DATA) {
       const upTo = countedMs == null ? 1440 : Math.max(0, Math.min(1440, (countedMs - dayStart(date)) / 60000));
       const unseen = upTo <= 0 ? "not counted yet" : upTo < 1440 ? `nothing recorded up to ${wall(upTo)}` : "nothing recorded";
       const add = (name, bars, sub, busyFor) => { lanes.push({ name, sub, bars, busyFor }); bars.forEach(b => { b.days.forEach(d => days.add(d)); rows.push([name, b.what || b.t.split(" · ")[0], b.from, b.to, Math.round(b.mins)]); }); return bars; };
-      // The date's figures, counted in Python (scripts/spec_drift_views.py, actogram); without them the sentences that need them are left out.
+      // The date's figures, counted in Python (scripts/pipeline/counts/spec_drift_views.py, actogram); without them the sentences that need them are left out.
       const F = ACT_BY.get(date) || null, ran = F ? F.ran : null, who = s => s.agent === "main" ? "Main session" : s.agent;
       let counted = false;  // a stretch written before the waits were counted has no `ran`: the date then says nothing about them
       laneKeys.forEach(([k, name]) => {
@@ -694,8 +694,8 @@ function model(DATA) {
         rows: cols.map(c => [c.t, c.section, c.rule ? "rule about people" : PL.commitments[at.get(c.key)].owner_day ?? "", c.n, c.days.sort((a, b) => a - b).join(", "), c.b[0].split(" · ").pop().replace(/\.$/, "")]) } };
   }
 
-  /* The merge graph: counted in scripts/spec_drift_views.py (merge_graph), drawn by mergeDraw as it stands. */
-  /* "Where we are" as a ring, and graph 1 as the plan being read: counted in scripts/spec_drift_views.py (where_ring, reading);
+  /* The merge graph: counted in scripts/pipeline/counts/spec_drift_views.py (merge_graph), drawn by mergeDraw as it stands. */
+  /* "Where we are" as a ring, and graph 1 as the plan being read: counted in scripts/pipeline/counts/spec_drift_views.py (where_ring, reading);
      the reading carries what dashboard-reconcile.py holds it to, the look-ahead's own ledger and last column. */
   function whrGraph() {
     const W = DATA.where_ring, mean = (DATA.score || {}).days_mean;
@@ -706,7 +706,7 @@ function model(DATA) {
     if (!R || !(R.m || []).length) return { empty: (R && R.empty) || "nothing is merged yet, so there is no strand to read." };
     return Object.assign({}, R, { ledger: { n: (L.hand_offs || []).length, open: last.open || 0, numbered: last.open_numbered || 0 } });
   }
-  /* Graph 2 as a gel, and graphs 3 to 5 as proteins: counted in scripts/spec_drift_views.py (gel, protein). */
+  /* Graph 2 as a gel, and graphs 3 to 5 as proteins: counted in scripts/pipeline/counts/spec_drift_views.py (gel, protein). */
   function gelGraph() {
     const G = DATA.gel;
     return G && (G.panels || []).length ? G : { empty: (G && G.empty) || "no yardstick is counted yet, so there is no gel to run." };
@@ -716,13 +716,13 @@ function model(DATA) {
     if (!P || !(P.chains || []).length) return { empty: (P && P.empty) || "no criterion is on record yet, so there is no chain to fold." };
     return Object.assign({}, P, { chains: P.chains.map(c => Object.assign({}, c, { parts: c.key in Q ? Q[c.key].parts : null })) });
   }
-  /* Graph 7 as proofreading: counted in scripts/spec_drift_views.py (proofreading); `empty` with the data branch or its
+  /* Graph 7 as proofreading: counted in scripts/pipeline/counts/spec_drift_views.py (proofreading); `empty` with the data branch or its
      gates.json missing, where the stream is not drawn. */
   function prfGraph() {
     const P = DATA.proofreading;
     return P && (P.gates || []).length ? P : { empty: "no defect is counted yet, so there is no stream to draw." };
   }
-  /* Graph 7's other view, one Day opened: counted in scripts/spec_drift_views.py (one_day); here the words each mark is
+  /* Graph 7's other view, one Day opened: counted in scripts/pipeline/counts/spec_drift_views.py (one_day); here the words each mark is
      read out with. A defect no step can take stands in an arc of its own, and so does one caught after the Day. */
   function oneGraph() {
     const O = DATA.one_day;
@@ -796,7 +796,7 @@ function model(DATA) {
     });
     return { head: O.head, last_pr: O.last_pr, generated: O.generated, from_day: O.from_day, pick: days.some(d => d.day === current) ? current : days[days.length - 1].day, days };
   }
-  /* Graph 8 as an energy budget and graph 9 as growth rings: counted in scripts/spec_drift_views.py (budget, rings).
+  /* Graph 8 as an energy budget and graph 9 as growth rings: counted in scripts/pipeline/counts/spec_drift_views.py (budget, rings).
      The budget is `empty` with the data branch or its token-usage.json missing, where no bead is drawn. */
   function atpGraph() {
     const B = DATA.budget;
@@ -872,7 +872,7 @@ function model(DATA) {
       note: most == null ? "A Day's arc is as long as the wordings it holds." : `A Day's arc is as long as the wordings it holds. Day ${most} holds the most: ${held[most]}.` };
   }
 
-  /* The gene: the plan read down to proved code. Every figure is counted in scripts/spec_drift_views.py (gene);
+  /* The gene: the plan read down to proved code. Every figure is counted in scripts/pipeline/counts/spec_drift_views.py (gene);
      this only words it and hands the drawing its columns, its labels and what the pointer says. */
   function geneGraph() {
     const G = DATA.gene;
@@ -994,7 +994,7 @@ function model(DATA) {
       clock.empty && ["Where a date's time goes, and who waits for whom", clock.empty]].filter(Boolean);
   }
 
-  // The quality score: scripts/spec_drift_score.py computes it from this same data; the page only draws it.
+  // The quality score: scripts/pipeline/counts/spec_drift_score.py computes it from this same data; the page only draws it.
   function quality() {
     const S = DATA.score;
     if (!S || !S.all) return null;
@@ -1520,7 +1520,7 @@ function geneDraw(m, box, tip, forDays) {
 /* "Where we are" as one turn of a cell's cycle, in the old panel's place: a segment per Day plan.md numbers, read
    clockwise from the top, each phase's arc outside its Days, a gate at each stop and a hand where the work stands.
    Layout only, as the mockup at #228 drew it: every count it prints is in DATA.where_ring, counted by
-   scripts/spec_drift_views.py (where_ring). `get` finds an element by its id; `onDay` is the page's Day buttons and
+   scripts/pipeline/counts/spec_drift_views.py (where_ring). `get` finds an element by its id; `onDay` is the page's Day buttons and
    `press(day)` presses one. Colours are in dashboard.css, under #whr. */
 const RING_WORD = { done: "done", open: "closed, boxes open", active: "in progress", ready: "spec written", next: "next, no spec yet",
   planned: "provisional: plan.md names it, no spec yet", cut: "cut" };
@@ -1818,7 +1818,7 @@ function rdgTip(R, k, v) {
 /* Graph 1 as the plan being read, in graph 1's place: every merge in order on one strand, a Day's merges as a block, the
    merges between Days as thin stretches, the promises built under each merge, today as the polymerase, the Days with
    no spec ahead and the stop, and the hand-offs as arcs. Layout only, as the mockup at #228 drew it: every count it
-   prints is in DATA.reading, counted by scripts/spec_drift_views.py (reading). Every hand-off's arc is drawn, closed or open;
+   prints is in DATA.reading, counted by scripts/pipeline/counts/spec_drift_views.py (reading). Every hand-off's arc is drawn, closed or open;
    pointing at one, or at its merge, lights it and fades the others, and a Day chosen fades those not of it. `get` finds an element by its
    id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #rdg. */
 function readingDraw(R, get, onDay) {
@@ -2059,7 +2059,7 @@ function readingDraw(R, get, onDay) {
 /* The merge graph, drawn, in graph 6's place: the spec as one long bar, one stripe per criterion, and above it a row
    per Day (or per merge) marking the criteria each merge gave evidence for and the times the replay saw one stop
    holding. Layout only, as the mockup at #228 drew it: every count it prints is in DATA.merge_graph, counted by
-   scripts/spec_drift_views.py (merge_graph), for all Days (`all`) and for each Day (`by_day`). `get` finds an element
+   scripts/pipeline/counts/spec_drift_views.py (merge_graph), for all Days (`all`) and for each Day (`by_day`). `get` finds an element
    by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #mrg. */
 function mergeDraw(D, get, onDay) {
   const NS = "http://www.w3.org/2000/svg";
@@ -2435,7 +2435,7 @@ function pointerBox(fig, tip, show, key) {
 const tipFill = (tip, d) => { tip.replaceChildren(); const div = (c, t) => { const e = document.createElement("div"); e.className = c; e.textContent = t; tip.appendChild(e); };
   div("t", d.t); (d.l || []).filter(Boolean).forEach(l => Array.isArray(l) ? div(l[0], l[1]) : div("l", l)); if (d.q) div("q", d.q); tip.hidden = false; return true; };
 
-/* Graph 2 as a gel, as the mockup at #228 draws it: counted in scripts/spec_drift_views.py (gel); this lays it out and
+/* Graph 2 as a gel, as the mockup at #228 draws it: counted in scripts/pipeline/counts/spec_drift_views.py (gel); this lays it out and
    words it. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #gel. */
 // What one of a yardstick's figures is a figure of, as the pointer box says it.
 const GEL_NOUN = { cost: ["for each merged pull request"], replies: ["reply for each merged pull request", "replies for each merged pull request"],
@@ -2539,7 +2539,7 @@ function gelDraw(G, get, onDay) {
   return fig;
 }
 
-/* Graphs 3 to 5 as proteins, as the mockup at #228 draws them: counted in scripts/spec_drift_views.py (protein); this
+/* Graphs 3 to 5 as proteins, as the mockup at #228 draws them: counted in scripts/pipeline/counts/spec_drift_views.py (protein); this
    folds each chain and words it. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in
    dashboard.css, under #prt. */
 const PRT_MARK = { proven: ["proved", 13], unproven: ["unproved", 11.4], skipped: ["norun", 12], repair: ["stale", 13], broken: ["broken", 13],
@@ -2766,7 +2766,7 @@ function protDraw(P, get, onDay) {
 }
 
 /* Graph 7 as proofreading, as the mockup at #228 draws it: one stream of defects, thinning left to right at each layer
-   of checking. Counted in scripts/spec_drift_views.py (proofreading), by graph 7's rules; this lays it out and words
+   of checking. Counted in scripts/pipeline/counts/spec_drift_views.py (proofreading), by graph 7's rules; this lays it out and words
    it, and counts nothing. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in
    dashboard.css, under #prf. */
 const PRF_MEM = [316, 704, 872, 1060];  // each layer's membrane, left to right
@@ -3400,7 +3400,7 @@ function rewDraw(R, get, onDay) {
 
 /* Graph 8 as an energy budget: one bead for each $2 of tokens at list prices, in a column for each Day beside the
    work between Days, or in a column for each date, coloured by where the dollars went. Counted in
-   scripts/spec_drift_views.py (budget): every bead, dollar and share; this lays them out and words them, and counts
+   scripts/pipeline/counts/spec_drift_views.py (budget): every bead, dollar and share; this lays them out and words them, and counts
    nothing. `get` finds an element by its id; `onDay` is the page's Day buttons. Colours are in dashboard.css, under #atp. */
 // The layout. A bead is 6.6 px on a pitch of 8.6. By date the columns share the width from x0 to x1, a step each and
 // 3 px apart, `per` beads to a row. By Day a column is `step` wide at most, `per` beads to a row, and the Days end at
@@ -3605,7 +3605,7 @@ function atpDraw(B, get, onDay) {
 
 /* Graph 9 as growth rings, as the mockup at #228 draws it: a ring for each Day, as wide as the lines its own pull
    requests changed, and below, a hatched ring for the work no Day owns, at the furthest Day begun when it merged. Counted in
-   scripts/spec_drift_views.py (rings): every ring's lines, share and pull requests; this turns lines into px with one
+   scripts/pipeline/counts/spec_drift_views.py (rings): every ring's lines, share and pull requests; this turns lines into px with one
    scale for both strips, and words them. Colours are in dashboard.css, under #rng. */
 const RNG_NAME = { prod: "Production code", test: "Tests", spec: "Specs", context: "Agent context", tooling: "Tooling" };
 // The layout, from the mockup's coordinates. A strip is 120 px tall (upper y 47, lower y 236); its rings start at x 7,

@@ -147,9 +147,9 @@ D12.10 and D12.11 added).
     finding too: say where the day would split.
 14. **Who else reads what the day changes.** List every output this day adds to or changes: a
     printed line, a comment on the issue or the pull request, a run log line, a file, a call a
-    fake records. For each, grep `tests/` and `scripts/test_*.py` for the tests that read it,
-    and say for every one how it picks what it reads: by a prefix or a word the new output
-    carries too, by a count, by position (the first, the last, an index), or by comparing a
+    fake records. For each, grep `tests/`, `scripts/tests/` and `scripts/test_*.py` for the tests
+    that read it, and say for every one how it picks what it reads: by a prefix or a word the new
+    output carries too, by a count, by position (the first, the last, an index), or by comparing a
     whole block. Each of those fails, or passes for another reason, once the new output is
     there: the grep says how a test picks, and only a run on the stand-in of check 8 says
     whether it fails. Tests often read through a helper: grep the helper's name too. Compare

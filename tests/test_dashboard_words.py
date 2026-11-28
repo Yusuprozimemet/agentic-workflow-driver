@@ -21,7 +21,7 @@ def read(name):
 
 def views():
     spec = importlib.util.spec_from_file_location(
-        "spec_drift_views", os.path.join(SCRIPTS, "spec_drift_views.py")
+        "spec_drift_views", os.path.join(SCRIPTS, "pipeline", "counts", "spec_drift_views.py")
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

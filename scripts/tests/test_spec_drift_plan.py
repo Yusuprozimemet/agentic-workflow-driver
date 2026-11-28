@@ -9,6 +9,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
+import pipeline  # noqa: E402,F401  (importing it puts the pipeline's folders on the path)
 import spec_drift_plan as sp  # noqa: E402
 
 DAY_11 = """# Day 11

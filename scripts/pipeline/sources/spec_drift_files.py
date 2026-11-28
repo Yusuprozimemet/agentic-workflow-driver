@@ -18,7 +18,7 @@ import math
 import os
 import re
 
-TABLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "dashboard", "file-stations.json")
+TABLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "docs", "dashboard", "file-stations.json")
 TABLE_NAME = "docs/dashboard/file-stations.json"
 SCRIPTS = "scripts/"
 

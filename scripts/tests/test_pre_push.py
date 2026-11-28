@@ -51,6 +51,12 @@ class PrePushTest(unittest.TestCase):
         # A change to the index alone runs the test that holds it to the folder.
         index = [command[1] for command in self.names(files=("scripts/README.md",))["Drift and gap move when they should"]]
         self.assertIn("scripts/tests/test_scripts_layout.py", index)
+        # The page's data builder sits in scripts/pipeline/, a folder deeper: a change to one of its modules alone,
+        # or to the package that puts them on the path, starts the run too (skipped, the gate would pass unrun).
+        for changed in ("scripts/pipeline/counts/spec_drift_views.py", "scripts/pipeline/__init__.py"):
+            ran = [command[1] for command in self.names(files=(changed,))["Drift and gap move when they should"]]
+            self.assertIn("scripts/tests/test_spec_drift.py", ran, changed)
+        self.assertIsNone(pp.DRIFT_PATHS.match("scripts/pipeline/sources/deeper/x.py"))
         [(_, _, jobs)] = [w for w in workflows() if w[0] == "spec-drift-tests.yml"]
         steps = [s for job in jobs.values() for s in job.get("steps", [])]
         [paths] = [s["env"]["PATHS"] for s in steps if "PATHS" in (s.get("env") or {})]

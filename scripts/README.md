@@ -2,7 +2,9 @@
 
 `scripts/` holds this repository's commands: each one a body of its own, run by hand, by a hook or
 by CI. The specs, the workflows and the docs name them by path, so their names and places do not
-move; this page only sorts them by what they are for. Their tests are in `scripts/tests/`, run one
+move; this page only sorts them by what they are for. The page's data builder is not a command: the
+11 modules `spec-drift.py` runs sit in `scripts/pipeline/`, in a folder for each of the first three
+concerns below (`sources/`, `counts/`, `build/`), and keep the names they had beside it. Their tests are in `scripts/tests/`, run one
 file at a time (`python scripts/tests/test_<name>.py`). Three tests stay beside the scripts on
 purpose: `test_token_usage.py`, frozen by C16.19 (a hold in force); `test_setup_check.py`, which
 Day 10's break record runs by this path (C10.29); and `test_dashboard_page.py`, which Day 14's break
@@ -12,28 +14,28 @@ record runs by this module name (C14.9).
 
 | File | What it does |
 |---|---|
-| `spec_drift_common.py` | What every part of spec-drift.py reads: the patterns, the project file's values, and where the page and its data live. |
-| `spec_drift_git.py` | spec-drift.py's reading of git and GitHub: commands, merges, branches, PRs, runs and parked issues. |
-| `spec_drift_specs.py` | spec-drift.py's reading of plan.md and the day specs: steps, tracks, criteria, evidence and removals. |
-| `spec_drift_handoffs.py` | spec-drift.py's reading of hand-offs: what one day defers to a later one, and what lies ahead. |
-| `spec_drift_data.py` | spec-drift.py's reading of what git and GitHub cannot give: the dashboard-data branch and the evidence report. |
-| `spec_drift_files.py` | The dashboard's file map: every tracked file as one dot, hung under the station of the workflow it serves. |
-| `spec_drift_plan.py` | spec-drift.py's plan graph: what `plan.md` commits to, and which criteria say they serve each commitment. |
+| `pipeline/sources/spec_drift_common.py` | What every part of spec-drift.py reads: the patterns, the project file's values, and where the page and its data live. |
+| `pipeline/sources/spec_drift_git.py` | spec-drift.py's reading of git and GitHub: commands, merges, branches, PRs, runs and parked issues. |
+| `pipeline/sources/spec_drift_specs.py` | spec-drift.py's reading of plan.md and the day specs: steps, tracks, criteria, evidence and removals. |
+| `pipeline/sources/spec_drift_handoffs.py` | spec-drift.py's reading of hand-offs: what one day defers to a later one, and what lies ahead. |
+| `pipeline/sources/spec_drift_data.py` | spec-drift.py's reading of what git and GitHub cannot give: the dashboard-data branch and the evidence report. |
+| `pipeline/sources/spec_drift_files.py` | The dashboard's file map: every tracked file as one dot, hung under the station of the workflow it serves. |
+| `pipeline/sources/spec_drift_plan.py` | spec-drift.py's plan graph: what `plan.md` commits to, and which criteria say they serve each commitment. |
 
 ## The dashboard's data: counts
 
 | File | What it does |
 |---|---|
-| `spec_drift_metrics.py` | spec-drift.py's measures: the clock, the chance bands, the names in code, boundaries and yardsticks. |
-| `spec_drift_score.py` | spec-drift.py's quality score: one number out of 100 for the whole project, each Day and each ability. |
-| `spec_drift_views.py` | spec-drift.py's newer views: one function per section of the page, each written under its own key of spec-drift.json. |
+| `pipeline/counts/spec_drift_metrics.py` | spec-drift.py's measures: the clock, the chance bands, the names in code, boundaries and yardsticks. |
+| `pipeline/counts/spec_drift_score.py` | spec-drift.py's quality score: one number out of 100 for the whole project, each Day and each ability. |
+| `pipeline/counts/spec_drift_views.py` | spec-drift.py's newer views: one function per section of the page, each written under its own key of spec-drift.json. |
 
 ## The dashboard's data: build
 
 | File | What it does |
 |---|---|
 | `spec-drift.py` | Measure how the spec and the code move against each other, merge by merge. |
-| `spec_drift_page.py` | spec-drift.py's page: the data the dashboard draws, and the one-file page it builds. |
+| `pipeline/build/spec_drift_page.py` | spec-drift.py's page: the data the dashboard draws, and the one-file page it builds. |
 | `demo-data.py` | Made-up data in the shape spec-drift.py writes for the dashboard, for a project called sample-shop. |
 | `dashboard-reconcile.py` | Hold each new section of the dashboard to the graph it is drawn beside, one line per section. |
 

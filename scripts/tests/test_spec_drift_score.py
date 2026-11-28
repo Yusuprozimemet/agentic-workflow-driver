@@ -1,10 +1,11 @@
-"""The quality score's recipe (scripts/spec_drift_score.py) on small made-up data."""
+"""The quality score's recipe (scripts/pipeline/counts/spec_drift_score.py) on small made-up data."""
 
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pipeline  # noqa: E402,F401  (importing it puts the pipeline's folders on the path)
 from spec_drift_score import combine, count, quality_score  # noqa: E402
 
 

@@ -841,7 +841,7 @@ class ModelTest(unittest.TestCase):
                           ("5", ["5 in the notebook"])])
         self.assertEqual((row.get("avg"), [w.get("name") for w in g.get("waiting", [])]), ([], []))
 
-    # The quality score, as scripts/spec_drift_score.py writes it: the page rounds it and links each part.
+    # The quality score, as scripts/pipeline/counts/spec_drift_score.py writes it: the page rounds it and links each part.
     PART = lambda key, pct, counts: dict(key=key, name=key.title(), graph="g4", pct=pct, counts=counts)  # noqa: E731
     SCORE = dict(all=dict(score=89.8, low="proof", parts=[
         PART("plan", 92.5, [dict(name="Named", n=9, m=10, pct=90.0, note="")]),

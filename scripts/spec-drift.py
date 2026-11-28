@@ -64,9 +64,11 @@ import tempfile
 
 import numpy as np
 
-# The modules spec-drift.py is split into sit beside it, also when a test loads it by path.
+# The modules spec-drift.py is split into sit in scripts/pipeline/, a folder per concern: importing the
+# package beside this script puts them on the path, also when a test loads it by path.
 if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import pipeline  # noqa: F401
 from spec_drift_common import *  # noqa: F403
 from spec_drift_git import *  # noqa: F403
 from spec_drift_specs import *  # noqa: F403
@@ -107,19 +109,23 @@ CAVEATS = [
 ]
 
 
-# The files this script is split into, beside it: a change to any of them counts as the script
+# The files this script is split into, by their paths from it: a change to any of them counts as the script
 # edited (provenance).
-SOURCES = ("spec-drift.py", "spec_drift_common.py", "spec_drift_git.py", "spec_drift_specs.py",
-           "spec_drift_handoffs.py", "spec_drift_data.py", "spec_drift_metrics.py", "spec_drift_page.py",
-           "spec_drift_plan.py", "spec_drift_score.py", "spec_drift_files.py", "spec_drift_views.py")
+SOURCES = ("spec-drift.py", "pipeline/sources/spec_drift_common.py", "pipeline/sources/spec_drift_git.py",
+           "pipeline/sources/spec_drift_specs.py", "pipeline/sources/spec_drift_handoffs.py",
+           "pipeline/sources/spec_drift_data.py", "pipeline/counts/spec_drift_metrics.py",
+           "pipeline/build/spec_drift_page.py", "pipeline/sources/spec_drift_plan.py",
+           "pipeline/counts/spec_drift_score.py", "pipeline/sources/spec_drift_files.py",
+           "pipeline/counts/spec_drift_views.py")
 # The files that make each part of the cache: a part starts over when one of its files changes
 # (load_cache), and an edit to any other file keeps it. "git" is git's own output for commits named
 # by SHA, as spec_drift_git.py reads it. "code" and "flags" are what spec_drift_metrics.py counts in
 # git grep's output, with spec_drift_common.py's patterns, at the merges spec_drift_git.py lists.
 # "comments" is the git grep spec_drift_handoffs.py runs at each merge (day_comments).
-COUNTED_BY = ("spec_drift_git.py", "spec_drift_common.py", "spec_drift_metrics.py")
-CACHE_PARTS = dict(git=("spec_drift_git.py",), code=COUNTED_BY, flags=COUNTED_BY,
-                   comments=("spec_drift_git.py", "spec_drift_handoffs.py"))
+COUNTED_BY = ("pipeline/sources/spec_drift_git.py", "pipeline/sources/spec_drift_common.py",
+              "pipeline/counts/spec_drift_metrics.py")
+CACHE_PARTS = dict(git=("pipeline/sources/spec_drift_git.py",), code=COUNTED_BY, flags=COUNTED_BY,
+                   comments=("pipeline/sources/spec_drift_git.py", "pipeline/sources/spec_drift_handoffs.py"))
 
 
 def load_cache(path):

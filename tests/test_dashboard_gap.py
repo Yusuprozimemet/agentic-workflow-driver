@@ -144,7 +144,7 @@ class ReplayHistoryTest(unittest.TestCase):
         loaded = {}
         for name, file in (
             ("replay_history", "replay-history.py"),
-            ("spec_drift_views", "spec_drift_views.py"),
+            ("spec_drift_views", "pipeline/counts/spec_drift_views.py"),
             ("dashboard_reconcile", "dashboard-reconcile.py"),
         ):
             spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / file)
