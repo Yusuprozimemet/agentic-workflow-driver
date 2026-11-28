@@ -78,7 +78,8 @@ from spec_drift_metrics import *  # noqa: F403
 from spec_drift_page import *  # noqa: F403
 from spec_drift_plan import plan_graph
 from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention, proofreading, protein,
-                               one_day, one_day_line, reading, reflex, rewrites, rewrites_line, rings, where_ring)
+                               one_day, one_day_line, reading, reflex, rewrites, rewrites_line, rings, where_ring, cell, CELL_AGENTS,
+                               FIX_STATIONS)
 from spec_drift_score import quality_score
 from spec_drift_files import build_file_map
 
@@ -119,6 +120,7 @@ SOURCES = ("spec-drift.py", "pipeline/sources/spec_drift_common.py", "pipeline/s
            "pipeline/counts/spec_drift_views.py",
            "pipeline/counts/spec_drift_view_actogram.py",
            "pipeline/counts/spec_drift_view_budget.py",
+           "pipeline/counts/spec_drift_view_cell.py",
            "pipeline/counts/spec_drift_view_common.py",
            "pipeline/counts/spec_drift_view_criterion_states.py",
            "pipeline/counts/spec_drift_view_gel.py",
@@ -304,6 +306,9 @@ def main():
         real["budget"], real["rings"], real["actogram"], real["reflex"] = budget(real), rings(real), actogram(real), reflex(real)
         real["learning"] = learning(real)
         real["one_day"] = one_day(real)
+        # the cell's challenge tests and its fixes' stations, from the case sets and the table at the head
+        real["cell"] = cell(real, {a: blobs.read(head, CASES_DIR + a + ".json") or None for _, a in CELL_AGENTS},
+                            blobs.read(head, FIX_STATIONS))
         real["rewrites"] = rewrites(real)
         real["needs_attention"] = needs_attention(real)  # after the graphs: it reads their verdicts, and `attention` above
         real["file_map"] = build_file_map(head, run)  # every tracked file at its station: read from git, not from the specs
@@ -333,6 +338,8 @@ def main():
     for p in real["one_day"]["problems"]:
         print(f"defect at: not used: {p}")
     print(one_day_line(real["one_day"]))
+    for p in real["cell"]["problems"]:
+        print(f"cell: {p}")
     for p in real["rewrites"]["problems"]:
         print(f"rewrites: {p}")
     print(rewrites_line(real["rewrites"]))

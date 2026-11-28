@@ -48,6 +48,11 @@ OPEN_ALL = """() => {
 UNSCROLL = "e => { e.style.overflow = 'visible'; e.style.width = e.scrollWidth + 'px'; }"
 NL = "String.fromCharCode(10)"  # no backslash anywhere in the JavaScript: nothing to lose
 TEXT = f"e => e.innerText.split({NL}).filter(l => l.trim()).join({NL}).slice(0, 3000)"
+# the cell draws in a shadow root, whose words innerText leaves out: the text of its .wrap, cut and joined as TEXT
+CELL_TEXT = TEXT.replace(
+    "e => e.innerText",
+    "e => e.querySelector('#cell-host').shadowRoot.querySelector('.wrap').innerText",
+)
 CLOSE = "() => document.querySelectorAll('section.graph details').forEach(x => { x.open = false; })"
 GRAPHS = ["g1", "g2", "g3", "g12", "g6", "g7", "g8", "g9", "g10"]
 GO = "p => { location.hash = p; }"  # the front page or the back one, as a link turns to it
@@ -64,7 +69,7 @@ def to_page(page, el):
         page.wait_for_timeout(400)
 
 
-def shot(page, sel, name, note=""):
+def shot(page, sel, name, note="", text=TEXT):
     """One view: its picture, cut into pieces 1400 px high (name.png, name-2.png, ...), and its text."""
     el = page.query_selector(sel)
     to_page(page, el)
@@ -87,7 +92,7 @@ def shot(page, sel, name, note=""):
             clip={"x": x, "y": y + top, "width": w, "height": min(1400, hgt - top)},
         )
         files.append(f)
-    views.append(f"=== {' '.join(files)} {note}\n{el.evaluate(TEXT)}")
+    views.append(f"=== {' '.join(files)} {note}\n{el.evaluate(text)}")
 
 
 def click(page, btn, wait=600):
@@ -137,6 +142,15 @@ with sync_playwright() as p:
     for g in GRAPHS:
         shot(page, f"#{g}", g)
     shot(page, "#lrn", "lrn", "(Graph 13: Does it learn from its mistakes?)")
+    shot(page, "#cell", "cell", "(The cell: the Day it opens on)", CELL_TEXT)
+    # Playwright's CSS reaches into the open shadow root
+    station = page.query_selector("#cell-host #s-sa")
+    if station:
+        click(page, station, 400)
+        opened = "(The cell: the spec-auditor's station opened)"
+        shot(page, "#cell", "cell-station", opened, CELL_TEXT)
+    else:
+        views.append("cell-station: NOT FOUND")
     # Each closed section on its own.
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
@@ -259,11 +273,12 @@ a box that is cut off or overlaps is a finding.
 | 17 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
 | 18 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
 | 19 | What these figures cannot see; Not measured yet | `page-NN` |
-| 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
+| 20 | Where does each file belong? (the file map), with its two closed sections | `back-NN` |
 | 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |
 | 22 | Graph 6, Promises rewritten: the ring of Days, each replaced promise joined to what replaced it | `g6-rewrites` |
 | 23 | The plan's yardsticks, the row under Needs attention | `attention` |
-| 24 | The back page: its switch and its four graphs | `back-NN` |
+| 24 | The back page: its switch and its five graphs | `back-NN` |
+| 25 | The cell: the Day it opens on, then the spec-auditor's station opened | `cell`, `cell-station` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 

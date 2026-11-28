@@ -2238,6 +2238,580 @@ class RewritesPageTest(unittest.TestCase):
         self.assertEqual((out["error"], [e for e in out["logged"] if e.startswith("rew:")]), (None, []))
 
 
+def cell_data(current_day=None):
+    """The page's data for the cell, made up: Day 1 closed after an audit, a spec change, track A and a close, with a
+    defect at its step, one that names no step and one found after the Day; Day 2 open, its track B and close not
+    started. Four fixes (one at no station, one counted from no Day), four refusals (one on a date two Days spent on,
+    one on a date no Day spent on), files at two stations and on none, and the cell's own key with three cards."""
+    def step(key, name, kind, prs=(), title=""):
+        return dict(key=key, name=name, kind=kind, prs=list(prs), date=None, title=title, subs=[])
+
+    def defect(i, found, at, cause="spec", sub=None, same=None):
+        return dict(id=i, found=found, cause=cause, same=same, text=f"problem {i}", step=at, sub=sub, by="at" if at else "found")
+
+    def criterion(i, tag, state, at):
+        return dict(id=i, day=int(i[1]), tag=tag, state=state, back=False, gone=state == "replaced", quote=f"claim {i}", step=at)
+
+    def agent(key, name, replies, cost):
+        return dict(agent=key, name=name, does=f"the {name}'s work", replies=replies, cost=cost, covers=[["*", "*"]])
+
+    def fix(pr, from_day, verdict=None, days_since=0, gated=()):
+        return dict(pr=pr, title=f"fix {pr}", merged="2026-01-01T08:00:00Z", from_day=from_day, stops=["D1.2"], before=1, after=0,
+                    after_ids=[], days_since=days_since, first_day=1, days_before=1, rate_before=1.0,
+                    rate_after=0.0 if from_day else None, gated=list(gated), leaked=[], verdict=verdict)
+
+    def tokens(date, day, cost, past):
+        return dict(date=date, day=None, model="m", agent="main", part="day", part_day=day, input=1, cache_write=1, cache_read=1,
+                    output=1, replies=1, bash=0, cut=0, reads=0, whole=0, cost=cost, cost_past_150k=past)
+
+    one = dict(day=1, title="Day 1: first", status="done",
+               steps=[step("audit", "Audit", "audit"), step("spec", "Spec change", "spec", [11], "Day 01 spec change"),
+                      step("A", "Track A", "code", [12], "Day 01 track A"), step("close", "Close", "close", [13], "Day 01 close")],
+               defects=[defect("D1.1", "auditor", "audit"), defect("D1.2", "review", None, "implementation"),
+                        defect("D1.3", "dashboard", "after", "process")],
+               criteria=[criterion("C1.1", "new", "proven", "A"), criterion("C1.2", "hold", "proven", "A"), criterion("C1.3", "new", "replaced", "A")],
+               agents=[agent("main", "Main session", 30, 2.5)],
+               totals=dict(prs=3, new=2, hold=1, ticked=3, cost=2.5, replies=30, defects=3, placed=1, no_step=1, after=1))
+    two = dict(day=2, title="Day 2: second", status="active",
+               steps=[step("audit", "Audit", "audit"), step("spec", "Spec change", "spec", [21], "Day 02 spec change"),
+                      step("A", "Track A", "code", [22], "Day 02 track A"), step("B", "Track B", "code"), step("close", "Close", "close")],
+               # D2.2 names no step but its track, D2.3 neither: it is placed in turn over the tracks
+               defects=[defect("D2.1", "track-reviewer", "A", "implementation", "diff", "D1.2"), defect("D2.2", "Track A", None),
+                        defect("D2.3", "review", None, "process")],
+               criteria=[criterion("C2.1", "new", "proven", "A"), criterion("C2.2", "new", "unproven", "B")],
+               agents=[agent("main", "Main session", 20, 1.25), agent("spec-auditor", "Spec-auditor", 5, 0.5)],
+               totals=dict(prs=2, new=2, hold=0, ticked=0, cost=1.75, replies=25, defects=3, placed=1, no_step=2, after=0))
+    learning = dict(head="abc1234", last_pr=34, generated="2026-01-03", repeats=1, past_fix=1, held=0, problems=[], wait=5,
+                    past_gated=1, past_leaked=2, shared=[],
+                    days=[dict(day=1, n=0, before=[], past_fix=[], defects=3, share=0, gated=[], leaked=["D1.1", "D1.3"], fixes=[31]),
+                          dict(day=2, n=1, before=[], past_fix=["D2.1"], defects=1, share=1.0, gated=["D2.1"], leaked=[], fixes=[32, 34])],
+                    fixes=[fix(31, 1, "gone", 2, ["D2.1"]), fix(32, 2, None, 1), fix(33, None), fix(34, 2, None, 1)])
+    files = dict(head="abc1234", lines=135, files=[["plan.md", 100, 0, 0, 0], ["a.md", 10, 0, 1, 0], ["b.md", 20, 0, 1, 0], [".gitignore", 5, 3, 2, 0]],
+                 groups=[dict(label="plan.md", what="The plan.", at="station 1, the goal", files=1, lines=100),
+                         dict(label="agent", what="The spec-auditor.", at="the spec-auditor's check, after station 2", files=2, lines=30),
+                         dict(label="settings", what="Settings files.", at="on no station", files=1, lines=5)])
+    cell = dict(cards=dict(sa=dict(agent="spec-auditor", cases=2, runs=3, n=3, of=5, found=1),
+                           ci=dict(agent="reviewer", cases=3, runs=3, n=2, of=3, named=1, named_of=2, found=0),
+                           rater=dict(agent="defect-rater", cases=2, runs=3, cause=5, stage=6, made=7, real=dict(cause=[4, 5]))),
+                fix_station={"31": "sa", "33": "ci", "34": "test"}, problems=[], total=4)
+    return data(now=dict(data()["now"], current_day=current_day),
+                meta=dict(project="toy", caveats=[], where=dict(rows=[dict(phase=0, days=[1, 2], stop=None, lifted=False, from_day=None, cut=False)])),
+                one_day=dict(head="abc1234", last_pr=22, generated="2026-01-03", from_day=1, problems=[], no_step=dict(lines=0, of=0, ids=[]),
+                             days=[one, two]),
+                # 1 Jan: Day 1 spent 2.00 and Day 2 1.00, so its refusals are Day 1's; 3 Jan: no Day spent, and 5 Jan has no tokens;
+                # 4 Jan: both spent 1.00, and a tie goes to the Day seen first on that date (celldata.py's strict `>`), Day 1
+                tokens=[tokens("2026-01-01", 1, 2.0, 0.5), tokens("2026-01-01", 2, 1.0, 0), tokens("2026-01-02", 2, 3.0, 0.25),
+                        tokens("2026-01-03", None, 1.0, 0), tokens("2026-01-04", 1, 1.0, 0), tokens("2026-01-04", 2, 1.0, 0)],
+                refusals=[dict(date="2026-01-01", guard="read-guard", refused=4), dict(date="2026-01-02", guard="step-guard", refused=2),
+                          dict(date="2026-01-03", guard="read-guard", refused=1), dict(date="2026-01-04", guard="auditor-guard", refused=3),
+                          dict(date="2026-01-05", guard="read-guard", refused=1)],
+                rewrites=dict(lines=[dict(sink="C2.1", nodes=[dict(id="C1.3", day=1, by=["C2.1"]), dict(id="C2.1", day=2, by=[])])]),
+                hand_offs=[dict(to=2, id="H1.1", source="Day 1 Notes", picked=True, text="hand it on"),
+                           dict(to=5, id="H1.2", source="a test's comment", picked=False, text="later")],
+                learning=learning, file_map=files,
+                protein=dict(chains=[dict(key="a", name="Runs", cells=[dict(id="C1.1", state="proven"), dict(id="C2.1", state="unproven")]),
+                                     dict(key=None, name="On no chain", cells=[dict(id="C1.1", state="proven")])]),
+                cell=cell)
+
+
+# The page's script in node, on a document that keeps every node and each node's listeners, and a root for the cell
+# whose getElementById makes a node for any id; then BODY, which returns what the test reads (null with no such function).
+CELL_DOC = r"""
+const fs = require("fs"), vm = require("vm");
+const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", value: "", on: {}, q: {},
+  classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); },
+    add(c) { this.toggle(c, true); }, remove(c) { this.toggle(c, false); }, contains(c) { return (n.attrs.class || "").split(" ").includes(c); } },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+  appendChild(c) { this.kids.push(c); return c; }, append(...c) { this.kids.push(...c); },
+  replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
+  addEventListener(type, fn) { this.on[type] = fn; }, querySelector(s) { return this.q[s] || (this.q[s] = node(s)); }, querySelectorAll() { return []; } };
+  Object.defineProperty(n, "className", { set(v) { n.attrs.class = v; }, get() { return n.attrs.class || ""; } });
+  return n; };
+// a root also holds the four speed buttons the engine asks for by class, and takes what is appended to it
+const root = () => { const els = {}, q = {}, spd = ["0.5", "1", "2", "4"].map(s => { const b = node("button"); b.setAttribute("data-s", s); return b; });
+  return { els, kids: [], spd, getElementById: id => els[id] || (els[id] = node(id)), querySelector: s => q[s] || (q[s] = node(s)),
+    querySelectorAll: s => s === ".spd" ? spd : [], appendChild(c) { this.kids.push(c); return c; } }; };
+const document = { createElementNS: (ns, tag) => node(tag), createElement: node };
+const logged = [];
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, console: { error: e => logged.push(String(e)), log() {} } });
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+const words = n => n == null ? "" : typeof n !== "object" ? String(n) : [n.textContent, ...(n.kids || []).map(words)].join(" ").split(/\s+/).filter(Boolean).join(" ");
+const text = words;
+const attrs = n => n && typeof n === "object" ? [...Object.values(n.attrs || {}), (n.style || {}).cssText || "", ...(n.kids || []).map(attrs)].join(" ") : "";
+// every node under n (n too) that pred takes; a listener fired as the browser fires it, `this` the node
+const find = (n, pred) => !n || typeof n !== "object" ? [] : [...(pred(n) ? [n] : []), ...(n.kids || []).flatMap(k => find(k, pred))];
+// (false, and nothing fired, when there is no such node or listener: the test then fails on what did not change)
+const fire = (n, type, ev) => !!(n && n.on[type]) && (n.on[type].call(n, Object.assign({ key: "", preventDefault() {}, stopPropagation() {} }, ev || {})), true);
+const out = (() => { BODY })();
+console.log(JSON.stringify(out === undefined ? null : out));
+"""
+CELL_PLACE = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellPlace !== "function") return null;
+  const p = ctx.cellPlace(ctx.DATA);
+  return { played: p.played.map(s => s.key), after: p.after.map(d => d.id), assumed: p.assumed,
+    byStep: Object.fromEntries(Object.entries(p.byStep).map(([k, list]) => [k, list.map(o => [o.d.id, o.as])])) };
+""")
+CELL_CATCHER = CELL_DOC.replace("BODY", r"""
+  return typeof ctx.cellCatcher !== "function" ? null : ctx.DATA.map(f => ctx.cellCatcher(f));
+""")
+CELL_COUNTS = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const E = ctx.cellEngine(ctx.model(ctx.DATA).cell, root(), { reduced: true, at: { day: 1, paused: true, end: true } });
+  const first = E.counts();
+  E.open(2);
+  return [first, E.counts()];
+""")
+CELL_PANELS = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell, R = root(), E = ctx.cellEngine(C, R, { reduced: true, at: { day: 1, paused: true, end: true } });
+  const panel = (R0, E0, info) => { E0.show(info); const P = R0.getElementById("panel"); return { w: words(P), a: attrs(P) }; };
+  const crit = id => C.days[0].crit.find(c => c[0] === id), fix = pr => C.learn.fixes.find(f => f.pr === pr);
+  const out = { gene: panel(R, E, { type: "stn", id: "gene" }), sa: panel(R, E, { type: "stn", id: "sa" }), ci: panel(R, E, { type: "stn", id: "ci" }),
+    rater: panel(R, E, { type: "stn", id: "rater" }), loop: panel(R, E, { type: "stn", id: "loop" }),
+    promise: panel(R, E, { type: "crit", c: crit("C1.1") }), plain: panel(R, E, { type: "crit", c: crit("C1.2") }),
+    replaced: panel(R, E, { type: "crit", c: crit("C1.3") }), gone: panel(R, E, { type: "fix", f: fix(31) }),
+    early: panel(R, E, { type: "fix", f: fix(32) }), noday: panel(R, E, { type: "fix", f: fix(33) }) };
+  // the same Days with no challenge test recorded
+  const bare = Object.assign({}, C, { learn: Object.assign({}, C.learn, { cards: {} }) }), R2 = root(), E2 = ctx.cellEngine(bare, R2, { reduced: true, at: { day: 1, paused: true, end: true } });
+  out.bare = panel(R2, E2, { type: "stn", id: "loop" });
+  out.nocard = panel(R2, E2, { type: "stn", id: "chap" });
+  // the agents' arcs: the defect-rater's card has no total, so it has none
+  const G = R.getElementById("learnG");
+  out.arcs = { w: find(G, n => n.tag === "text").map(n => n.textContent).join(" | "), a: attrs(G), n: find(G, n => n.tag === "circle").length };
+  const R3 = root();
+  ctx.cellEngine(Object.assign({}, C, { days: C.days.map(d => Object.assign({}, d, { phase: null })) }), R3, { reduced: true, at: { day: 1, paused: true, end: true } });
+  out.nophase = { w: words(R3.getElementById("org")), a: "" };
+  out.nobefore = panel(R, E, { type: "fix", f: Object.assign({}, fix(32), { rate_before: null }) });
+  // a fix counted from no Day has no rate since it, whatever its record says
+  out.norate = panel(R, E, { type: "fix", f: Object.assign({}, fix(33), { rate_after: 0.5, days_since: 2 }) });
+  out.notyet = panel(R, E, { type: "stn", id: "test" });
+  // a card with no runs, and the defect-rater's with no agreement on the real Days
+  const cards = { sa: Object.assign({}, C.learn.cards.sa, { runs: null }), rater: Object.assign({}, C.learn.cards.rater, { real: {} }) };
+  const R4 = root(), E4 = ctx.cellEngine(Object.assign({}, C, { learn: Object.assign({}, C.learn, { cards }) }), R4, { reduced: true, at: { day: 1, paused: true, end: true } });
+  out.noruns = panel(R4, E4, { type: "stn", id: "sa" });
+  out.noreal = panel(R4, E4, { type: "stn", id: "rater" });
+  return out;
+""")
+
+
+CELL_MOUNT = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellMount !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell;
+  // a page whose host gives a fake shadow root and whose template clones to a node; `tweak` breaks it
+  const run = (cell, env, tweak) => {
+    const P = root(), shadow = root(), onDay = [];
+    P.getElementById("cell-host").attachShadow = () => shadow;
+    P.getElementById("cell-tpl").content = { cloneNode: () => node("fragment") };
+    P.getElementById("cell-none").hidden = true;
+    if (tweak) tweak(P);
+    logged.length = 0;
+    const api = ctx.cellMount({ cell }, id => P.getElementById(id), onDay, env), none = P.getElementById("cell-none");
+    return { host: P.getElementById("cell-host").hidden, none: [none.hidden, none.textContent], mounted: api != null, onDay: onDay.length,
+      logged: logged.slice(), api, on: onDay };
+  };
+  const env = { shadow: true, reduced: true, raf: null };
+  const out = { missing: run(null, env), error: run({ error: "boom" }, env), stub: run(C, Object.assign({}, env, { shadow: false })),
+    notpl: run(C, env, P => { P.getElementById("cell-tpl").content = undefined; }), broken: run(Object.assign({}, C, { bio: null }), env),
+    mounted: run(C, env) };
+  const m = out.mounted, moved = [];
+  if (m.api) { moved.push(m.api.counts().day); m.on[0](2); moved.push(m.api.counts().day); m.on[0](null); moved.push(m.api.counts().day); }
+  Object.values(out).forEach(o => { delete o.api; delete o.on; });
+  out.moved = moved;
+  return out;
+""")
+
+
+CELL_BUTTONS = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell, frames = [];
+  const mk = opts => { const R = root(); return { R, E: ctx.cellEngine(C, R, Object.assign({ reduced: false, raf: f => frames.push(f), at: { day: 1, paused: true, end: true } }, opts)) }; };
+  const { R, E } = mk({}), $ = id => R.getElementById(id);
+  const head = () => words(find($("panel"), n => n.tag === "h2")[0]);
+  const value = () => Math.round(+$("scrub").value * 100) / 100;
+  const out = {};
+  // play from the end, then pause
+  out.play = [$("play").textContent];
+  fire($("play"), "click"); out.play.push($("play").textContent);
+  fire($("play"), "click"); out.play.push($("play").textContent);
+  $("scrub").value = "30"; fire($("scrub"), "input"); out.clock = $("clock").textContent.split(" / ")[0];
+  // each speed: pressed alone, and two frames a second apart move the time by a tenth of a second times the speed
+  out.speeds = R.spd.map(b => {
+    fire(b, "click");
+    $("scrub").value = "0"; fire($("scrub"), "input");
+    fire($("play"), "click");
+    frames[frames.length - 1](1000); frames[frames.length - 1](2000);
+    const moved = value();
+    fire($("play"), "click");
+    return [R.spd.map(x => x.getAttribute("aria-pressed")), moved];
+  });
+  fire($("learnBtn"), "click");
+  out.learnOff = [E.counts().fixes, $("learnBtn").getAttribute("aria-pressed"), $("s-loop").querySelector("text").textContent];
+  fire($("learnBtn"), "click");
+  out.learnOn = [E.counts().fixes, $("learnBtn").getAttribute("aria-pressed"), $("s-loop").querySelector("text").textContent];
+  fire($("s-gene"), "click"); out.stations = [head()];
+  fire($("s-pa"), "keydown", { key: "Enter" }); out.stations.push(head());
+  fire($("s-sa"), "keydown", { key: " " }); out.stations.push(head());
+  fire($("s-ci"), "keydown", { key: "x" }); out.stations.push(head());
+  const steps = $("steps").kids.slice(1);
+  fire(steps[1], "click");
+  out.step = [steps[1].textContent || words(steps[1]), value(), steps.map(b => b.getAttribute("aria-pressed"))];
+  const cells = find($("org"), n => n.tag === "button");
+  fire(cells[1], "click");
+  out.cell = [E.counts().day, cells.map(b => b.getAttribute("aria-pressed"))];
+  fire($("s-gene"), "click");
+  fire(find($("panel"), n => n.tag === "button" && n.attrs.class === "back")[0], "click"); out.back = head();
+  // a defect's "same as" button and a promise's "replaced by" button, each from the panel its own mark opens
+  const marks = cls => find($("dyn"), n => n.on.click && (n.attrs.class || "").split(" ").includes(cls));
+  const open = (cls, want) => marks(cls).some(n => { fire(n, "click"); return head() === want; });
+  out.defect = [open("df", "Defect D2.1")];
+  fire(find($("panel"), n => n.tag === "button" && words(n) === "D1.2")[0], "click");
+  out.defect.push(E.counts().day, head());
+  out.crit = [open("tr", "Promise C1.3")];
+  fire(find($("panel"), n => n.tag === "button" && words(n) === "C2.1, Day 2")[0], "click");
+  out.crit.push(E.counts().day, head());
+  // where the time starts: at the Day's end, at its start, and with no motion
+  const at = o => { const m = mk(o); return [Math.round(+m.R.getElementById("scrub").value * 100) / 100, m.R.getElementById("play").textContent]; };
+  const end = at({});
+  out.starts = [end[0] > 25, end[1], at({ at: { day: 1 } }), at({ reduced: true, at: { day: 1 } })];
+  // open() of the Day shown rebuilds nothing (its first drawn group is the same node); of a Day the cell has not, nothing
+  const shown = E.counts().day, first = $("dyn").kids[0];
+  E.open(shown);
+  out.same = $("dyn").kids[0] === first;
+  let threw = null;
+  try { E.open(99); } catch (e) { threw = e.message; }
+  out.unknown = [threw, E.counts().day === shown, $("dyn").kids[0] === first];
+  return out;
+""")
+CELL_KINDS = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell, R = root(), E = ctx.cellEngine(C, R, { reduced: true, at: { day: 1, paused: true, end: true } });
+  const said = info => { E.show(info); return words(R.getElementById("panel")); };
+  const D1 = C.days[0], crit = id => D1.crit.find(c => c[0] === id);
+  const out = { day: said(null), agentFound: said({ type: "defect", d: D1.defects[0] }),
+    trackFound: said({ type: "defect", d: { id: "D1.9", found: "Track A", cause: "implementation", step: "A", text: "made up", same: null } }),
+    pr: said({ type: "pr", n: 12, step: D1.steps[2] }), code: said({ type: "code", step: D1.steps[2], m: 3 }), test: said({ type: "test", c: crit("C1.2") }) };
+  ["gene", "pa", "spec", "sa", "pool", "test", "ribo", "chap", "ko", "ci", "gate", "main", "close", "rater", "recheck", "bin", "mhc", "mito", "loop",
+   "gAud", "gRead", "gStep", "sig"].forEach(id => { out["stn " + id] = said({ type: "stn", id }); });
+  E.open(2);
+  out["sig 2"] = said({ type: "stn", id: "sig" });
+  return out;
+""")
+CELL_NOTE = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const C = ctx.model(ctx.DATA).cell, R = root(), E = ctx.cellEngine(C, R, { reduced: true, at: { day: 1, paused: true, end: true } });
+  const $ = id => R.getElementById(id), sentences = () => $("note").textContent.split(/(?<=\.) /);
+  const out = { note1: sentences(), counts1: ["c-tr", "c-ts", "c-df", "c-pr", "binLbl", "escLbl"].map(id => $(id).textContent),
+    settings: words($("settings")), org: words($("org")), loop: $("s-loop").querySelector("text").textContent,
+    says1: $("say").textContent };
+  E.open(2);
+  out.note2 = sentences();
+  return out;
+""")
+
+
+class CellPageTest(unittest.TestCase):
+    """The cell: one Day replayed in a shadow root on the front page, from the page's own data."""
+
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def test_the_cell_stands_first_under_its_chapter_and_the_file_map_on_the_back(self):
+        html, script = read("index.html"), read("dashboard.js")
+        self.assertIn('<div class="view" id="v-front">', html)
+        self.assertIn('<div class="view" id="v-back" hidden>', html)
+        front = html[html.index('<div class="view" id="v-front">'):html.index('<div class="view" id="v-back" hidden>')]
+        back = html[html.index('<div class="view" id="v-back" hidden>'):html.index("<footer>")]
+        graphs = lambda part: re.findall(r'<section class="graph(?: foot)?" id="([\w-]+)"[ >]', part)  # noqa: E731
+        self.assertEqual(graphs(front), ["rdg", "lrn", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
+        self.assertEqual(graphs(back), ["gel", "g12", "rng", "act", "fil"])
+        # first under its chapter's head, the template inside its section, and one template on the page
+        self.assertLess(front.index("<h2 class=\"chapter\">What happens inside a Day?<small>"), front.index('<section class="graph" id="cell">'))
+        self.assertEqual(html.count('<template id="cell-tpl">'), 1)
+        at = front.index('<template id="cell-tpl">')
+        self.assertTrue(front.index('<section class="graph" id="cell">') < at < front.index('<section class="graph" id="prf">'), "the template stands in #cell")
+        template = front[at:front.index("</template>", at)]
+        self.assertEqual(['id="scene"' in template, 'class="bends"' in template, 'id="cell-host"' in front[:at]], [True, True, True])
+        self.assertIn("Five more graphs", html)
+        self.assertEqual(["utophagy" in html, "utophagy" in script], [False, False])
+
+    def test_the_cells_data_is_read_from_the_pages_own_keys(self):
+        C = model(cell_data()).get("cell")
+        self.assertIsNotNone(C, "the model has no cell")
+        self.assertEqual(sorted(C), ["bio", "days", "extra", "learn", "start"])
+        D = cell_data()["one_day"]["days"]
+        self.assertEqual(len(C["days"]), 2)
+        self.assertEqual(C["days"][0], dict(d=1, title="Day 1: first", status="done", phase=0, steps=D[0]["steps"], defects=D[0]["defects"],
+                                            tot=dict(prs=3, new=2, hold=1, ticked=3, cost=2.5, replies=30, defects=3, after=1),
+                                            crit=[["C1.1", "new", "proven", "A", "claim C1.1"], ["C1.2", "hold", "proven", "A", "claim C1.2"],
+                                                  ["C1.3", "new", "replaced", "A", "claim C1.3"]],
+                                            ag=[["main", "Main session", "the Main session's work", 30, 2.5]]))
+        self.assertEqual((C["days"][1]["d"], C["days"][1]["status"], C["days"][1]["phase"], C["days"][1]["steps"], C["days"][1]["defects"]),
+                         (2, "active", 0, D[1]["steps"], D[1]["defects"]))
+        self.assertEqual(C["days"][1]["ag"], [["main", "Main session", "the Main session's work", 20, 1.25],
+                                              ["spec-auditor", "Spec-auditor", "the Spec-auditor's work", 5, 0.5]])
+        # 1 Jan's 4 refusals go to Day 1, which spent 2.00 to Day 2's 1.00; 2 Jan's 2 to Day 2; 4 Jan's 3 to Day 1, first seen on
+        # a tie; 3 Jan's 1 and 5 Jan's 1 to none
+        self.assertEqual(C["bio"], dict(heat={"1": 0.5, "2": 0.25}, guards={"1": {"read-guard": 4, "auditor-guard": 3}, "2": {"step-guard": 2}},
+                                        guard_total={"read-guard": 6, "step-guard": 2, "auditor-guard": 3}, guard_none=2,
+                                        succ={"C1.3": [["C2.1", 2]]}, pred={"C2.1": [["C1.3", 1]]},
+                                        signals=[dict(to=2, picked=True, source="Day 1 Notes", text="hand it on"),
+                                                 dict(to=5, picked=False, source="a test's comment", text="later")]))
+        L = C["learn"]
+        self.assertEqual([(f["pr"], f["stn"], f["from_day"]) for f in L["fixes"]], [(31, "sa", 1), (32, None, 2), (33, "ci", None), (34, "test", 2)])
+        self.assertEqual(L["fixes"][0], dict(pr=31, title="fix 31", from_day=1, stn="sa", stops=["D1.2"], before=1, after=0, after_ids=[], gated=1,
+                                             leaked=0, rate_before=1, rate_after=0, verdict="gone", days_since=2, days_before=1,
+                                             merged="2026-01-01T08:00:00Z"))
+        self.assertEqual((L["past"], L["totals"], L["wait"], L["cards"]),
+                         ({"D2.1": "gated", "D1.1": "leaked", "D1.3": "leaked"}, dict(repeats=1, past_fix=1, gated=1, leaked=2, defects=4), 5, cell_data()["cell"]["cards"]))
+        # the files by the cell's station, longest first; C1.1 on two chains, one of them tied to no ability
+        self.assertEqual(C["extra"], dict(
+            files=dict(gene=[dict(label="plan.md", what="The plan.", n=1, lines=100, files=[["plan.md", 100]])],
+                       sa=[dict(label="agent", what="The spec-auditor.", n=2, lines=30, files=[["b.md", 20], ["a.md", 10]])],
+                       none=[dict(label="settings", what="Settings files.", n=1, lines=5, files=[[".gitignore", 5]])]),
+            ability={"C1.1": [["Runs", "proven"], [None, "proven"]], "C2.1": [["Runs", "unproven"]]}, file_head="abc1234", file_total=[4, 135]))
+        # it opens on the Day in progress, and on the last Day when none is
+        self.assertEqual((C["start"], model(cell_data(1))["cell"]["start"]), (2, 1))
+        self.assertIsNone(model(data()).get("cell"))
+
+    def test_a_defect_with_no_step_is_drawn_by_who_found_it(self):
+        def step(key, kind, prs=()):
+            return dict(key=key, name=key, kind=kind, prs=list(prs), title="", subs=[])
+
+        def defect(i, found, at=None):
+            return dict(id=i, found=found, step=at, sub=None, same=None, cause="spec", text="")
+
+        day = dict(steps=[step("spec", "spec", [1]), step("audit", "audit"), step("A", "code", [2]), step("B", "code", [3]), step("close", "close")],
+                   defects=[defect("X1", "track-reviewer", "A"), defect("X2", "Track B"), defect("X3", "auditor"), defect("X4", "review"),
+                            defect("X5", "review"), defect("X6", "dashboard", "after"), defect("X7", "close"), defect("X8", "spec-change PR"),
+                            defect("X9", "evidence replay"), defect("X10", "dashboard"), defect("X11", "Track X"), defect("X12", "auditor", "Z")])
+        out = node(CELL_PLACE, day)
+        self.assertIsNotNone(out, "the page has no cellPlace")
+        # the close has no pull request and no defect at it, so the Day is played up to B; the two found in review
+        # name no track, so they go A then B, hollow; the one found at the close, which is not played, goes to B
+        self.assertEqual(out["played"], ["spec", "audit", "A", "B"])
+        # X8 found by the spec change goes to it; X9 and X10 found at the re-check to the close, which is not played, so to B;
+        # X11's track X is not one of the Day's, so it is placed in turn (A, after X4's A and X5's B); X12 names a step the
+        # Day did not play, which is no step, so it goes by its finder to the audit
+        self.assertEqual(out["byStep"], {"A": [["X1", False], ["X4", True], ["X11", True]], "B": [["X2", False], ["X5", True], ["X7", False], ["X9", False],
+                                                                                              ["X10", False]],
+                                         "audit": [["X3", False], ["X12", False]], "spec": [["X8", False]]})
+        self.assertEqual((out["after"], out["assumed"]), (["X6"], 3))
+        # with a close played before the last step, one whose finder's step is not there goes to the close, not to the last step
+        out = node(CELL_PLACE, dict(steps=[step("spec", "spec", [1]), step("close", "close", [2]), step("A", "code", [3])],
+                                    defects=[defect("W1", "auditor"), defect("W2", "close"), defect("W3", "review")]))
+        self.assertEqual((out["played"], out["byStep"], out["assumed"]), (["spec", "close", "A"], {"close": [["W1", False], ["W2", False]], "A": [["W3", True]]}, 1))
+        # with no track, nothing is placed in turn: it goes to the close
+        out = node(CELL_PLACE, dict(steps=[step("spec", "spec", [1]), step("close", "close", [2])], defects=[defect("V1", "review")]))
+        self.assertEqual((out["byStep"], out["assumed"]), ({"close": [["V1", False]]}, 0))
+
+    def test_who_found_a_defect_names_its_station(self):
+        found = ["auditor", "spec-change PR", "track-reviewer", "seen red", "Track A", "CI", "driver reviewer", "close", "rehearsal",
+                 "evidence replay", "dashboard", "review", "self"]
+        want = ["sa", "spec", "chap", "test", "ribo", "ci", "ci", "close", "close", "recheck", "recheck", "ko", "ko"]
+        out = node(CELL_CATCHER, found)
+        self.assertIsNotNone(out, "the page has no cellCatcher")
+        # the finders drawn at another station than theirs, so that a failure stays short
+        self.assertEqual([(f, got) for f, got, w in zip(found, out, want) if got != w], [])
+        self.assertEqual(len(out), len(found))
+
+    def test_the_cell_draws_one_day_and_another_when_asked(self):
+        out = node(CELL_COUNTS, cell_data())
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        # Day 1: every step played (the close has a pull request). Its 3 promises set at the spec change; a test mark for
+        # each promise of a track with a pull request (track A's 3); its 2 defects not after the Day; the pull requests
+        # of the spec change, track A and the close; D1.2 found in review names no track, so it is placed on A, hollow;
+        # #31 counts from Day 1 at sa (#32 and #34 from Day 2, #33 from no Day)
+        # Day 2: played to track A (B and the close have no pull request and no defect); its 2 promises; a test mark for
+        # C2.1 alone (C2.2 is B's); D2.1 at its step, D2.2 at its track A, D2.3 placed on A, hollow; #21 and #22; #31, and #34
+        # at test (#32 has no station)
+        # each count on its own first, so that a wrong one is named in one short line
+        for k, want in (("promises", [3, 2]), ("tests", [3, 1]), ("defects", [2, 3]), ("prs", [3, 2]), ("assumed", [1, 1]), ("fixes", [1, 2])):
+            self.assertEqual((k, [c[k] for c in out]), (k, want))
+        self.assertEqual(out, [dict(day=1, promises=3, tests=3, defects=2, prs=3, assumed=1, fixes=1),
+                               dict(day=2, promises=2, tests=1, defects=3, prs=2, assumed=1, fixes=2)])
+
+    def test_a_panel_says_what_the_page_knows_about_it(self):
+        out = node(CELL_PANELS, cell_data())
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        said = lambda k, *words: (k, [w for w in words if w not in out[k]["w"]])  # noqa: E731
+        self.assertEqual(said("gene", "Files at this station: 1, 100 lines", "plan.md"), ("gene", []))
+        self.assertEqual(said("sa", "Challenge test: Spec-auditor", "3 of 5 known faults named, on the worst of 3 runs over 2 known cases",
+                              "Across the 2 Days it found 1 of the 4 defects", "#31 in place since Day 1", "Files at this station: 2, 30 lines",
+                              "b.md"), ("sa", []))
+        self.assertEqual(said("ci", "#33 not counted from a Day yet", "2 of 3 right verdicts on known pull requests",
+                              "It named 1 of the 2 known faults in them."), ("ci", []))
+        self.assertEqual(said("rater", "On its 2 known cases, at worst over 3 runs", "the cause 5, the stage 6, who made it 7",
+                              "its cause label agrees on 4 of 5 defects"), ("rater", []))
+        self.assertEqual(said("loop", "Chosen by hand", "#32", "no station chosen yet", "#33 not counted from a Day yet",
+                              "Spec-auditor: 3 of 5 known faults named", "reviewer: 2 of 3 right verdicts on known pull requests",
+                              "Defect-rater: 2 known cases; cause 5, stage 6, who made it 7"), ("loop", []))
+        self.assertEqual(said("promise", "Ability Runs Proven yes", "Ability not tied to an ability yet"), ("promise", []))
+        self.assertEqual(said("plain", "Ability not on the abilities graph"), ("plain", []))
+        self.assertEqual(said("replaced", "spliced out", "Replaced by C2.1, Day 2"), ("replaced", []))
+        self.assertEqual(said("gone", "Did it work? gone"), ("gone", []))
+        self.assertEqual(said("early", "Did it work? too early to say: 1 of 5 Days since"), ("early", []))
+        self.assertEqual(said("noday", "Counts from no Day yet", "Of its kind since 0 Did it work?"), ("noday", []))
+        self.assertEqual(said("bare", "No challenge test is recorded yet."), ("bare", []))
+        self.assertEqual("Challenge test" in out["nocard"]["w"], False)
+        # the departures: no arc for the defect-rater (two circles each for sa and ci), "No phase", a count alone with no
+        # rate before, a fix that counts from a later Day, a card with no runs, and the rater's with no real agreement
+        self.assertEqual((out["arcs"]["n"], out["arcs"]["w"]), (4, "3 of 5 | 2 of 3"))
+        self.assertEqual(out["nophase"]["w"][:13], "No phase #31 ")
+        self.assertEqual(said("nobefore", "Of its kind before 1 Of its kind since 0, 0 a Day over 1 Day"), ("nobefore", []))
+        self.assertEqual(said("norate", "Of its kind since 0 Did it work?"), ("norate", []))
+        self.assertEqual(said("notyet", "#34 not yet on Day 1: it counts from Day 2"), ("notyet", []))
+        self.assertEqual(said("noruns", "3 of 5 known faults named, on the worst of its runs over 2 known cases."), ("noruns", []))
+        self.assertEqual(("On the real Days" in out["noreal"]["w"], "the cause 5, the stage 6" in out["noreal"]["w"]), (False, True))
+        bad = sorted((k, w) for k, v in out.items() for w in ("undefined", "NaN", "null") if w in v["w"] + " " + v["a"])
+        self.assertEqual(bad, [])
+
+    def test_the_cell_is_mounted_only_where_it_can_be_and_says_why_when_it_is_not(self):
+        out = node(CELL_MOUNT, cell_data(1))
+        self.assertIsNotNone(out, "the page has no cellMount")
+        said = lambda k: (k, {x: out[k][x] for x in ("host", "none", "mounted", "onDay", "logged")})  # noqa: E731
+        missing = "The cell needs the Day-by-Day data, which this page does not have."
+        # which sentence each failure gets, by its first words, before each case is compared in full
+        self.assertEqual([out[k]["none"][1][:14] for k in ("missing", "error", "notpl")], ["The cell needs", "This graph cou", "This graph cou"])
+        self.assertEqual(said("missing"), ("missing", dict(host=True, none=[False, missing], mounted=False, onDay=0, logged=[])))
+        self.assertEqual(said("error"), ("error", dict(host=True, none=[False, "This graph could not be drawn: boom"], mounted=False, onDay=0,
+                                                         logged=["cell: boom"])))
+        # the tests' stub document: nothing mounted and nothing hidden
+        self.assertEqual(said("stub"), ("stub", dict(host=False, none=[True, ""], mounted=False, onDay=0, logged=[])))
+        no_tpl = "the page has no template for the cell"
+        self.assertEqual(said("notpl"), ("notpl", dict(host=True, none=[False, f"This graph could not be drawn: {no_tpl}"], mounted=False,
+                                                         onDay=0, logged=[f"cell: {no_tpl}"])))
+        # an engine that throws (no bio) leaves no half-built cell showing; the error's words are V8's, so only their start
+        broken = out["broken"]
+        self.assertEqual((broken["host"], broken["none"][0], broken["none"][1].startswith("This graph could not be drawn: "), broken["mounted"],
+                          broken["onDay"], [e[:6] for e in broken["logged"]]), (True, False, True, False, 0, ["cell: "]))
+        self.assertEqual(said("mounted"), ("mounted", dict(host=False, none=[True, ""], mounted=True, onDay=1, logged=[])))
+        # it opens on Day 1 (the Day in progress), a Day's button turns it to Day 2, and "All Days" leaves it there
+        self.assertEqual(out["moved"], [1, 2, 2])
+
+    def test_a_day_with_no_step_played_shows_its_defects_on_the_surface(self):
+        def defect(i, found, at=None):
+            return dict(id=i, found=found, step=at, sub=None, same=None, cause="spec", text="")
+
+        out = node(CELL_PLACE, dict(steps=[], defects=[defect("Y1", "review"), defect("Y2", "dashboard", "after"), defect("Y3", "auditor", "audit")]))
+        self.assertIsNotNone(out, "the page has no cellPlace")
+        # no step was played, so none can take a defect: each is drawn on the surface, and none is placed in turn
+        self.assertEqual((out["played"], out["byStep"], out["after"], out["assumed"]), ([], {}, ["Y1", "Y2", "Y3"], 0))
+
+    def test_the_cells_buttons_do_what_they_say(self):
+        out = node(CELL_BUTTONS, cell_data())
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        # it opens at the Day's end: play starts it over, and a second press pauses at its start
+        self.assertEqual((out["play"], out["clock"]), (["Replay", "Pause", "Play"], "0:30"))
+        # each speed button is pressed alone; two frames a second apart move the time 0.1 s (the most a frame takes) times it
+        self.assertEqual(out["speeds"], [[["true", "false", "false", "false"], 0.05], [["false", "true", "false", "false"], 0.1],
+                                         [["false", "false", "true", "false"], 0.2], [["false", "false", "false", "true"], 0.4]])
+        # the learning layer off draws no fix; on again, Day 1 has #31
+        self.assertEqual((out["learnOff"], out["learnOn"]), ([0, "false", "what the body keeps for later Days"],
+                                                             [1, "true", "immune memory: 4 fixes kept for later Days"]))
+        # a click, Enter and space open a station; another key does not
+        self.assertEqual(out["stations"], ["The goal", "Plan-auditor", "Spec-auditor", "Spec-auditor"])
+        # Day 1's marks: Immunity at 0, then the audit at 0.3 + 3.6 = 3.9 (one fix travels first); its button lands just after
+        self.assertEqual(out["step"], ["Audit", 3.91, ["false", "true", "false", "false", "false", "false"]])
+        self.assertEqual((out["cell"], out["back"]), ([2, ["false", "true"]], "Day 2"))
+        # D2.1's "same as" button goes to D1.2 on Day 1; C1.3's "replaced by" button to C2.1 on Day 2
+        self.assertEqual((out["defect"], out["crit"]), ([True, 1, "Defect D1.2"], [True, 2, "Promise C2.1"]))
+        # at the end, paused; at the start, playing; with no motion, 20 s in and paused
+        self.assertEqual(out["starts"], [True, "Replay", [0, "Pause"], [20, "Play"]])
+        # open() of the Day shown rebuilds nothing; of a Day the cell has not, it neither throws nor changes anything
+        self.assertEqual((out["same"], out["unknown"]), (True, [None, True, True]))
+
+    def test_every_kind_of_panel_says_its_own_words(self):
+        out = node(CELL_KINDS, cell_data())
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        # (panel, the words it lacks): D1.1 found by an agent, a made-up D1.9 by a track; Day 1's 7 refusals are 1 Jan's 4
+        # read-guard and 4 Jan's 3 auditor-guard; 2 fell on no Day; one hand-off is to Day 2 and one to Day 5, not started
+        want = {
+            "day": ["Pull requests merged 3", "Promises 2 new, 1 hold", "Defects found 3", "Cost at list prices $2.50", "State closed",
+                    "Promises replaced later 1", "Refused by the guards 7", "Spent re-reading long sessions $0.50",
+                    "Where the defects were found Spec-auditor 1 Review and a planted bug 1 After the Day closed 1",
+                    "Who worked on it Main session: 30 replies, $2.50"],
+            "agentFound": ["Defect D1.1", "Found by auditor Cause spec Step audit", "It got past the gates: an escape."],
+            "trackFound": ["Defect D1.9", "Found by Track A Cause implementation Step A"],
+            "pr": ["Pull request #12 Day 01 track A Step Track A Back to Day 1"],
+            "code": ["Track A’s code", "Day 01 track A Promises it serves 3 Pull request #12"],
+            "test": ["The test of C1.2 claim C1.2 Tag hold State today proven Track A Ability not on the abilities graph",
+                     "Hold: it is true today, so its check is broken on purpose once."],
+            "stn gene": ["Files at this station: 1, 100 lines", "4 files in all"],
+            "stn pa": ["It did not run on Day 1, or its session was not recorded. Back to Day 1"],
+            "stn spec": ["Defects found here (0) None on this Day."],
+            "stn pool": ["Day 1’s promises C1.1 new track A claim C1.1 C1.2 hold track A claim C1.2 C1.3 new track A claim C1.3"],
+            "stn test": ["#34 not yet on Day 1: it counts from Day 2", "Defects found here (0)"],
+            "stn ribo": ["It did not run on Day 1", "Defects found here (0)"],
+            "stn ko": ["Replies on Day 1 30 Cost at list prices $2.50", "The main session’s figures cover every step of the Day",
+                       "Defects found here (1) D1.2 implementation problem D1.2"],
+            "stn gate": ["Merges on Day 1 3"],
+            "stn main": ["Merged on Day 1 #11 Day 01 spec change #12 Day 01 track A #13 Day 01 close"],
+            "stn close": ["Defects found here (0)"],
+            "stn recheck": ["Defects found here (1) D1.3 process problem D1.3"],
+            "stn bin": ["All of them (2) D1.1 spec problem D1.1 D1.2 implementation problem D1.2"],
+            "stn mhc": ["Day 1’s Notes: one line for each defect (3) D1.1 spec problem D1.1 D1.2 implementation problem D1.2 D1.3 process"],
+            "stn mito": ["Day 1 in all $2.50 Replies 30 Heat: re-reading a session past 150,000 tokens $0.50",
+                         "By who spent it Main session: 30 replies, $2.50"],
+            "stn gAud": ["Refused on Day 1 3 Refused since the start 3", "2 refusals of all three guards fell on dates when no Day was worked on"],
+            "stn gRead": ["Refused on Day 1 4 Refused since the start 6"],
+            "stn gStep": ["Refused on Day 1 0 Refused since the start 2"],
+            "stn sig": ["None of the hand-offs on the dashboard’s list is addressed to Day 1.", "The list holds 2 hand-offs; 1 are addressed"],
+            "sig 2": ["Addressed to Day 2 (1) picked up hand it on (Day 1 Notes)"],
+        }
+        # the panels that lack some of their words, by name first, then with the words each lacks
+        self.assertEqual([k for k, words in want.items() if any(w not in out.get(k, "") for w in words)], [])
+        self.assertEqual([(k, [w for w in words if w not in out.get(k, "")]) for k, words in want.items() if any(w not in out.get(k, "") for w in words)], [])
+        # the panels with no words of their own beyond the station's: the track-reviewer and the defect-rater on a Day they
+        # did not run; the rater lists no defects
+        self.assertEqual(["Defects found here" in out["stn rater"], "It did not run on Day 1" in out["stn chap"]], [False, True])
+
+    def test_the_cell_says_what_it_leaves_out(self):
+        out = node(CELL_NOTE, cell_data())
+        self.assertIsNotNone(out, "the page has no cellEngine")
+        self.assertEqual(len(out["note1"]), 7)
+        # Day 1: D1.2 names no step and no track, so it is placed in turn; Day 2: D2.2 names its track A, D2.3 nothing
+        self.assertEqual(out["note1"][2], "1 of this Day’s defects names no step: it is drawn at the check of whoever found it, in turn over the Day’s "
+                                          "tracks, as a hollow mark.")
+        self.assertEqual(out["note2"][2], "2 of this Day’s defects name no step: each is drawn at the check of whoever found it; the 1 whose finder works "
+                                          "in no one step is placed in turn over the Day’s tracks, as a hollow mark.")
+        # 3 Jan's 1 and 5 Jan's 1 refusals fell on no Day
+        self.assertEqual(out["note1"][3], "Refusals carry a date, not a Day: each is drawn on the Day that spent the most on that date; 2 had no such Day "
+                                          "and are not drawn.")
+        self.assertIn("A dashed ring marks a promise that was spliced out; the ring shows from the moment the spec change sets the promise",
+                      out["note1"][4])
+        self.assertEqual(out["settings"], "Settings: 1 file, serve every station Settings files. .gitignore 5")
+        # each Day's cell, its fixes before it: $2.50 rounds to $3, $1.75 to $2
+        self.assertEqual(out["org"], "Phase 0 #31 Day 1 3 found · $3 #32 #34 Day 2 3 found · $2")
+        # at Day 1's end: 3 promises, 3 tests, 3 defects (one after the close), 3 pull requests
+        self.assertEqual(out["counts1"], ["3 of 3", "3 of 3", "3 of 3", "3 of 3", "broken down: 2", "found after the close: 1"])
+        self.assertEqual(out["loop"], "immune memory: 4 fixes kept for later Days")
+
+    def test_the_cell_is_built_from_whatever_keys_the_data_has(self):
+        full = node(MODEL, cell_data()).get("cell")
+        self.assertIsNotNone(full, "the model has no cell")
+        got = {}
+        for key in ("cell", "learning", "file_map", "tokens", "refusals", "rewrites", "hand_offs", "protein", "meta", "now"):
+            d = cell_data()
+            del d[key]
+            got[key] = node(MODEL, d).get("cell") or {}
+        self.assertEqual([k for k, c in got.items() if "error" in c or not c], [])
+        L = got["cell"]["learn"]
+        self.assertEqual((L["cards"], L["totals"], [f["stn"] for f in L["fixes"]]),
+                         ({}, dict(repeats=1, past_fix=1, gated=1, leaked=2, defects=0), [None, None, None, None]))
+        self.assertEqual(got["learning"]["learn"], dict(fixes=[], past={}, wait=0, cards=full["learn"]["cards"],
+                                                        totals=dict(repeats=0, past_fix=0, gated=0, leaked=0, defects=4)))
+        self.assertEqual(got["file_map"]["extra"], dict(files={}, ability=full["extra"]["ability"], file_head=None, file_total=[0, 0]))
+        # with no tokens no date has a Day: all 11 refusals fall on none
+        B = got["tokens"]["bio"]
+        self.assertEqual((B["heat"], B["guards"], B["guard_none"], B["guard_total"]), ({}, {}, 11, full["bio"]["guard_total"]))
+        B = got["refusals"]["bio"]
+        self.assertEqual((B["guards"], B["guard_total"], B["guard_none"], B["heat"]), ({}, {}, 0, full["bio"]["heat"]))
+        self.assertEqual((got["rewrites"]["bio"]["succ"], got["rewrites"]["bio"]["pred"], got["hand_offs"]["bio"]["signals"]), ({}, {}, []))
+        self.assertEqual(got["protein"]["extra"]["ability"], {})
+        self.assertEqual(([d["phase"] for d in got["meta"]["days"]], got["now"]["start"]), ([None, None], 2))
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -2365,11 +2939,12 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
     # The front page, chapter by chapter: each graph's section and where its old card is folded (g1, g7, g6).
-    FRONT = {"rdg": 0, "g1": 0, "lrn": 0, "prf": 1, "g7": 1, "fil": 1, "prt": 2, "g3": 2, "gene": 2, "mrg": 2, "g6": 2, "rfx": 3, "atp": 4, "g8": 4}
+    FRONT = {"rdg": 0, "g1": 0, "lrn": 0, "cell": 1, "prf": 1, "g7": 1, "prt": 2, "g3": 2, "gene": 2, "mrg": 2, "g6": 2, "rfx": 3, "atp": 4, "g8": 4}
     FRONT_HEADS = ["Where is it going?", "What happens inside a Day?", "What can it do, and can it be trusted?", "Can it be left alone?",
                    "What does it take?"]
-    BACK = {"gel": 0, "g2": 0, "g12": 1, "rng": 2, "g9": 2, "act": 2, "g10": 2}
-    BACK_HEADS = ["Is it on the plan's yardsticks?", "Do the specs follow the plan?", "Where did the work and the time go?"]
+    BACK = {"gel": 0, "g2": 0, "g12": 1, "rng": 2, "g9": 2, "act": 2, "g10": 2, "fil": 3}
+    BACK_HEADS = ["Is it on the plan's yardsticks?", "Do the specs follow the plan?", "Where did the work and the time go?",
+                  "Where does each file belong?"]
 
     def chapters(self, part, heads, ids):
         """{id: the index of the chapter it sits under} in `part`, -1 for an id not in it."""
@@ -2382,7 +2957,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r'<div class="view" id="(v-front|v-back)"', html), ["v-front", "v-back"])
         front = html[html.index('<div class="view" id="v-front"'):html.index('<div class="view" id="v-back"')]
         self.assertEqual(re.findall(r'<section class="graph(?: foot)?" id="([\w-]+)"[ >]', front),
-                         ["rdg", "lrn", "prf", "fil", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
+                         ["rdg", "lrn", "cell", "prf", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', front), self.FRONT_HEADS)
         self.assertEqual(self.chapters(front, self.FRONT_HEADS, self.FRONT), self.FRONT)
         self.assertLess(front.index('id="atp"'), front.find('<div class="to-back">'))
@@ -2390,11 +2965,11 @@ class PageFilesTest(unittest.TestCase):
         for part in ("say", "ladder", "key", "plot", "read", "table"):
             self.assertIn(f'id="g1-{part}"', front)
 
-    def test_the_back_page_holds_graphs_2_12_9_and_10_and_opens_on_a_button(self):
+    def test_the_back_page_holds_graphs_2_12_9_and_10_and_the_file_map_and_opens_on_a_button(self):
         html = read("index.html")
         self.assertEqual(re.findall(r'<div class="view" id="v-back" hidden>', html), ['<div class="view" id="v-back" hidden>'])
         back = html[html.index('<div class="view" id="v-back" hidden>'):html.index("<footer>")]
-        self.assertEqual(re.findall(r'<section class="graph[^"]*" id="([\w-]+)"', back), ["gel", "g12", "rng", "act"])
+        self.assertEqual(re.findall(r'<section class="graph[^"]*" id="([\w-]+)"', back), ["gel", "g12", "rng", "act", "fil"])
         self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', back), self.BACK_HEADS)
         self.assertEqual(self.chapters(back, self.BACK_HEADS, self.BACK), self.BACK)
         # the switch in the header, and the way to the back page from the foot of the front one
@@ -2402,7 +2977,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(re.findall(r'<button type="button" data-view="(\w+)" aria-pressed="(\w+)">', header), [("front", "true"), ("back", "false")])
         self.assertIn('<small id="back-n"></small>', header)
         to_back = re.findall(r'<div class="to-back">\s*<p>(\w+) more graphs[^<]*</p>\s*<button type="button" data-view="back">', html)
-        self.assertEqual((to_back, len(re.findall(r'<section class="graph"', back))), (["Four"], 4))
+        self.assertEqual((to_back, len(re.findall(r'<section class="graph"', back))), (["Five"], 5))
 
     # Each picture's container, and the lead of its closed line where it is not "Under the picture".
     UNDER = ("rdg", "lrn", "prf-all", "one", "fil", "prt", "gene", "mrg-all", "rew", "rfx", "atp", "gel", "g12", "rng", "act")

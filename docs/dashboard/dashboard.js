@@ -872,6 +872,71 @@ function model(DATA) {
       note: most == null ? "A Day's arc is as long as the wordings it holds." : `A Day's arc is as long as the wordings it holds. Day ${most} holds the most: ${held[most]}.` };
   }
 
+  /* The cell: graph 7's One Day ring's Days in the shape cellEngine reads, its steps and defects as one_day has them
+     (what cellPlace takes), with what the cell draws beside them: each Day's heat and the guards' refusals, the
+     promises spliced out and what replaced them, the hand-offs, each fix at its check and the agents' challenge tests
+     (the `cell` key, spec_drift_view_cell), and the files at each station. Null with no Day to open. */
+  function cellGraph() {
+    const O = DATA.one_day;
+    if (!O || !(O.days || []).length) return null;
+    const round2 = x => Math.round((Number(x) || 0) * 100) / 100, phase = {};
+    (((DATA.meta || {}).where || {}).rows || []).forEach(r => (r.days || []).forEach(d => { phase[d] = r.phase; }));
+    const days = O.days.map(D => {
+      const T = D.totals || {};
+      return { d: D.day, title: D.title, status: D.status, phase: D.day in phase ? phase[D.day] : null,
+        tot: Object.fromEntries(["prs", "new", "hold", "ticked", "cost", "replies", "defects", "after"].map(k => [k, T[k] || 0])),
+        steps: D.steps || [], crit: (D.criteria || []).map(c => [c.id, c.tag, c.state, c.step, c.quote]), defects: D.defects || [],
+        ag: (D.agents || []).map(a => [a.agent, a.name, a.does, a.replies, round2(a.cost)]) };
+    });
+    // a refusal carries a date, not a Day: it belongs to the Day that spent the most on its date, the first seen on a tie
+    const heat = {}, spent = {}, dayOf = {};
+    (DATA.tokens || []).forEach(r => {
+      if (r.part_day == null) return;
+      heat[r.part_day] = (heat[r.part_day] || 0) + (r.cost_past_150k || 0);
+      const per = spent[r.date] = spent[r.date] || new Map();
+      per.set(r.part_day, (per.get(r.part_day) || 0) + (r.cost || 0));
+    });
+    Object.entries(spent).forEach(([date, per]) => per.forEach((cost, day) => { if (!(date in dayOf) || cost > per.get(dayOf[date])) dayOf[date] = day; }));
+    const guards = {}, guardTotal = {};
+    let guardNone = 0;
+    (DATA.refusals || []).forEach(r => {
+      guardTotal[r.guard] = (guardTotal[r.guard] || 0) + r.refused;
+      const day = dayOf[r.date];
+      if (day == null) { guardNone += r.refused; return; }
+      const g = guards[day] = guards[day] || {};
+      g[r.guard] = (g[r.guard] || 0) + r.refused;
+    });
+    const succ = {}, pred = {}, has = (list, x) => list.some(y => y[0] === x[0] && y[1] === x[1]);
+    ((DATA.rewrites || {}).lines || []).forEach(line => {
+      const ds = Object.fromEntries((line.nodes || []).map(n => [n.id, n.day]));
+      (line.nodes || []).forEach(n => (n.by || []).forEach(b => {
+        const s = [b, b in ds ? ds[b] : null], p = [n.id, n.day];
+        if (!has(succ[n.id] = succ[n.id] || [], s)) succ[n.id].push(s);
+        if (!has(pred[b] = pred[b] || [], p)) pred[b].push(p);
+      }));
+    });
+    const bio = { heat: Object.fromEntries(Object.entries(heat).map(([k, v]) => [k, round2(v)])), guards, guard_total: guardTotal, guard_none: guardNone,
+      succ, pred, signals: (DATA.hand_offs || []).map(x => ({ to: x.to, picked: !!x.picked, source: x.source, text: x.text })) };
+    // a fix stands at the check the cell's key gives it, or at none
+    const L = DATA.learning || {}, K = DATA.cell || {}, at = K.fix_station || {}, past = {};
+    const fixes = (L.fixes || []).map(f => ({ pr: f.pr, title: f.title, from_day: f.from_day, stn: at[f.pr] || null, stops: f.stops || [], before: f.before,
+      after: f.after, after_ids: f.after_ids || [], gated: (f.gated || []).length, leaked: (f.leaked || []).length, rate_before: f.rate_before,
+      rate_after: f.rate_after, verdict: f.verdict, days_since: f.days_since, days_before: f.days_before, merged: f.merged }));
+    (L.days || []).forEach(D => { (D.gated || []).forEach(i => { past[i] = "gated"; }); (D.leaked || []).forEach(i => { past[i] = "leaked"; }); });
+    const learn = { fixes, past, wait: L.wait || 0, cards: K.cards || {},
+      totals: { repeats: L.repeats || 0, past_fix: L.past_fix || 0, gated: L.past_gated || 0, leaked: L.past_leaked || 0, defects: K.total || 0 } };
+    // the files by the cell's station, longest first; a group at no station of the cell under `none`
+    const F = DATA.file_map || {}, list = F.files || [], files = {}, ability = {};
+    (F.groups || []).forEach((g, i) => {
+      const st = CELL_STATION[g.at] || "none", names = list.filter(f => f[3] === i).sort((a, b) => b[1] - a[1]);
+      (files[st] = files[st] || []).push({ label: g.label, what: g.what, n: g.files, lines: g.lines, files: names.map(f => [f[0], f[1]]) });
+    });
+    ((DATA.protein || {}).chains || []).forEach(c => (c.cells || []).forEach(x => (ability[x.id] = ability[x.id] || []).push([c.key ? c.name : null, x.state])));
+    const cur = (DATA.now || {}).current_day;
+    return { days, bio, learn, extra: { files, ability, file_head: F.head || null, file_total: [list.length, F.lines || 0] },
+      start: days.some(d => d.d === cur) ? cur : days[days.length - 1].d };
+  }
+
   /* The gene: the plan read down to proved code. Every figure is counted in scripts/pipeline/counts/spec_drift_views.py (gene);
      this only words it and hands the drawing its columns, its labels and what the pointer says. */
   function geneGraph() {
@@ -1010,7 +1075,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), yardsticks: safe(() => yardsticks(DATA.gel)), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
+    attention: attention(), yardsticks: safe(() => yardsticks(DATA.gel)), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph), cell: safe(cellGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -4445,6 +4510,11 @@ function draw(M, DATA) {
     else if (g.empty) put(`${k}-scroll`, h("p", { class: "load-error" }, "Not measured yet: ", rich(g.empty)));
     else try { fn(g, $, onDay); } catch (e) { failed(String((e && e.message) || e)); }
   });
+  /* The cell, first under its chapter (cellMount): what the browser offers is read here, so a test can pass its own */
+  try {
+    cellMount(M, $, onDay, { shadow: typeof ShadowRoot === "function", reduced: typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches,
+      raf: typeof requestAnimationFrame === "function" ? f => requestAnimationFrame(f) : null });
+  } catch (e) { console.error(`cell: ${(e && e.message) || e}`); }
   // graph 11 as reflex arcs: its Days are the driven project's, so it takes no Day button
   [["rfx", rfxDraw]].forEach(([k, fn]) => {
     const g = M[k], failed = e => { put(`${k}-scroll`, h("p", { class: "load-error" }, `This graph could not be drawn: ${e}`)); console.error(`${k}: ${e}`); };
@@ -4703,7 +4773,7 @@ function draw(M, DATA) {
     });
   } catch (e) { console.error(`under: ${(e && e.message) || e}`); }
 
-  /* Two pages: the front, and the back with four graphs moved there as they were. A link, or the address on load,
+  /* Two pages: the front, and the back with five graphs moved there as they were. A link, or the address on load,
      turns to the page that holds its target (viewFor); a button turns it by hand and goes to the top of the page shown.
      The graphs fit themselves on a resize, so one is sent for the page that has just been shown. */
   let route = null;
@@ -4884,6 +4954,702 @@ function filDraw(F, get) {
     ...(L ? [li("The dashed line is the improve loop.", `It is no station, because no Day runs it: it starts only when the maintainer asks. It drafts a better brief for an agent that has known cases, counts the draft on those cases, and leaves the change to the maintainer. An arrow lands where the brief of each such agent hangs: ${loopTo}.`)] : []),
     li("A dot's area is the file's line count.", "Within a group the longest file comes first."),
     li("Colour is the kind of file.", "They are the page's colours: blue for written text, orange for the app's code, magenta for its tests, grey for tooling and docs."));
+}
+
+/* ---------- the cell: one Day replayed, step by step ----------
+   Each Day of graph 7's One Day ring drawn as one cell: the plan and the spec in the nucleus, the tests, the code and
+   the checks in the cytoplasm, the maintainer at the membrane and main outside, with the Days as the body round it.
+   Ported from its mockup (version 3): the picture is the static markup of #cell-tpl, in a shadow root of its own so
+   that neither its styles nor the page's reach the other; cellGraph() in model() reads its data from the page's own
+   keys; cellEngine() moves it. Every place, time and order of the mockup is kept. */
+// the file map's stations (spec_drift_files.COLUMNS' names), by the cell's station for each
+const CELL_STATION = { "station 1, the goal": "gene", "the plan-auditor's check, after station 1": "pa", "station 2, a Day's spec": "spec",
+  "the spec-auditor's check, after station 2": "sa", "station 3, a promise": "pool", "station 4, a test that fails first": "test",
+  "the implementer, between stations 4 and 5": "ribo", "station 5, the code, then a planted bug": "ko", "the track-reviewer's check, after station 5": "chap",
+  "CI's checks, after station 5": "ci", "station 6, the Day closes": "close", "the defect-rater's check, after station 6": "rater",
+  "station 7, the re-check": "recheck" };
+// a challenge test's name and unit by station: the data names the agent and its counts, not how the cell says them
+const CELL_CARD = { sa: ["Spec-auditor", "known faults named"], chap: ["Track-reviewer", "known faults named"],
+  ci: ["The driver’s reviewer", "right verdicts on known pull requests"], rater: ["Defect-rater", null] };
+
+// The station a defect is drawn at, from who found it.
+function cellCatcher(f) {
+  if (f === "auditor") return "sa";
+  if (f === "spec-change PR") return "spec";
+  if (f === "track-reviewer") return "chap";
+  if (f === "seen red") return "test";
+  if (/^Track /.test(f)) return "ribo";
+  if (f === "CI" || f === "driver reviewer") return "ci";
+  if (f === "close" || f === "rehearsal") return "close";
+  if (f === "evidence replay" || f === "dashboard") return "recheck";
+  return "ko";
+}
+
+/* Which steps of one Day of one_day have happened, and the step each defect is drawn in. `played` is the steps up to
+   the last one with a pull request or a defect recorded at it. A defect stays at its own step when that step was
+   played; one that names none goes to the step of whoever found it: its track, the audit, the spec change or the
+   close. When nothing says where, it is placed in turn over the Day's tracks, `as: true`, and drawn hollow;
+   `assumed` counts those. A step the Day did not play is no step. `after` is the defects found after the Day, and,
+   on a Day with no step played, every defect: none can be drawn at a step, so each is shown on the surface. */
+function cellPlace(day) {
+  var steps = day.steps || [], defects = day.defects || [], lastIdx = 0;
+  steps.forEach(function (s, i) {
+    if ((s.prs || []).length || defects.some(function (d) { return d.step === s.key; })) lastIdx = i;
+  });
+  var played = steps.slice(0, lastIdx + 1);
+  var codeKeys = played.filter(function (s) { return s.kind === "code"; }).map(function (s) { return s.key; });
+  var byStep = {}, after = [], rr = 0, assumed = 0;
+  function firstKey(kind) { for (var i = 0; i < played.length; i++) if (played[i].kind === kind) return played[i].key; return null; }
+  function put(k, d, as) { (byStep[k] = byStep[k] || []).push({ d: d, as: as }); if (as) assumed++; }
+  defects.forEach(function (d) {
+    var st = d.step, f = d.found;
+    if (st === "after" || !played.length) { after.push(d); return; }
+    if (st != null && played.some(function (s) { return s.key === st; })) { put(st, d, false); return; }
+    var m = /^Track (\w+)$/.exec(f), c = cellCatcher(f), k = null, as = false;
+    if (m && codeKeys.indexOf(m[1]) >= 0) k = m[1];
+    else if (c === "sa") k = firstKey("audit");
+    else if (c === "spec") k = firstKey("spec");
+    else if (c === "close" || c === "recheck") k = firstKey("close");
+    else if (codeKeys.length) { k = codeKeys[rr++ % codeKeys.length]; as = true; }
+    if (!k) k = firstKey("close") || (played.length ? played[played.length - 1].key : null);
+    put(k, d, as);
+  });
+  return { played: played, byStep: byStep, after: after, assumed: assumed };
+}
+
+/* The cell's engine on M.cell (`C`), in the shadow root `root`. `opts`: `reduced`, no motion; `raf`, the frame
+   scheduler, none where nothing moves; `at`, the Day it opens on ({ day, paused, end }). It returns open(day), which
+   shows that Day at its end, paused; show(info), which opens a panel; and counts(), what the Day shown has drawn. */
+function cellEngine(C, root, opts) {
+  'use strict';
+  var DAYS = C.days, LEARN = C.learn, BIO = C.bio, EXTRA = C.extra, NS = SVG_NS, start = opts.at || {}, reduced = !!opts.reduced, raf = opts.raf || null;
+  function $(i) { return root.getElementById(i); }
+  function S(tag, at, par) { var e = document.createElementNS(NS, tag); for (var k in at) e.setAttribute(k, at[k]); if (par) par.appendChild(e); return e; }
+  function money(x) { return '$' + Number(x).toFixed(2); }
+  // the engine's own plural, one word and an s: not the page's plural(n, one, many)
+  function cplural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+
+  var P = { gene: [120, 190], pa: [213, 190], spec: [300, 190], sa: [300, 275], pool: [428, 346], test: [505, 220], ribo: [610, 220],
+    chap: [770, 220], ko: [815, 220], ci: [860, 220], gate: [936, 220], out: [1050, 220], main: [1050, 220],
+    close: [1230, 290], rater: [1230, 360], recheck: [1230, 444], bin: [514, 516], mito: [720, 400], loop: [1126, 21], mhc: [936, 516], gAud: [170, 112], gRead: [250, 630], gStep: [1150, 220], sig: [560, 70] };
+  var GD = { gAud: 'auditor-guard', gRead: 'read-guard', gStep: 'step-guard' };
+  // where a fix's tag sits beside the check it strengthened: x, y, and the step to the next tag
+  var FXP = { sa: [246, 302, -48], test: [482, 160, 48], chap: [762, 150, 0], ko: [815, 292, 0], spec: [360, 176, 0], ci: [866, 150, 0] };
+  var INFO = {
+    gene: { n: 'The goal', bio: 'the gene', what: 'plan.md, the one text everything else is copied from. It changes rarely, and only through a pull request of its own.' },
+    pa: { n: 'Plan-auditor', bio: 'proofreading the gene', what: 'On the first Day of a phase it reads the phase’s specs against the plan and the code. It only reports.', agent: 'plan-auditor' },
+    spec: { n: 'The Day’s spec', bio: 'transcription', what: 'The Day’s promises, each tagged new (fails today) or hold (true today), each with the check that proves it. Its fixes merge first, as the spec-change pull request.' },
+    sa: { n: 'Spec-auditor', bio: 'reading the template', what: 'Runs every check of the spec on the code as it is and tries to break every hold. Most defects are found here, before any code is written.', agent: 'spec-auditor' },
+    pool: { n: 'The promises', bio: 'the transcripts', what: 'One strand per promise of the Day. Each waits here until its track starts.' },
+    test: { n: 'A test that fails first', bio: 'the negative control', what: 'A new test is seen red before its code exists. A test that passes before and after a change proves nothing.' },
+    ribo: { n: 'Implementer', bio: 'the ribosome', what: 'Writes the code and the tests from the brief. It never commits or pushes.', agent: 'implementer' },
+    chap: { n: 'Track-reviewer', bio: 'the folding check', what: 'A fresh context reads the brief before the build and the diff after it, and checks each claim of the pull request.', agent: 'track-reviewer' },
+    ko: { n: 'Review and a planted bug', bio: 'the knock-out', what: 'The main session reads the diff itself, then breaks each check on purpose once to see it fail, and puts the code back.', agent: 'main' },
+    ci: { n: 'CI’s checks', bio: 'quality control', what: 'The required checks run on the open pull request. From Day 16 a fault they show is recorded as found by CI.' },
+    gate: { n: 'The maintainer', bio: 'the membrane gate', what: 'Nothing leaves the cell without the maintainer’s merge. The merge is a go-ahead: CI and the auditors are the gate.' },
+    main: { n: 'main', bio: 'outside the cell', what: 'Every merged pull request of the Day, in the order it landed.' },
+    close: { n: 'The Day closes', bio: 'delivered, labelled', what: 'The closing pull request ticks each promise with its evidence, adds the Notes and commits the break manifest.' },
+    rater: { n: 'Defect-rater', bio: 'a second reader of what is shown', what: 'Labels the Day’s defects blind, from their text alone, so the tags are not only the writer’s.', agent: 'defect-rater' },
+    recheck: { n: 'The re-check', bio: 'still working?', what: 'After the merge the evidence is run again on fresh main, and later the recorded breaks are replayed.' },
+    bin: { n: 'Tagged and broken down', bio: 'the proteasome', what: 'Every defect found before or at the close ends here: it was fixed inside the Day. In a cell a faulty protein gets a tag where it is noticed, and the proteasome cuts it into pieces. A promise drawn with a dashed ring did not end here: it was spliced out, cut from the transcript and replaced by a later promise.' },
+    mhc: { n: 'Shown on the surface', bio: 'antigen presentation', what: 'At the close every defect of the Day becomes one line in the spec’s Notes: what it was, who found it, what caused it. In a cell, pieces of what the proteasome broke down are carried to the surface and shown there. That is how the body outside learns what went wrong inside.' },
+    mito: { n: 'What the Day cost', bio: 'the mitochondrion', what: 'Replies and dollars at API list prices (not a bill), by who spent them. The part spent re-reading a session that had grown past 150,000 tokens is drawn as heat: energy that did no work.' },
+    loop: { n: 'Immune memory', bio: 'immunity', body: 1, what: 'The body reads what each cell shows. When a kind of defect keeps coming back, a fix is made: a pull request that changes a brief, a rule or a script, so that one check catches that kind from then on. That is an antibody, and the body keeps it: every later Day starts with it. A defect that returns anyway is a known invader, and one that gets past a fix is an escape. The improve loop is the booster, given only when the maintainer asks: an agent with known cases gets a drafted brief, measured against those cases.' },
+    gAud: { n: 'Auditor-guard', bio: 'the nuclear pore', what: 'The auditors may read everything and change nothing: a command of theirs that would write is refused. In a cell the nuclear pore decides what may pass in and out of the nucleus.' },
+    gRead: { n: 'Read-guard', bio: 'a channel too narrow for big things', what: 'A whole read of a file over 8,000 bytes is refused, so a session does not fill up with text it pays for again on every reply. In a cell a channel in the membrane lets only small things through.' },
+    gStep: { n: 'Step-guard', bio: 'the cell-cycle checkpoint', what: 'After a merge nothing new starts in the same session: no agent, edit, branch, commit or pull request, until a fresh session begins. In a cell a checkpoint holds the next phase back until the last one is truly finished.' },
+    sig: { n: 'Signals from other Days', bio: 'a receptor on the membrane', what: 'A hand-off: something an earlier Day’s Notes or a test’s comment leaves for a later Day. Nothing else carries it forward, so the auditors check that each one is picked up. In a body, one cell sends a signal and another receives it at its membrane.' }
+  };
+  var mode = 'hand', learn = true, curDay = null, booted = false, sameAs = {}, cameBack = {}, dayOf = {}, orgBtns = [], stepBtns = [];
+  DAYS.forEach(function (D) { D.defects.forEach(function (d) { dayOf[d.id] = D; if (d.same) { sameAs[d.id] = d.same; (cameBack[d.same] = cameBack[d.same] || []).push(d.id); } }); });
+  function repCls(d) { return LEARN.past[d.id] ? ' past' : (d.same ? ' rep' : ''); }
+  var STN = Object.keys(INFO), stnEl = {};
+  var catcher = cellCatcher;
+
+  var model = null, T = 0, playing = true, speed = 1, selStn = null, selActor = null, curBeat = null, last = 0;
+
+  function build(day) {
+    var dyn = $('dyn'); dyn.replaceChildren();
+    var M = { actors: [], pulses: [], beats: [], marks: [], day: day, step: null, T: 0, nAs: 0, noStep: 0, fxN: 0, trA: [], tsA: [], dfA: [], prA: [], esA: [], seA: [], pkA: [], fxA: [] };
+    var gT = S('g', {}, dyn), gB = S('g', {}, dyn), gV = S('g', {}, dyn), gD = S('g', {}, dyn);
+    function mk(e, base, info) {
+      var a = { el: e, base: base, seg: [], st: [], t0: null, t1: null, info: info };
+      e.setAttribute('class', base); e.setAttribute('display', 'none'); M.actors.push(a);
+      if (info) e.addEventListener('click', function (ev) { ev.stopPropagation(); show(info, a); });
+      return a;
+    }
+    function at(a, t, x, y) { a.seg.push([t, t, x, y, x, y]); if (a.t0 === null) a.t0 = t; }
+    function go(a, t0, t1, x, y) { var L = a.seg[a.seg.length - 1]; a.seg.push([t0, t1, L ? L[4] : x, L ? L[5] : y, x, y]); if (a.t0 === null) a.t0 = t0; }
+    function pulse(id, a, b) { M.pulses.push([id, a, b]); }
+    function beat(t, pill, say, bio) { M.beats.push({ t: t, pill: pill, say: say, bio: bio }); }
+    function prTxt(s) { return s.prs.length ? ' #' + s.prs.join(', #') : ''; }
+    function hasAgent(k) { return day.ag.some(function (a) { return a[0] === k; }); }
+
+    // which steps have happened, and the step each defect is drawn in (cellPlace)
+    var place = cellPlace(day), played = place.played, byStep = place.byStep, after = place.after;
+    Object.keys(byStep).forEach(function (k) { byStep[k].forEach(function (o) { if (o.d.step !== k) M.noStep++; }); });
+
+    var t = 0, slot = 0, testN = 0, binN = 0, jn = {}, specDone = false, nPr = 0;
+    played.forEach(function (s) { nPr += s.prs.length; });
+    var gap = Math.min(20, 224 / Math.max(1, nPr));
+    function jit(id) { var n = jn[id] = (jn[id] || 0) + 1, a = n * 2.4, r = 21 + (n % 4) * 6; return [P[id][0] + Math.cos(a) * r, P[id][1] + Math.sin(a) * r]; }
+    function defect(o, tp, id) {
+      var c = S('circle', { r: 4.2, cx: 0, cy: 0 }, gD), a = mk(c, 'df' + (o.as ? ' as' : '') + repCls(o.d), { type: 'defect', d: o.d, as: o.as });
+      var p = jit(id), b = binN++;
+      at(a, tp, p[0], p[1]); go(a, tp + 0.8, tp + 1.8, 456 + (b % 12) * 10.6, 478 + Math.floor(b / 12) * 10.6);
+      a.st.push([tp + 1.8, 'bin']); M.dfA.push(a); if (o.as) M.nAs++;
+    }
+    function spread(list, t0, t1, id) { list.forEach(function (o, i) { defect(o, t0 + (t1 - t0) * (i + 0.5) / list.length, id || catcher(o.d.found)); }); }
+    function vesicle(s, n, kind, tv, pore) {
+      var g = S('g', {}, gV); S('circle', { r: 10, cx: 0, cy: 0, 'class': 'vs-o' }, g); S('circle', { r: 3.5, cx: 0, cy: 0, 'class': 'vs-i' }, g);
+      var tx = S('text', { x: 15, y: 4, 'class': 'vs-t' }, g); tx.textContent = '#' + n + ' ' + (s.kind === 'code' ? s.key : s.kind);
+      var a = mk(g, 'vs ' + kind, { type: 'pr', n: n, step: s });
+      if (pore) { at(a, tv, 386, 310); go(a, tv, tv + 0.6, 450, 128); go(a, tv + 0.6, tv + 1.6, 836, 128); go(a, tv + 1.6, tv + 2.0, P.ci[0], P.ci[1]); tv += 2.0; }
+      else { at(a, tv, P.ko[0], P.ko[1]); go(a, tv, tv + 0.5, P.ci[0], P.ci[1]); tv += 0.5; }
+      pulse('ci', tv, tv + 0.7); go(a, tv + 0.7, tv + 1.2, P.gate[0], P.gate[1]); pulse('gate', tv + 1.0, tv + 1.7);
+      go(a, tv + 1.2, tv + 1.7, P.out[0], P.out[1]); go(a, tv + 1.7, tv + 2.1, P.out[0], 252 + (slot++) * gap);
+      a.st.push([tv + 2.1, 'merged']); a.mT = tv + 2.1; M.prA.push(a); return tv + 2.1;
+    }
+    function findTr(id) { for (var i = 0; i < M.trA.length; i++) if (M.trA[i].info.c[0] === id) return M.trA[i]; return null; }
+
+    if (learn) {
+      // the fixes in place on this Day sit beside their check; one that counts from this Day travels the loop first.
+      // A fix that counts from no Day yet, or has no check chosen for it, is drawn on no Day.
+      var gF = S('g', {}, dyn), fn = {}, nw = [];
+      LEARN.fixes.forEach(function (f) {
+        if (f.from_day == null || !FXP[f.stn] || f.from_day > day.d) return;
+        var k = fn[f.stn] || 0, o = FXP[f.stn], x = o[0] + k * o[2], y = o[1]; fn[f.stn] = k + 1;
+        var g = S('g', {}, gF); S('rect', { x: -21, y: -9, width: 42, height: 18 }, g); S('path', { d: 'M-14,8 V1 L-19,-6 M-14,1 L-9,-6' }, g);
+        var tx = S('text', { x: -5, y: 4.5 }, g); tx.textContent = '#' + f.pr;
+        var a = mk(g, 'fx', { type: 'fix', f: f }); M.fxA.push(a);
+        if (f.from_day === day.d) {
+          var p = mk(S('circle', { r: 5.5, cx: 0, cy: 0 }, gF), 'fxp', null), t0 = 0.3 + 0.3 * M.fxN;
+          at(p, t0, 1286, 516); go(p, t0, t0 + 0.9, 1286, 34); go(p, t0 + 0.9, t0 + 1.9, x, 34); go(p, t0 + 1.9, t0 + 2.5, x, y); p.t1 = t0 + 2.5;
+          at(a, t0 + 2.5, x, y); pulse(f.stn, t0 + 2.2, t0 + 3.3); M.fxN++; nw.push(f.pr);
+        } else at(a, 0, x, y);
+      });
+      if (nw.length) {
+        M.marks.push({ t: 0, name: 'Immunity' });
+        beat(0, 'Immunity', 'Before Day ' + day.d + ' began, ' + (nw.length === 1 ? 'a fix was' : nw.length + ' fixes were') + ' merged: #' + nw.join(', #') + '. Each changes a brief, a rule or a script so that one check catches a kind of defect that kept coming back.',
+          'In the body: antibodies. The body met this invader in earlier cells, and every cell from now on starts with the defence.');
+        t = 0.3 * nw.length + 3.6;
+      }
+    }
+    played.forEach(function (s) {
+      var ds = byStep[s.key] || [], N = s.name;
+      M.marks.push({ t: t, name: N });
+      if (s.kind === 'audit') {
+        var dur = Math.max(5, Math.min(16, 4 + ds.length * 0.15));
+        beat(t, N, 'Before anything is built, the auditors read Day ' + day.d + '’s spec against the code as it is today' + (ds.length ? ', and find ' + cplural(ds.length, 'defect') + ' in it.' : '.'),
+          'In the cell: proofreading. The template is checked inside the nucleus before any copy leaves it.');
+        if (hasAgent('plan-auditor')) pulse('pa', t + 0.3, t + 2);
+        pulse('sa', t + 1.2, t + dur - 0.4); spread(ds, t + 1.5, t + dur - 1.6);
+        t += dur;
+      } else if (s.kind === 'spec') {
+        var first = !specDone; specDone = true;
+        beat(t, N, first ? 'The spec-change pull request' + prTxt(s) + ' puts the fixes into the spec and sets the Day’s ' + cplural(day.crit.length, 'promise') + '.'
+          : 'Another spec-change pull request' + prTxt(s) + ': the spec is corrected while the Day is open.',
+        first ? 'In the cell: transcription. The corrected template is copied into transcripts, one for each promise, and they leave through the pores.'
+          : 'In the cell: the template is repaired, and what is built from now on follows the repair.');
+        pulse('spec', t, t + 2.6);
+        if (first) day.crit.forEach(function (c, j) {
+          var p = S('g', {}, gT); S('rect', { x: -8, y: -6, width: 16, height: 11 }, p); S('path', { d: 'M-7,0 q1.75,-5 3.5,0 t3.5,0 t3.5,0 t3.5,0' }, p); if (c[2] === 'replaced') S('ellipse', { cx: 0, cy: -1, rx: 9.5, ry: 5.5, 'class': 'ring' }, p);
+          var a = mk(p, 'tr ' + c[1] + (c[2] === 'replaced' ? ' gone' : ''), { type: 'crit', c: c });
+          var ts = t + 0.4 + j * Math.min(0.2, 3 / day.crit.length);
+          at(a, ts, P.spec[0], P.spec[1] + 30); go(a, ts, ts + 0.7, 374, [310, 340, 370][j % 3]); go(a, ts + 0.7, ts + 1.3, 405 + (j % 4) * 15, 301 + Math.floor(j / 4) * 13);
+          M.trA.push(a);
+        });
+        spread(ds, t + 0.5, t + 2.5);
+        var te = t + 3.2; s.prs.forEach(function (n, i) { te = Math.max(te, vesicle(s, n, 'k-spec', t + 3.2 + i * 0.4, true)); });
+        t = te + 0.7;
+      } else if (s.kind === 'code') {
+        var cs = day.crit.filter(function (c) { return c[3] === s.key; }), m = cs.length;
+        var nNew = cs.filter(function (c) { return c[1] === 'new'; }).length, nHold = m - nNew;
+        var B = { brief: [], red: [], build: [], diff: [], ko: [], ci: [] }, alt = 0;
+        ds.forEach(function (o) {
+          var c = catcher(o.d.found), sub = o.d.sub;
+          if (c === 'chap') B[sub === 'brief' ? 'brief' : sub === 'diff' ? 'diff' : (alt++ % 2 ? 'diff' : 'brief')].push(o);
+          else if (c === 'test') B.red.push(o); else if (c === 'ribo') B.build.push(o); else if (c === 'ci') B.ci.push(o);
+          else if (c === 'ko') B.ko.push(o); else B.brief.push(o);
+        });
+        beat(t, N, N + ': the main session writes the brief, and the track-reviewer reads it before the implementer starts.',
+          'In the cell: a chaperone checks the instructions before the ribosome begins.');
+        pulse('chap', t + 0.2, t + 1.6);
+        B.brief.forEach(function (o, i) { defect(o, t + 0.4 + 1.1 * (i + 0.5) / B.brief.length, catcher(o.d.found) === 'chap' ? 'chap' : catcher(o.d.found)); });
+        if (!s.prs.length) {
+          ['red', 'build', 'diff', 'ko', 'ci'].forEach(function (k) { spread(B[k], t + 1.2, t + 2.2); });
+          beat(t + 1.7, N, N + ' has no merged pull request yet.', 'In the cell: the ribosome has not finished with these transcripts.');
+          t += 3.2; return;
+        }
+        beat(t + 1.7, N, m ? (nNew ? cplural(nNew, 'new test') + (nNew === 1 ? ' is' : ' are') + ' written and seen failing before any code exists' : 'No new test here') + (nHold ? '; ' + cplural(nHold, 'hold test') + (nHold === 1 ? ' is' : ' are') + ' true already and must stay true.' : '.')
+          : N + ' carries no promise of its own; its tests still run before the code changes.',
+        'In the cell: the negative control. A test that cannot say no proves nothing.');
+        var tests = [];
+        cs.forEach(function (c, i) {
+          var ta = t + 1.8 + i * Math.min(0.15, 1.2 / m), tr = findTr(c[0]);
+          if (tr) { go(tr, ta, ta + 0.6, P.test[0], P.test[1]); tr.t1 = ta + 0.6; }
+          var q = S('circle', { r: 4.6, cx: 0, cy: 0 }, gT), n = testN++, a = mk(q, 'ts', { type: 'test', c: c });
+          at(a, ta + 0.6, P.test[0], P.test[1]); go(a, ta + 0.6, ta + 1.0, 472 + (n % 6) * 13, 258 + Math.floor(n / 6) * 13);
+          a.st.push([ta + 0.6, c[1] === 'hold' ? 'green' : 'red']); a.gT = c[1] === 'hold' ? ta + 0.6 : null; tests.push(a); M.tsA.push(a);
+        });
+        pulse('test', t + 1.8, t + 3.4); spread(B.red, t + 2.4, t + 3.3);
+        beat(t + 3.4, N, 'The implementer writes the code from the brief' + (nNew ? ', and each failing test turns green.' : '.'),
+          'In the cell: translation. The ribosome reads the transcripts and builds the protein, piece by piece.');
+        pulse('ribo', t + 3.4, t + 7.0);
+        var nb = Math.max(3, m), sp = Math.min(9, 96 / nb);
+        for (var i = 0; i < nb; i++) {
+          var tb = t + 3.6 + i * (3.1 / nb), bd = mk(S('circle', { r: 4.2, cx: 0, cy: 0 }, gB), 'bd', null);
+          at(bd, tb, 640, 220); go(bd, tb, tb + 0.3, 650 + i * sp, 220 + (i % 2 ? 5 : -5)); bd.t1 = t + 7.0;
+          if (tests[i] && tests[i].gT === null) { tests[i].st.push([tb + 0.3, 'green']); tests[i].gT = tb + 0.3; }
+        }
+        spread(B.build, t + 4.2, t + 6.6);
+        var bg = S('g', {}, gB); S('circle', { r: 11, cx: 0, cy: 0 }, bg); S('circle', { r: 5, cx: 8, cy: -7 }, bg); S('circle', { r: 5, cx: -8, cy: 6 }, bg);
+        var bl = mk(bg, 'bl', { type: 'code', step: s, m: m });
+        at(bl, t + 7.0, 694, 220); go(bl, t + 7.0, t + 7.5, P.chap[0], P.chap[1]);
+        beat(t + 7.0, N, 'The track-reviewer reads the diff and checks each claim of the pull request against it.',
+          'In the cell: the folding check. A misfolded protein is caught here, before it travels.');
+        pulse('chap', t + 7.3, t + 8.5); spread(B.diff, t + 7.5, t + 8.4);
+        go(bl, t + 8.5, t + 8.9, P.ko[0], P.ko[1]);
+        beat(t + 8.5, N, 'The main session reads the diff itself, then plants a bug on purpose to see a check fail, and takes it out again.',
+          'In the cell: the knock-out. Break the product once and watch whether the cell notices.');
+        pulse('ko', t + 8.7, t + 9.7); spread(B.ko, t + 8.8, t + 9.6);
+        var kt = tests.filter(function (a) { return a.info.c[1] === 'hold'; })[0] || tests[0];
+        if (kt) { kt.st.push([t + 8.95, 'red']); kt.st.push([t + 9.45, 'green']); }
+        bl.t1 = t + 9.8;
+        beat(t + 9.8, N, 'Pull request' + prTxt(s) + ': CI runs the required checks, then the maintainer merges it into main.',
+          'In the cell: quality control, then the membrane gate. Only the maintainer opens it.');
+        var te2 = t + 9.8; s.prs.forEach(function (n, i) { te2 = Math.max(te2, vesicle(s, n, 'k-code', t + 9.8 + i * 0.4, false)); });
+        spread(B.ci, t + 10.4, t + 11.0);
+        t = te2 + 0.7;
+      } else {
+        var reh = [], cl = [], rc = [], oth = [];
+        ds.forEach(function (o) {
+          var c = catcher(o.d.found);
+          if (o.d.found === 'rehearsal' || o.d.sub === 'rehearsal') reh.push(o); else if (c === 'close') cl.push(o); else if (c === 'recheck') rc.push(o); else oth.push(o);
+        });
+        beat(t, N, 'The close is rehearsed: the recorded breaks and the Day’s checks are replayed before the closing pull request opens.',
+          'In the cell: the whole product is tested once more before it is exported.');
+        pulse('test', t + 0.2, t + 2.2); spread(reh, t + 0.6, t + 2.0, 'close'); spread(oth, t + 0.6, t + 2.0);
+        var te3 = t + 2.4;
+        if (s.prs.length) {
+          beat(t + 2.4, N, 'The closing pull request' + prTxt(s) + ': each promise ticked with its evidence, the Notes, and the break manifest.',
+            'In the cell: the product is packed and labelled for delivery.');
+          s.prs.forEach(function (n, i) { te3 = Math.max(te3, vesicle(s, n, 'k-close', t + 2.4 + i * 0.4, false)); });
+        }
+        var tc = te3 + 0.2;
+        beat(tc, N, 'Day ' + day.d + ' closes with ' + cplural(day.tot.ticked, 'promise') + ' ticked. The defect-rater labels its defects blind.',
+          'In the cell: delivered, labelled.');
+        pulse('close', tc, tc + 1.9); pulse('rater', tc + 0.9, tc + 2.3); spread(cl, tc + 0.3, tc + 1.6, 'close');
+        var tN = tc + 2.3, nPep = Math.min(9, binN + cl.length);
+        beat(tN, N, 'Every defect of the Day is now one line in its Notes: what it was, who found it, what caused it.',
+          'In the cell: pieces of every fault that was broken down are carried to the surface and shown there, where the body can read them.');
+        for (var q2 = 0; q2 < nPep; q2++) { var pe = mk(S('rect', { x: -3, y: -2, width: 6, height: 4, rx: 1 }, gD), 'pep', null), tq = tN + 0.1 + q2 * 0.14; at(pe, tq, 582, 516); go(pe, tq, tq + 1.0, 920, 516); pe.t1 = tq + 1.1; }
+        pulse('bin', tN, tN + 1.2); pulse('mhc', tN + 0.9, tN + 2.6); if (learn) pulse('loop', tN + 1.7, tN + 2.8);
+        var tR = tN + 2.8;
+        beat(tR, N, 'After the merge, the evidence is run again on fresh main.', 'In the cell: still working? The re-check.');
+        pulse('recheck', tR, tR + 1.8); spread(rc, tR + 0.3, tR + 1.5, 'recheck');
+        t = tR + 2.0;
+      }
+    });
+    if (after.length) {
+      M.marks.push({ t: t, name: 'After the close' });
+      beat(t, 'After the close', cplural(after.length, 'defect') + ' of this Day ' + (after.length === 1 ? 'was' : 'were') + ' found only after it had closed.',
+        'In the cell: a fault that left the cell and was noticed outside it.');
+      after.forEach(function (d, i) {
+        var a = mk(S('circle', { r: 4.2, cx: 0, cy: 0 }, gD), 'df' + repCls(d), { type: 'defect', d: d, esc: true });
+        at(a, t + 0.4 + i * 0.2, 1197 + (i % 6) * 13, 556 + Math.floor(i / 6) * 13); M.esA.push(a);
+      });
+      t += 1.6 + after.length * 0.2;
+    }
+    var open = day.status === 'active';
+    beat(t, open ? 'Open' : 'Closed', open ? 'Day ' + day.d + ' is open: its next step has not merged yet.'
+      : 'Day ' + day.d + ' is closed: ' + cplural(day.tot.prs, 'pull request') + ' merged, ' + cplural(day.defects.length - after.length, 'defect') + ' found and broken down inside it.',
+    open ? 'In the cell: still at work.' : 'In the cell: at rest, its product delivered.');
+    if (learn) {
+      var nr = day.defects.filter(function (d) { return d.same; }).length, np = day.defects.filter(function (d) { return LEARN.past[d.id]; }).length;
+      M.beats[M.beats.length - 1].say += ' ' + (nr ? nr + ' of its ' + cplural(day.defects.length, 'defect') + (nr === 1 ? ' was' : ' were') + ' a known invader, an old problem back' + (np ? ', ' + np + ' of them although an antibody was in place.' : '.')
+        : 'None of its defects is recorded as an old problem back.');
+    }
+    M.T = t + 1.2;
+    M.beats.sort(function (a, b) { return a.t - b.t; });
+    $('trunk').setAttribute('d', 'M1050,236 V' + (252 + Math.max(1, slot) * gap - 8).toFixed(1));
+    return M;
+  }
+
+  function render() {
+    var M = model, t = T, i;
+    M.actors.forEach(function (a) {
+      var v = a.t0 !== null && t >= a.t0 && (a.t1 === null || t < a.t1);
+      if (v !== a._v) { a.el.setAttribute('display', v ? 'inline' : 'none'); a._v = v; }
+      if (!v) return;
+      var sg = a.seg, k = 0; for (i = 0; i < sg.length; i++) { if (sg[i][0] <= t) k = i; else break; }
+      var g = sg[k], u = g[1] > g[0] ? Math.min(1, (t - g[0]) / (g[1] - g[0])) : 1; u = u * u * (3 - 2 * u);
+      var tr = 'translate(' + (g[2] + (g[4] - g[2]) * u).toFixed(1) + ',' + (g[3] + (g[5] - g[3]) * u).toFixed(1) + ')';
+      if (tr !== a._tr) { a.el.setAttribute('transform', tr); a._tr = tr; }
+      var c = a.base; for (i = 0; i < a.st.length; i++) { if (a.st[i][0] <= t) c = a.base + ' ' + a.st[i][1]; else break; }
+      if (a === selActor) c += ' pick';
+      if (c !== a._c) { a.el.setAttribute('class', c); a._c = c; }
+    });
+    var on = {}; M.pulses.forEach(function (p) { if (t >= p[1] && t < p[2]) on[p[0]] = 1; });
+    STN.forEach(function (id) { stnEl[id].classList.toggle('on', !!on[id]); });
+    var b = M.beats[0]; M.beats.forEach(function (x) { if (x.t <= t) b = x; });
+    if (b !== curBeat) { curBeat = b; $('pill').textContent = b.pill; $('say').textContent = b.say; $('bio').textContent = b.bio; }
+    function cnt(list, key) { var n = 0; list.forEach(function (a) { var x = key ? a[key] : a.t0; if (x !== null && x !== undefined && x <= t) n++; }); return n; }
+    var nd = cnt(M.dfA) + cnt(M.esA), ne = cnt(M.esA);
+    $('c-tr').textContent = cnt(M.trA) + ' of ' + M.day.crit.length;
+    $('c-ts').textContent = cnt(M.tsA, 'gT') + ' of ' + M.tsA.length;
+    $('c-df').textContent = nd + ' of ' + M.day.defects.length;
+    $('c-pr').textContent = cnt(M.prA, 'mT') + ' of ' + M.prA.length;
+    $('binLbl').textContent = 'broken down: ' + (nd - ne);
+    $('escLbl').textContent = ne ? 'found after the close: ' + ne : '';
+    var mi = 0; M.marks.forEach(function (m, j) { if (m.t <= t) mi = j; });
+    stepBtns.forEach(function (sb, j) { sb.setAttribute('aria-pressed', j === mi ? 'true' : 'false'); });
+    $('scrub').value = t;
+    function mmss(x) { x = Math.floor(x); return Math.floor(x / 60) + ':' + ('0' + x % 60).slice(-2); }
+    $('clock').textContent = mmss(t) + ' / ' + mmss(M.T);
+    $('play').textContent = playing ? 'Pause' : (t >= M.T ? 'Replay' : 'Play');
+  }
+
+  // A panel is built from nodes, each text a text node: nothing in the data is parsed as HTML.
+  function gsum(dn) { var g = BIO.guards[dn] || {}, n = 0; for (var k in g) n += g[k]; return n; }
+  function row(k, v) { return h('div', null, h('dt', null, k), h('dd', null, typeof v === 'number' ? String(v) : v)); }
+  function defList(list) {
+    if (!list.length) return h('p', { class: 'none' }, 'None on this Day.');
+    return h('ul', { class: 'dl' }, list.map(function (d) { return h('li', null, h('b', null, d.id), ' ', h('span', { class: 'tag' }, d.cause), ' ', d.text); }));
+  }
+  function button(cls, text, fn) { var b = h('button', { class: cls, type: 'button' }, text); b.addEventListener('click', fn); return b; }
+  function lkBtn(id) { return button('lk', id, function () { jumpDefect(id); }); }
+  function fxBtn(f) { return button('lk', '#' + f.pr, function () { show({ type: 'fix', f: f }); }); }
+  function spaced(list) { return list.map(function (x, i) { return i ? [' ', x] : x; }); }
+  function cardHtml(id) {
+    var c = LEARN.cards[id], nm = CELL_CARD[id]; if (!c || !nm) return null;
+    var runs = c.runs ? cplural(c.runs, 'run') : 'its runs';
+    var out = [h('h3', null, 'Challenge test: ' + nm[0]), h('p', { class: 'bio' }, 'In the body: show it the invaders it has met, and count how many it recognises')];
+    if (id === 'rater') {
+      // its three labels' totals are not in its case set, so they stand as counts, with no bar
+      out.push(h('p', null, 'On its ' + cplural(c.cases, 'known case') + ', at worst over ' + runs + ', its labels agreed with the Days’ own on: the cause ' + c.cause + ', the stage ' + c.stage + ', who made it ' + c.made + ' (the cases’ total is not recorded yet).'));
+      var rc = (c.real || {}).cause;
+      if (rc && rc.length === 2) out.push(h('p', null, 'On the real Days its cause label agrees on ' + rc[0] + ' of ' + rc[1] + ' defects.'));
+    } else {
+      out.push(h('p', null, h('b', null, c.n + ' of ' + c.of), ' ' + nm[1] + ', on the worst of ' + runs + ' over ' + cplural(c.cases, 'known case') + '.'),
+        h('div', { class: 'card-bar' }, h('i', { style: 'width:' + (c.of ? Math.round(100 * c.n / c.of) : 0) + '%' })));
+      if (id === 'ci') out.push(h('p', null, 'It named ' + c.named + ' of the ' + c.named_of + ' known faults in them.'));
+    }
+    if (c.found) out.push(h('p', null, 'Across the ' + cplural(DAYS.length, 'Day') + ' it found ' + c.found + ' of the ' + LEARN.totals.defects + ' defects.'));
+    out.push(h('p', { class: 'none' }, 'Measured today, on its present brief: one figure for the agent, the same on every Day.'));
+    return out;
+  }
+  function fixHtml(id, dn) {
+    var a = LEARN.fixes.filter(function (f) { return f.stn === id; }); if (!a.length) return null;
+    return [h('h3', null, 'Antibodies at this check: the fixes'), h('ul', { class: 'dl' }, a.map(function (f) {
+      return h('li', null, fxBtn(f), f.from_day == null ? ' not counted from a Day yet' : f.from_day > dn ? ' not yet on Day ' + dn + ': it counts from Day ' + f.from_day : ' in place since Day ' + f.from_day);
+    }))];
+  }
+  // what the cell takes over from the file map, the abilities and graph 13: a station's files, a promise's ability, a fix's verdict
+  function filesGroup(x) {
+    return h('details', { class: 'fl' }, h('summary', null, h('b', null, x.label), h('span', null, cplural(x.n, 'file') + ' · ' + comma(x.lines) + ' lines')), h('p', null, x.what),
+      h('ul', null, x.files.map(function (f) { return h('li', null, h('code', null, f[0]), h('i', null, comma(f[1]))); })));
+  }
+  function filesHtml(id) {
+    var g = EXTRA.files[id]; if (!g) return null;
+    var n = 0, l = 0; g.forEach(function (x) { n += x.n; l += x.lines; });
+    return [h('h3', null, 'Files at this station: ' + comma(n) + ', ' + comma(l) + ' lines'), g.map(filesGroup),
+      h('p', { class: 'none' }, 'Every file of main at ' + (EXTRA.file_head || 'this build') + ' is listed once, at the station it serves: ' + comma(EXTRA.file_total[0]) + ' files in all. The picture shows one Day; the files are today’s, the same on every Day.')];
+  }
+  function abilityRows(id) {
+    var a = EXTRA.ability[id];
+    if (!a) return row('Ability', 'not on the abilities graph');
+    return a.map(function (x) { return [row('Ability', x[0] ? x[0] : 'not tied to an ability yet'), row('Proven', x[1] === 'proven' ? 'yes' : 'no: ' + x[1])]; });
+  }
+  function verdict(f) { return f.verdict ? f.verdict : 'too early to say: ' + f.days_since + ' of ' + LEARN.wait + ' Days since'; }
+  function byHand() {
+    return h('p', { class: 'none' }, 'Chosen by hand: nothing turns a line of the Notes into a fix or a known case by itself. A person picks them: ' + LEARN.fixes.length + ' fixes so far, out of ' + comma(LEARN.totals.defects) + ' defects.');
+  }
+  function loopHtml() {
+    var t = LEARN.totals, ks = ['sa', 'chap', 'ci', 'rater'].filter(function (k) { return LEARN.cards[k] && CELL_CARD[k]; });
+    return [h('dl', null, row('Old problems back', t.repeats + ' of ' + t.defects), row('Back although a fix was in place', t.past_fix), row('Of those, caught at a gate', t.gated), row('Of those, got past', t.leaked)),
+      h('h3', null, 'The antibodies: ' + LEARN.fixes.length + ' fixes'), h('ul', { class: 'dl' }, LEARN.fixes.map(function (f) {
+        return h('li', null, fxBtn(f), (f.from_day == null ? ' not counted from a Day yet' : ' from Day ' + f.from_day) + (f.stn ? '' : ', no station chosen yet') + ': ' + f.before + ' of its kind before, ' + f.after + ' since. ' + f.title);
+      })),
+      byHand(), h('h3', null, 'The checking agents’ challenge tests'),
+      ks.length ? h('ul', { class: 'dl' }, ks.map(function (k) {
+        var c = LEARN.cards[k], nm = CELL_CARD[k];
+        return h('li', null, k === 'rater' ? nm[0] + ': ' + cplural(c.cases, 'known case') + '; cause ' + c.cause + ', stage ' + c.stage + ', who made it ' + c.made : nm[0] + ': ' + c.n + ' of ' + c.of + ' ' + nm[1]);
+      })) : h('p', { class: 'none' }, 'No challenge test is recorded yet.')];
+  }
+  function crBtn(x) {
+    return DAYS.some(function (D) { return D.d === x[1]; }) ? button('lk', x[0] + ', Day ' + x[1], function () { jumpCrit(x[0], x[1]); }) : x[0] + (x[1] ? ', Day ' + x[1] : '');
+  }
+  function jumpCrit(id, dn) {
+    var D = DAYS.filter(function (x) { return x.d === dn; })[0]; if (!D) return;
+    if (!model.day || model.day.d !== D.d) pick(D, 0, true);
+    var a = null; model.actors.forEach(function (x) { if (x.info && x.info.type === 'crit' && x.info.c[0] === id) a = x; });
+    if (a) { playing = false; T = Math.min(model.T, a.t0 + 1.4); show(a.info, a); }
+  }
+  function jumpDefect(id) {
+    var D = dayOf[id]; if (!D || mode !== 'hand') return;
+    if (!model.day || model.day.d !== D.d) pick(D, 0, true);
+    var a = null; model.actors.forEach(function (x) { if (x.info && x.info.type === 'defect' && x.info.d.id === id) a = x; });
+    if (a) { playing = false; T = Math.min(model.T, a.t0 + 0.6); show(a.info, a); }
+  }
+  function show(info, actor) {
+    var day = model.day, out = [], back = button('back', 'Back to Day ' + day.d, function () { show(null); });
+    selActor = actor || null; selStn = info && info.type === 'stn' ? info.id : null;
+    STN.forEach(function (id) { stnEl[id].classList.toggle('sel', id === selStn); });
+    if (!info) {
+      var by = {}, order = [];
+      day.defects.forEach(function (d) { var c = d.step === 'after' ? 'after' : catcher(d.found); if (!by[c]) { by[c] = 0; order.push(c); } by[c]++; });
+      order.sort(function (a, b) { return by[b] - by[a]; });
+      var mx = order.length ? by[order[0]] : 1;
+      out.push(h('h2', null, 'Day ' + day.d), h('p', null, day.title),
+        h('dl', null, row('Pull requests merged', day.tot.prs), row('Promises', day.tot.new + ' new, ' + day.tot.hold + ' hold'),
+          row('Defects found', day.defects.length), row('Cost at list prices', money(day.tot.cost)), row('Replies', day.tot.replies),
+          row('State', day.status === 'active' ? 'open' : 'closed'), row('Promises replaced later', day.crit.filter(function (c) { return c[2] === 'replaced'; }).length),
+          row('Refused by the guards', gsum(day.d)), row('Spent re-reading long sessions', money(BIO.heat[day.d] || 0))),
+        h('h3', null, 'Where the defects were found'),
+        order.length ? h('ul', { class: 'who' }, order.map(function (c) {
+          var nm = c === 'after' ? 'After the Day closed' : INFO[c].n;
+          var b = button(null, [nm, h('span', null, String(by[c])), h('i', { style: 'width:' + Math.max(3, Math.round(100 * by[c] / mx)) + '%' })], function () { show({ type: 'stn', id: c === 'after' ? 'recheck' : c }); });
+          return h('li', null, b);
+        })) : h('p', { class: 'none' }, 'None recorded.'),
+        h('h3', null, 'Who worked on it'), h('ul', { class: 'dl' }, day.ag.map(function (a) { return h('li', null, a[1] + ': ' + a[3] + ' replies, ' + money(a[4])); })),
+        h('p', { class: 'none' }, 'Click anything in the cell to see what it is.'));
+    } else if (info.type === 'stn') {
+      var I = INFO[info.id], ag = I.agent ? day.ag.filter(function (a) { return a[0] === I.agent; })[0] : null;
+      out.push(h('h2', null, I.n), h('p', { class: 'bio' }, 'In the ' + (I.body ? 'body' : 'cell') + ': ' + I.bio), h('p', null, I.what));
+      out.push(cardHtml(info.id), fixHtml(info.id, day.d)); var FILES = filesHtml(info.id);
+      if (info.id === 'mito') {
+        out.push(h('dl', null, row('Day ' + day.d + ' in all', money(day.tot.cost)), row('Replies', day.tot.replies), row('Heat: re-reading a session past 150,000 tokens', money(BIO.heat[day.d] || 0))),
+          h('h3', null, 'By who spent it'), h('ul', { class: 'dl' }, day.ag.map(function (a) { return h('li', null, a[1] + ': ' + a[3] + ' replies, ' + money(a[4])); })));
+      } else if (info.id === 'pool') {
+        out.push(h('h3', null, 'Day ' + day.d + '’s promises'), h('ul', { class: 'dl' }, day.crit.map(function (c) {
+          return h('li', null, h('b', null, c[0]), ' ', h('span', { class: 'tag' }, c[1]), ' ', h('span', { class: 'tag' }, c[3] === null ? 'no track' : 'track ' + c[3]), ' ', c[4]);
+        })));
+      } else if (info.id === 'main') {
+        out.push(h('h3', null, 'Merged on Day ' + day.d), h('ul', { class: 'dl' }, day.steps.filter(function (s) { return s.prs.length; }).map(function (s) {
+          return h('li', null, h('b', null, '#' + s.prs.join(', #')), ' ', s.title || s.name);
+        })));
+      } else if (info.id === 'mhc') {
+        out.push(h('h3', null, 'Day ' + day.d + '’s Notes: one line for each defect (' + day.defects.length + ')'), defList(day.defects));
+      } else if (GD[info.id]) {
+        out.push(h('dl', null, row('Refused on Day ' + day.d, (BIO.guards[day.d] || {})[GD[info.id]] || 0), row('Refused since the start', BIO.guard_total[GD[info.id]] || 0)),
+          h('p', { class: 'none' }, 'A refusal is recorded with its date, not its Day. It is counted here on the Day that spent the most on that date; ' + BIO.guard_none + ' refusals of all three guards fell on dates when no Day was worked on.'));
+      } else if (info.id === 'sig') {
+        var sg = BIO.signals.filter(function (x) { return x.to === day.d; }), later = BIO.signals.filter(function (x) { return x.to !== null && !DAYS.some(function (D) { return D.d === x.to; }); }).length;
+        out.push(sg.length ? [h('h3', null, 'Addressed to Day ' + day.d + ' (' + sg.length + ')'), h('ul', { class: 'dl' }, sg.map(function (x) {
+          return h('li', null, h('span', { class: 'tag' }, x.picked ? 'picked up' : 'not picked up yet'), ' ', x.text, ' ', h('span', { class: 'none' }, '(' + x.source + ')'));
+        }))] : h('p', { class: 'none' }, 'None of the hand-offs on the dashboard’s list is addressed to Day ' + day.d + '.'),
+        h('p', { class: 'none' }, 'The list holds ' + BIO.signals.length + ' hand-offs; ' + later + ' are addressed to Days that have not started.'));
+      } else if (info.id === 'gene' || info.id === 'gate' || info.id === 'loop') {
+        if (info.id === 'gate') out.push(h('dl', null, row('Merges on Day ' + day.d, day.tot.prs)));
+        if (info.id === 'loop') out.push(loopHtml());
+      } else {
+        if (ag) out.push(h('dl', null, row('Replies on Day ' + day.d, ag[3]), row('Cost at list prices', money(ag[4]))), I.agent === 'main' ? h('p', { class: 'none' }, 'The main session’s figures cover every step of the Day, not this one alone.') : null);
+        else if (I.agent) out.push(h('p', { class: 'none' }, 'It did not run on Day ' + day.d + ', or its session was not recorded.'));
+        var list = info.id === 'bin' ? day.defects.filter(function (d) { return d.step !== 'after'; }) : day.defects.filter(function (d) { return catcher(d.found) === info.id; });
+        if (info.id !== 'pa' && info.id !== 'rater') out.push(h('h3', null, (info.id === 'bin' ? 'All of them' : 'Defects found here') + ' (' + list.length + ')'), defList(list));
+      }
+      out.push(FILES, back);
+    } else if (info.type === 'defect') {
+      var d = info.d;
+      out.push(h('h2', null, 'Defect ' + d.id), h('p', { class: 'bio' }, 'In the cell: ' + (info.esc ? 'a fault that left the cell and was noticed outside it' : 'a faulty piece, tagged where it was found and broken down')), h('p', null, d.text),
+        h('dl', null, row('Found by', d.found), row('Cause', d.cause), row('Step', d.step == null ? 'not recorded' : d.step)),
+        d.same ? h('p', null, 'A known invader: the same fault as ', lkBtn(d.same), dayOf[d.same] ? 'found on Day ' + dayOf[d.same].d + '.' : '') : null,
+        cameBack[d.id] ? h('p', null, 'It came back later as ', cameBack[d.id].map(lkBtn)) : null,
+        LEARN.past[d.id] ? h('p', null, 'An antibody against it, a fix meant to stop it, was already in place. ' + (LEARN.past[d.id] === 'gated' ? 'It was caught at a gate.' : 'It got past the gates: an escape.')) : null,
+        info.as ? h('p', { class: 'none' }, 'Its Notes do not say which track it was found in, so the dot is drawn hollow and placed on one of the Day’s tracks in turn.') : null,
+        info.esc ? h('p', { class: 'none' }, 'Found after the Day had closed.') : null, back);
+    } else if (info.type === 'crit' || info.type === 'test') {
+      var c = info.c;
+      out.push(h('h2', null, (info.type === 'test' ? 'The test of ' : 'Promise ') + c[0]), h('p', null, c[4]),
+        h('dl', null, row('Tag', c[1]), row('State today', c[2]), row('Track', c[3] === null ? 'none' : c[3]), abilityRows(c[0])),
+        BIO.succ[c[0]] ? [h('p', { class: 'bio' }, 'In the cell: spliced out. A piece of the transcript is cut, and a new piece is joined in where it was. The gene graph uses the same word.'),
+          h('p', null, 'Replaced by ', spaced(BIO.succ[c[0]].map(crBtn)))] : null,
+        BIO.pred[c[0]] ? h('p', null, 'It takes the place of ', spaced(BIO.pred[c[0]].map(crBtn))) : null,
+        h('p', { class: 'none' }, c[1] === 'new' ? 'New: it fails today, so its test is seen red before the code.' : 'Hold: it is true today, so its check is broken on purpose once.'), back);
+    } else if (info.type === 'pr') {
+      out.push(h('h2', null, 'Pull request #' + info.n), h('p', null, info.step.title || info.step.name), h('dl', null, row('Step', info.step.name)), back);
+    } else if (info.type === 'code') {
+      out.push(h('h2', null, info.step.name + '’s code'), h('p', { class: 'bio' }, 'In the cell: the protein'), h('p', null, info.step.title),
+        h('dl', null, row('Promises it serves', info.m), row('Pull request', '#' + info.step.prs.join(', #'))), back);
+    } else if (info.type === 'fix') {
+      var f = info.f, counted = f.from_day != null;
+      // a fix counted from no Day yet has no rate since it, and none a Day over the Days since
+      out.push(h('h2', null, 'Fix #' + f.pr), h('p', { class: 'bio' }, 'In the body: an antibody, kept for every later Day'), h('p', null, f.title),
+        h('dl', null, row('Counts from', counted ? 'Day ' + f.from_day : 'no Day yet'), row('Defects it names', f.stops.length),
+          row('Of its kind before', f.rate_before == null ? String(f.before) : f.before + ', ' + f.rate_before + ' a Day over ' + cplural(f.days_before, 'Day')),
+          row('Of its kind since', !counted || f.rate_after == null ? String(f.after) : f.after + ', ' + f.rate_after + ' a Day over ' + cplural(f.days_since, 'Day')),
+          row('Did it work?', verdict(f)), f.after ? [row('Since: caught at a gate', f.gated), row('Since: got past', f.leaked)] : null),
+        h('h3', null, 'The defects it names'), h('p', null, f.stops.map(lkBtn)), f.after_ids.length ? [h('h3', null, 'Back since'), h('p', null, f.after_ids.map(lkBtn))] : null,
+        h('p', { class: 'none' }, f.stn ? 'Its place in the cell was chosen by hand, from what it changed.' : 'No check is chosen for it yet, so the cell draws it at none.'), back);
+    }
+    $('panel').replaceChildren.apply($('panel'), [out].flat(Infinity).filter(function (x) { return x != null && x !== false; }));
+    render();
+  }
+
+  function fxCol(dn) {
+    var a = LEARN.fixes.filter(function (f) { return f.from_day === dn; });
+    return a.length ? h('span', { class: 'fixcol' }, a.map(function (f) { return h('span', { class: 'fixtick' }, '#' + f.pr); })) : null;
+  }
+  function startDay() {
+    var d0 = DAYS.filter(function (d) { return start.day ? d.d === start.day : d.status !== 'active'; });
+    return (start.day ? d0[0] : d0[d0.length - 1]) || DAYS[DAYS.length - 1];
+  }
+  function setMode() {
+    var w = root.querySelector('.wrap'), first = !booted; booted = true;
+    w.classList.toggle('learn', learn);
+    $('learnBtn').setAttribute('aria-pressed', learn ? 'true' : 'false');
+    $('orgH').textContent = 'The body: every Day is one cell, every phase a tissue';
+    $('orgS').textContent = 'A bigger cell merged more pull requests; each red speck is about six defects found. Pick a cell to look inside.' + (learn ? ' A violet tag before a Day is an antibody: a fix that protects every Day from that one on.' : '');
+    $('s-loop').querySelector('text').textContent = learn ? 'immune memory: ' + LEARN.fixes.length + ' fixes kept for later Days' : 'what the body keeps for later Days';
+    orgBuild();
+    pick(curDay || startDay(), first ? (start.t || (reduced ? 20 : 0)) : 0, first ? (start.paused || reduced) : reduced);
+  }
+
+  function pick(day, t0, paused) {
+    curDay = day;
+    model = build(day); T = t0 || 0; curBeat = null; playing = !paused;
+    $('scrub').max = model.T;
+    $('specLbl').textContent = 'Day ' + day.d + '’s spec';
+    $('mitoFig').textContent = money(day.tot.cost) + ' · ' + day.tot.replies + ' replies';
+    var ht = BIO.heat[day.d] || 0, hg = $('heatG'), gd = BIO.guards[day.d] || {}, hn = ht / day.tot.cost > 0.25 ? 3 : ht / day.tot.cost > 0.12 ? 2 : ht >= 0.5 ? 1 : 0;
+    hg.replaceChildren();
+    for (var hi = 0; hi < hn; hi++) S('path', { 'class': 'heat', d: 'M' + (704 + hi * 16) + ',374 q5,-4 0,-8 t0,-8' }, hg);
+    $('mitoHeat').textContent = ht >= 0.5 ? 'heat: ' + money(ht) + ' re-reading long sessions' : '';
+    $('gAudT').textContent = 'auditor-guard: ' + (gd['auditor-guard'] || 0);
+    $('gReadT').textContent = 'read-guard: ' + (gd['read-guard'] || 0);
+    $('gStepT').textContent = 'step-guard: ' + (gd['step-guard'] || 0);
+    var sgn = BIO.signals.filter(function (x) { return x.to === day.d; }).length;
+    $('sigT').textContent = sgn ? 'signals received: ' + sgn : 'no signal listed';
+    stepBtns = model.marks.map(function (m) { return button('ctl', m.name, function () { T = m.t + 0.01; render(); }); });
+    $('steps').replaceChildren.apply($('steps'), [h('span', null, 'Jump to')].concat(stepBtns));
+    orgBtns.forEach(function (x) { x[0].setAttribute('aria-pressed', x[1] === day ? 'true' : 'false'); });
+    // where the model bends, each count from this Day's data
+    var ns = model.noStep, na = model.nAs, gn = BIO.guard_none;
+    $('note').textContent = 'What is recorded: the Days, their steps and pull requests, every promise and its track, every defect, who found it, and the cost. ' +
+      'What is drawn: the seconds inside a step (the order is the workflow’s; a Day really takes hours), which test the planted bug turns red, and one piece of code per promise. ' +
+      (ns ? (ns === 1 ? '1 of this Day’s defects names no step: it is drawn at the check of whoever found it' : ns + ' of this Day’s defects name no step: each is drawn at the check of whoever found it') +
+        (na === ns ? ', in turn over the Day’s tracks, as a hollow mark.' : na ? '; the ' + na + ' whose finder works in no one step ' + (na === 1 ? 'is' : 'are') + ' placed in turn over the Day’s tracks, as ' + (na === 1 ? 'a hollow mark.' : 'hollow marks.') : ', in the step that finder works in.')
+        : 'Every defect of this Day has its step recorded.') +
+      ' Refusals carry a date, not a Day: each is drawn on the Day that spent the most on that date; ' + gn + (gn === 1 ? ' had no such Day and is not drawn.' : ' had no such Day and are not drawn.') +
+      ' A dashed ring marks a promise that was spliced out; the ring shows from the moment the spec change sets the promise, though the promise was replaced on a later Day.' +
+      (learn ? ' In the immunity layer, a fix’s place in the cell was chosen by hand from what it changed, and an agent’s challenge test is today’s figure, the same on every Day.' : '') +
+      ' The biology is a way of reading, chosen by hand: nothing in the data says proteasome or antibody.';
+    show(null);
+  }
+
+  function orgBuild() {
+    var ph = {}, keys = [];
+    DAYS.forEach(function (d) { var k = d.phase == null ? 'none' : d.phase; if (!ph[k]) { ph[k] = []; keys.push(k); } ph[k].push(d); });
+    orgBtns = [];
+    $('org').replaceChildren.apply($('org'), keys.map(function (k) {
+      return h('div', { class: 'tissue' }, h('span', null, k === 'none' ? 'No phase' : 'Phase ' + k), h('div', null, ph[k].map(function (d) {
+        var r = 11 + Math.sqrt(d.tot.prs) * 3.2, n = Math.min(16, Math.round(d.tot.defects / 6)), svg = S('svg', { viewBox: '0 0 54 54', 'aria-hidden': 'true' });
+        S('circle', { 'class': 'm' + (d.status === 'active' ? ' open' : ''), cx: 27, cy: 27, r: r.toFixed(1) }, svg);
+        S('circle', { 'class': 'n', cx: (27 - r * 0.3).toFixed(1), cy: (27 - r * 0.25).toFixed(1), r: (r * 0.3).toFixed(1) }, svg);
+        for (var i = 0; i < n; i++) { var a = i * 2.4 + d.d, rr = (r - 4) * Math.sqrt((i + 1.5) / (n + 1.5)); S('circle', { 'class': 's', cx: (27 + Math.cos(a) * rr).toFixed(1), cy: (27 + Math.sin(a) * rr).toFixed(1), r: 1.6 }, svg); }
+        var b = h('button', { class: 'cellbtn', type: 'button', 'data-d': d.d, 'aria-pressed': 'false', 'aria-label': 'Day ' + d.d + ': ' + d.tot.prs + ' pull requests, ' + d.tot.defects + ' defects found, ' + money(d.tot.cost) },
+          svg, h('b', null, 'Day ' + d.d), h('small', null, d.tot.defects + ' found · $' + Math.round(d.tot.cost)));
+        b.addEventListener('click', function () { pick(d, 0, reduced); });
+        orgBtns.push([b, d]);
+        return [fxCol(d.d), b];
+      })));
+    }));
+  }
+
+  // the gene's helix
+  (function () {
+    var g = $('helix'), a = '', b = '', x;
+    for (x = 0; x <= 52; x += 2) { var y = Math.sin(x / 52 * Math.PI * 3) * 9; a += (x ? 'L' : 'M') + (94 + x) + ',' + (190 + y).toFixed(1); b += (x ? 'L' : 'M') + (94 + x) + ',' + (190 - y).toFixed(1); }
+    S('path', { d: a, 'class': 'ink' }, g); S('path', { d: b, 'class': 'ink', style: 'stroke:var(--hold)' }, g);
+  })();
+  // the files that serve every station, in the key: the same on every Day
+  (function () {
+    var el = $('settings'), g = EXTRA.files.none || [], n = 0;
+    g.forEach(function (x) { n += x.n; });
+    if (!n) { el.hidden = true; return; }
+    el.replaceChildren.apply(el, [h('summary', null, 'Settings: ' + cplural(n, 'file') + ', serve every station')].concat(g.map(function (x) {
+      return [h('p', null, x.what), h('ul', null, x.files.map(function (f) { return h('li', null, h('code', null, f[0]), h('i', null, comma(f[1]))); }))];
+    })).flat(Infinity));
+  })();
+
+  STN.forEach(function (id) {
+    var e = $('s-' + id); stnEl[id] = e;
+    e.addEventListener('click', function () { show({ type: 'stn', id: id }); });
+    e.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); show({ type: 'stn', id: id }); } });
+  });
+  $('play').addEventListener('click', function () {
+    if (!playing && T >= model.T) T = 0;
+    playing = !playing; last = 0; render();
+  });
+  var sp = root.querySelectorAll('.spd');
+  for (var i = 0; i < sp.length; i++) sp[i].addEventListener('click', function () {
+    speed = +this.getAttribute('data-s');
+    for (var j = 0; j < sp.length; j++) sp[j].setAttribute('aria-pressed', sp[j] === this ? 'true' : 'false');
+  });
+  $('scrub').addEventListener('input', function () { T = +this.value; render(); });
+
+  function frame(now) {
+    if (playing) {
+      var dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+      T += dt * speed;
+      if (T >= model.T) { T = model.T; playing = false; }
+      render();
+    } else last = 0;
+    raf(frame);
+  }
+
+  // how many of its known cases each checking agent answers: an arc round its station, shown with the learning layer;
+  // the defect-rater's has no total in its case set, so it has no arc
+  (function () {
+    var g = $('learnG'), lab = { sa: [300, 316, 'middle'], chap: [746, 256, 'end'], ci: [868, 266, 'start'], rater: [1204, 382, 'end'] };
+    Object.keys(LEARN.cards).forEach(function (k) {
+      var c = LEARN.cards[k], p = P[k]; if (!p || !lab[k] || typeof c.n !== 'number' || !c.of) return;
+      var R = k === 'ci' ? 23 : 20, Cr = 2 * Math.PI * R;
+      S('circle', { 'class': 'track', cx: p[0], cy: p[1], r: R }, g);
+      S('circle', { 'class': 'fill', cx: p[0], cy: p[1], r: R, 'stroke-dasharray': (Cr * c.n / c.of).toFixed(1) + ' ' + Cr.toFixed(1), transform: 'rotate(-90 ' + p[0] + ' ' + p[1] + ')' }, g);
+      S('text', { x: lab[k][0], y: lab[k][1], 'text-anchor': lab[k][2] }, g).textContent = c.n + ' of ' + c.of;
+    });
+  })();
+  $('learnBtn').addEventListener('click', function () { learn = !learn; setMode(); });
+  learn = start.learn !== false;
+  setMode();
+  // opens on its Day, stopped where the Day is now
+  if (start.end) { T = model.T; playing = false; render(); }
+  if (raf) raf(frame);
+  return {
+    open: function (n) { var D = DAYS.filter(function (x) { return x.d === n; })[0]; if (D && D !== curDay) { pick(D, 0, true); T = model.T; render(); } },
+    show: function (info) { show(info); },
+    counts: function () { return { day: model.day.d, promises: model.trA.length, tests: model.tsA.length, defects: model.dfA.length, prs: model.prA.length, assumed: model.nAs, fixes: model.fxA.length }; }
+  };
+}
+
+/* The cell, mounted in its host's shadow root from #cell-tpl, opening on M.cell.start at its end. `$` finds an element
+   by its id; `onDay` is the page's Day buttons; `env` is what the browser offers: `shadow` (shadow roots), `reduced`
+   (no motion) and `raf` (the frame scheduler). Where shadow roots are missing, as on the document the page's tests
+   boot it on, no engine starts and nothing is hidden. With no Day to open, a cell that could not be counted, no
+   template or an engine that throws, the host is hidden and #cell-none says which. It returns the engine's API, or
+   null when nothing was mounted. */
+function cellMount(M, $, onDay, env) {
+  const C = M.cell;
+  const fail = text => { $("cell-host").hidden = true; $("cell-none").textContent = text; $("cell-none").hidden = false; return null; };
+  if (!C) return fail("The cell needs the Day-by-Day data, which this page does not have.");
+  if (C.error) { console.error(`cell: ${C.error}`); return fail(`This graph could not be drawn: ${C.error}`); }
+  if (!env.shadow) return null;
+  let api;
+  try {
+    const tpl = $("cell-tpl");
+    if (!tpl || !tpl.content) throw new Error("the page has no template for the cell");
+    const root = $("cell-host").attachShadow({ mode: "open" });
+    root.appendChild(tpl.content.cloneNode(true));
+    api = cellEngine(C, root, { reduced: env.reduced, raf: env.raf, at: { day: C.start, paused: true, end: true } });
+  } catch (e) {
+    const why = (e && e.message) || e;
+    console.error(`cell: ${why}`);
+    return fail(`This graph could not be drawn: ${why}`);
+  }
+  onDay.push(day => { if (day != null) api.open(day); });
+  return api;
 }
 
 function boot(DATA) {

@@ -19,7 +19,7 @@
       <button type="button" class="theme" id="theme" aria-pressed="false">Dark mode</button>
     </div>
     <h1>A script that runs AI coding work one step at a time</h1>
-    <p class="lede">The project in graphs, each answering one question: the work on this page, the plan's yardsticks and where the time went on the back page. Point at, tap or tab to any mark, and the box under its graph says the detail. Under every graph, one closed line holds its key, its lists and its exact numbers.</p>
+    <p class="lede">The project in graphs, each answering one question: the work on this page; the plan's yardsticks, where the time went and where each file belongs on the back page. Point at, tap or tab to any mark, and the box under its graph says the detail. Under every graph, one closed line holds its key, its lists and its exact numbers.</p>
     <dl class="words" id="words">
       <div><dt>Day</dt><dd>A numbered step of the plan, written as a spec before it is built. It is not a calendar day: <span id="words-took">several Days can fit in one date</span>.</dd></div>
       <div><dt>Date</dt><dd>A calendar date, on the maintainer's clock.</dd></div>
@@ -296,7 +296,445 @@
     <div id="lrn-tip" hidden></div>
   </section>
 
-  <h2 class="chapter">What happens inside a Day?<small>the checks of every Day side by side, and where each file belongs</small></h2>
+  <h2 class="chapter">What happens inside a Day?<small>one Day replayed in the cell, and the checks of every Day side by side</small></h2>
+
+  <section class="graph" id="cell">
+    <div class="graph-head">
+      <p class="graph-n">The cell · one Day replayed, step by step, on the data of graph 7's One Day ring</p>
+      <h2>What happened inside a Day?</h2>
+    </div>
+    <p class="hint">Pick a Day in the row of small cells, press play, and click anything in the picture: a station, a promise, a defect, a pull request, a fix.</p>
+    <div id="cell-host"></div>
+    <p class="stamp" id="cell-none" hidden></p>
+    <template id="cell-tpl"><style>
+:host{display:block;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+.wrap{max-width:1800px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+.top h1{margin:0;font-size:20px;font-weight:700}
+.top p{margin:0;color:var(--muted);font-size:13px;flex:1 1 300px;min-width:0}
+h2{margin:0;font-size:14px;font-weight:700}
+h3{margin:14px 0 6px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.org{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.org-head{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline}
+.org-head span{font-size:13px;color:var(--muted)}
+#org{display:flex;flex-wrap:wrap;gap:10px}
+.tissue{display:flex;flex-direction:column;gap:4px;border:1px dashed var(--axis);border-radius:14px;padding:6px 8px 8px}
+.tissue>span{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.tissue>div{display:flex;flex-wrap:wrap;gap:4px}
+button{font:600 13px var(--sans);color:var(--ink);cursor:pointer}
+.cellbtn{display:flex;flex-direction:column;align-items:center;gap:0;width:88px;padding:4px 2px 6px;border-radius:10px;border:1px solid transparent;background:none}
+.cellbtn:hover{background:var(--wash)}
+.cellbtn[aria-pressed="true"]{background:var(--wash);border-color:var(--ink)}
+.cellbtn b{font-size:12px}
+.cellbtn small{font:400 10.5px var(--sans);color:var(--muted);white-space:nowrap}
+.cellbtn svg{width:54px;height:54px;display:block}
+.cellbtn .m{fill:var(--cyto);stroke:var(--mem);stroke-width:2}
+.cellbtn .m.open{stroke-dasharray:4 3}
+.cellbtn .n{fill:var(--nuc);stroke:var(--spec);stroke-width:1.5}
+.cellbtn .s{fill:var(--broken)}
+button:focus-visible,input:focus-visible,.stn:focus-visible{outline:2px solid var(--spec);outline-offset:2px}
+.say{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 14px;min-height:72px}
+.pill{font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;white-space:nowrap;background:var(--ink);color:var(--page);margin-top:2px}
+.say div{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:2px}
+#say{margin:0;font-size:17px;font-weight:600;text-wrap:balance}
+#bio{margin:0;font-size:14px;color:var(--muted);font-style:italic}
+.counts{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px;color:var(--muted)}
+.counts b{color:var(--ink);font-variant-numeric:tabular-nums}
+.main{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.stage{flex:1000 1 760px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.scene-box{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+#scene{display:block;width:100%;min-width:980px;height:auto}
+.legend{list-style:none;margin:0;padding:10px 16px 14px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+.legend li{display:flex;align-items:center;gap:6px}
+.legend svg{width:18px;height:12px;flex:none}
+.panel{flex:1 1 320px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.panel h2{font-size:17px}
+.panel .bio{margin:2px 0 8px;font-style:italic;color:var(--muted)}
+.panel p{margin:6px 0}
+.panel dl{margin:10px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px 16px}
+.panel dl div{display:flex;flex-direction:column;min-width:0}
+.panel dt{font-size:11.5px;color:var(--muted)}
+.panel dd{margin:0;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.who{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.who button{width:100%;display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:left;padding:5px 8px;border-radius:8px;border:1px solid transparent;background:none;font-weight:500}
+.who button:hover{background:var(--wash);border-color:var(--line)}
+.who i{grid-column:1/-1;height:4px;border-radius:2px;background:var(--broken);display:block}
+.who span{font-variant-numeric:tabular-nums;font-weight:700}
+.dl{list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto;font-size:12.5px;border-top:1px solid var(--line)}
+.dl li{padding:6px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.dl b{font-family:var(--mono);font-weight:500;font-size:12px}
+.tag{font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:999px;background:var(--wash);border:1px solid var(--line);color:var(--ink-2)}
+.back{min-height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--axis);background:var(--card);margin-top:12px}
+.back:hover,.ctl:hover{background:var(--wash)}
+.none{color:var(--muted)}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.ctl{min-height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--axis);background:var(--card)}
+.ctl[aria-pressed="true"]{background:var(--ink);color:var(--page);border-color:var(--ink)}
+#play{min-width:84px;background:var(--spec);color:var(--on-accent);border-color:var(--spec)}
+.speeds,.steps{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.speeds span,.steps span{font-size:12px;color:var(--muted);margin-right:4px}
+.scrub{flex:1 1 260px;min-width:0;display:flex;align-items:center;gap:10px}
+#scrub{flex:1 1 auto;min-width:0;accent-color:var(--spec)}
+#clock{font:500 13px var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.note{margin:0;font-size:12.5px;color:var(--muted);max-width:110ch}
+/* the scene */
+#scene text{font-family:var(--sans);fill:var(--ink)}
+#scene .lbl{font-size:13px;font-weight:600}
+#scene .sub{font-size:12px;fill:var(--muted)}
+#scene .zone{font-size:12px;font-weight:700;letter-spacing:.08em;fill:var(--ink-2)}
+#scene .zsub{font:400 11px var(--mono);fill:var(--muted)}
+#scene .fig{font:500 11px var(--mono);fill:var(--ink-2)}
+.mem{fill:var(--cyto);stroke:var(--mem);stroke-width:3}
+.mem2{fill:none;stroke:var(--mem);stroke-width:1.2;stroke-dasharray:2 5}
+.nuc{fill:var(--nuc);stroke:var(--spec);stroke-width:2;stroke-dasharray:10 6}
+.flow{stroke:var(--axis);stroke-width:2;fill:none}
+.loop{stroke:var(--muted);stroke-width:1.5;fill:none;stroke-dasharray:5 4}
+.arrow{fill:var(--axis)}
+.arrow2{fill:var(--muted)}
+.stn{cursor:pointer}
+.stn .shape{fill:var(--card);stroke:var(--node);stroke-width:2.5}
+.stn .soft{fill:var(--wash);stroke:var(--axis);stroke-width:2}
+.stn .dia{fill:var(--node);stroke:var(--node);stroke-width:2}
+.stn .ink{fill:none;stroke:var(--spec);stroke-width:2;stroke-linecap:round}
+.stn .ink2{fill:none;stroke:var(--axis);stroke-width:1.5}
+.stn .gt{fill:var(--node);transition:transform .3s}
+.stn.on .g1{transform:translateY(-8px)}
+.stn.on .g2{transform:translateY(8px)}
+.stn .halo{fill:var(--spec);opacity:0;transform-box:fill-box;transform-origin:center}
+.stn.on .halo{opacity:.2;animation:halo 1s ease-in-out infinite}
+.stn.on .dia{fill:var(--spec);stroke:var(--spec)}
+.stn.on .shape,.stn.on .soft{stroke:var(--spec)}
+.stn.sel .shape,.stn.sel .soft,.stn.sel .dia{stroke:var(--ink);stroke-width:4}
+@keyframes halo{0%,100%{transform:scale(.8)}50%{transform:scale(1.15)}}
+.tr{fill:none;stroke:var(--spec);stroke-width:2.4;stroke-linecap:round;cursor:pointer}
+.tr.hold{stroke:var(--hold)}
+.tr.gone{stroke:var(--axis)}
+.ts{fill:var(--axis);stroke:var(--card);stroke-width:1;cursor:pointer}
+.ts.red{fill:var(--broken)}
+.ts.green{fill:var(--proven)}
+.bd{fill:var(--code)}
+.bl{cursor:pointer}
+.bl circle{fill:var(--code);stroke:var(--card);stroke-width:1.5}
+.vs{cursor:pointer}
+.vs .vs-o{fill:var(--card);stroke:var(--node);stroke-width:3}
+.vs.k-spec .vs-o{stroke:var(--spec)}
+.vs.k-code .vs-o{stroke:var(--code)}
+.vs.k-close .vs-o{stroke:var(--ink)}
+.vs .vs-i{fill:var(--axis)}
+.vs.merged .vs-i{fill:var(--proven)}
+#scene .vs-t{font:500 11px var(--mono);fill:var(--ink-2)}
+.df{fill:var(--broken);stroke:var(--card);stroke-width:1;cursor:pointer}
+.df.as{fill:var(--card);stroke:var(--broken);stroke-width:2}
+.df.bin{fill:var(--binned)}
+.df.as.bin{fill:var(--card);stroke:var(--binned)}
+.pick{stroke:var(--ink);stroke-width:2.5}
+/* the immunity layer (violet) */
+.modes{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.modes .sep{flex:1 1 12px}
+#learnBtn[aria-pressed="true"]{background:var(--learn);border-color:var(--learn);color:var(--on-accent)}
+.fixcol{display:none;flex-direction:column;gap:2px;justify-content:center}
+.learn .fixcol{display:flex}
+.fixtick{font:500 10.5px var(--mono);color:var(--on-accent);background:var(--learn);border-radius:999px;padding:1px 7px;white-space:nowrap}
+.lk{font:500 12px var(--mono);padding:2px 8px;border-radius:999px;border:1px solid var(--axis);background:var(--card);margin:2px 4px 2px 0}
+.lk:hover{background:var(--wash)}
+.card-bar{height:6px;border-radius:3px;background:var(--wash);overflow:hidden;margin:4px 0 8px}
+.card-bar i{display:block;height:100%;background:var(--learn)}
+.legend li.lg-only{display:none}
+.learn .legend li.lg-only{display:flex}
+#learnG{display:none;pointer-events:none}
+.learn #learnG{display:inline}
+#learnG .track{fill:none;stroke:var(--line);stroke-width:4}
+#learnG .fill{fill:none;stroke:var(--learn);stroke-width:4;stroke-linecap:round}
+#scene #learnG text{font:500 11px var(--mono);fill:var(--learn)}
+.learn .df.rep{stroke:var(--learn);stroke-width:2.6}
+.learn .df.past{fill:var(--learn);stroke:var(--learn);stroke-width:2.6}
+.learn .df.pick{stroke:var(--ink)}
+.learn .loop{stroke:var(--learn)}
+.learn .arrow2{fill:var(--learn)}
+.fx{cursor:pointer}
+.fx rect{fill:transparent;stroke:none}
+.fx path{fill:none;stroke:var(--learn);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+#scene .fx text{font:500 10px var(--mono);fill:var(--learn)}
+.tr rect{fill:transparent;stroke:none}
+.tr .ring{stroke:var(--hold);stroke-width:1.2;stroke-dasharray:2 2}
+.pep{fill:var(--binned);stroke:var(--card);stroke-width:1}
+.heat{fill:none;stroke:var(--broken);stroke-width:1.6;stroke-linecap:round}
+.hint{font-size:13px;color:var(--muted);flex:1 1 300px;min-width:0}
+#scene .fig.hot{fill:var(--broken)}
+.fxp{fill:var(--learn);stroke:var(--card);stroke-width:1.5}
+@media (prefers-reduced-motion: reduce){.stn.on .halo{animation:none}.stn .gt{transition:none}}
+
+/* inside the page: the page's own heading stands above the cell, so the cell's own goes */
+.wrap{max-width:none;margin:0;padding:0}
+.main{flex-direction:column;flex-wrap:nowrap;align-items:stretch}
+.stage{flex:none}
+#scene{min-width:900px}
+.panel{flex:none;columns:3 300px;column-gap:28px}
+.panel>h2{column-span:all;margin:0 0 6px}
+.panel>h2+p,.panel>h2+.bio+p{column-span:all;max-width:100ch}
+.panel p{break-inside:avoid}
+.panel h3{break-after:avoid}
+.panel li,.panel dl>div,details.fl,.panel>dl{break-inside:avoid}
+.legend.moved{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:10px 16px}
+details.fl{border-top:1px solid var(--line);padding:6px 0}
+details.fl:last-of-type{border-bottom:1px solid var(--line)}
+details.fl summary{cursor:pointer;display:flex;gap:8px;justify-content:space-between;align-items:baseline;font-size:13px}
+details.fl summary span{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+details.fl p{margin:6px 0 4px;color:var(--ink-2);font-size:12.5px}
+details.fl ul{list-style:none;margin:0;padding:0;max-height:220px;overflow:auto}
+details.fl li{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
+details.fl code{font-family:var(--mono);font-size:11.5px;overflow-wrap:anywhere;min-width:0}
+details.fl i{font-style:normal;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+details.bends{margin-top:10px;font-size:13px;color:var(--ink-2)}
+details.bends summary{cursor:pointer;color:var(--ink-2)}
+details.bends .note{margin:8px 0 0;max-width:110ch}
+.byhand{font-family:var(--sans);font-size:10.5px;fill:var(--learn);font-style:italic}
+</style>
+    <div class="wrap">
+      <div class="modes">
+        <span class="hint">One Day of work, drawn as one cell. The Days together are the body, and what one Day learns the body keeps.</span>
+        <button class="ctl" type="button" id="learnBtn" aria-pressed="true">Immunity: what the body keeps</button>
+      </div>
+
+      <section class="org" aria-label="The organism">
+        <div class="org-head">
+          <h2 id="orgH"></h2>
+          <span id="orgS"></span>
+        </div>
+        <div id="org"></div>
+      </section>
+
+      <div class="say">
+        <span class="pill" id="pill">Audit</span>
+        <div><p id="say"></p><p id="bio"></p></div>
+      </div>
+      <ul class="counts">
+        <li><span id="l-tr">Promises set</span> <b id="c-tr">0</b></li>
+        <li><span id="l-ts">Tests green</span> <b id="c-ts">0</b></li>
+        <li><span id="l-df">Defects found</span> <b id="c-df">0</b></li>
+        <li><span id="l-pr">Pull requests merged</span> <b id="c-pr">0</b></li>
+      </ul>
+
+      <div class="main">
+       <div class="stage">
+        <div class="scene-box">
+          <svg id="scene" viewBox="0 0 1300 640" role="img" aria-label="One Day drawn as a cell: the plan and the spec in the nucleus, tests, code and checks in the cytoplasm, the maintainer at the membrane, and main outside.">
+            <!-- the improve loop, over the top -->
+            <path class="loop" d="M948,516 H1286 V34 H300 V104"/>
+            <path class="loop" d="M770,34 V198"/>
+            <path class="arrow2" d="M295,102 l5,9 l5,-9 z"/>
+            <path class="arrow2" d="M765,194 l5,9 l5,-9 z"/>
+            <g class="stn" id="s-loop" tabindex="0" role="button" aria-label="Immune memory">
+              <rect class="shape" x="976" y="10" width="300" height="22" rx="11" style="stroke-width:1"/>
+              <text class="sub" x="1126" y="25" text-anchor="middle">the improve loop: only when the maintainer asks</text>
+            </g>
+            <!-- the cell and its nucleus -->
+            <rect class="mem" x="16" y="70" width="920" height="560" rx="110"/>
+            <rect class="mem2" x="23" y="77" width="906" height="546" rx="104"/>
+            <rect class="nuc" x="46" y="112" width="340" height="320" rx="90"/>
+            <text class="zone" x="216" y="454" text-anchor="middle">WRITTEN DOWN FIRST</text>
+            <text class="zsub" x="216" y="468" text-anchor="middle">the nucleus</text>
+            <text class="zone" x="770" y="596" text-anchor="middle">TRIED ON THE CODE</text>
+            <text class="zsub" x="770" y="610" text-anchor="middle">the cytoplasm</text>
+            <!-- the fixed paths -->
+            <path class="flow" d="M158,190 H268"/>
+            <path class="flow" d="M300,216 V258"/>
+            <path class="flow" d="M560,220 H576"/>
+            <path class="flow" d="M642,220 H752"/>
+            <path class="flow" d="M788,220 H846"/>
+            <path class="flow" d="M874,220 H1050 V236"/>
+            <path class="flow" d="M1050,220 H1230 V266"/>
+            <path class="flow" d="M1230,312 V342"/>
+            <path class="flow" d="M1230,378 V418"/>
+            <path class="arrow" d="M1225,262 l5,9 l5,-9 z"/>
+            <path class="arrow" d="M1225,414 l5,9 l5,-9 z"/>
+            <path class="flow" id="trunk" d="M1050,236 V260"/>
+            <g id="pores">
+              <circle class="arrow" cx="386" cy="300" r="3.5"/><circle class="arrow" cx="386" cy="320" r="3.5"/>
+              <circle class="arrow" cx="386" cy="330" r="3.5"/><circle class="arrow" cx="386" cy="350" r="3.5"/>
+              <circle class="arrow" cx="386" cy="360" r="3.5"/><circle class="arrow" cx="386" cy="380" r="3.5"/>
+            </g>
+            <!-- stations -->
+            <g class="stn" id="s-gene" tabindex="0" role="button" aria-label="The goal, the gene">
+              <circle class="halo" cx="120" cy="190" r="44"/>
+              <rect class="shape" x="82" y="168" width="76" height="44" rx="22"/>
+              <g id="helix"></g>
+              <text class="lbl" x="120" y="152" text-anchor="middle">The goal</text>
+              <text class="sub" x="120" y="230" text-anchor="middle">plan.md · the gene</text>
+            </g>
+            <g class="stn" id="s-pa" tabindex="0" role="button" aria-label="Plan-auditor">
+              <circle class="halo" cx="213" cy="190" r="26"/>
+              <path class="dia" d="M213,176 L227,190 L213,204 L199,190 Z"/>
+              <text class="sub" x="213" y="168" text-anchor="middle">plan-auditor</text>
+            </g>
+            <g class="stn" id="s-spec" tabindex="0" role="button" aria-label="The Day's spec, transcription">
+              <circle class="halo" cx="300" cy="190" r="44"/>
+              <rect class="shape" x="268" y="164" width="64" height="52" rx="8"/>
+              <path class="ink" d="M280,178 H320 M280,190 H320 M280,202 H306"/>
+              <text class="lbl" id="specLbl" x="300" y="152" text-anchor="middle">The Day's spec</text>
+              <text class="sub" x="230" y="246" text-anchor="middle">transcription</text>
+            </g>
+            <g class="stn" id="s-sa" tabindex="0" role="button" aria-label="Spec-auditor, reading the template">
+              <circle class="halo" cx="300" cy="275" r="28"/>
+              <path class="dia" d="M300,260 L315,275 L300,290 L285,275 Z"/>
+              <text class="lbl" x="276" y="272" text-anchor="end">spec-auditor</text>
+              <text class="sub" x="276" y="286" text-anchor="end">reading the template</text>
+            </g>
+            <g class="stn" id="s-pool" tabindex="0" role="button" aria-label="The promises, the transcripts">
+              <rect class="soft" x="394" y="290" width="68" height="112" rx="8" style="fill:none;stroke-dasharray:3 4"/>
+              <text class="lbl" x="428" y="420" text-anchor="middle">promises</text>
+              <text class="sub" x="428" y="434" text-anchor="middle">the transcripts</text>
+            </g>
+            <g class="stn" id="s-test" tabindex="0" role="button" aria-label="A test that fails first, the negative control">
+              <circle class="halo" cx="505" cy="220" r="50"/>
+              <rect class="shape" x="450" y="198" width="110" height="44" rx="22" style="stroke:var(--code)"/>
+              <text class="lbl" x="505" y="216" text-anchor="middle">A test that</text>
+              <text class="lbl" x="505" y="231" text-anchor="middle">fails first</text>
+              <text class="sub" x="505" y="188" text-anchor="middle">negative control</text>
+            </g>
+            <g class="stn" id="s-ribo" tabindex="0" role="button" aria-label="Implementer, the ribosome">
+              <circle class="halo" cx="610" cy="222" r="40"/>
+              <ellipse class="soft" cx="610" cy="212" rx="32" ry="17"/>
+              <ellipse class="soft" cx="610" cy="236" rx="22" ry="9"/>
+              <text class="lbl" x="610" y="172" text-anchor="middle">implementer</text>
+              <text class="sub" x="610" y="186" text-anchor="middle">the ribosome</text>
+            </g>
+            <g class="stn" id="s-chap" tabindex="0" role="button" aria-label="Track-reviewer, the folding check">
+              <circle class="halo" cx="770" cy="220" r="28"/>
+              <path class="dia" d="M770,204 L786,220 L770,236 L754,220 Z"/>
+              <text class="lbl" x="762" y="172" text-anchor="middle">track-reviewer</text>
+              <text class="sub" x="762" y="186" text-anchor="middle">folding check</text>
+            </g>
+            <g class="stn" id="s-ko" tabindex="0" role="button" aria-label="Review and a planted bug, the knock-out">
+              <circle class="halo" cx="815" cy="220" r="22"/>
+              <circle class="shape" cx="815" cy="220" r="9" style="stroke:var(--code)"/>
+              <path class="ink" d="M811,216 L819,224 M819,216 L811,224" style="stroke:var(--code)"/>
+              <text class="lbl" x="815" y="262" text-anchor="middle">a planted bug</text>
+              <text class="sub" x="815" y="276" text-anchor="middle">the knock-out</text>
+            </g>
+            <g class="stn" id="s-ci" tabindex="0" role="button" aria-label="CI's checks, quality control">
+              <circle class="halo" cx="860" cy="220" r="26"/>
+              <rect class="dia" x="846" y="206" width="28" height="28" rx="5"/>
+              <text class="lbl" x="866" y="172" text-anchor="middle">CI's checks</text>
+              <text class="sub" x="866" y="186" text-anchor="middle">quality control</text>
+            </g>
+            <g class="stn" id="s-gate" tabindex="0" role="button" aria-label="The maintainer, the membrane gate">
+              <rect x="924" y="190" width="24" height="60" style="fill:var(--card);stroke:none"/>
+              <rect class="gt g1" x="924" y="190" width="24" height="18" rx="7"/>
+              <rect class="gt g2" x="924" y="232" width="24" height="18" rx="7"/>
+              <text class="lbl" x="956" y="150" text-anchor="start">the maintainer</text>
+              <text class="sub" x="956" y="164" text-anchor="start">membrane gate</text>
+            </g>
+            <g class="stn" id="s-main" tabindex="0" role="button" aria-label="main, outside the cell">
+              <text class="lbl" x="1050" y="184" text-anchor="middle">main</text>
+              <text class="sub" x="1050" y="198" text-anchor="middle">outside the cell</text>
+              <rect x="1010" y="170" width="80" height="34" style="fill:none;stroke:none;pointer-events:all"/>
+            </g>
+            <g class="stn" id="s-close" tabindex="0" role="button" aria-label="The Day closes: delivered, labelled">
+              <circle class="halo" cx="1230" cy="290" r="52"/>
+              <rect class="shape" x="1168" y="268" width="124" height="46" rx="23" style="stroke:var(--ink)"/>
+              <text class="lbl" x="1230" y="288" text-anchor="middle">The Day closes</text>
+              <text class="sub" x="1230" y="303" text-anchor="middle">delivered, labelled</text>
+            </g>
+            <g class="stn" id="s-rater" tabindex="0" role="button" aria-label="Defect-rater">
+              <circle class="halo" cx="1230" cy="360" r="26"/>
+              <path class="dia" d="M1230,344 L1246,360 L1230,376 L1214,360 Z"/>
+              <text class="sub" x="1208" y="364" text-anchor="end">defect-rater</text>
+            </g>
+            <g class="stn" id="s-recheck" tabindex="0" role="button" aria-label="The re-check: still working?">
+              <circle class="halo" cx="1230" cy="444" r="52"/>
+              <rect class="shape" x="1168" y="421" width="124" height="46" rx="23" style="stroke:var(--ink)"/>
+              <text class="lbl" x="1230" y="441" text-anchor="middle">The re-check</text>
+              <text class="sub" x="1230" y="456" text-anchor="middle">still working?</text>
+            </g>
+            <text class="sub" id="escLbl" x="1230" y="542" text-anchor="middle"></text>
+            <g class="stn" id="s-mito" tabindex="0" role="button" aria-label="What the Day cost, the mitochondrion">
+              <circle class="halo" cx="720" cy="400" r="46"/>
+              <ellipse class="soft" cx="720" cy="400" rx="46" ry="22" transform="rotate(-12 720 400)"/>
+              <path class="ink2" d="M688,406 l8,-12 l8,12 l8,-12 l8,12 l8,-12 l8,12 l8,-12" transform="rotate(-12 720 400)"/>
+              <text class="lbl" x="720" y="444" text-anchor="middle">what it cost</text>
+              <text class="sub" x="720" y="458" text-anchor="middle">the mitochondrion</text>
+              <text class="fig" id="mitoFig" x="720" y="474" text-anchor="middle"></text>
+              <text class="fig hot" id="mitoHeat" x="720" y="489" text-anchor="middle"></text>
+              <g id="heatG"></g>
+            </g>
+            <g class="stn" id="s-bin" tabindex="0" role="button" aria-label="Defects caught inside the Day: tagged and broken down, the proteasome">
+              <rect class="soft" x="446" y="468" width="136" height="98" rx="14" style="stroke-dasharray:3 4"/>
+              <text class="lbl" id="binLbl" x="514" y="584" text-anchor="middle">broken down: 0</text>
+              <text class="sub" x="514" y="598" text-anchor="middle">the proteasome</text>
+            </g>
+            <path class="flow" d="M582,516 H918"/>
+            <path class="arrow" d="M914,511 l9,5 l-9,5 z"/>
+            <g class="stn" id="s-mhc" tabindex="0" role="button" aria-label="Shown on the surface: the Day's Notes, antigen presentation">
+              <circle class="halo" cx="936" cy="516" r="24"/>
+              <rect x="924" y="500" width="24" height="32" style="fill:var(--card);stroke:none"/>
+              <path class="shape" d="M927,502 V530 M945,502 V530 M927,516 H945" style="fill:none"/>
+              <text class="lbl" x="956" y="502" text-anchor="start">shown on the surface</text>
+              <text class="sub" x="956" y="534" text-anchor="start">the Day’s Notes</text>
+            </g>
+            <g class="stn" id="s-gAud" tabindex="0" role="button" aria-label="Auditor-guard, the nuclear pore">
+              <circle class="halo" cx="170" cy="112" r="18"/>
+              <circle class="shape" cx="170" cy="112" r="8"/>
+              <path class="ink" d="M165,112 H175" style="stroke:var(--node)"/>
+              <text class="fig" id="gAudT" x="184" y="105" text-anchor="start"></text>
+            </g>
+            <g class="stn" id="s-gRead" tabindex="0" role="button" aria-label="Read-guard, a narrow channel">
+              <circle class="halo" cx="250" cy="630" r="18"/>
+              <circle class="shape" cx="250" cy="630" r="8"/>
+              <path class="ink" d="M245,630 H255" style="stroke:var(--node)"/>
+              <text class="fig" id="gReadT" x="264" y="616" text-anchor="start"></text>
+            </g>
+            <g class="stn" id="s-gStep" tabindex="0" role="button" aria-label="Step-guard, the checkpoint">
+              <circle class="halo" cx="1150" cy="220" r="18"/>
+              <circle class="shape" cx="1150" cy="220" r="8"/>
+              <path class="ink" d="M1145,220 H1155" style="stroke:var(--node)"/>
+              <text class="fig" id="gStepT" x="1150" y="204" text-anchor="middle"></text>
+            </g>
+            <g class="stn" id="s-sig" tabindex="0" role="button" aria-label="Signals from other Days, a receptor">
+              <circle class="halo" cx="560" cy="70" r="20"/>
+              <path class="shape" d="M552,58 V70 a8,8 0 0 0 16,0 V58" style="fill:var(--card)"/>
+              <text class="fig" id="sigT" x="576" y="94" text-anchor="start"></text>
+            </g>
+            <g id="learnG"></g>
+            <g id="dyn"></g>
+            <text class="byhand" x="1282" y="508" text-anchor="end">from the Notes to a fix: chosen by hand</text>
+          </svg>
+        </div>
+      <div class="controls">
+        <button id="play" class="ctl" type="button">Pause</button>
+        <div class="speeds" role="group" aria-label="Speed"><span>Speed</span>
+          <button class="ctl spd" type="button" data-s="0.5">½×</button>
+          <button class="ctl spd" type="button" data-s="1" aria-pressed="true">1×</button>
+          <button class="ctl spd" type="button" data-s="2">2×</button>
+          <button class="ctl spd" type="button" data-s="4">4×</button>
+        </div>
+        <div class="scrub"><input id="scrub" type="range" min="0" max="100" step="0.05" value="0" aria-label="Position in the Day"><span id="clock">0:00</span></div>
+      </div>
+      <div class="steps" id="steps" role="group" aria-label="Jump to a step"></div>
+       </div>
+        <aside class="panel" aria-live="polite" id="panel"></aside>
+        <ul class="legend moved" id="lgHand">
+          <li><svg viewBox="0 0 18 12"><path d="M2,6 q1.75,-5 3.5,0 t3.5,0 t3.5,0 t3.5,0" fill="none" stroke="var(--spec)" stroke-width="2.2" stroke-linecap="round"/></svg>a promise tagged new</li>
+          <li><svg viewBox="0 0 18 12"><path d="M2,6 q1.75,-5 3.5,0 t3.5,0 t3.5,0 t3.5,0" fill="none" stroke="var(--hold)" stroke-width="2.2" stroke-linecap="round"/></svg>a promise tagged hold</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="5" cy="6" r="4" fill="var(--broken)"/><circle cx="14" cy="6" r="4" fill="var(--proven)"/></svg>a test failing, then passing</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="4" cy="6" r="3.5" fill="var(--code)"/><circle cx="10" cy="6" r="3.5" fill="var(--code)"/><circle cx="16" cy="6" r="3.5" fill="var(--code)"/></svg>the code being written</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="4.5" fill="var(--card)" stroke="var(--code)" stroke-width="2.5"/></svg>a pull request</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="4" fill="var(--broken)"/></svg>a defect: a faulty piece, where it was found</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="3.5" fill="var(--card)" stroke="var(--broken)" stroke-width="2"/></svg>a defect whose track was not recorded</li>
+          <li><svg viewBox="0 0 18 12"><rect x="6" y="4" width="6" height="4" rx="1" fill="var(--binned)"/></svg>pieces shown on the surface: the Notes</li>
+          <li><svg viewBox="0 0 18 12"><ellipse cx="9" cy="6" rx="8" ry="5" fill="none" stroke="var(--hold)" stroke-width="1.2" stroke-dasharray="2 2"/><path d="M4,6 q1.25,-3 2.5,0 t2.5,0 t2.5,0 t2.5,0" fill="none" stroke="var(--axis)" stroke-width="1.8"/></svg>a promise replaced later: spliced out</li>
+          <li><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="4.5" fill="var(--card)" stroke="var(--node)" stroke-width="2"/><path d="M6.5,6 H11.5" stroke="var(--node)" stroke-width="2"/></svg>a guard: a gate that refuses</li>
+          <li class="lg-only"><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="3.6" fill="var(--broken)" stroke="var(--learn)" stroke-width="2.4"/></svg>a known invader: an old problem, back</li>
+          <li class="lg-only"><svg viewBox="0 0 18 12"><circle cx="9" cy="6" r="4.8" fill="var(--learn)"/></svg>back although an antibody was in place</li>
+          <li class="lg-only"><svg viewBox="0 0 18 12"><path d="M9,11 V6 L4,1 M9,6 L14,1" fill="none" stroke="var(--learn)" stroke-width="2.4" stroke-linecap="round"/></svg>an antibody: a fix, at the check it strengthened</li>
+          <li class="lg-only"><svg viewBox="0 0 18 12"><path d="M3,10 A7,7 0 0 1 15,10" fill="none" stroke="var(--learn)" stroke-width="3" stroke-linecap="round"/></svg>a challenge test: how many known cases an agent recognises</li>
+          <li><details class="fl" id="settings"></details></li>
+        </ul>
+      </div>
+      <details class="bends"><summary>What is recorded, what is drawn, and where the model bends</summary><p class="note" id="note"></p></details>
+    </div>
+    </template>
+  </section>
 
   <section class="graph" id="prf">
     <div class="graph-head">
@@ -419,37 +857,6 @@
     </div>
     <div id="prf-tip" hidden></div>
   </section>
-
-  <section class="graph" id="fil">
-  <div class="graph-head">
-    <p class="graph-n">How this works · every file, at the station it serves</p>
-    <h2>Where does each file belong?</h2>
-    <p class="graph-say">The way of working, drawn as a cell: a promise goes from the written goal on the left, through every check, to the re-check on the right. Every file of the repository hangs under the station it serves. One dot is one file, and a bigger dot is a longer file.</p>
-  </div>
-  <div class="figs" id="fil-figs"></div>
-  <div class="key" id="fil-key"></div>
-  <div class="scroll" id="fil-scroll"><svg class="fig" id="fil-fig" viewBox="0 100 1236 489" role="group"></svg></div>
-  <details class="under" id="fil-under"><summary><b>Under the picture</b><span class="under-n" id="fil-under-n"></span></summary>
-  <p class="hint" id="fil-hint"></p>
-  <details class="exact"><summary>Every file, by station</summary>
-    <div class="scroll-x"><table id="fil-table"></table></div>
-    <p class="stamp" id="fil-stamp"></p>
-  </details>
-  <details class="exact"><summary>How it is drawn, and where the model bends</summary>
-    <div class="cols">
-      <div>
-        <h3>How it is drawn</h3>
-        <ul class="plain" id="fil-how"></ul>
-      </div>
-      <div>
-        <h3>Where the model bends</h3>
-        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
-      </div>
-    </div>
-  </details>
-  </details>
-  <div id="fil-tip" hidden></div>
-</section>
 
   <h2 class="chapter">What can it do, and can it be trusted?<small>abilities, the plan's reach, and the spec against the code</small></h2>
 
@@ -751,7 +1158,7 @@
   </section>
 
   <div class="to-back">
-    <p>Four more graphs are on the back page, as they were: the plan's yardsticks, the specs against the plan, where the work went, and where a date's time goes.</p>
+    <p>Five more graphs are on the back page, as they were: the plan's yardsticks, the specs against the plan, where the work went, where a date's time goes, and where each file belongs.</p>
     <button type="button" data-view="back">Open the back page</button>
   </div>
 
@@ -766,7 +1173,7 @@
 
   <div class="view" id="v-back" hidden>
 
-  <p class="back-note">The back page: four graphs moved here from the front, as they were.</p>
+  <p class="back-note">The back page: five graphs moved here from the front, as they were.</p>
 
   <h2 class="chapter">Is it on the plan's yardsticks?<small>the figures the plan judges the work on</small></h2>
 
@@ -973,6 +1380,39 @@
     </details>
     <div id="act-tip" hidden></div>
   </section>
+
+  <h2 class="chapter">Where does each file belong?<small>every tracked file at the station it serves</small></h2>
+
+  <section class="graph" id="fil">
+  <div class="graph-head">
+    <p class="graph-n">How this works · every file, at the station it serves</p>
+    <h2>Where does each file belong?</h2>
+    <p class="graph-say">The way of working, drawn as a cell: a promise goes from the written goal on the left, through every check, to the re-check on the right. Every file of the repository hangs under the station it serves. One dot is one file, and a bigger dot is a longer file.</p>
+  </div>
+  <div class="figs" id="fil-figs"></div>
+  <div class="key" id="fil-key"></div>
+  <div class="scroll" id="fil-scroll"><svg class="fig" id="fil-fig" viewBox="0 100 1236 489" role="group"></svg></div>
+  <details class="under" id="fil-under"><summary><b>Under the picture</b><span class="under-n" id="fil-under-n"></span></summary>
+  <p class="hint" id="fil-hint"></p>
+  <details class="exact"><summary>Every file, by station</summary>
+    <div class="scroll-x"><table id="fil-table"></table></div>
+    <p class="stamp" id="fil-stamp"></p>
+  </details>
+  <details class="exact"><summary>How it is drawn, and where the model bends</summary>
+    <div class="cols">
+      <div>
+        <h3>How it is drawn</h3>
+        <ul class="plain" id="fil-how"></ul>
+      </div>
+      <div>
+        <h3>Where the model bends</h3>
+        <ul class="plain"><li><b>A file is drawn once.</b> Many serve more than one station: <code>CLAUDE.md</code> is read at every one. Each hangs where it matters first.</li><li><b>The whole app is one group.</b> The driver, its hooks, rules and container are all "the protein" here. How the app itself runs is the reflex graph's subject.</li><li><b>The guards are not CI.</b> They stop a working session in this repository at any station. They hang beside CI's checks because both are checks by a script.</li><li><b>The track-reviewer reads twice,</b> the brief before the implementer starts and the diff after; the map draws it once, after the code.</li><li><b>Length is not importance.</b> <code>plan.md</code> is one middle-sized dot, and everything else is copied from it.</li><li><b>The maintainer has no file.</b> The gate in the membrane is a person.</li><li><b>Nobody decides in a cell.</b> There the steps are chemistry. Here each check is a script, a separate AI reviewer or a person, and each can say no.</li></ul>
+      </div>
+    </div>
+  </details>
+  </details>
+  <div id="fil-tip" hidden></div>
+</section>
 
   </div>
 
