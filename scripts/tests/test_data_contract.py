@@ -64,25 +64,24 @@ def _pairs(node):
             yield target, node.value
 
 
-def calls_behind(value, main):
-    """The names of the functions called in `value`, and in the assignment of each name `value` reads but `real`."""
-    made = {}
+def maker(value, main):
+    """The function that makes `value`: the call it is, or for a name, the call main() assigned the name from;
+    "main" for a dict(...) main() builds itself. Any other expression (a list) is made by the names it reads
+    that main() assigned. More than one function is ambiguous, and the test fails on it."""
+    if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+        return {"main"} if value.func.id == "dict" else {value.func.id}
+    assigned = {}
     for node in ast.walk(main):
-        if isinstance(node, (ast.Assign, ast.With)):
-            pairs = _pairs(node) if isinstance(node, ast.Assign) else []
-            for target, val in pairs:
-                names = [t.id for t in ast.walk(target) if isinstance(t, ast.Name)]
-                for name in names:
-                    made.setdefault(name, set()).update(_called(val))
-    found = set(_called(value))
-    # `real` is everything gathered so far: a view handed it is made by the view, not by what made the rest
-    for name in {n.id for n in ast.walk(value) if isinstance(n, ast.Name)} - {"real"}:
-        found |= made.get(name, set())
-    return found
-
-
-def _called(node):
-    return {c.func.id for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)}
+        if isinstance(node, ast.Assign):
+            for target, val in _pairs(node):
+                for t in target.elts if isinstance(target, ast.Tuple) else [target]:
+                    if isinstance(t, ast.Name):
+                        assigned.setdefault(t.id, []).append(val)
+    if isinstance(value, ast.Name):
+        names = [value.id]
+    else:
+        names = sorted({n.id for n in ast.walk(value) if isinstance(n, ast.Name)} & set(assigned))
+    return {f for name in names for val in assigned.get(name, []) for f in maker(val, main)}
 
 
 def readers():
@@ -116,17 +115,83 @@ def _keys_read(fn, name):
             yield node.args[0].value
 
 
+def _code(text):
+    """dashboard.js with its comments and the text of its strings blanked, lengths and lines kept: what is left
+    is code. A ${...} inside a template string is code too."""
+    out, i, n, stack = list(text), 0, len(text), []  # "`" for a template string, "{" for a ${ inside one
+
+    def blank(a, b):
+        for j in range(a, min(b, n)):
+            if out[j] != "\n":
+                out[j] = " "
+
+    while i < n:
+        c, nxt = text[i], text[i + 1 : i + 2]
+        if stack and stack[-1] == "`":
+            if c == "\\":
+                blank(i, i + 2)
+                i += 2
+            elif c == "`":
+                stack.pop()
+                i += 1
+            elif c == "$" and nxt == "{":
+                stack.append("{")
+                i += 2
+            else:
+                blank(i, i + 1)
+                i += 1
+        elif c == "/" and nxt == "/":
+            end = text.find("\n", i)
+            end = n if end < 0 else end
+            blank(i, end)
+            i = end
+        elif c == "/" and nxt == "*":
+            end = text.find("*/", i + 2) + 2
+            blank(i, end)
+            i = end
+        elif c == "/" and re.search(r"(^|[(,=:\[!&|?{};+\-*%<>~^]|\breturn)\s*$", text[max(0, i - 40) : i]):
+            # a regex literal, where an operand is expected: /`/g is no template string
+            j, klass = i + 1, False
+            while j < n and text[j] != "\n" and (klass or text[j] != "/"):
+                klass = (klass or text[j] == "[") and text[j] != "]"
+                j += 2 if text[j] == "\\" else 1
+            blank(i + 1, j)
+            i = j + 1
+        elif c in "'\"":
+            j = i + 1
+            while j < n and text[j] not in (c, "\n"):
+                j += 2 if text[j] == "\\" else 1
+            blank(i + 1, j)
+            i = j + 1
+        elif c == "`":
+            stack.append("`")
+            i += 1
+        else:
+            if c == "{" and stack:
+                stack.append("{")
+            elif c == "}" and stack:
+                stack.pop()
+            i += 1
+    return "".join(out)
+
+
 def drawers():
-    """{key: the functions of dashboard.js that read DATA.key}: a line counts in the last function declared above
-    it at the file's top level or one level in (model()'s graphs, as `  function prfGraph() {`)."""
-    found, fn = {}, None
+    """{key: the functions of dashboard.js that read DATA.key}: the innermost function declared at the file's
+    top level or one level in (model()'s graphs, as `  function prfGraph() {`) whose braces hold the read.
+    Comments and the text of strings are not read."""
     with open(PAGE_JS, encoding="utf-8") as f:
-        for line in f:
-            top = re.match(r"(?:  )?(?:async\s+)?function\s+(\w+)", line)
-            if top:
-                fn = top.group(1)
-            for a, b in re.findall(r"\bDATA\.(\w+)|\bDATA\[\"(\w+)\"\]", line):
-                found.setdefault(a or b, set()).add(fn)
+        code = _code(f.read())
+    spans = []
+    for m in re.finditer(r"^(?:  )?(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{", code, re.M):
+        depth, j = 1, m.end()
+        while depth and j < len(code):
+            depth += {"{": 1, "}": -1}.get(code[j], 0)
+            j += 1
+        spans.append((m.start(), j, m.group(1)))
+    found = {}
+    for m in re.finditer(r"\bDATA\.(\w+)|\bDATA\[\"(\w+)\"\]", code):
+        inside = [s for s in spans if s[0] <= m.start() < s[1]]
+        found.setdefault(m.group(1) or m.group(2), set()).add(max(inside)[2] if inside else "(top level)")
     return found
 
 
@@ -153,9 +218,8 @@ class DataContractTest(unittest.TestCase):
         for key, entry in contract().items():
             module, _, function = entry["made_by"].partition(":")
             self.assertTrue(defines(entry["made_by"]), f"{key}: {entry['made_by']} is not defined")
-            # main() builds a dict of its own from what it has gathered (now, meta)
-            called = "dict" if entry["made_by"] == "spec-drift:main" else function
-            self.assertIn(called, calls_behind(keys[key], main), key)
+            self.assertIn(key, keys)
+            self.assertEqual(sorted(maker(keys[key], main)), [function], key)
 
     def test_each_key_is_read_by_the_views_it_names(self):
         read = readers()

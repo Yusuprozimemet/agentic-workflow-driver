@@ -8,9 +8,11 @@ out here now, in `criterion_states`, and the browser reads it.
 A criterion is *in force* while no later criterion's `Replaces:` line names it (its `replaced_by` is empty):
 `scripts/plan-links.py`, graph 12 and the gene count the same set.
 
-The views live in one module each beside this one (spec_drift_view_<key>.py, the key of spec-drift.json each
-writes), with the helpers more than one uses in spec_drift_view_common.py. This module only imports them,
-so that spec-drift.py, demo-data.py and the tests keep importing every view from one name.
+The views live in one module each beside this one, spec_drift_view_<key>.py after the key of spec-drift.json
+each writes (criterion_states fills criteria_index[].state), with the helpers more than one uses in
+spec_drift_view_common.py. Three views import from another: budget and learning from proofreading's gates,
+one_day from budget and proofreading. This module only imports them, so that spec-drift.py, demo-data.py and
+the tests keep importing every view from one name.
 """
 
 from spec_drift_view_common import (  # noqa: F401

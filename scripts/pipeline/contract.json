@@ -375,8 +375,8 @@
     "drawn_by": [
       "clockGraph",
       "lookGraph",
-      "notMeasured",
-      "sieveGraph"
+      "model",
+      "notMeasured"
     ],
     "graph": "Graphs 1 and 10, the old graph 7"
   },
@@ -405,7 +405,7 @@
     "drawn_by": [
       "attention",
       "head",
-      "quality"
+      "model"
     ],
     "graph": "the header and the score"
   },
@@ -417,7 +417,6 @@
     ],
     "drawn_by": [
       "geneGraph",
-      "lightH",
       "mrgGraph"
     ],
     "graph": "Graph 6 and the gene"
@@ -440,7 +439,6 @@
     "made_by": "spec_drift_view_where_ring:where_ring",
     "read_by": [],
     "drawn_by": [
-      "geneDraw",
       "whrGraph"
     ],
     "graph": "Where we are and the gene"
@@ -452,8 +450,7 @@
       "spec_drift_view_needs_attention"
     ],
     "drawn_by": [
-      "rdgGraph",
-      "rdgTip"
+      "rdgGraph"
     ],
     "graph": "Graph 1"
   },
@@ -465,7 +462,7 @@
     ],
     "drawn_by": [
       "gelGraph",
-      "sieveGraph"
+      "model"
     ],
     "graph": "Graph 2"
   },
@@ -570,7 +567,7 @@
       "spec_drift_page"
     ],
     "drawn_by": [
-      "graph"
+      "draw"
     ],
     "graph": "the file map"
   }

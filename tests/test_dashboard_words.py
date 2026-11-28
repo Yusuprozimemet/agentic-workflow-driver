@@ -12,6 +12,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SCRIPTS = os.path.join(ROOT, "scripts")
 PAGE = os.path.join(ROOT, "docs", "dashboard")
 sys.path.insert(0, SCRIPTS)
+import pipeline  # noqa: F401  (the views import each other from scripts/pipeline/counts/)
 
 
 def read(name):

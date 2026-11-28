@@ -3,7 +3,7 @@
 `scripts/` holds this repository's commands: each one a body of its own, run by hand, by a hook or
 by CI. The specs, the workflows and the docs name them by path, so their names and places do not
 move; this page only sorts them by what they are for. The page's data builder is not a command: the
-11 modules `spec-drift.py` runs sit in `scripts/pipeline/`, in a folder for each of the first three
+28 modules `spec-drift.py` runs sit in `scripts/pipeline/`, in a folder for each of the first three
 concerns below (`sources/`, `counts/`, `build/`), and keep the names they had beside it. Their tests are in `scripts/tests/`, run one
 file at a time (`python scripts/tests/test_<name>.py`). Three tests stay beside the scripts on
 purpose: `test_token_usage.py`, frozen by C16.19 (a hold in force); `test_setup_check.py`, which
