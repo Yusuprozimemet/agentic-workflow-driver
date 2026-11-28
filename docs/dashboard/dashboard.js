@@ -1010,7 +1010,7 @@ function model(DATA) {
 
   const P = safe(promises), g2 = safe(yardGraph), g10 = safe(clockGraph), g12 = safe(planGraph), gene = safe(geneGraph), mrg = safe(mrgGraph);
   return { head: head(), days: days.map(d => ({ day: d.day, title: plain(d.title), closed: finished(d), active: d.day === current })),
-    attention: attention(), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
+    attention: attention(), yardsticks: safe(() => yardsticks(DATA.gel)), quality: safe(quality), g6: safe(mergeGraph), g7: safe(sieveGraph), g1: safe(lookGraph), g2, g10, g12, gene, mrg, rew: safe(rewGraph), whr: safe(whrGraph), rdg: safe(rdgGraph), gel: safe(gelGraph), prt: safe(prtGraph), prf: safe(prfGraph), one: safe(oneGraph), atp: safe(atpGraph), rng: safe(rngGraph), act: safe(actGraph), rfx: safe(rfxGraph), lrn: safe(lrnGraph),
     promises: P.error ? { counts: [] } : { counts: COUNTED.map(s => [s, P.n(P.tiles, s)]).filter(c => c[1]), total: P.counted(P.tiles),
       states: Object.fromEntries(Object.keys(STATES).map(s => [s, P.n(P.tiles, s)])) },
     caveats: (DATA.meta || {}).caveats || [], notMeasured: notMeasured(g2, g10, g12) };
@@ -4207,10 +4207,85 @@ function openFolds(target) {
   for (let e = target; e; e = e.parentElement || e.parentNode) if (e.tagName && String(e.tagName).toUpperCase() === "DETAILS") e.open = true;
   if (target && target.scrollIntoView) target.scrollIntoView({ block: "start" });
 }
-function foldLinks() {
-  const go = () => { const id = decodeURIComponent((location.hash || "").slice(1)); if (id) openFolds(document.getElementById(id)); };
+// `route` first turns to the page that holds the link's target (the front or the back), so that the folds it opens show.
+function foldLinks(route) {
+  const go = () => {
+    const raw = (location.hash || "").slice(1), id = decodeURIComponent(raw);
+    if (route) route(raw);
+    if (id) openFolds(document.getElementById(id));
+  };
   if (typeof addEventListener === "function") addEventListener("hashchange", go);
   go();
+}
+
+/* Which page holds a link's target: "back" and "front" name themselves, an id on the back page (`backIds`) is "back",
+   any other id "front". No id is null: the page stays as it is. `hash` is the id as the address has it, without its "#". */
+function viewFor(hash, backIds) {
+  let id = String(hash || "").replace(/^#/, "");
+  try { id = decodeURIComponent(id); } catch (e) { /* a stray "%" is read as it is */ }
+  if (!id) return null;
+  if (id === "back" || id === "front") return id;
+  return backIds && backIds.has(id) ? "back" : "front";
+}
+
+/* The closed line under a picture: the names of what its fold holds, so that a reader sees what is there without
+   opening it. `items` are the fold's children as foldItems() reads them: a list's headings, a note's lead words, a
+   table's title and row count, or a graph as it was. A heading "name · count, more" keeps its name, cut short, and its
+   count. Past seven names the first six stand and "and N more" says the rest; the graph as it was is named last, always. */
+function underLine(items) {
+  const one = s => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  const cut = s => s.length > 72 ? `${s.slice(0, 71).trim()}…` : s;
+  const head = t => { const s = one(t), at = s.indexOf(" · ");
+    return at < 0 ? cut(s) : `${cut(s.slice(0, at).trim())} · ${s.slice(at + 3).split(",")[0].trim()}`; };
+  const names = (items || []).filter(it => it.kind !== "old").flatMap(it => {
+    if (it.kind === "list") return (it.heads || []).map(head);
+    if (it.kind === "notes") return it.heads || [];
+    if (it.kind === "table") { const t = one(one(it.title).split(" · ")[0].split(":")[0]); return t ? [t + (it.rows > 0 ? ` (${it.rows} rows)` : "")] : []; }
+    return [];
+  }).filter(Boolean);
+  const shown = names.length > 7 ? [...names.slice(0, 6), `and ${names.length - 6} more`] : names;
+  return (items || []).some(it => it.kind === "old") ? [...shown, "As it was"] : shown;
+}
+
+/* A fold's children as underLine() reads them: a list (div.find) by its headings, notes by the bold lead of each and the
+   words after it up to the first ; : , or (, a closed table (details) by its summary and its rows that hold data, and a
+   graph as it was (.mock-fold). Anything else, its own summary included, names nothing. */
+function foldItems(fold) {
+  return Array.from(fold.children).flatMap(k => {
+    const c = k.classList;
+    if (c.contains("find")) return [{ kind: "list", heads: Array.from(k.querySelectorAll("h3, h4")).map(x => x.textContent) }];
+    if (c.contains("notes")) return [{ kind: "notes", heads: Array.from(k.children).flatMap(s => {
+      const b = s.querySelector("b");
+      if (!b) return [];
+      const rest = s.textContent.replace(b.textContent, "").trim().split(/[;:,(]/)[0].trim();
+      return [`${b.textContent} ${rest}`.trim()];
+    }) }];
+    if (c.contains("mock-fold")) return [{ kind: "old" }];
+    // graphs 9 and 10 write their rows with no tbody: a row is data when it has a cell
+    if (k.tagName === "DETAILS") { const s = k.querySelector("summary"); return [{ kind: "table", title: s ? s.textContent : "", rows: Array.from(k.querySelectorAll("table tr")).filter(r => r.querySelector("td")).length }]; }
+    return [];
+  });
+}
+
+/* The plan's yardsticks in one row under What needs attention. A yardstick where lower is better is judged as graph 2's
+   gel judges it, on its last Day against its own average so far; the others are shown and not judged. */
+function yardsticks(G) {
+  if (!G || !Array.isArray(G.panels) || !G.panels.length) return null;
+  const days = G.days || [], day = days.length ? days[days.length - 1] : null;
+  const short = p => String(p.name).split(",")[0];
+  const judged = G.panels.filter(p => p.lower_better === true), worse = judged.filter(p => p.verdict === "worse").map(short);
+  const n = judged.length, w = worse.length;
+  const lead = `on Day ${day}, the last Day counted: ` + (!w ? `none of the ${n} judged is worse than its own average so far`
+    : w === 1 ? `1 of ${n} judged is worse than its own average so far` : `${w} of ${n} judged are worse than their own average so far`);
+  const chips = G.panels.map(p => {
+    const fmt = x => (p.unit === "$" ? "$" : "") + Number(x).toFixed(p.decimals || 0) + (p.unit && p.unit !== "$" ? ` ${p.unit}` : "");
+    const on = p.lower_better === true, bad = on && p.verdict === "worse";
+    const word = !on ? "not judged" : bad ? `worse than its average ${fmt(p.average)}`
+      : p.verdict === "better" ? `better than its average ${fmt(p.average)}` : "level with its average";
+    return { key: p.key, name: short(p), value: p.last && p.last.value != null ? fmt(p.last.value) : "–", word, cls: bad ? "bad" : on ? "" : "none",
+      title: p.name + (p.kit != null ? `. The kit's figure: ${fmt(p.kit)}` : "") };
+  });
+  return { day, judged: n, worse, lead, chips };
 }
 
 function draw(M, DATA) {
@@ -4259,8 +4334,16 @@ function draw(M, DATA) {
   put("now", h("strong", null, "Now: "), H.now, " ", h("strong", null, "Next step: "), rich(H.next));
   if (H.took) $("words-took").textContent = H.took;
   /* needs attention, folded until opened or a chip is followed (openFolds): the headline, the strand of Days, the list worst first, the two folds, and a chip beside each graph's title */
-  const A = M.attention;
-  $("attention").hidden = !A;
+  const A = M.attention, Y = M.yardsticks && !M.yardsticks.error ? M.yardsticks : null;
+  if (M.yardsticks && M.yardsticks.error) console.error(`sticks model: ${M.yardsticks.error}`);
+  // the section shows for the yardstick row alone, on a Day nothing needs attention
+  $("attention").hidden = !A && !Y;
+  $("attention-all").hidden = !A;
+  try {
+    $("sticks").hidden = !Y;
+    if (Y) put("sticks", h("span", { class: "lead" }, h("b", null, "The plan's yardsticks"), " ", Y.lead),
+      Y.chips.map(c => h("a", { href: "#gel", class: c.cls || null, title: c.title }, c.name, h("b", null, c.value), h("small", null, c.word))));
+  } catch (e) { console.error(`sticks draw: ${(e && e.message) || e}`); }
   if (A) {
     const mark = (m, tip) => h("i", { class: `o ${m}`, title: tip || null, "aria-hidden": tip ? null : "true" });
     const lines = list => list.map(l => h("div", { class: "at-ln" }, h("span", { class: "mk" }, mark(l.mark)),
@@ -4601,7 +4684,51 @@ function draw(M, DATA) {
     put("fil-scroll", h("p", { class: "load-error" }, `This graph could not be drawn: ${(e && e.message) || e}`)); console.error(`fil: ${(e && e.message) || e}`);
   }
   document.addEventListener("keydown", e => { if (e.key === "Escape") resets.forEach(r => r()); });
-  foldLinks();
+
+  /* The closed line under each picture, read from what its fold holds, and read again when that changes (a list
+     redrawn for a Day). A line is written only when it differs, so its own writing does not start it again. */
+  try {
+    const said = new Map();
+    const line = fold => {
+      try {
+        const t = underLine(foldItems(fold));
+        if (said.get(fold.id) === t.join("\n")) return;
+        said.set(fold.id, t.join("\n"));
+        put(`${fold.id}-n`, t.map(x => h("span", null, x)));
+      } catch (e) { console.error(`${fold.id}: ${(e && e.message) || e}`); }
+    };
+    Array.from(document.querySelectorAll("details.under")).forEach(fold => {
+      line(fold);
+      if (typeof MutationObserver === "function") new MutationObserver(() => line(fold)).observe(fold, { childList: true, subtree: true, characterData: true });
+    });
+  } catch (e) { console.error(`under: ${(e && e.message) || e}`); }
+
+  /* Two pages: the front, and the back with four graphs moved there as they were. A link, or the address on load,
+     turns to the page that holds its target (viewFor); a button turns it by hand and goes to the top of the page shown.
+     The graphs fit themselves on a resize, so one is sent for the page that has just been shown. */
+  let route = null;
+  try {
+    const back = $("v-back"), backIds = new Set([back.id, ...Array.from(back.querySelectorAll("[id]")).map(e => e.id)]);
+    const showPage = v => {
+      $("v-front").hidden = v !== "front";
+      $("v-back").hidden = v !== "back";
+      document.documentElement.dataset.view = v;
+      Array.from(document.querySelectorAll(".views [data-view]")).forEach(b => b.setAttribute("aria-pressed", String(b.getAttribute("data-view") === v)));
+      if (typeof Event === "function") window.dispatchEvent(new Event("resize"));
+    };
+    put("back-n", `${back.querySelectorAll("section.graph").length} graphs`);
+    document.addEventListener("click", e => {
+      const b = e.target && e.target.closest ? e.target.closest("[data-view]") : null;
+      if (!b) return;
+      const v = b.getAttribute("data-view");
+      showPage(v);
+      try { history.replaceState(null, "", `#${v}`); } catch (x) { /* the address keeps its old name */ }
+      const top = $(`v-${v}`);
+      if (top && top.scrollIntoView) top.scrollIntoView({ block: "start" });
+    });
+    route = raw => { const v = viewFor(raw, backIds); if (v) showPage(v); };
+  } catch (e) { console.error(`views: ${(e && e.message) || e}`); }
+  foldLinks(route);
   // the old page, by its tag, on the repository the build read: the page names no repository of its own
   const blob = howBlob(DATA), old = document.getElementById("old-page");
   if (blob && old) old.setAttribute("href", blob.replace(/blob\/main\/$/, "tree/dashboard-v1/docs/dashboard"));

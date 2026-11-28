@@ -1,4 +1,4 @@
-"""The dashboard page: what each of its twelve graphs draws and says, and what the page file must hold.
+"""The dashboard page: what each of its graphs draws and says, and what the page file must hold.
 
 docs/dashboard/dashboard.js keeps its reading of the data in model(), which touches no document, so
 these tests run it in node on small made-up data and compare what comes out. The page itself is
@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import unittest
+from html.parser import HTMLParser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "..", "docs", "dashboard")
@@ -45,7 +46,7 @@ try { vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nboot(DATA);"
 const shown = el => el ? { hidden: el.hidden, text: el.textContent } : null;
 console.log(JSON.stringify({ error, logged, eyebrow: els.eyebrow ? els.eyebrow.textContent : null,
   banner: shown(els["demo-banner"]), missing: shown(els["data-banner"]), quality: shown(els.quality),
-  now: shown(els.now), whr: shown(els.whr), attention: shown(els.attention),
+  now: shown(els.now), whr: shown(els.whr), attention: shown(els.attention), attentionAll: shown(els["attention-all"]), sticks: shown(els.sticks),
   chips: { prt: shown(els["prt-chips"]), g12: shown(els["g12-chips"]) } }));
 """
 
@@ -80,6 +81,39 @@ HOW_BLOB = r"""
 const fs = require("fs"), vm = require("vm");
 const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\nhowBlob(DATA)", ctx)));
+"""
+
+# underLine() on each list of a fold's items from stdin; null when the page has no underLine, so the test fails by its assertion.
+UNDER_LINE = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\ntypeof underLine !== 'function' ? null : DATA.map(items => underLine(items))", ctx)));
+"""
+
+# foldItems() on a fold built from the tree on stdin: each node is its tag, classes, children and the text after them
+# (`post`), with only what foldItems asks of an element. A selector is tags, comma-separated, each a descendant chain
+# ("table tr"). Null when the page has no foldItems.
+FOLD_ITEMS = r"""
+const fs = require("fs"), vm = require("vm");
+const below = n => n.kids.flatMap(k => [k, ...below(k)]);
+const match = (n, chain) => { const tags = chain.trim().split(/\s+/), last = tags.pop();
+  return n.tag === last && (!tags.length || below(n.root).some(a => a.tag === tags[tags.length - 1] && below(a).includes(n))); };
+const build = (s, root) => { const n = { tag: s.tag, kids: [], root: null, post: s.post || "", text: s.text || "" };
+  n.root = root || n; n.kids = (s.kids || []).map(k => build(k, n.root));
+  n.tagName = s.tag.toUpperCase(); n.classList = { contains: c => (s.cls || []).includes(c) }; n.children = n.kids;
+  n.querySelectorAll = sel => below(n).filter(d => sel.split(",").some(c => match(d, c)));
+  n.querySelector = sel => n.querySelectorAll(sel)[0] || null;
+  Object.defineProperty(n, "textContent", { get: () => n.text + n.kids.map(k => k.textContent).join("") + n.post });
+  return n; };
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), build });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\ntypeof foldItems !== 'function' ? null : foldItems(build(DATA))", ctx)));
+"""
+
+# viewFor() on each [hash, ids of the back page] pair from stdin; null when the page has no viewFor.
+VIEW_FOR = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + "\ntypeof viewFor !== 'function' ? null : DATA.map(c => viewFor(c[0], new Set(c[1])))", ctx)));
 """
 
 
@@ -915,6 +949,104 @@ class ModelTest(unittest.TestCase):
         self.assertIn(["Whether the specs follow the plan", got["g12"].get("empty")], got.get("notMeasured", []))
         self.assertIsNotNone(got["g12"].get("empty"))
 
+    # Five yardsticks as the gel holds them: four judged (lower is better), two of them worse than their own average.
+    GEL = dict(days=[14, 15, 16], judged=4, panels=[
+        dict(key="cost", name="Cost of each merged pull request, main sessions", unit="$", decimals=2, lower_better=True, kit=1.86,
+             average=2.67, last=dict(day=16, value=10.77), verdict="worse"),
+        dict(key="replies", name="Replies for each merged pull request, main sessions", unit="", decimals=1, lower_better=True, kit=None,
+             average=36.8, last=dict(day=16, value=45.5), verdict="worse"),
+        dict(key="parks", name="Times the driver stopped for a person", unit="", decimals=0, lower_better=True, kit=None,
+             average=4, last=dict(day=16, value=2), verdict="better"),
+        dict(key="refusals", name="Calls the hooks refused", unit="", decimals=0, lower_better=False, kit=None,
+             average=14.6, last=dict(day=16, value=18), verdict="flat"),
+        dict(key="escapes", name="Defects that escaped from an earlier Day", unit="", decimals=0, lower_better=True, kit=None,
+             average=1.2, last=None, verdict="flat")])
+
+    def test_the_yardstick_row_names_each_one_worse_than_its_own_average(self):
+        G = self.GEL
+        got = model(data(gel=G))
+        # the key first, so that its absence fails short
+        self.assertEqual(sorted(set(got) & {"yardsticks"}), ["yardsticks"])
+        Y = got["yardsticks"] or {}
+        self.assertEqual((Y.get("day"), Y.get("judged"), G["judged"]), (16, 4, 4))
+        self.assertEqual(Y.get("worse"), ["Cost of each merged pull request", "Replies for each merged pull request"])
+        self.assertEqual(Y.get("lead"), "on Day 16, the last Day counted: 2 of 4 judged are worse than their own average so far")
+        # each chip's judgement first, so that a wrong one fails short; then every field
+        self.assertEqual([c.get("cls") for c in Y.get("chips") or []], ["bad", "bad", "", "none", ""])
+        self.assertEqual(Y.get("chips"), [
+            dict(key="cost", name="Cost of each merged pull request", value="$10.77", word="worse than its average $2.67", cls="bad",
+                 title="Cost of each merged pull request, main sessions. The kit's figure: $1.86"),
+            dict(key="replies", name="Replies for each merged pull request", value="45.5", word="worse than its average 36.8", cls="bad",
+                 title="Replies for each merged pull request, main sessions"),
+            dict(key="parks", name="Times the driver stopped for a person", value="2", word="better than its average 4", cls="",
+                 title="Times the driver stopped for a person"),
+            dict(key="refusals", name="Calls the hooks refused", value="18", word="not judged", cls="none", title="Calls the hooks refused"),
+            dict(key="escapes", name="Defects that escaped from an earlier Day", value="–", word="level with its average", cls="",
+                 title="Defects that escaped from an earlier Day")])
+        # one worse, then none
+        better = lambda keys: dict(G, panels=[dict(p, verdict="better") if p["key"] in keys else p for p in G["panels"]])  # noqa: E731
+        leads = [(model(data(gel=better(keys)))["yardsticks"] or {}).get("lead") for keys in (("replies",), ("cost", "replies"))]
+        self.assertEqual(leads, ["on Day 16, the last Day counted: 1 of 4 judged is worse than its own average so far",
+                                 "on Day 16, the last Day counted: none of the 4 judged is worse than its own average so far"])
+        # and no row without the gel
+        none = model(data())
+        self.assertEqual(sorted(set(none) & {"yardsticks"}), ["yardsticks"])
+        self.assertIsNone(none["yardsticks"])
+
+    def test_a_closed_line_carries_the_counts_of_what_it_holds(self):
+        cases = [
+            [dict(kind="list", heads=["  What   the picture\n shows ", "x" * 90]), dict(kind="notes", heads=["Broken since Day 3"]),
+             dict(kind="table", title="Exact numbers · 12 rows: by Day", rows=12), dict(kind="table", title="How to read it", rows=0),
+             dict(kind="old"), dict(kind="svg", heads=["not read"])],
+            [dict(kind="table", title=f"T{n}", rows=0) for n in range(1, 10)],
+        ]
+        out = node(UNDER_LINE, cases)
+        self.assertIsNotNone(out, "dashboard.js has no underLine")
+        want = [["What the picture shows", "x" * 71 + "…", "Broken since Day 3", "Exact numbers (12 rows)", "How to read it", "As it was"],
+                [f"T{n}" for n in range(1, 7)] + ["and 3 more"]]
+        self.assertEqual([sum(s not in got for s in w) for got, w in zip(out, want)], [0] * len(want))
+        self.assertEqual(out, want)
+
+    def test_a_closed_line_keeps_each_lists_count_and_the_old_graph_last(self):
+        long = "A name for a list that runs on and on, well past the cut of the line, and further"
+        cases = [
+            [dict(kind="list", heads=["Stops grouped by suspect window · 13 groups, first seen at 11 merges", f"{long} · 2", "Doubtful citations · 5 groups"]),
+             dict(kind="table", title="Where it stopped: by Day", rows=0), dict(kind="table", title="  ", rows=3)],
+            [dict(kind="list", heads=[f"h{n}" for n in range(1, 11)]), dict(kind="old")],
+            # graph 6's two headings that differ only at their end stay apart
+            [dict(kind="list", heads=[f"{h} · {n}" for h, n in zip(("Not holding when last run, since replaced by one not shown to hold", "Not holding when last run, since replaced by one that holds"), (0, 5))])],
+        ]
+        out = node(UNDER_LINE, cases)
+        self.assertIsNotNone(out, "dashboard.js has no underLine")
+        want = [["Stops grouped by suspect window · 13 groups", f"{long[:71]}… · 2", "Doubtful citations · 5 groups", "Where it stopped"],
+                [f"h{n}" for n in range(1, 7)] + ["and 4 more", "As it was"],
+                [f"{h} · {n}" for h, n in zip(("Not holding when last run, since replaced by one not shown to hold", "Not holding when last run, since replaced by one that holds"), (0, 5))]]
+        # how many strings of each line are missing first, so that a failure stays short; then all of them, in order
+        self.assertEqual([sum(s not in got for s in w) for got, w in zip(out, want)], [0] * len(want))
+        self.assertEqual(out, want)
+
+    def test_a_fold_is_read_as_its_lists_notes_tables_and_old_graph(self):
+        el = lambda tag, *kids, cls=(), text="", post="": dict(tag=tag, cls=list(cls), kids=list(kids), text=text, post=post)  # noqa: E731
+        fold = el("details",
+                  el("summary", el("b", text="Under the picture")),
+                  el("div", el("h3", text="Broken · 2"), el("p", text="not a head"), el("h4", text="Older"), cls=["find"]),
+                  el("div", el("p", el("b", text="Doubtful citations"), post=" 5 groups, first seen at Day 3"), el("p", text="no lead"), cls=["notes"]),
+                  el("details", el("summary", text="Exact numbers"),
+                     el("table", el("tr", el("th", text="Day")), el("tr", el("td", text="1")), el("tr", el("td", text="2"))), cls=["exact"]),
+                  el("div", el("details", el("summary", text="Graph 1 as it was")), cls=["mock-fold"]),
+                  cls=["under"])
+        out = node(FOLD_ITEMS, fold)
+        self.assertIsNotNone(out, "dashboard.js has no foldItems")
+        # the kinds and row counts first, so that a wrong count fails short
+        self.assertEqual([(it.get("kind"), it.get("rows")) for it in out], [("list", None), ("notes", None), ("table", 2), ("old", None)])
+        self.assertEqual(out, [dict(kind="list", heads=["Broken · 2", "Older"]), dict(kind="notes", heads=["Doubtful citations 5 groups"]),
+                               dict(kind="table", title="Exact numbers", rows=2), dict(kind="old")])
+
+    def test_a_link_opens_the_page_that_holds_its_target(self):
+        back = ["a-b", "gel"]
+        hashes = ["back", "front", "gel", "rdg", "", "a%2Db", "#gel", "a%"]
+        self.assertEqual(node(VIEW_FOR, [[x, back] for x in hashes]), ["back", "front", "back", "front", None, "back", "back", "front"])
+
 
 def texts(t):
     """Every string a drawn node holds, its own text and its children's, in order."""
@@ -1003,6 +1135,12 @@ class BootTest(unittest.TestCase):
         self.assertEqual((out["error"], out["logged"]), (None, []))
         self.assertEqual(out["eyebrow"], "toy · read from git and GitHub on 3 Jan 2026 at 09:30 · commit abcdef1")
         self.assertTrue(out["banner"]["hidden"])
+
+    def test_the_yardstick_row_shows_on_a_day_nothing_needs_attention(self):
+        # no needs_attention: the section shows for the row alone, its folded list stays hidden
+        out = boot(data(gel=ModelTest.GEL))
+        self.assertEqual((out["error"], out["attention"]["hidden"], out["attentionAll"] and out["attentionAll"]["hidden"], out["sticks"] and out["sticks"]["hidden"]),
+                         (None, False, True, False))
 
     def test_the_page_names_no_repository_of_its_own(self):
         # a link to the repository is made from the data's meta.repo_url, so the page built from demo data names none
@@ -1096,7 +1234,7 @@ class ThemeTest(unittest.TestCase):
 # budget, the growth rings, the reflex arcs and the ring stand alone (GONE_IDS, GONE_KEYS, which list everything that left).
 CARDS = (1, 2, 6, 7, 10)
 FOLDED = (6, 1, 2, 7, 10)
-FOLDS = ["g1-fold", "g2-fold", "g6-fold", "g7-fold", "g10-fold"]
+FOLDS = ["g1-fold", "g7-fold", "g6-fold", "g2-fold", "g10-fold"]  # in the page's order, front page first
 GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist", "g11-fold", "g11", "g11-plot", "g11-table", "cel",
             "cel-fig", "how-fold", "how-this-works")
 GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how")
@@ -1372,7 +1510,8 @@ class CostAndRingsPageTest(unittest.TestCase):
         self.assertEqual(node(ATP_RNG, demo_data())["fold"], [True, True])
         script = read("dashboard.js")
         self.assertIn('addEventListener("hashchange", go)', script)
-        self.assertIn("foldLinks();", script[script.index("function draw(M, DATA)"):])
+        # given the switch between the two pages, so that a link first turns to the page that holds its target
+        self.assertRegex(script[script.index("function draw(M, DATA)"):], r"foldLinks\(\w+\);")
 
 
 # actDraw() on the model of the data from stdin, on a document that keeps every node it is given and the listeners
@@ -1531,7 +1670,7 @@ class ActogramPageTest(unittest.TestCase):
 
     def test_the_key_names_what_each_lane_draws_and_nothing_is_left_of_the_old_strip(self):
         html = read("index.html")
-        section = html[html.index('<section class="graph" id="act">'):html.index('<section class="graph mock-fold" id="g10-fold">')]
+        section = html[html.index('<section class="graph" id="act">'):html.index('<div class="mock-fold" id="g10-fold">')]
         key = section[section.index('<div class="act-key">'):section.index('<div class="act-scroll"')]
         self.assertIn('<span class="act-lead">In each row, top to bottom:</span>', key)
         for cls in ("act-s", "act-w", "act-two", "act-k-spec", "act-k-code", "act-k-close", "act-k-other", "act-ok", "act-failed", "act-m", "act-unc", "act-cnt"):
@@ -2099,6 +2238,38 @@ class RewritesPageTest(unittest.TestCase):
         self.assertEqual((out["error"], [e for e in out["logged"] if e.startswith("rew:")]), (None, []))
 
 
+VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
+def page_tree():
+    """index.html's elements by id: each a dict of its tag, attributes, children (elements and text) and parent."""
+    ids, at = {}, [dict(tag=None, attrs={}, kids=[], up=None)]
+
+    class Tree(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            e = dict(tag=tag, attrs=dict(attrs), kids=[], up=at[-1])
+            at[-1]["kids"].append(e)
+            if e["attrs"].get("id"):
+                ids[e["attrs"]["id"]] = e
+            if tag not in VOID:
+                at.append(e)
+
+        def handle_endtag(self, tag):
+            while len(at) > 1 and at.pop()["tag"] != tag:
+                pass
+
+        def handle_data(self, data):
+            at[-1].setdefault("text", []).append(data)
+
+    Tree().feed(read("index.html"))
+    return ids
+
+
+def text_of(e):
+    """The text inside an element, whitespace collapsed."""
+    return " ".join(" ".join((e.get("text") or []) + [text_of(k) for k in e.get("kids", [])]).split())
+
+
 class PageFilesTest(unittest.TestCase):
     """What index.html, dashboard.css and dashboard.js must hold, read as text."""
 
@@ -2157,7 +2328,9 @@ class PageFilesTest(unittest.TestCase):
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
         for n in FOLDED:
-            fold = re.search(rf'<section class="graph mock-fold" id="g{n}-fold">\s*<details class="exact">.*?</section>', html, re.S)
+            # each old card is a plain block, last in its graph's closed line: its own fold closes it
+            fold = re.search(rf'<div class="mock-fold" id="g{n}-fold">\s*<details class="exact">.*?\n    </details>\n  </div>', html, re.S)
+            self.assertIsNotNone(fold, f"graph {n}'s card")
             for part in ("plot", "read", "table"):
                 self.assertIn(f'id="g{n}-{part}"', fold.group(0), f"graph {n}'s {part} is in its fold")
         # and drawn there, on the example data, as before it was folded
@@ -2191,32 +2364,76 @@ class PageFilesTest(unittest.TestCase):
         text = re.sub(r"<[^>]+>", " ", page)
         self.assertEqual(re.findall(r"\b(?:a|an|each|one|the|any|every|later|next|earlier) days?\b", text), [])
 
-    def test_the_graphs_sit_in_order_under_five_group_headings(self):
+    # The front page, chapter by chapter: each graph's section and where its old card is folded (g1, g7, g6).
+    FRONT = {"rdg": 0, "g1": 0, "lrn": 0, "prf": 1, "g7": 1, "fil": 1, "prt": 2, "g3": 2, "gene": 2, "mrg": 2, "g6": 2, "rfx": 3, "atp": 4, "g8": 4}
+    FRONT_HEADS = ["Where is it going?", "What happens inside a Day?", "What can it do, and can it be trusted?", "Can it be left alone?",
+                   "What does it take?"]
+    BACK = {"gel": 0, "g2": 0, "g12": 1, "rng": 2, "g9": 2, "act": 2, "g10": 2}
+    BACK_HEADS = ["Is it on the plan's yardsticks?", "Do the specs follow the plan?", "Where did the work and the time go?"]
+
+    def chapters(self, part, heads, ids):
+        """{id: the index of the chapter it sits under} in `part`, -1 for an id not in it."""
+        starts = [part.find(f'<h2 class="chapter">{h}<small>') for h in heads]
+        at = {n: (m.start() if (m := re.search(f'id="{n}"[ >]', part)) else -1) for n in ids}
+        return {n: max((i for i, s in enumerate(starts) if -1 < s < a), default=-1) for n, a in at.items()}
+
+    def test_the_front_page_holds_its_graphs_in_order_under_five_chapters(self):
         html = read("index.html")
-        self.assertEqual(re.findall(r'<section class="graph" id="(g\d+|mrg|rdg|gel|prt|prf|lrn|atp|rng|act|rfx)"[ >]', html),
-                         ["rdg", "gel", "prt", "g12", "mrg", "prf", "lrn", "atp", "rng", "act", "rfx"])
-        heads = ["Where is it going?", "What can it do, and can it be trusted?", "Is the way of working sound?", "What does it take?",
-                 "Can it be left alone?"]
-        self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', html), heads)
-        starts = [html.index(f'<h2 class="chapter">{h}<small>') for h in heads]
-        group = {"rdg": 0, "g1": 0, "gel": 0, "g2": 0, "prt": 1, "g3": 1, "g12": 2, "mrg": 2, "g6": 2, "prf": 2, "g7": 2, "lrn": 2, "atp": 3, "g8": 3, "rng": 3, "g9": 3, "act": 3, "g10": 3,
-                 "rfx": 4}
-        for n, g in group.items():
-            at = re.search(f'id="{n}"[ >]', html).start()
-            self.assertEqual(max(i for i, s in enumerate(starts) if s < at), g, n)
-        self.assertLess(html.index('id="mrg">'), html.index('id="g6-fold">'))
-        self.assertLess(html.index('id="g6-fold">'), html.index('id="prf">'))
-        self.assertLess(html.index('id="prf">'), html.index('id="g7-fold">'))
-        self.assertLess(html.index('id="g7-fold">'), html.index('id="lrn">'))
-        self.assertLess(html.index('id="lrn">'), html.index('id="atp" '))
-        self.assertLess(html.index('id="atp" '), html.index('id="rng">'))
-        self.assertLess(html.index('id="rng">'), html.index('id="act">'))
-        self.assertLess(html.index('id="act">'), html.index('id="g10-fold">'))
-        self.assertLess(html.index('id="rdg">'), html.index('id="g1-fold">'))
-        self.assertLess(html.index('id="g1-fold">'), html.index('id="gel">'))
-        self.assertLess(html.index('id="gel">'), html.index('id="g2-fold">'))
+        self.assertEqual(re.findall(r'<div class="view" id="(v-front|v-back)"', html), ["v-front", "v-back"])
+        front = html[html.index('<div class="view" id="v-front"'):html.index('<div class="view" id="v-back"')]
+        self.assertEqual(re.findall(r'<section class="graph(?: foot)?" id="([\w-]+)"[ >]', front),
+                         ["rdg", "lrn", "prf", "fil", "prt", "gene", "mrg", "rfx", "atp", "cannot-see"])
+        self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', front), self.FRONT_HEADS)
+        self.assertEqual(self.chapters(front, self.FRONT_HEADS, self.FRONT), self.FRONT)
+        self.assertLess(front.index('id="atp"'), front.find('<div class="to-back">'))
+        self.assertLess(front.find('<div class="to-back">'), front.index('id="cannot-see"'))
         for part in ("say", "ladder", "key", "plot", "read", "table"):
-            self.assertIn(f'id="g1-{part}"', html)
+            self.assertIn(f'id="g1-{part}"', front)
+
+    def test_the_back_page_holds_graphs_2_12_9_and_10_and_opens_on_a_button(self):
+        html = read("index.html")
+        self.assertEqual(re.findall(r'<div class="view" id="v-back" hidden>', html), ['<div class="view" id="v-back" hidden>'])
+        back = html[html.index('<div class="view" id="v-back" hidden>'):html.index("<footer>")]
+        self.assertEqual(re.findall(r'<section class="graph[^"]*" id="([\w-]+)"', back), ["gel", "g12", "rng", "act"])
+        self.assertEqual(re.findall(r'<h2 class="chapter">([^<]*)<small>', back), self.BACK_HEADS)
+        self.assertEqual(self.chapters(back, self.BACK_HEADS, self.BACK), self.BACK)
+        # the switch in the header, and the way to the back page from the foot of the front one
+        header = html[html.index("<header"):html.index("</header>")]
+        self.assertEqual(re.findall(r'<button type="button" data-view="(\w+)" aria-pressed="(\w+)">', header), [("front", "true"), ("back", "false")])
+        self.assertIn('<small id="back-n"></small>', header)
+        to_back = re.findall(r'<div class="to-back">\s*<p>(\w+) more graphs[^<]*</p>\s*<button type="button" data-view="back">', html)
+        self.assertEqual((to_back, len(re.findall(r'<section class="graph"', back))), (["Four"], 4))
+
+    # Each picture's container, and the lead of its closed line where it is not "Under the picture".
+    UNDER = ("rdg", "lrn", "prf-all", "one", "fil", "prt", "gene", "mrg-all", "rew", "rfx", "atp", "gel", "g12", "rng", "act")
+    UNDER_LEAD = {"one": "Under this Day's picture", "rew": "Under the rewrites"}
+    OLD_CARDS = {"g1-fold": "rdg-under", "g2-fold": "gel-under", "g6-fold": "mrg-all-under", "g7-fold": "prf-all-under", "g10-fold": "act-under"}
+
+    def test_every_picture_has_one_closed_line_after_it(self):
+        ids = page_tree()
+        self.assertEqual([c for c in self.UNDER if c not in ids], [])
+        cls = lambda e: e["attrs"].get("class", "").split()  # noqa: E731
+        picture = lambda e: re.search(r"-(scroll|plot)$|^one-strand$", e["attrs"].get("id", "")) or {"pc-fig", "readout", "duo"} & set(cls(e))  # noqa: E731
+        moves = lambda e: (e["tag"] == "details" and "under" not in cls(e)) or (e["tag"] == "p" and {"hint", "rng-hint", "act-hint", "ci"} & set(cls(e))) \
+            or (e["tag"] == "div" and {"find", "notes"} & set(cls(e)))  # noqa: E731
+        for c in self.UNDER:
+            kids = ids[c]["kids"]
+            unders = [i for i, e in enumerate(kids) if e["tag"] == "details" and "under" in cls(e)]
+            self.assertEqual((c, len(unders)), (c, 1))
+            fold = kids[unders[0]]
+            self.assertEqual((fold["attrs"].get("id"), "open" in fold["attrs"]), (f"{c}-under", False))
+            summary = fold["kids"][0] if fold["kids"] else {}
+            self.assertEqual((summary.get("tag"), [e["attrs"].get("id") for e in summary.get("kids", []) if "under-n" in cls(e)]), ("summary", [f"{c}-under-n"]), c)
+            self.assertEqual(text_of(summary.get("kids", [{}])[0]), self.UNDER_LEAD.get(c, "Under the picture"), c)
+            pictures = [i for i, e in enumerate(kids) if picture(e)]
+            self.assertEqual((c, bool(pictures) and max(pictures) < unders[0]), (c, True))
+            self.assertEqual([(c, e["tag"], e["attrs"].get("class", "")) for e in kids if moves(e)][:1], [])
+        # the five old cards, each last in its graph's fold
+        for card, fold in self.OLD_CARDS.items():
+            e = ids.get(card, dict(tag=None, attrs={}, up=None))
+            self.assertEqual((card, e["tag"], cls(e), e["up"] is not None and e["up"]["attrs"].get("id"), e["up"] is not None and e["up"]["kids"][-1] is e),
+                             (card, "div", ["mock-fold"], fold, True))
+        self.assertNotIn('<section class="graph mock-fold"', read("index.html"))
 
     def test_the_build_inlines_one_stylesheet_and_one_script_and_fills_one_data_line(self):
         page = sd.build(json.dumps(dict(now=dict(next_step="x"))))
@@ -2253,7 +2470,7 @@ class PageFilesTest(unittest.TestCase):
         self.assertEqual(colours(by_os), colours(by_choice))
 
     def test_graph_10_says_in_one_sentence_that_a_date_runs_from_05_00_to_05_00(self):
-        section = re.search(r'<section class="graph mock-fold" id="g10-fold">.*?</section>', read("index.html"), re.S).group(0)
+        section = re.search(r'<div class="mock-fold" id="g10-fold">.*?</section>', read("index.html"), re.S).group(0)
         self.assertIn("A date runs from 05:00 to 05:00, so work after midnight stays on the evening it belongs to.", section)
 
     def test_needs_attention_is_a_section_in_the_header_folded_until_it_is_opened(self):

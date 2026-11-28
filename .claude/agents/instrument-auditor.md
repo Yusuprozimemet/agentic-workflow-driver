@@ -50,14 +50,24 @@ NL = "String.fromCharCode(10)"  # no backslash anywhere in the JavaScript: nothi
 TEXT = f"e => e.innerText.split({NL}).filter(l => l.trim()).join({NL}).slice(0, 3000)"
 CLOSE = "() => document.querySelectorAll('section.graph details').forEach(x => { x.open = false; })"
 GRAPHS = ["g1", "g2", "g3", "g12", "g6", "g7", "g8", "g9", "g10"]
+GO = "p => { location.hash = p; }"  # the front page or the back one, as a link turns to it
+TO_PAGE = "e => { const b = e.closest('#v-back'); location.hash = b ? 'back' : 'front'; }"
 
 out = sys.argv[1]
 views = []
 
 
+def to_page(page, el):
+    """Turn to the page that holds el: a view on the back page is hidden on the front one."""
+    if el:
+        page.evaluate(TO_PAGE, el)
+        page.wait_for_timeout(400)
+
+
 def shot(page, sel, name, note=""):
     """One view: its picture, cut into pieces 1400 px high (name.png, name-2.png, ...), and its text."""
     el = page.query_selector(sel)
+    to_page(page, el)
     if not el or not el.is_visible():
         views.append(f"{name}: NOT FOUND ({sel})")
         return
@@ -81,6 +91,7 @@ def shot(page, sel, name, note=""):
 
 
 def click(page, btn, wait=600):
+    to_page(page, btn)
     btn.scroll_into_view_if_needed()
     btn.click()
     page.wait_for_timeout(wait)
@@ -102,6 +113,18 @@ with sync_playwright() as p:
             full_page=True,
             clip={"x": 0, "y": y, "width": 1400, "height": min(1000, h - y)},
         )
+    # The back page, in the same slices: its own height, read once it shows.
+    page.evaluate(GO, "back")
+    page.wait_for_timeout(1000)
+    hb = page.evaluate("document.documentElement.scrollHeight")
+    for n, y in enumerate(range(0, hb, 1000)):
+        page.screenshot(
+            path=f"{out}/back-{n:02d}.png",
+            full_page=True,
+            clip={"x": 0, "y": y, "width": 1400, "height": min(1000, hb - y)},
+        )
+    page.evaluate(GO, "front")
+    page.wait_for_timeout(400)
 
     # Each graph with its own sections closed; the Day bar stops sticking so it covers no view.
     page.evaluate(
@@ -175,12 +198,19 @@ with sync_playwright() as p:
     page.evaluate(OPEN_ALL)
     page.wait_for_timeout(500)
 
-    for n, el in enumerate(page.query_selector_all(".scroll-x")):
-        w = el.evaluate("e => e.scrollWidth > e.clientWidth + 2 ? e.scrollWidth : 0")
-        if w:
-            el.evaluate(UNSCROLL)
-            el.screenshot(path=f"{out}/wide-{n:02d}.png")
-            print(f"wide-{n:02d}.png", w, "px")
+    # The wide boxes, a page at a time: a box on the page not shown has no width.
+    for pg in ("front", "back"):
+        page.evaluate(GO, pg)
+        page.wait_for_timeout(400)
+        for n, el in enumerate(page.query_selector_all(".scroll-x")):
+            if not el.is_visible():
+                continue
+            w = el.evaluate("e => e.scrollWidth > e.clientWidth + 2 ? e.scrollWidth : 0")
+            if w:
+                el.evaluate(UNSCROLL)
+                el.screenshot(path=f"{out}/wide-{n:02d}.png")
+                print(f"wide-{n:02d}.png", w, "px")
+    page.evaluate(GO, "front")
     with open(f"{out}/views.txt", "w", encoding="utf-8") as f:
         f.write("\n\n".join(views))
     print(
@@ -232,6 +262,8 @@ a box that is cut off or overlaps is a finding.
 | 20 | Where does each file belong? (the file map), with its two closed sections | `page-NN` |
 | 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |
 | 22 | Graph 6, Promises rewritten: the ring of Days, each replaced promise joined to what replaced it | `g6-rewrites` |
+| 23 | The plan's yardsticks, the row under Needs attention | `attention` |
+| 24 | The back page: its switch and its four graphs | `back-NN` |
 
 For each view, read its picture and its text in `views.txt`, then write four lines:
 
