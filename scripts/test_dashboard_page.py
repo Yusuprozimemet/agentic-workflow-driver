@@ -971,6 +971,8 @@ class ModelTest(unittest.TestCase):
         self.assertEqual((Y.get("day"), Y.get("judged"), G["judged"]), (16, 4, 4))
         self.assertEqual(Y.get("worse"), ["Cost of each merged pull request", "Replies for each merged pull request"])
         self.assertEqual(Y.get("lead"), "on Day 16, the last Day counted: 2 of 4 judged are worse than their own average so far")
+        # each chip's judgement first, so that a wrong one fails short; then every field
+        self.assertEqual([c.get("cls") for c in Y.get("chips") or []], ["bad", "bad", "", "none", ""])
         self.assertEqual(Y.get("chips"), [
             dict(key="cost", name="Cost of each merged pull request", value="$10.77", word="worse than its average $2.67", cls="bad",
                  title="Cost of each merged pull request, main sessions. The kit's figure: $1.86"),
@@ -1035,6 +1037,8 @@ class ModelTest(unittest.TestCase):
                   cls=["under"])
         out = node(FOLD_ITEMS, fold)
         self.assertIsNotNone(out, "dashboard.js has no foldItems")
+        # the kinds and row counts first, so that a wrong count fails short
+        self.assertEqual([(it.get("kind"), it.get("rows")) for it in out], [("list", None), ("notes", None), ("table", 2), ("old", None)])
         self.assertEqual(out, [dict(kind="list", heads=["Broken · 2", "Older"]), dict(kind="notes", heads=["Doubtful citations 5 groups"]),
                                dict(kind="table", title="Exact numbers", rows=2), dict(kind="old")])
 
