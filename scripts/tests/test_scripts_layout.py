@@ -60,7 +60,10 @@ def pipeline_modules():
     found = {}
     for folder in sorted(os.listdir(PIPELINE)) if os.path.isdir(PIPELINE) else ():
         if os.path.isdir(os.path.join(PIPELINE, folder)) and not folder.startswith("__"):
-            found.update({n: folder for n in os.listdir(os.path.join(PIPELINE, folder)) if n.endswith(".py")})
+            for name in sorted(n for n in os.listdir(os.path.join(PIPELINE, folder)) if n.endswith(".py")):
+                # pipeline.path() takes the first folder that holds a name: a second copy would be read by no one
+                assert name not in found, f"{name} is in {found[name]}/ and in {folder}/"
+                found[name] = folder
     return found
 
 

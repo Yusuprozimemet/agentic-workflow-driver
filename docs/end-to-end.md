@@ -232,6 +232,7 @@ flowchart LR
 
 Drawn on 27 November 2026 from the workflows, `.claude/settings.json`, `scripts/publish-counts.py`,
 the `spec_drift_*.py` modules, `plan.md` and the driver's modules, at `273fd18`. The modules have
-moved since, with nothing in the picture changed: stage 4's readers, metrics, views and page are
-`scripts/pipeline/` (`sources/`, `counts/`, `build/`; [`scripts/README.md`](../scripts/README.md)
-says what each one does), and the tests of stage 8 are in `scripts/tests/`.
+moved since: stage 4's readers, metrics, views and page are in `scripts/pipeline/` (`sources/`,
+`counts/`, `build/`; [`scripts/README.md`](../scripts/README.md) says what each one does), and all
+but three of the scripts' tests are in `scripts/tests/`. The folders sort two modules otherwise
+than stage 4's boxes do: the plan graph and the file map, drawn among the views, sit in `sources/`.

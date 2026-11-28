@@ -1,4 +1,4 @@
-"""The quality score's recipe (scripts/spec_drift_score.py) on small made-up data."""
+"""The quality score's recipe (scripts/pipeline/counts/spec_drift_score.py) on small made-up data."""
 
 import os
 import sys

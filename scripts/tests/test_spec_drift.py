@@ -517,7 +517,7 @@ class SpecDriftTest(unittest.TestCase):
         self.assertEqual((p["commit"], p["script_edited"]), (None, True))
 
     def test_an_edit_to_a_module_of_the_script_is_the_script_edited(self):
-        # The script is split into modules beside it: an edit to one of them is an edit to it.
+        # The script is split into modules in scripts/pipeline/: an edit to one of them is an edit to it.
         repo = Repo().merge({name: "" for name in sd.SOURCES})
         self.addCleanup(repo.close)
         self.addCleanup(setattr, sd, "__file__", sd.__file__)
