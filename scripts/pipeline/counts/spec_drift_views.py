@@ -70,3 +70,6 @@ from spec_drift_view_one_day import (  # noqa: F401
 from spec_drift_view_rewrites import (  # noqa: F401
     _rewrites_line, rewrites, rewrites_line,
 )
+from spec_drift_view_cell import (  # noqa: F401
+    CELL_AGENTS, CELL_FOUND, FIX_AT, FIX_STATIONS, cell_cards, fix_stations, cell,
+)

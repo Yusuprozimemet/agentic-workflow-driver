@@ -13,7 +13,7 @@ import pipeline  # noqa: E402,F401  (importing it puts the pipeline's folders on
 from spec_drift_metrics import defect_counts, never_found  # noqa: E402
 from spec_drift_score import quality_score  # noqa: E402
 from spec_drift_views import (actogram, budget, criterion_states, gel, gene, learning, merge_graph, needs_attention,  # noqa: E402
-                              one_day, proofreading, protein, reading, reflex, rewrites, rings, where_ring)
+                              one_day, proofreading, protein, reading, reflex, rewrites, rings, where_ring, cell)
 
 PROJECT = "sample-shop"
 PHASES = ["Catalogue", "Checkout", "Shipping"]
@@ -537,6 +537,8 @@ def demo():
         dict(pr=119, title="Made-up fix: a break's find checked before it runs", merged=merged[119], stops=["D4.1"])])
     out["learning"] = learning(out)
     out["one_day"] = one_day(out)
+    # no case set, so no challenge test; the two fixes at a check of their own
+    out["cell"] = cell(out, {}, json.dumps(dict(stations={"103": "sa", "119": "test"})))
     out["rewrites"] = rewrites(out)
     out["needs_attention"] = needs_attention(out)
     return out

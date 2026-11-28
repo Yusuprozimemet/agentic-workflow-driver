@@ -1,0 +1,4 @@
+{
+  "what": "The check each fix of specs/fixes.json is drawn beside in the cell on the dashboard's front page, chosen by hand from what the fix changed: sa the spec-auditor, test a test that fails first, chap the track-reviewer, ko the review and the planted bug, spec the Day's spec, ci CI's checks and the driver's reviewer.",
+  "stations": {"112": "sa", "133": "test", "189": "ko", "231": "spec", "232": "ci", "245": "test", "246": "chap", "247": "sa", "314": "ci"}
+}

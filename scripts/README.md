@@ -31,6 +31,7 @@ record runs by this module name (C14.9).
 | `pipeline/counts/spec_drift_views.py` | spec-drift.py's newer views, by one name: it imports each from its own module below, which writes its own key of spec-drift.json. |
 | `pipeline/counts/spec_drift_view_actogram.py` | Graph 10: the clock as an actogram, a lane per actor (`actogram`). |
 | `pipeline/counts/spec_drift_view_budget.py` | Graph 8: the dollars as an energy budget (`budget`). |
+| `pipeline/counts/spec_drift_view_cell.py` | The cell: each checking agent's challenge test, and the check each fix is drawn beside (`cell`). |
 | `pipeline/counts/spec_drift_view_common.py` | Helpers more than one view uses: the replay's groups, a Day's state, rounding, plain words, times. |
 | `pipeline/counts/spec_drift_view_criterion_states.py` | Each criterion's state, worked out once for every view and the page (`criteria_index[].state`). |
 | `pipeline/counts/spec_drift_view_gel.py` | Graph 2: the yardsticks drawn as a gel (`gel`). |

@@ -9,6 +9,7 @@
       "spec_drift_view_where_ring"
     ],
     "drawn_by": [
+      "cellGraph",
       "model"
     ],
     "graph": "the header and Where we are"
@@ -102,8 +103,10 @@
     "read_by": [
       "spec_drift_view_merge_graph"
     ],
-    "drawn_by": [],
-    "graph": "not drawn: the views read it"
+    "drawn_by": [
+      "cellGraph"
+    ],
+    "graph": "not drawn: the views read it, and the cell lists the hand-offs addressed to its Day"
   },
   "look_ahead": {
     "what": "How far to the next stop: the hand-off ledger and what is pending.",
@@ -162,6 +165,7 @@
     "what": "Defects of a kind seen again on a later Day.",
     "made_by": "spec_drift_metrics:recurrence",
     "read_by": [
+      "spec_drift_view_cell",
       "spec_drift_view_learning",
       "spec_drift_view_proofreading"
     ],
@@ -224,9 +228,11 @@
   "defect_counts": {
     "what": "The Defect lines counted by Day and by tag.",
     "made_by": "spec_drift_metrics:defect_counts",
-    "read_by": [],
+    "read_by": [
+      "spec_drift_view_cell"
+    ],
     "drawn_by": [],
-    "graph": "not drawn; no view reads it"
+    "graph": "not drawn: the cell's view reads the rater's agreement"
   },
   "never_found": {
     "what": "The known faults each checking agent's cases name that it never found.",
@@ -258,8 +264,10 @@
       "spec_drift_view_budget",
       "spec_drift_view_one_day"
     ],
-    "drawn_by": [],
-    "graph": "not drawn: the views read it (Graphs 7 and 8)"
+    "drawn_by": [
+      "cellGraph"
+    ],
+    "graph": "not drawn: the views read it (Graphs 7 and 8), and the cell its heat and the Day of each date"
   },
   "refusals": {
     "what": "The guards' refusals, from the dashboard-data branch.",
@@ -269,6 +277,7 @@
       "spec_drift_view_proofreading"
     ],
     "drawn_by": [
+      "cellGraph",
       "sieveGraph"
     ],
     "graph": "the old graph 7"
@@ -404,6 +413,7 @@
     ],
     "drawn_by": [
       "attention",
+      "cellGraph",
       "head",
       "model"
     ],
@@ -473,6 +483,7 @@
       "spec_drift_view_needs_attention"
     ],
     "drawn_by": [
+      "cellGraph",
       "prtGraph"
     ],
     "graph": "Graphs 3 to 5"
@@ -527,8 +538,11 @@
   "learning": {
     "what": "Repeats per Day and each fix's before and after.",
     "made_by": "spec_drift_view_learning:learning",
-    "read_by": [],
+    "read_by": [
+      "spec_drift_view_cell"
+    ],
     "drawn_by": [
+      "cellGraph",
       "lrnGraph"
     ],
     "graph": "Graph 13"
@@ -536,8 +550,11 @@
   "one_day": {
     "what": "One Day step by step, each defect at the step it was caught.",
     "made_by": "spec_drift_view_one_day:one_day",
-    "read_by": [],
+    "read_by": [
+      "spec_drift_view_cell"
+    ],
     "drawn_by": [
+      "cellGraph",
       "oneGraph"
     ],
     "graph": "Graph 7's One Day ring"
@@ -547,9 +564,19 @@
     "made_by": "spec_drift_view_rewrites:rewrites",
     "read_by": [],
     "drawn_by": [
+      "cellGraph",
       "rewGraph"
     ],
     "graph": "Graph 6's rewrites frame"
+  },
+  "cell": {
+    "what": "Each checking agent's challenge test from its case set, and the check each fix is drawn beside.",
+    "made_by": "spec_drift_view_cell:cell",
+    "read_by": [],
+    "drawn_by": [
+      "cellGraph"
+    ],
+    "graph": "The cell"
   },
   "needs_attention": {
     "what": "What needs attention, by one rule.",
@@ -567,6 +594,7 @@
       "spec_drift_page"
     ],
     "drawn_by": [
+      "cellGraph",
       "draw"
     ],
     "graph": "the file map"
