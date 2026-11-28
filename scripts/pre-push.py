@@ -38,7 +38,8 @@ REPEAT = 5  # under load D12.36 failed 3 of 5 and D12.39 4 of 10
 SECTIONS = ("## User story", "## What I built", "## Why this approach", "## Contract impact", "## How to run",
             "## Self-check")
 # spec-drift-tests.yml runs the scripts' tests only when the change touches one of these.
-DRIFT_PATHS = re.compile(r"^(scripts/(tests/|pipeline/([^/]+/)?)?[^/]+\.py$|scripts/README\.md$|\.claude/agents/.*\.md$|"
+DRIFT_PATHS = re.compile(r"^(scripts/(tests/|pipeline/([^/]+/)?)?[^/]+\.py$|scripts/README\.md$|scripts/pipeline/contract\.json$|"
+                         r"\.claude/agents/.*\.md$|"
                          r"\.claude/settings\.json$|"
                          r"spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|"
                          r"kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)")

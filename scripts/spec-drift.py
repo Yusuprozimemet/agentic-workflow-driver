@@ -116,7 +116,24 @@ SOURCES = ("spec-drift.py", "pipeline/sources/spec_drift_common.py", "pipeline/s
            "pipeline/sources/spec_drift_data.py", "pipeline/counts/spec_drift_metrics.py",
            "pipeline/build/spec_drift_page.py", "pipeline/sources/spec_drift_plan.py",
            "pipeline/counts/spec_drift_score.py", "pipeline/sources/spec_drift_files.py",
-           "pipeline/counts/spec_drift_views.py")
+           "pipeline/counts/spec_drift_views.py",
+           "pipeline/counts/spec_drift_view_actogram.py",
+           "pipeline/counts/spec_drift_view_budget.py",
+           "pipeline/counts/spec_drift_view_common.py",
+           "pipeline/counts/spec_drift_view_criterion_states.py",
+           "pipeline/counts/spec_drift_view_gel.py",
+           "pipeline/counts/spec_drift_view_gene.py",
+           "pipeline/counts/spec_drift_view_learning.py",
+           "pipeline/counts/spec_drift_view_merge_graph.py",
+           "pipeline/counts/spec_drift_view_needs_attention.py",
+           "pipeline/counts/spec_drift_view_one_day.py",
+           "pipeline/counts/spec_drift_view_proofreading.py",
+           "pipeline/counts/spec_drift_view_protein.py",
+           "pipeline/counts/spec_drift_view_reading.py",
+           "pipeline/counts/spec_drift_view_reflex.py",
+           "pipeline/counts/spec_drift_view_rewrites.py",
+           "pipeline/counts/spec_drift_view_rings.py",
+           "pipeline/counts/spec_drift_view_where_ring.py")
 # The files that make each part of the cache: a part starts over when one of its files changes
 # (load_cache), and an edit to any other file keeps it. "git" is git's own output for commits named
 # by SHA, as spec_drift_git.py reads it. "code" and "flags" are what spec_drift_metrics.py counts in

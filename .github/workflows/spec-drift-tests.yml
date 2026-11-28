@@ -34,7 +34,7 @@ jobs:
       - name: Compare with the base
         id: diff
         env:
-          PATHS: '^(scripts/(tests/|pipeline/([^/]+/)?)?[^/]+\.py$|scripts/README\.md$|\.claude/agents/.*\.md$|\.claude/settings\.json$|spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)'
+          PATHS: '^(scripts/(tests/|pipeline/([^/]+/)?)?[^/]+\.py$|scripts/README\.md$|scripts/pipeline/contract\.json$|\.claude/agents/.*\.md$|\.claude/settings\.json$|spec-drift\.config\.json$|docs/dashboard/(dashboard\.js|index\.html|dashboard\.css)$|kit/(compare-page\.py|page/.*)$|\.github/workflows/(spec-drift-tests|pr-checks)\.yml$)'
         run: |
           files=$(git diff --name-only HEAD^1 HEAD)
           if grep -qE "$PATHS" <<< "$files"; then run=true; else run=false; fi
