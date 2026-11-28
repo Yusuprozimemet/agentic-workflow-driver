@@ -263,7 +263,7 @@ Tick each box in the closing PR once its evidence is in it; under a box left unt
       included: `scripts/test_dashboard_page.py` and `tests/test_dashboard_files.py` pass.
       Plan: none — the dashboard's views are not commitments of `plan.md`.
       Evidence: `python scripts/test_dashboard_page.py` and `python -m unittest tests.test_dashboard_files` pass on `main` at `66782b6`, after both picker tracks (#268, #269); its break recorded in #262.
-      broken: the helper the file map links by removed with the picker → AssertionError: Tuples differ: ('howBlob is not defined', []) != (None, [])
+      broken: the helper the file map links by removed with the picker → AssertionError: 'howBlob is not defined' is not None
 - [x] C14.10 **new** — The trial ran at level 2. The test builds a temporary state folder from the
       copies (`run-14.jsonl` as `run.jsonl`, `switches-14.jsonl` as `switches.jsonl`,
       `refusals-14.jsonl` as `refusals/hooks.jsonl`; an empty `refusals-14.jsonl` when the hook log
