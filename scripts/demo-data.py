@@ -357,6 +357,12 @@ def driver_runs(rows, at):
         steps.append(dict(step=sentence, day=day, prefix=prefix.format(day), sessions=sessions, fixes=fixes,
                           crashes=sum(s["crashed"] for s in sessions), pr=pr, merged=p["merged"], parks=parked,
                           ended="parked" if parked else "open" if p["merged"] is None else "fixed" if fixes else "merged"))
+    # the driver's other two kinds of step, neither parked: its review of a track, one session that has opened
+    # nothing yet (its prefix is its session's, not its sentence's), and a step with no branch and no Day, which ran nothing
+    date = max(r["date"] for r in rows)
+    steps.append(dict(step=named["code"][0].format(6, DAYS[6]["work"]), day=6, prefix="review", sessions=[run(last["number"], 9, date, 16 * 60, 16 * 60 + 12)],
+                      fixes=0, crashes=0, pr=None, merged=None, parks=[], ended="open"))
+    steps.append(dict(step="Every day is done.", day=None, prefix=None, sessions=[], fixes=0, crashes=0, pr=None, merged=None, parks=[], ended="open"))
     return dict(source="docs/dashboard/driver-runs.json", counted=at, steps=steps, parks=parks)
 
 

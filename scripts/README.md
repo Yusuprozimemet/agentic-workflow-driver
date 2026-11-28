@@ -43,7 +43,7 @@ record runs by this module name (C14.9).
 | `pipeline/counts/spec_drift_view_proofreading.py` | Graph 7: the checking as error correction, gate by gate (`proofreading`). |
 | `pipeline/counts/spec_drift_view_protein.py` | Graphs 3 to 5: the abilities as proteins, each promise a cell on its chain (`protein`). |
 | `pipeline/counts/spec_drift_view_reading.py` | Graph 1: the plan being read, merge by merge (`reading`). |
-| `pipeline/counts/spec_drift_view_reflex.py` | Graph 11: the driver's steps as reflex arcs (`reflex`). |
+| `pipeline/counts/spec_drift_view_reflex.py` | Graph 11: the driver's steps, each replayed as a cell (`reflex`). |
 | `pipeline/counts/spec_drift_view_rewrites.py` | Graph 6's rewrites frame: replaced promises joined to what replaced them (`rewrites`). |
 | `pipeline/counts/spec_drift_view_rings.py` | Graph 9: the files as growth rings (`rings`). |
 | `pipeline/counts/spec_drift_view_where_ring.py` | Where we are: the plan as one turn of the cell cycle, a checkpoint at each stop (`where_ring`). |

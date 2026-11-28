@@ -277,7 +277,7 @@ a box that is cut off or overlaps is a finding.
 | 15 | Graph 8, By Day | `g8-byday` |
 | 16 | Graph 9: Where did the work go? | `g9`, `g9-exact` |
 | 17 | Graph 10: Where does a date's time go? The last three dates | `g10`, `g10-date-*`, `g10-exact` |
-| 18 | Graph 11: Can it run without a person? (the reflex arcs) | `page-NN` |
+| 18 | Graph 11: Can it run without a person? (each step replayed as a cell): the step it opens on, and a step picked in its row | `page-NN` |
 | 19 | What these figures cannot see; Not measured yet | `page-NN` |
 | 20 | Where does each file belong? (the file map), with its two closed sections | `back-NN` |
 | 21 | Graph 7, One Day: the Day its picker opens on, as rings and as the strand | `g7-one-ring`, `g7-one-strand` |

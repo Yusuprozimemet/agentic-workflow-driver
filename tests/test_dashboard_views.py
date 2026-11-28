@@ -3400,16 +3400,25 @@ class ReflexTest(unittest.TestCase):
             ],
         )
         self.assertEqual(r["tips"]["s2p0"]["t"], "Parked by a fault · 11 Nov 00:56 (UTC+1)")
+        # the replay says these lines at its Park beat: a park is where the step parked and went on, not a climb
         self.assertEqual(
-            r["tips"]["s2p0"]["l"][1:],
+            [r["tips"]["s2p0"]["l"][0].split(". ")[1], r["tips"]["s2p0"]["l"][1][:24]],
+            ["It parked after session 1 of 2, which crashed.", "It went on at session 2:"],
+        )
+        self.assertEqual(
+            r["tips"]["s2p0"]["l"],
             [
-                "It came back down at session 2: the next session started 5 minutes later.",
+                "The driver or the kit was at fault. It parked after session 1 of 2, which crashed.",
+                "It went on at session 2: the next session started 5 minutes later.",
                 "How long a person was needed is not known: the park names no issue.",
             ],
         )
         self.assertEqual(
-            r["tips"]["s3p0"]["l"][1],
-            "It did not come back: no session started after it in this step.",
+            r["tips"]["s3p0"]["l"][:2],
+            [
+                "A decision that is the maintainer's. It parked before any session ran.",
+                "It did not go on: no session started after it in this step.",
+            ],
         )
         words = json.dumps(r, ensure_ascii=False).lower()
         self.assertEqual(re.findall(r"\bwait(?:ed|ing)?\b|\banswer\w*", words), [])
@@ -3463,9 +3472,43 @@ class ReflexTest(unittest.TestCase):
         self.assertEqual(v.reflex(data)["rows"], [])
         self.assertIsNone(v.reflex(runs_data())["missing"])
 
+    def test_each_step_has_its_kind_from_its_branch_prefix(self):
+        prefixes = [
+            "day-20/spec",
+            "day-21/spec-the-premise",
+            "day-13/track-a",
+            "day-13/close-the-day",
+            "review",
+            None,
+            "hotfix/x",
+            "day-13/close-other",
+            "day-13/spec-x",
+            "day-13/track-a/b",
+        ]
+        data = runs_data()
+        data["driver_runs"]["steps"] = [
+            {
+                "step": f"Step {i}.",
+                "day": 13,
+                "prefix": p,
+                "sessions": [],
+                "parks": [],
+                "pr": None,
+                "ended": "open",
+            }
+            for i, p in enumerate(prefixes)
+        ]
+        rows = self.views().reflex(data)["rows"]
+        self.assertEqual(len(rows), 10)
+        # only the close's own branch is a close, and a track's branch has one part after the Day
+        self.assertEqual(
+            [r.get("kind") for r in rows],
+            ["spec", "spec", "track", "close", "review", "none", "none", "none", "spec", "none"],
+        )
 
-# rfxDraw() from dashboard.js on the data from stdin, on a document that keeps every node it makes: the marks drawn by
-# kind, the rows' labels and what the pointer box says for a park.
+
+# rfxDraw() from dashboard.js on the data from stdin, on a document that keeps every node it makes: the figures,
+# the trial for level 2's boxes and its label, and the folded lists.
 RFX = r"""
 const fs = require("fs"), vm = require("vm"), els = {}, made = [];
 const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, dataset: {}, hidden: false, on: {}, classList: { add() {}, remove() {} },
@@ -3479,14 +3522,12 @@ const $ = id => els[id] || (els[id] = node(id));
 const ctx = vm.createContext({ DATA: JSON.parse(fs.readFileSync(0, "utf8")), document, $, made, innerWidth: 1200, innerHeight: 800 });
 console.log(JSON.stringify(vm.runInContext(fs.readFileSync(process.argv[1], "utf8") + `
   const M = model(DATA), R = M.rfx, is = c => made.filter(e => (e.attrs.class || "").split(" ").includes(c));
-  const words = n => typeof n === "string" ? n : [n.textContent, ...(n.kids || []).map(words)].join(" ");
   if (!R.empty && !R.error) rfxDraw(R, $);
-  const fig = $("rfx-fig"), park = is("b").find(g => /p0$/.test(g.attrs["data-k"] || ""));
-  if (park) { park.closest = () => park; fig.on.focusin({ target: park }); }
-  ({ empty: R.empty || null, error: R.error || null, rows: is("t-lab").map(t => t.textContent), sessions: is("x-ses").length + is("x-crash").length + is("x-fix").length,
-     crashed: is("x-crash").length, branches: is("x-br").length, pills: is("x-pill").length, awaited: is("x-go").filter(e => /await/.test(e.attrs.class)).length,
-     l2: is("x-l2").length, l2run: is("x-l2").filter(e => /run/.test(e.attrs.class)).length, box: fig.attrs.viewBox,
-     tip: park ? $("rfx-tip").kids.map(words) : null, figs: $("rfx-figs").kids.length })`, ctx)));
+  ({ empty: R.empty || null, error: R.error || null, figs: $("rfx-figs").kids.length, finds: $("rfx-finds").kids.length,
+     bends: $("rfx-bends").kids.length, aria: $("rfx-cell-host").attrs["aria-label"] || null,
+     trial: { boxes: is("box").length, run: is("box").filter(e => e.attrs.class.split(" ").includes("run")).length,
+       label: $("rfx-l2").attrs["aria-label"] || null, hidden: $("rfx-l2").hidden,
+       key: [$("rfx-l2-k").hidden, $("rfx-l2-of").textContent || null] } })`, ctx)));
 """
 
 
@@ -3505,32 +3546,46 @@ class ReflexPageTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr[-600:])
         return json.loads(out.stdout)
 
-    def test_a_mark_for_every_step_session_park_and_pull_request(self):
+    def test_the_figures_and_the_folded_lists_are_drawn_for_every_step(self):
         v = load("spec_drift_views", "spec_drift_views.py")
         for data in (demo_data.demo(), runs_data()):
             data["reflex"] = r = v.reflex(data)
             got = self.draw(data)
-            self.assertEqual(len(got["rows"]), len(r["rows"]))
             self.assertEqual(
-                [got["sessions"], got["crashed"], got["branches"], got["pills"]],
-                [
-                    sum(len(x["sessions"]) for x in r["rows"]),
-                    r["counts"]["crashed_sessions"],
-                    r["counts"]["parks"],
-                    sum(1 for x in r["rows"] if x["pr"]),
-                ],
+                [got["figs"], got["finds"], got["bends"]],
+                [len(r["figs"]), len(r["finds"]), len(r["bends"])],
             )
-            self.assertEqual(got["rows"], [x["label"] for x in r["rows"]])
+            # the cell's host is named by the sentence reflex() made for it
+            self.assertEqual(got["aria"] == r["aria"], True)
+        self.assertEqual(got["figs"], 4)
+
+    def test_the_trial_for_level_2_is_a_box_for_each_pull_request_it_asks_for(self):
+        v = load("spec_drift_views", "spec_drift_views.py")
+        got = []
+        for l2 in ({"run": 17, "of": 15}, {"run": 3, "of": 5}, None, {"run": 2, "of": 0}):
+            data = runs_data()
+            data["driver_runs"]["level_2"] = l2
+            data["reflex"] = v.reflex(data)
+            got.append(self.draw(data)["trial"])
+        # more pull requests in a row than the plan asks for fill every box; no trial, or one that asks for
+        # none, draws no bar
         self.assertEqual(
-            [got["awaited"], got["l2"], got["l2run"], got["box"], got["figs"]],
-            [1, 15, 0, "0 0 1198 211", 4],
+            [[t["boxes"], t["run"], t["hidden"]] for t in got],
+            [[15, 15, False], [5, 3, False], [0, 0, True], [0, 0, True]],
         )
         self.assertEqual(
-            got["tip"][1:3],
+            [t["label"] for t in got],
             [
-                "The driver or the kit was at fault. It went up at session 1 of 2, which crashed.",
-                "It came back down at session 2: the next session started 5 minutes later.",
+                "Trial for level 2: 17 of 15 in a row",
+                "Trial for level 2: 3 of 5 in a row",
+                None,
+                None,
             ],
+        )
+        # the fold's key says how many the trial asks for, and with no trial it names none
+        self.assertEqual(
+            [t["key"] for t in got],
+            [[False, "15"], [False, "5"], [True, None], [True, None]],
         )
 
     def test_with_the_run_log_missing_nothing_is_drawn(self):
@@ -3538,10 +3593,10 @@ class ReflexPageTest(unittest.TestCase):
         data["reflex"] = load("spec_drift_views", "spec_drift_views.py").reflex(data)
         got = self.draw(data)
         self.assertEqual(
-            [got["empty"], got["rows"], got["branches"]],
+            [got["empty"], got["figs"], got["trial"]["boxes"]],
             [
                 "the dashboard-data branch has no driver-runs.json, so no step of the driver is drawn.",
-                [],
+                0,
                 0,
             ],
         )

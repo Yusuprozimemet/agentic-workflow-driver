@@ -1237,13 +1237,13 @@ FOLDED = (6, 1, 2, 7, 10)
 FOLDS = ["g1-fold", "g7-fold", "g6-fold", "g2-fold", "g10-fold"]  # in the page's order, front page first
 GONE_IDS = ("where-fold", "where", "g3-fold", "g8-fold", "g9-fold", "g3-hist", "g11-fold", "g11", "g11-plot", "g11-table", "cel",
             "cel-fig", "how-fold", "how-this-works", "lrn", "lrn-figs", "lrn-scroll", "lrn-epi", "lrn-dmb", "lrn-under", "lrn-stamp",
-            "lrn-finds", "lrn-bends", "lrn-days", "lrn-fixes", "lrn-tip")
+            "lrn-finds", "lrn-bends", "lrn-days", "lrn-fixes", "lrn-tip", "rfx-fig", "rfx-scroll", "rfx-tip")
 GONE_KEYS = ("where", "g3", "g4", "g5", "map", "g8", "g9", "g11", "cel", "how", "lrn")
 # Links to the graphs that left still land on the drawing in their place: an empty anchor in its section.
 ANCHORS = (("prt", ("g3", "g4", "g5")), ("atp", ("g8",)), ("rng", ("g9",)))
 EYEBROWS = {"whr": "Where we are · the plan as one turn of the cell cycle, a checkpoint at each stop", "prt": "Graphs 3–5 · drawn as proteins",
             "atp": "Graph 8 · drawn as an energy budget", "rng": "Graph 9 · drawn as growth rings",
-            "rfx": "Graph 11 · drawn as reflex arcs"}
+            "rfx": "Graph 11 · each step the driver started, replayed as a cell"}
 
 # gelDraw() and protDraw() on the model of the data from stdin, on a document that keeps every node it is given: how
 # many marks of each kind they drew, and the words of the proteins' figures.
@@ -2255,7 +2255,7 @@ const fs = require("fs"), vm = require("vm");
 const node = tag => { const n = { tag, attrs: {}, kids: [], style: {}, hidden: false, textContent: "", value: "", on: {}, q: {},
   classList: { toggle(c, on) { const k = new Set((n.attrs.class || "").split(" ").filter(Boolean)); if (on) k.add(c); else k.delete(c); n.attrs.class = [...k].join(" "); },
     add(c) { this.toggle(c, true); }, remove(c) { this.toggle(c, false); }, contains(c) { return (n.attrs.class || "").split(" ").includes(c); } },
-  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+  setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, removeAttribute(k) { delete this.attrs[k]; },
   appendChild(c) { this.kids.push(c); return c; }, append(...c) { this.kids.push(...c); },
   replaceChildren(...c) { if (c.some(Array.isArray)) throw new Error("replaceChildren() given an array: a browser writes it as text"); this.kids = c; },
   addEventListener(type, fn) { this.on[type] = fn; }, querySelector(s) { return this.q[s] || (this.q[s] = node(s)); }, querySelectorAll() { return []; } };
@@ -2869,6 +2869,358 @@ class ImmunityLinksTest(unittest.TestCase):
         self.assertEqual(self.loop([])["total"], ["No fix yet."])
 
 
+# viewButton() on fakes whose closest(sel) walks up the parents as a browser's does: "[data-view]" takes any element
+# with the attribute, "button[data-view]" only a BUTTON with it. Null when the page has no viewButton.
+VIEW_BUTTON = r"""
+const fs = require("fs"), vm = require("vm");
+const ctx = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+const el = (tag, attrs, parent) => ({ tagName: tag, attrs, parentElement: parent || null,
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+  closest(sel) {
+    const m = /^([a-z]*)\[([a-z-]+)\]$/.exec(sel);
+    for (let e = this; e; e = e.parentElement) if ((!m[1] || e.tagName === m[1].toUpperCase()) && m[2] in e.attrs) return e;
+    return null; } });
+const html = el("HTML", { "data-view": "front" }), body = el("BODY", {}, html), back = el("BUTTON", { "data-view": "back" }, body);
+console.log(JSON.stringify(typeof ctx.viewButton !== "function" ? null : [
+  ctx.viewButton(el("SUMMARY", {}, el("DETAILS", {}, body))), ctx.viewButton(el("SPAN", {}, back)),
+  ctx.viewButton(el("BUTTON", { "data-view": "front" }, body)), ctx.viewButton({ nodeType: 3, data: "a text node" })]));
+"""
+
+
+class ViewSwitchTest(unittest.TestCase):
+    """The page's click handler turns the page only for a button that names a view, not for <html>, which names the
+    view shown."""
+
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def test_only_a_button_with_a_view_turns_the_page(self):
+        # a fold's summary under <html data-view="front">: nothing; a span in the "back" button: back; the button
+        # itself: front; a text node, which has no closest(): nothing
+        self.assertEqual(node(VIEW_BUTTON, {}), [None, "back", "front", None])
+
+    def test_the_pages_click_listener_turns_the_page_by_the_button_it_landed_in(self):
+        # draw()'s own listener: a fold's summary turns nothing, a span in the "back" button turns to the back
+        out = node(DRAW_WIRING, data(reflex=views.reflex(dict(driver_runs=driver_runs_fixture()))))
+        self.assertEqual(out["clicks"], [None, "back"])
+
+    def test_draw_mounts_graph_11s_cell_always_and_draws_its_figures_only_when_it_has_steps(self):
+        out = node(DRAW_WIRING, data(reflex=views.reflex(dict(driver_runs=driver_runs_fixture()))))
+        self.assertEqual(out["drew"], dict(error=["rfxCellMount"], empty=["rfxCellMount"], drawn=["rfxDraw", "rfxCellMount"]))
+
+
+def driver_runs_fixture(level_2=None):
+    """The driver's run log, made up: a track merged after one session; a close whose first session crashed, parked
+    by a fault and came back at the second, then merged; a step with no Day and no session, parked for the maintainer;
+    a review with one session and its pull request still open."""
+    def ses(a, b, cost):
+        return dict(session=f"s-{a}", start=a, end=b, cost=cost, denials=0, fixes=0, crashed=b is None)
+
+    steps = [
+        dict(step="Day 13 Track A: C13.1–C13.3: `bearing/cli.py`", day=13, prefix="day-13/track-a",
+             sessions=[ses("2026-11-10T23:16:41Z", "2026-11-10T23:31:48Z", 0.9)], fixes=0, crashes=0, pr=90,
+             merged="2026-11-10T23:32:54Z", parks=[], ended="merged"),
+        dict(step="Day 13: the closing PR", day=13, prefix="day-13/close-the-day",
+             sessions=[ses("2026-11-10T23:47:55Z", None, 0.0), ses("2026-11-11T00:00:59Z", "2026-11-11T00:20:40Z", 1.16)],
+             fixes=0, crashes=1, pr=96, merged="2026-11-11T00:31:46Z", ended="parked",
+             parks=[dict(at="2026-11-10T23:56:17Z", by="fault", line="park: the run log names session `s-1` with no end")]),
+        dict(step="Every day is done.", day=None, prefix=None, sessions=[], fixes=0, crashes=0, pr=None, merged=None, ended="parked",
+             parks=[dict(at="2026-11-11T00:33:55Z", by="maintainer", line="park: every day is done")]),
+        dict(step="Day 22: review the open pull request", day=22, prefix="review",
+             sessions=[ses("2026-11-12T10:00:00Z", "2026-11-12T10:12:00Z", 0.5)], fixes=0, crashes=0, pr=153, merged=None,
+             parks=[], ended="open"),
+    ]
+    return dict(source="docs/dashboard/driver-runs.json", counted="2026-11-16T15:06:00+01:00", level_2=level_2, steps=steps, parks=None)
+
+
+def driver_cell_data():
+    """The cell's data, with graph 11's steps as reflex() counts them from the run log above."""
+    return dict(cell_data(1), reflex=views.reflex(dict(driver_runs=driver_runs_fixture(dict(run=3, of=15)))))
+
+
+STATIONS = ["gene", "pa", "spec", "sa", "pool", "test", "ribo", "chap", "ko", "ci", "gate", "main", "close", "rater", "recheck", "bin",
+            "mhc", "mito", "loop", "gAud", "gRead", "gStep", "sig"]
+# the cell in driver mode on graph 11's steps: what its strip, its stations, its marks, its counters and its panel show
+DRIVER_CELL = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellDriverStations !== "function") return null;
+  const M = ctx.model(ctx.DATA), R = root(), $ = id => R.getElementById(id), STN = JSON.parse(process.argv[2]);
+  const E = ctx.cellEngine(M.cell, R, { reduced: true, raf: null, steps: M.rfx });
+  const cells = find($("org"), n => n.tag === "button"), c0 = E.counts() || {};
+  const head = () => words(find($("panel"), n => n.tag === "h2")[0]);
+  const out = { strip: cells.map(b => words(b)), classes: cells.map(b => b.attrs.class || ""), opened: [c0.step, $("play").textContent],
+    stations: M.rfx.rows.map(r => ctx.cellDriverStations(r)), drawn: [], counted: [], orgH: $("orgH").textContent,
+    wrap: (R.querySelector(".wrap").attrs.class || "").split(" ").includes("drv"), learnBtn: $("learnBtn").hidden, spec: [], cost: [] };
+  M.rfx.rows.forEach((r, i) => {
+    E.open(i);
+    const c = E.counts() || {};
+    out.drawn.push([c.stations, STN.filter(id => !("hidden" in $("s-" + id).attrs)).sort()]);
+    out.counted.push([c.step, c.sessions, c.crashed, c.parks, c.prs]);
+    out.spec.push($("specLbl").textContent); out.cost.push($("mitoFig").textContent);
+  });
+  E.open(1);
+  out.marks = (E.counts() || {}).marks;
+  out.counters = [["l-tr", "c-tr"], ["l-ts", "c-ts"], ["l-df", "c-df"], ["l-pr", "c-pr"]].map(([l, c]) => [$(l).textContent, $(c).textContent]);
+  out.step = head();
+  // every actor drawn on step 1 opens its own tip; a station opens its text, with a way back to the step
+  out.actors = [...new Set(find($("dyn"), n => n.on.click).map(n => { fire(n, "click"); return head(); }))].sort();
+  fire($("s-gate"), "click");
+  const back = find($("panel"), n => n.tag === "button" && n.attrs.class === "back")[0];
+  out.station = [head(), back ? words(back) : null];
+  fire(back, "click");
+  out.back = head();
+  return out;
+""")
+# the same cell with no steps: it opens on its Day, and hides no station
+DAY_CELL = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellEngine !== "function") return null;
+  const R = root(), E = ctx.cellEngine(ctx.model(ctx.DATA).cell, R, { reduced: true, at: { day: 1, paused: true, end: true } });
+  return { day: E.counts().day, hidden: JSON.parse(process.argv[2]).filter(id => "hidden" in R.getElementById("s-" + id).attrs),
+    drv: (R.querySelector(".wrap").attrs.class || "").split(" ").includes("drv") };
+""")
+# rfxCellMount() on a page whose host gives a fake shadow root, for graph 11 empty, failed, drawn and with no cell
+RFX_CELL_MOUNT = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.rfxCellMount !== "function") return null;
+  const M = ctx.model(ctx.DATA);
+  // `opt.shadow` false: a browser with no shadow roots; `opt.throws`: a template that cannot be cloned. `side` is how
+  // many shadow roots were asked for, and whether the cell mounted in them is in driver mode.
+  const run = (m, opt) => {
+    opt = opt || {};
+    const P = root(), shadow = root(), host = P.getElementById("rfx-cell-host");
+    let attached = 0;
+    host.attachShadow = () => { attached++; return shadow; };
+    P.getElementById("cell-tpl").content = { cloneNode: () => { if (opt.throws) throw new Error("no clone"); return node("fragment"); } };
+    P.getElementById("rfx-cell-none").hidden = true;
+    logged.length = 0;
+    const api = ctx.rfxCellMount(m, id => P.getElementById(id), { shadow: opt.shadow !== false, reduced: true, raf: null }), none = P.getElementById("rfx-cell-none");
+    return { host: host.hidden, none: [none.hidden, none.textContent], mounted: api != null, logged: logged.slice(),
+      side: [attached, (shadow.querySelector(".wrap").attrs.class || "").split(" ").includes("drv")] };
+  };
+  return { empty: run({ cell: M.cell, rfx: { empty: "no step is drawn." } }), error: run({ cell: M.cell, rfx: { error: "boom" } }),
+    nocell: run({ cell: null, rfx: M.rfx }), mounted: run(M), norows: run({ cell: M.cell, rfx: { rows: [] } }),
+    noshadow: run(M, { shadow: false }), throws: run(M, { throws: true }), cellerror: run({ cell: { error: "x" }, rfx: M.rfx }) };
+""")
+# the cell in driver mode, each step opened in turn: the stations each actor passes, in order (counts().paths), its
+# parks' and its vesicle's class and display at the step's end, the strip's pressed button and the note, and what
+# the Reads beat says; then the step shown opened again and a step that is not there, and step 1 just after its
+# first session started
+DRIVER_STEPS = CELL_DOC.replace("BODY", r"""
+  if (typeof ctx.cellDriverStations !== "function") return null;
+  const M = ctx.model(ctx.DATA), R = root(), $ = id => R.getElementById(id);
+  const E = ctx.cellEngine(M.cell, R, { reduced: true, raf: null, steps: M.rfx });
+  const of = pre => find($("dyn"), n => (n.attrs.class || "").split(" ")[0] === pre).map(n => [n.attrs.class, n.attrs.display]);
+  const jump = name => fire(find($("steps"), n => n.tag === "button" && words(n) === name)[0], "click");
+  const out = { orgH: $("orgH").textContent, steps: [] };
+  M.rfx.rows.forEach((r, i) => {
+    E.open(i);
+    const c = E.counts() || {}, s = { paths: c.paths || null, parks: of("pk"), prs: of("vs"), pr: r.pr ? r.pr.state : null,
+      pressed: find($("org"), n => n.tag === "button").map(b => b.attrs["aria-pressed"]), note: $("note").textContent };
+    s.reads = jump("Reads") ? $("say").textContent : null;
+    out.steps.push(s);
+  });
+  const dyn = $("dyn").kids, last = M.rfx.rows.length - 1;
+  E.open(last); E.open(99);
+  out.kept = [$("dyn").kids === dyn, (E.counts() || {}).step === last];
+  E.open(1);
+  out.jumped = jump("Session 1 crashed");
+  out.mid = ["c-tr", "c-ts", "c-df", "c-pr"].map(id => $(id).textContent);
+  return out;
+""")
+# draw() with rfxDraw and rfxCellMount replaced by recorders, for graph 11 failed, empty and drawn: which it called;
+# then the page's click listeners fired on a fold's summary under <html data-view="front"> and on a span inside the
+# "back" button: the view each click turned the page to (null: none)
+DRAW_WIRING = r"""
+const fs = require("fs"), vm = require("vm"), els = {}, clicks = [], docEl = { dataset: {} };
+const stub = () => new Proxy(function () {}, {
+  get: (t, k) => k === Symbol.toPrimitive ? () => "" : k === Symbol.iterator ? [][Symbol.iterator] : k in t ? t[k] : (t[k] = stub()),
+  apply: () => stub(), construct: () => stub() });
+const document = new Proxy({}, { get: (t, k) => k === "getElementById" ? id => els[id] || (els[id] = stub())
+  : k === "addEventListener" ? (type, fn) => { if (type === "click") clicks.push(fn); } : k === "documentElement" ? docEl : stub() });
+const ctx = vm.createContext({ document, window: {}, location: { hash: "" }, history: { replaceState() {} },
+  matchMedia: () => ({ matches: false, addEventListener() {} }), console: { error() {} }, DATA: JSON.parse(fs.readFileSync(0, "utf8")) });
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+const calls = [], drew = {};
+ctx.rfxDraw = () => { calls.push("rfxDraw"); };
+ctx.rfxCellMount = () => { calls.push("rfxCellMount"); return null; };
+const M = ctx.model(ctx.DATA);
+for (const [k, rfx] of [["error", { error: "boom" }], ["empty", { empty: "no step yet." }], ["drawn", M.rfx]]) {
+  calls.length = 0; clicks.length = 0;
+  try { ctx.draw(Object.assign({}, M, { rfx }), ctx.DATA); } catch (e) { calls.push("threw"); }
+  drew[k] = calls.slice();
+}
+const el = (tag, attrs, parent) => ({ tagName: tag, attrs, parentElement: parent || null,
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+  closest(sel) {
+    const m = /^([a-z]*)\[([a-z-]+)\]$/.exec(sel);
+    for (let e = this; e; e = e.parentElement) if ((!m[1] || e.tagName === m[1].toUpperCase()) && m[2] in e.attrs) return e;
+    return null; } });
+const html = el("HTML", { "data-view": "front" }), body = el("BODY", {}, html), back = el("BUTTON", { "data-view": "back" }, body);
+const click = target => { delete docEl.dataset.view;
+  clicks.forEach(fn => { try { fn({ target, preventDefault() {}, stopPropagation() {} }); } catch (e) { /* another listener's */ } });
+  return docEl.dataset.view || null; };
+console.log(JSON.stringify({ drew, clicks: [click(el("SUMMARY", {}, el("DETAILS", {}, body))), click(el("SPAN", {}, back))] }));
+"""
+
+
+def driver_more_data(only_first=False):
+    """The cell's data with graph 11's steps from the run log above and two more on Day 23: a step on a branch the
+    driver does not name, one session and no pull request; and a track parked by a fault before its one session.
+    `only_first`: the first step alone."""
+    def ses(name, a, b):
+        return dict(session=name, start=a, end=b, cost=0.2, denials=0, fixes=0, crashed=False)
+
+    runs = driver_runs_fixture(dict(run=3, of=15))
+    runs["steps"].append(dict(step="Day 23: a hotfix", day=23, prefix="hotfix/x", fixes=0, crashes=0, pr=None, merged=None, parks=[],
+                              ended="open", sessions=[ses("s-9", "2026-11-13T10:00:00Z", "2026-11-13T10:05:00Z")]))
+    runs["steps"].append(dict(step="Day 23 Track B: C23.1: `x`", day=23, prefix="day-23/track-b", fixes=0, crashes=0, pr=None, merged=None,
+                              parks=[dict(at="2026-11-13T11:00:00Z", by="fault", line="park: the tests did not start")], ended="parked",
+                              sessions=[ses("s-10", "2026-11-13T11:10:00Z", "2026-11-13T11:20:00Z")]))
+    if only_first:
+        runs["steps"] = runs["steps"][:1]
+    return dict(cell_data(1), reflex=views.reflex(dict(driver_runs=runs)))
+
+
+def node_with(harness, data, arg):
+    return json.loads(subprocess.run(["node", "-e", harness, SCRIPT, arg], input=json.dumps(data), capture_output=True,
+                                     encoding="utf-8", check=True).stdout)
+
+
+class DriverCellTest(unittest.TestCase):
+    """Graph 11: each step the driver started, replayed as a cell, with only the stations that step used drawn."""
+
+    def setUp(self):
+        if not shutil.which("node"):
+            self.skipTest("needs node")
+
+    def test_each_kind_of_step_draws_only_the_stations_it_used(self):
+        out = node_with(DRIVER_CELL, driver_cell_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        # one small cell per step, named by its Day and kind, classed by how it ended; it opens on the last, at its end
+        self.assertEqual(out["strip"], ["13A", "13 close", "none", "22 review"])
+        self.assertEqual(out["classes"], ["cellbtn merged", "cellbtn fault", "cellbtn maint", "cellbtn still"])
+        self.assertEqual(out["opened"], [3, "Replay"])
+        self.assertEqual(out["orgH"], "The driver’s 4 steps, on the trial project’s Days 13 to 22")
+        self.assertEqual([out["wrap"], out["learnBtn"]], [True, True])
+        self.assertEqual(out["stations"], [["ci", "gate", "ko", "main", "mito", "ribo", "spec", "test"], ["ci", "close", "gate", "main", "mito", "spec"],
+                                           ["gate", "main", "spec"], ["ci", "gate", "main", "mito", "spec"]])
+        # after open(i) the step's stations are drawn, and every other station's group is hidden
+        self.assertEqual([len(d[1]) for d in out["drawn"]], [8, 6, 3, 5])
+        self.assertEqual(out["drawn"], [[s, s] for s in out["stations"]])
+        self.assertEqual(out["counted"], [[0, 1, 0, 0, 1], [1, 2, 1, 1, 1], [2, 0, 0, 1, 0], [3, 1, 0, 0, 1]])
+        self.assertEqual(out["spec"], ["the trial project’s spec, Day 13", "the trial project’s spec, Day 13", "no Day", "the trial project’s spec, Day 22"])
+        self.assertEqual(out["cost"], ["$0.90", "$1.16", "$0.00", "$0.50"])
+
+    def test_a_step_is_replayed_in_its_order_and_its_counters_count_it(self):
+        out = node_with(DRIVER_CELL, driver_cell_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        self.assertEqual(len(out["marks"] or []), 6)
+        self.assertEqual(out["marks"], ["Reads", "Session 1 crashed", "Park", "Session 2", "#96", "End"])
+        # at the end of step 1: both sessions, the one that crashed, its park and its pull request
+        # (the crashed are counted of the step's sessions: the label already says what is counted)
+        self.assertEqual(out["counters"][1], ["Crashed", "1 of 2"])
+        self.assertEqual(out["counters"], [["Sessions", "2 of 2"], ["Crashed", "1 of 2"], ["Parks", "1 of 1"], ["Pull requests", "1 of 1"]])
+        tips = views.reflex(dict(driver_runs=driver_runs_fixture()))["tips"]
+        self.assertEqual(out["step"], tips["s1"]["t"])
+        self.assertEqual(out["actors"], sorted({tips[k]["t"] for k in ("s1x0", "s1x1", "s1p0", "s1r")}))
+        self.assertEqual(out["station"], ["The maintainer", "Back to the step"])
+        self.assertEqual(out["back"], tips["s1"]["t"])
+
+    def test_each_actor_goes_from_station_to_station_as_its_step_did(self):
+        out = node_with(DRIVER_STEPS, driver_more_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        self.assertEqual(len(out["steps"]), 6)
+        paths = [s["paths"] for s in out["steps"]]
+        # the signal reads main and the spec; a track's session works at the implementer and its pull request goes
+        # through CI and the gate to main
+        self.assertEqual(paths[0], [["main", "spec"], ["spec", "ribo"], ["ribo", "ci", "gate", "main"]])
+        # a close: each session at the close, the crash where it stopped, the park that went up after session 1 from
+        # the close to the gate
+        self.assertEqual(paths[1], [["main", "spec"], ["spec", "close"], ["close"], ["close", "gate"], ["spec", "close"],
+                                    ["close", "ci", "gate", "main"]])
+        # no session: the park goes from the spec it read
+        self.assertEqual(paths[2], [["main", "spec"], ["spec", "gate"]])
+        # a review works at CI; its pull request is open, so it stops at the gate
+        self.assertEqual(paths[3], [["main", "spec"], ["spec", "ci"], ["ci", "ci", "gate"]])
+        # a step of no kind works at the spec
+        self.assertEqual(paths[4], [["main", "spec"], ["spec", "spec"]])
+        # a track's park before any session goes from the spec it read, not from the implementer
+        self.assertEqual(paths[5], [["main", "spec"], ["spec", "gate"], ["spec", "ribo"]])
+
+    def test_a_park_and_a_pull_request_end_as_their_step_did(self):
+        out = node_with(DRIVER_STEPS, driver_more_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        self.assertEqual(len(out["steps"]), 6)
+        # a fault's park that went on leaves the cell; the maintainer's, which did not, is still there at the end
+        self.assertEqual([s["parks"] for s in out["steps"]], [[], [["pk fault", "none"]], [["pk maint", "inline"]], [], [],
+                                                             [["pk fault", "none"]]])
+        # the merged pull requests' vesicles say so at the end; the open one's does not
+        self.assertEqual([s["pr"] for s in out["steps"]], ["merged", "merged", None, "open", None, None])
+        self.assertEqual([s["prs"] for s in out["steps"]], [[["vs k-code merged", "inline"]], [["vs k-code merged", "inline"]], [],
+                                                            [["vs k-code", "inline"]], [], []])
+
+    def test_the_strip_names_its_days_and_presses_the_step_shown(self):
+        data = driver_more_data()
+        out = node_with(DRIVER_STEPS, data, json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        self.assertEqual(out["orgH"], "The driver’s 6 steps, on the trial project’s Days 13 to 23")
+        one = node_with(DRIVER_STEPS, driver_more_data(only_first=True), json.dumps(STATIONS))
+        self.assertEqual(one["orgH"], "The driver’s 1 step, on the trial project’s Day 13")
+        self.assertEqual(len(out["steps"]), 6)
+        self.assertEqual([s["pressed"] for s in out["steps"]], [["true" if j == i else "false" for j in range(6)] for i in range(6)])
+        tips = data["reflex"]["tips"]
+        notes = [" ".join([tips[f"s{i}"]["t"] + "."] + tips[f"s{i}"]["l"]) for i in range(6)]
+        self.assertEqual([s["note"] == n for s, n in zip(out["steps"], notes)], [True] * 6)
+        # the step shown, opened again, is not built again; a step that is not there changes nothing
+        self.assertEqual(out["kept"], [True, True])
+
+    def test_the_reads_beat_quotes_a_step_that_is_a_sentence(self):
+        out = node_with(DRIVER_STEPS, driver_more_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        self.assertEqual(len(out["steps"]), 6)
+        # a label that ends its own sentence is quoted and takes no second stop, as reflex()'s _said() writes it
+        self.assertEqual([(s["reads"] or "").split("next step: ")[-1] for s in out["steps"][:3]],
+                         ["Day 13 Track A.", "Day 13: the closing PR.", '"Every day is done."'])
+        self.assertEqual(out["steps"][2]["reads"],
+                         'The driver reads the project’s main and its open pull requests, and picks the next step: "Every day is done."')
+
+    def test_mid_replay_the_counters_count_only_what_it_has_passed(self):
+        out = node_with(DRIVER_STEPS, driver_more_data(), json.dumps(STATIONS))
+        self.assertIsNotNone(out, "the page has no cellDriverStations")
+        # step 1 just after its first session started: one of its two sessions, nothing crashed, parked or opened yet
+        self.assertEqual(out["jumped"], True)
+        self.assertEqual(out["mid"], ["1 of 2", "0 of 2", "0 of 1", "0 of 1"])
+
+    def test_without_steps_the_cell_opens_on_its_day_and_hides_no_station(self):
+        # a hold: the Day mode as it was before graph 11 used the cell
+        out = node_with(DAY_CELL, cell_data(1), json.dumps(STATIONS))
+        self.assertEqual(out, dict(day=1, hidden=[], drv=False))
+
+    def test_graph_11s_cell_is_mounted_only_with_steps_and_says_why_when_it_is_not(self):
+        out = node(RFX_CELL_MOUNT, driver_cell_data())
+        self.assertIsNotNone(out, "the page has no rfxCellMount")
+        self.assertEqual([out[k]["none"][1][:14] for k in ("empty", "error", "nocell")], ["Not measured y", "This graph cou", "The cell needs"])
+        self.assertEqual(out["empty"], dict(host=True, none=[False, "Not measured yet: no step is drawn."], mounted=False, logged=[], side=[0, False]))
+        self.assertEqual(out["error"], dict(host=True, none=[False, "This graph could not be drawn: boom"], mounted=False, logged=["rfx: boom"],
+                                            side=[0, False]))
+        self.assertEqual(out["nocell"], dict(host=True, none=[False, "The cell needs the Day-by-Day data, which this page does not have."],
+                                             mounted=False, logged=[], side=[0, False]))
+        self.assertEqual(out["norows"]["none"][1][:24], "Not measured yet: the dr")
+        self.assertEqual(out["norows"], dict(host=True, none=[False, "Not measured yet: the driver has started no step yet, so there is no step to replay."],
+                                             mounted=False, logged=[], side=[0, False]))
+        # mounted in one shadow root, in driver mode: it was given graph 11's steps
+        self.assertEqual(out["mounted"]["side"], [1, True])
+        self.assertEqual(out["mounted"], dict(host=False, none=[True, ""], mounted=True, logged=[], side=[1, True]))
+        # where the browser has no shadow roots nothing starts, and nothing is hidden or said
+        self.assertEqual(out["noshadow"], dict(host=False, none=[True, ""], mounted=False, logged=[], side=[0, False]))
+        self.assertEqual(out["throws"], dict(host=True, none=[False, "This graph could not be drawn: no clone"], mounted=False,
+                                             logged=["rfx: no clone"], side=[1, False]))
+        # the cell's own data that could not be read is said as the cell's, not as graph 11's, and cellMount has logged it
+        self.assertEqual(out["cellerror"]["none"][1][:15], "The cell's data")
+        self.assertEqual(out["cellerror"], dict(host=True, none=[False, "The cell's data could not be read: x"], mounted=False, logged=[],
+                                                side=[0, False]))
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -2954,7 +3306,8 @@ class PageFilesTest(unittest.TestCase):
     def test_no_graph_sits_inside_anything_collapsed(self):
         html = read("index.html")
         for plot in [f"g{n}-plot" for n in CARDS if n not in FOLDED] + ["mrg-scroll", "whr-scroll", "rdg-scroll", "gel-scroll", "prt-scroll",
-                                                                             "prf-scroll", "atp-scroll", "rng-scroll", "act-scroll", "rfx-scroll"]:
+                                                                             "prf-scroll", "atp-scroll", "rng-scroll", "act-scroll",
+                                                                             "rfx-cell-host"]:
             self.assertIn(f'id="{plot}"', html, plot)
             before = html[:html.index(f'id="{plot}"')]
             self.assertEqual(before.count("<details"), before.count("</details>"), plot)
@@ -3045,7 +3398,7 @@ class PageFilesTest(unittest.TestCase):
         ids = page_tree()
         self.assertEqual([c for c in self.UNDER if c not in ids], [])
         cls = lambda e: e["attrs"].get("class", "").split()  # noqa: E731
-        picture = lambda e: re.search(r"-(scroll|plot)$|^one-strand$", e["attrs"].get("id", "")) or {"pc-fig", "readout", "duo"} & set(cls(e))  # noqa: E731
+        picture = lambda e: re.search(r"-(scroll|plot)$|^one-strand$|^rfx-cell-host$", e["attrs"].get("id", "")) or {"pc-fig", "readout", "duo"} & set(cls(e))  # noqa: E731
         moves = lambda e: (e["tag"] == "details" and "under" not in cls(e)) or (e["tag"] == "p" and {"hint", "rng-hint", "act-hint", "ci"} & set(cls(e))) \
             or (e["tag"] == "div" and {"find", "notes"} & set(cls(e)))  # noqa: E731
         for c in self.UNDER:
